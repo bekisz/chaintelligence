@@ -370,11 +370,16 @@ function renderChart(results, priceSeries) {
     const lpTotalPoints = lpTotalData.map(d => d[1]);
     const asset1Points = asset1Data.map(d => d[1]);
     const asset2Points = asset2Data.map(d => d[1]);
-    const pricePoints = priceSeries.map(d => d[1]);
 
-    // Create flat arrays for range lines
-    const rangeLowPoints = new Array(labels.length).fill(P_min);
-    const rangeHighPoints = new Array(labels.length).fill(P_max);
+    // Rebase Range Values to 100 scale
+    // P_min and P_max are absolute prices.
+    // We need to compare them relative to P0 (Entry Price).
+    const P0 = priceSeries[0][1];
+    const rangeLowVal = (P_min / P0) * 100;
+    const rangeHighVal = (P_max / P0) * 100;
+
+    const rangeLowPoints = new Array(labels.length).fill(rangeLowVal);
+    const rangeHighPoints = new Array(labels.length).fill(rangeHighVal);
 
     if (chartInstance) chartInstance.destroy();
 
@@ -384,36 +389,24 @@ function renderChart(results, priceSeries) {
             labels: labels,
             datasets: [
                 {
-                    label: 'Price',
-                    data: pricePoints,
-                    borderColor: '#10b981', // Green
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.1,
-                    yAxisID: 'y1',
-                    hidden: true
-                },
-                {
                     label: 'Range High',
                     data: rangeHighPoints,
-                    borderColor: '#10b981', // Green (Matches Price)
+                    borderColor: '#10b981', // Green
                     borderWidth: 1,
                     pointRadius: 0,
                     borderDash: [5, 5],
                     pointHitRadius: 0,
-                    yAxisID: 'y1',
-                    hidden: true
+                    yAxisID: 'y'
                 },
                 {
                     label: 'Range Low',
                     data: rangeLowPoints,
-                    borderColor: '#10b981', // Green (Matches Price)
+                    borderColor: '#10b981', // Green
                     borderWidth: 1,
                     pointRadius: 0,
                     borderDash: [5, 5],
                     pointHitRadius: 0,
-                    yAxisID: 'y1',
-                    hidden: true
+                    yAxisID: 'y'
                 },
                 {
                     label: `Only ${baseAsset.symbol.toUpperCase()}`,
@@ -465,7 +458,7 @@ function renderChart(results, priceSeries) {
                 tooltip: {
                     callbacks: {
                         label: function (ctx) {
-                            return `${ctx.dataset.label}: ${ctx.parsed.y.toPrecision(5)}`;
+                            return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`;
                         }
                     }
                 }
@@ -479,14 +472,6 @@ function renderChart(results, priceSeries) {
                     grid: { color: '#2d3748', drawBorder: false },
                     ticks: { color: '#9ca3af', callback: (v) => v.toFixed(0) },
                     title: { display: true, text: 'Portfolio Value (100 base)', color: '#6b7280' }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    grid: { drawOnChartArea: false },
-                    ticks: { color: '#10b981', callback: (v) => v.toPrecision(4) },
-                    title: { display: true, text: 'Price & Ranges', color: '#10b981' }
                 }
             }
         }
