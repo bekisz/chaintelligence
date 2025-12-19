@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Pair Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Crypto Pair Viewer</h1>
+            <p class="subtitle">Compare relative prices of any two assets</p>
+        </header>
+
+        <div class="controls-wrapper">
+            <div class="selection-row">
+                <!-- Base Asset -->
+                <div class="asset-selector">
+                    <label>Base Asset</label>
+                    <div class="search-container">
+                        <input type="text" id="base-search" placeholder="Search (e.g. AAVE)" autocomplete="off">
+                        <div id="base-results" class="search-results hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Swap Button -->
+                <button id="swap-btn" class="icon-btn" title="Swap Assets">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16" />
+                    </svg>
+                </button>
+
+                <!-- Quote Asset -->
+                <div class="asset-selector">
+                    <label>Quote Asset</label>
+                    <div class="search-container">
+                        <input type="text" id="quote-search" placeholder="Search (e.g. USDC)" autocomplete="off">
+                        <div id="quote-results" class="search-results hidden"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group time-selector">
+                <!-- <label for="days-select">Time Range</label> -->
+                <select id="days-select">
+                    <option value="1">24 Hours</option>
+                    <option value="7" selected>7 Days</option>
+                    <option value="30">30 Days</option>
+                    <option value="90">3 Months</option>
+                    <option value="365">1 Year</option>
+                    <option value="max">Max</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="loading-overlay" id="loading">
+                <div class="spinner"></div>
+            </div>
+            <div id="error-message" class="error-message hidden"></div>
+            <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="price-info">
+            <div class="info-item">
+                <span class="label">Current Ratio</span>
+                <span class="value" id="current-price">--</span>
+            </div>
+            <div class="info-item">
+                <span class="label">24h Change</span>
+                <span class="value" id="price-change">--</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
