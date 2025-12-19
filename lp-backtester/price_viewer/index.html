@@ -22,12 +22,9 @@
         <div class="controls-wrapper">
             <div class="selection-row">
                 <!-- Base Asset -->
-                <div class="asset-selector">
-                    <label>Base Asset</label>
-                    <div class="search-container">
-                        <input type="text" id="base-search" placeholder="Search (e.g. AAVE)" autocomplete="off">
-                        <div id="base-results" class="search-results hidden"></div>
-                    </div>
+                <div class="search-container">
+                    <input type="text" id="base-search" placeholder="Target (e.g. BTC)" autocomplete="off">
+                    <div id="base-results" class="search-results hidden"></div>
                 </div>
 
                 <!-- Swap Button -->
@@ -39,25 +36,22 @@
                 </button>
 
                 <!-- Quote Asset -->
-                <div class="asset-selector">
-                    <label>Quote Asset</label>
-                    <div class="search-container">
-                        <input type="text" id="quote-search" placeholder="Search (e.g. USDC)" autocomplete="off">
-                        <div id="quote-results" class="search-results hidden"></div>
-                    </div>
+                <div class="search-container">
+                    <input type="text" id="quote-search" placeholder="Quote (e.g. USD)" autocomplete="off">
+                    <div id="quote-results" class="search-results hidden"></div>
                 </div>
-            </div>
 
-            <div class="control-group time-selector">
-                <!-- <label for="days-select">Time Range</label> -->
-                <select id="days-select">
-                    <option value="1">24 Hours</option>
-                    <option value="7" selected>7 Days</option>
-                    <option value="30">30 Days</option>
-                    <option value="90">3 Months</option>
-                    <option value="365">1 Year</option>
-                    <option value="max">Max</option>
-                </select>
+                <!-- Time Selector -->
+                <div class="time-selector">
+                    <select id="days-select">
+                        <option value="1">24 Hours</option>
+                        <option value="7" selected>7 Days</option>
+                        <option value="30">30 Days</option>
+                        <option value="90">3 Months</option>
+                        <option value="365">1 Year</option>
+                        <option value="max">Max</option>
+                    </select>
+                </div>
             </div>
         </div>
 

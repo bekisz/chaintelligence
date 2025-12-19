@@ -13,7 +13,7 @@ let chartInstance = null;
 let allCoins = [];
 
 // Defaults
-let baseAsset = { id: 'aave', symbol: 'aave', name: 'Aave' };
+let baseAsset = { id: 'ethereum', symbol: 'eth', name: 'Ethereum' };
 let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
 
 // --- Initialization ---

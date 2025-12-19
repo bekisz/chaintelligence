@@ -67,21 +67,13 @@ h1 {
 
 .selection-row {
     display: flex;
-    align-items: flex-end;
-    justify-content: center;
+    align-items: center;
+    justify-content: space-between;
     gap: 1rem;
-    flex-wrap: wrap;
+    width: 100%;
 }
 
-.asset-selector {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    position: relative;
-    width: 250px;
-    z-index: 20;
-    /* Ensure results flow over chart */
-}
+/* Removed .asset-selector */
 
 label {
     font-size: 0.8rem;
@@ -91,7 +83,12 @@ label {
 
 .search-container {
     position: relative;
-    width: 100%;
+    flex: 1 1 0;
+    /* Force equal width */
+    min-width: 0;
+    /* Prevent overflow */
+    z-index: 20;
+    /* Ensure inputs stay reachable */
 }
 
 .search-container input {
@@ -124,6 +121,7 @@ label {
     max-height: 250px;
     overflow-y: auto;
     z-index: 100;
+    /* High z-index */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
@@ -187,7 +185,16 @@ label {
     background-color: rgba(59, 130, 246, 0.1);
 }
 
+.time-selector {
+    position: relative;
+    flex: 1 1 0;
+    /* Equal width */
+    min-width: 0;
+    z-index: 10;
+}
+
 .time-selector select {
+    width: 100%;
     padding: 0.75rem 1rem;
     background-color: var(--bg-color);
     border: 1px solid var(--border);
@@ -196,7 +203,7 @@ label {
     font-family: inherit;
     cursor: pointer;
     outline: none;
-    min-width: 150px;
+    /* min-width removed to allow flex sizing */
 }
 
 .chart-container {
