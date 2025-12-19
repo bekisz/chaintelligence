@@ -1,37 +1,62 @@
-const baseSearchInput = document.getElementById('base-search');
-const quoteSearchInput = document.getElementById('quote-search');
-const baseResults = document.getElementById('base-results');
-const quoteResults = document.getElementById('quote-results');
-const swapBtn = document.getElementById('swap-btn');
-
-// V3 Inputs
-const minRangeInput = document.getElementById('min-range');
-const maxRangeInput = document.getElementById('max-range');
-const aprInput = document.getElementById('apr-input');
-const startDateInput = document.getElementById('start-date');
-const endDateInput = document.getElementById('end-date');
-const rebalanceInput = document.getElementById('rebalance-select');
-const runBtn = document.getElementById('run-btn');
-
-const loading = document.getElementById('loading');
-const errorMessage = document.getElementById('error-message');
-
-// Info Elements
-const hodlReturnEl = document.getElementById('hodl-return');
-const lpReturnEl = document.getElementById('lp-return');
-const lpDiffEl = document.getElementById('lp-diff');
-const feesEl = document.getElementById('fees-collected');
+// DOM Elements (assigned in init)
+let baseSearchInput, quoteSearchInput, baseResults, quoteResults, swapBtn;
+let minRangeInput, maxRangeInput, aprInput, startDateInput, endDateInput, rebalanceInput, rebalanceDelayInput;
+let loading, errorMessage, hodlReturnEl, lpReturnEl, lpDiffEl, feesEl;
 
 let chartInstance = null;
 let allCoins = [];
-
-// Defaults
 let baseAsset = { id: 'ethereum', symbol: 'eth', name: 'Ethereum' };
 let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
+
+
+// ... (existing code) ...
 
 // --- Initialization ---
 
 async function init() {
+    // Assign DOM elements
+    baseSearchInput = document.getElementById('base-search');
+    quoteSearchInput = document.getElementById('quote-search');
+    baseResults = document.getElementById('base-results');
+    quoteResults = document.getElementById('quote-results');
+    swapBtn = document.getElementById('swap-btn');
+
+    minRangeInput = document.getElementById('min-range');
+    maxRangeInput = document.getElementById('max-range');
+    aprInput = document.getElementById('apr-input');
+    startDateInput = document.getElementById('start-date');
+    endDateInput = document.getElementById('end-date');
+    rebalanceInput = document.getElementById('rebalance-select');
+    rebalanceDelayInput = document.getElementById('rebalance-delay');
+
+    loading = document.getElementById('loading');
+    errorMessage = document.getElementById('error-message');
+
+    hodlReturnEl = document.getElementById('hodl-return');
+    lpReturnEl = document.getElementById('lp-return');
+    lpDiffEl = document.getElementById('lp-diff');
+    feesEl = document.getElementById('fees-collected');
+
+    // Attach Event Listeners now that elements exist
+    if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => { baseAsset = coin; });
+    if (quoteSearchInput && quoteResults) setupSearch(quoteSearchInput, quoteResults, (coin) => { quoteAsset = coin; });
+
+    if (swapBtn) {
+        swapBtn.addEventListener('click', () => {
+            const temp = baseAsset;
+            baseAsset = quoteAsset;
+            quoteAsset = temp;
+            if (baseSearchInput) baseSearchInput.value = baseAsset.symbol.toUpperCase();
+            if (quoteSearchInput) quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
+        });
+    }
+
+    const runBtn = document.getElementById('run-btn');
+    if (runBtn) {
+        runBtn.addEventListener('click', updateChart);
+    }
+
+    // Set Defaults
     if (baseSearchInput) baseSearchInput.value = baseAsset.symbol.toUpperCase();
     if (quoteSearchInput) quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
 
@@ -52,6 +77,7 @@ async function init() {
 
     updateChart(); // Run initial backtest
 }
+
 
 async function fetchCoinList() {
     try {
@@ -126,24 +152,7 @@ function renderResults(coins, container, onSelect) {
     container.classList.remove('hidden');
 }
 
-setupSearch(baseSearchInput, baseResults, (coin) => { baseAsset = coin; });
-setupSearch(quoteSearchInput, quoteResults, (coin) => { quoteAsset = coin; });
-
-// --- Swap Logic ---
-
-if (swapBtn) {
-    swapBtn.addEventListener('click', () => {
-        const temp = baseAsset;
-        baseAsset = quoteAsset;
-        quoteAsset = temp;
-        baseSearchInput.value = baseAsset.symbol.toUpperCase();
-        quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
-    });
-}
-
-if (runBtn) {
-    runBtn.addEventListener('click', updateChart);
-}
+// setupSearch and event listeners are now in init()
 
 // --- Chart Data & Rendering ---
 
@@ -187,8 +196,9 @@ async function updateChart() {
         const maxPct = parseFloat(maxRangeInput.value) / 100;
         const aprPct = parseFloat(aprInput.value) / 100;
         const rebalanceMode = rebalanceInput ? rebalanceInput.value : 'none';
+        const delayDays = rebalanceDelayInput ? parseInt(rebalanceDelayInput.value) : 3;
 
-        const results = calculateV3Backtest(ratioSeries, minPct, maxPct, aprPct, rebalanceMode);
+        const results = calculateV3Backtest(ratioSeries, minPct, maxPct, aprPct, rebalanceMode, delayDays);
 
         renderChart(results, ratioSeries);
         updateInfo(results);
@@ -261,7 +271,7 @@ function getLikidityAndAmounts(P, P_min, P_max, V_target) {
     return { L, x: x_L1 * L, y: y_L1 * L };
 }
 
-function calculateV3Backtest(priceSeries, minPct, maxPct, apr, rebalanceMode) {
+function calculateV3Backtest(priceSeries, minPct, maxPct, apr, rebalanceMode, delayDays = 3) {
     const P0_initial = priceSeries[0][1];
 
     let P0 = P0_initial;
@@ -289,6 +299,7 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, apr, rebalanceMode) {
     const maxRangeSeries = [];
 
     let accumulatedFees = 0;
+    let daysOutOfRange = 0;
 
     for (let i = 0; i < priceSeries.length; i++) {
         const [time, P] = priceSeries[i];
@@ -335,21 +346,38 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, apr, rebalanceMode) {
         }
 
         // --- Rebalance Check ---
+        let shouldRebalance = false;
+
+        if (P < P_min || P > P_max) {
+            daysOutOfRange++;
+        } else {
+            daysOutOfRange = 0;
+        }
+
         if (rebalanceMode === 'immediate') {
             if (P < P_min || P > P_max) {
-                // REBALANCE
-                currentCapital = val_lp_principal + accumulatedFees;
-                accumulatedFees = 0;
-
-                P0 = P;
-                P_min = P0 * (1 + minPct);
-                P_max = P0 * (1 + maxPct);
-
-                const newPos = getLikidityAndAmounts(P0, P_min, P_max, currentCapital);
-                L = newPos.L;
-
-                val_lp_principal = currentCapital;
+                shouldRebalance = true;
             }
+        } else if (rebalanceMode === 'delayed') {
+            if (daysOutOfRange >= delayDays) {
+                shouldRebalance = true;
+                daysOutOfRange = 0;
+            }
+        }
+
+        if (shouldRebalance) {
+            // REBALANCE
+            currentCapital = val_lp_principal + accumulatedFees;
+            accumulatedFees = 0;
+
+            P0 = P;
+            P_min = P0 * (1 + minPct);
+            P_max = P0 * (1 + maxPct);
+
+            const newPos = getLikidityAndAmounts(P0, P_min, P_max, currentCapital);
+            L = newPos.L;
+
+            val_lp_principal = currentCapital;
         }
 
         lpTotalData.push([time, val_lp_principal + accumulatedFees]);
@@ -505,4 +533,9 @@ function updateInfo(results) {
 }
 
 // Ensure init
-init();
+// Ensure init runs when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
