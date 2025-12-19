@@ -40,6 +40,8 @@
                     <input type="text" id="quote-search" placeholder="Quote (e.g. USDC)" autocomplete="off">
                     <div id="quote-results" class="search-results hidden"></div>
                 </div>
+
+                <button id="run-btn" class="primary-btn">Run Backtest</button>
             </div>
 
             <!-- V3 Settings Row -->
@@ -64,7 +66,13 @@
                     <label>End Date</label>
                     <input type="date" id="end-date">
                 </div>
-                <button id="run-btn" class="primary-btn">Run Backtest</button>
+                <div class="input-group">
+                    <label>Rebalance</label>
+                    <select id="rebalance-select">
+                        <option value="none">None</option>
+                        <option value="immediate">Immediate</option>
+                    </select>
+                </div>
             </div>
         </div>
 

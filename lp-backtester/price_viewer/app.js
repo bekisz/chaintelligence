@@ -10,6 +10,7 @@ const maxRangeInput = document.getElementById('max-range');
 const aprInput = document.getElementById('apr-input');
 const startDateInput = document.getElementById('start-date');
 const endDateInput = document.getElementById('end-date');
+const rebalanceInput = document.getElementById('rebalance-select');
 const runBtn = document.getElementById('run-btn');
 
 const loading = document.getElementById('loading');
@@ -185,8 +186,9 @@ async function updateChart() {
         const minPct = parseFloat(minRangeInput.value) / 100;
         const maxPct = parseFloat(maxRangeInput.value) / 100;
         const aprPct = parseFloat(aprInput.value) / 100;
+        const rebalanceMode = rebalanceInput ? rebalanceInput.value : 'none';
 
-        const results = calculateV3Backtest(ratioSeries, minPct, maxPct, aprPct);
+        const results = calculateV3Backtest(ratioSeries, minPct, maxPct, aprPct, rebalanceMode);
 
         renderChart(results, ratioSeries);
         updateInfo(results);
@@ -236,134 +238,132 @@ function calculateRatioSeries(basePrices, quotePrices) {
 
 // --- V3 Math ---
 
-function calculateV3Backtest(priceSeries, minPct, maxPct, apr) {
-    // Initial Price (Entry)
-    const P0 = priceSeries[0][1];
-
-    // Range Prices
-    const P_min = P0 * (1 + minPct);
-    const P_max = P0 * (1 + maxPct);
-
-    // Initial Investment Value Calculation
-    // We assume an initial investment Value V0.
-    // Ideally, for HODL comparison, we start with the amounts required for liquidity L.
-
-    const sqrtP0 = Math.sqrt(P0);
+function getLikidityAndAmounts(P, P_min, P_max, V_target) {
+    const sqrtP = Math.sqrt(P);
     const sqrtPa = Math.sqrt(P_min);
     const sqrtPb = Math.sqrt(P_max);
 
-    // Assume L=1 to determine composition
-    let x0_L1 = 0;
-    let y0_L1 = 0;
+    let x_L1 = 0;
+    let y_L1 = 0;
 
-    if (P0 < P_min) {
-        x0_L1 = (1 / sqrtPa - 1 / sqrtPb);
-    } else if (P0 > P_max) {
-        y0_L1 = (sqrtPb - sqrtPa);
+    if (P < P_min) {
+        x_L1 = (1 / sqrtPa - 1 / sqrtPb);
+    } else if (P > P_max) {
+        y_L1 = (sqrtPb - sqrtPa);
     } else {
-        x0_L1 = (1 / sqrtP0 - 1 / sqrtPb);
-        y0_L1 = (sqrtP0 - sqrtPa);
+        x_L1 = (1 / sqrtP - 1 / sqrtPb);
+        y_L1 = (sqrtP - sqrtPa);
     }
 
-    const V0_L1 = x0_L1 * P0 + y0_L1; // Total Initial Value in Quote Terms (USD)
+    const V_L1 = x_L1 * P + y_L1;
+    const L = V_target / V_L1;
 
-    // Strategy 1: HODL (Initial Composition)
-    const initial_x = x0_L1;
-    const initial_y = y0_L1;
+    return { L, x: x_L1 * L, y: y_L1 * L };
+}
 
-    // Strategy 2: Asset 1 Only (100% Base, e.g. ETH) 
-    // We buy V0 worth of Base at P0.
-    // Amount Base = V0 / P0.
-    const amt_asset1 = V0_L1 / P0;
+function calculateV3Backtest(priceSeries, minPct, maxPct, apr, rebalanceMode) {
+    const P0_initial = priceSeries[0][1];
 
-    // Strategy 3: Asset 2 Only (100% Quote, e.g. USDC)
-    // We hold V0 worth of Quote.
-    // Amount Quote = V0.
-    const amt_asset2 = V0_L1;
+    let P0 = P0_initial;
+    let P_min = P0 * (1 + minPct);
+    let P_max = P0 * (1 + maxPct);
 
+    let currentCapital = 100;
+
+    let { L } = getLikidityAndAmounts(P0, P_min, P_max, currentCapital);
+
+    // HODL Trackers (Reference is initial capital held in initial composition)
+    const initial_amounts = getLikidityAndAmounts(P0, P_min, P_max, 100);
+    const initial_x_hodl = initial_amounts.x;
+    const initial_y_hodl = initial_amounts.y;
+
+    const amt_asset1 = 100 / P0_initial;
+    const amt_asset2 = 100;
 
     const hodlData = [];
-    const lpTotalData = []; // LP + Fees
+    const lpTotalData = [];
     const asset1Data = [];
     const asset2Data = [];
 
-    let accumulatedFees = 0; // In normalized value terms
+    const minRangeSeries = [];
+    const maxRangeSeries = [];
+
+    let accumulatedFees = 0;
 
     for (let i = 0; i < priceSeries.length; i++) {
         const [time, P] = priceSeries[i];
-        const sqrtP = Math.sqrt(P);
 
-        // 1. HODL Value: x0 * P + y0
-        const val_hodl = (initial_x * P + initial_y) / V0_L1 * 100;
+        // 1. HODL Value
+        const val_hodl = (initial_x_hodl * P + initial_y_hodl);
         hodlData.push([time, val_hodl]);
 
-        // 2. Asset 1 Only Value: amt_asset1 * P
-        const val_asset1 = (amt_asset1 * P) / V0_L1 * 100;
-        asset1Data.push([time, val_asset1]);
+        // 2. Asset Only Values
+        asset1Data.push([time, (amt_asset1 * P)]);
+        asset2Data.push([time, amt_asset2]);
 
-        // 3. Asset 2 Only Value: amt_asset2 (Quote is numeraire if USDC)
-        // If Quote is e.g. BTC, then its value relative to USD is... wait.
-        // Our 'Price' P is Base/Quote ratio (if we calculated that way)? 
-        // OR is P just Base Price in USD?
-        // Let's check calculateRatioSeries.
-        // It returns `bPrice / qPrice`. So P is "How many Quote tokens per Base token".
-        // Value in Quote terms = Amount * Price (if Base) or Amount * 1 (if Quote).
+        // 3. LP Logic
+        const sqrtP = Math.sqrt(P);
+        const sqrtPa = Math.sqrt(P_min);
+        const sqrtPb = Math.sqrt(P_max);
 
-        // Wait, if Quote is NOT stablecoin (e.g. ETH/BTC), then "Value" in Quote terms fluctuates relative to USD?
-        // Using "Rebased to 100" means we track relative performance. 
-        // If our numeraire is "Quote Token", then Asset 2 Value is constant 100.
-        // If our numeraire is BTC (and pair is ETH/BTC), then holding BTC is "flat" relative to BTC, but variable relative to USD.
-
-        // Simplification: We will plot value in terms of QUOTE ASSET.
-        // So Asset 2 is always flat 100.
-        // Asset 1 is 100 * (P_t / P_0).
-        // HODL is ...
-        // LP is ...
-        // This is the standard way to visualize crypto pair performance (e.g. vs ETH).
-
-        const val_asset2 = 100; // Flat line
-        asset2Data.push([time, val_asset2]);
-
-
-        // 4. LP Position Value
         let x_t = 0;
         let y_t = 0;
         let inRange = false;
 
         if (P < P_min) {
-            x_t = (1 / sqrtPa - 1 / sqrtPb);
+            x_t = (1 / sqrtPa - 1 / sqrtPb) * L;
+            y_t = 0;
         } else if (P > P_max) {
-            y_t = (sqrtPb - sqrtPa);
+            y_t = (sqrtPb - sqrtPa) * L;
+            x_t = 0;
         } else {
-            // In Range
-            x_t = (1 / sqrtP - 1 / sqrtPb);
-            y_t = (sqrtP - sqrtPa);
+            x_t = (1 / sqrtP - 1 / sqrtPb) * L;
+            y_t = (sqrtP - sqrtPa) * L;
             inRange = true;
         }
 
-        const val_lp_principal = (x_t * P + y_t) / V0_L1 * 100;
+        let val_lp_principal = x_t * P + y_t;
 
-        // Fees Calculation
+        // Fees
         if (i > 0) {
             const prevTime = priceSeries[i - 1][0];
-            const timeDiffMs = time - prevTime;
-            const yearsElapsed = timeDiffMs / (1000 * 60 * 60 * 24 * 365);
-
+            const yearsElapsed = (time - prevTime) / (1000 * 60 * 60 * 24 * 365);
             if (inRange) {
-                const feeAccrued = val_lp_principal * apr * yearsElapsed;
-                accumulatedFees += feeAccrued;
+                const fees = val_lp_principal * apr * yearsElapsed;
+                accumulatedFees += fees;
+            }
+        }
+
+        // --- Rebalance Check ---
+        if (rebalanceMode === 'immediate') {
+            if (P < P_min || P > P_max) {
+                // REBALANCE
+                currentCapital = val_lp_principal + accumulatedFees;
+                accumulatedFees = 0;
+
+                P0 = P;
+                P_min = P0 * (1 + minPct);
+                P_max = P0 * (1 + maxPct);
+
+                const newPos = getLikidityAndAmounts(P0, P_min, P_max, currentCapital);
+                L = newPos.L;
+
+                val_lp_principal = currentCapital;
             }
         }
 
         lpTotalData.push([time, val_lp_principal + accumulatedFees]);
+
+        minRangeSeries.push((P_min / P0_initial) * 100);
+        maxRangeSeries.push((P_max / P0_initial) * 100);
     }
 
-    return { hodlData, lpTotalData, asset1Data, asset2Data, accumulatedFees, P_min, P_max };
+    return { hodlData, lpTotalData, asset1Data, asset2Data, accumulatedFees, minRangeSeries, maxRangeSeries };
 }
 
 function renderChart(results, priceSeries) {
     const ctx = document.getElementById('priceChart').getContext('2d');
-    const { hodlData, lpTotalData, asset1Data, asset2Data, P_min, P_max } = results;
+    const { hodlData, lpTotalData, asset1Data, asset2Data, minRangeSeries, maxRangeSeries } = results;
 
     const labels = hodlData.map(d => new Date(d[0]).toLocaleDateString());
     const hodlPoints = hodlData.map(d => d[1]);
@@ -371,15 +371,9 @@ function renderChart(results, priceSeries) {
     const asset1Points = asset1Data.map(d => d[1]);
     const asset2Points = asset2Data.map(d => d[1]);
 
-    // Rebase Range Values to 100 scale
-    // P_min and P_max are absolute prices.
-    // We need to compare them relative to P0 (Entry Price).
-    const P0 = priceSeries[0][1];
-    const rangeLowVal = (P_min / P0) * 100;
-    const rangeHighVal = (P_max / P0) * 100;
-
-    const rangeLowPoints = new Array(labels.length).fill(rangeLowVal);
-    const rangeHighPoints = new Array(labels.length).fill(rangeHighVal);
+    // Use dynamic range series provided by calculation
+    const rangeLowPoints = minRangeSeries;
+    const rangeHighPoints = maxRangeSeries;
 
     if (chartInstance) chartInstance.destroy();
 
