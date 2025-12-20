@@ -9,7 +9,6 @@ let baseAsset = { id: 'ethereum', symbol: 'eth', name: 'Ethereum' };
 let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
 
 
-// ... (existing code) ...
 
 // --- Initialization ---
 
@@ -340,7 +339,10 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, apr, rebalanceMode, de
             const prevTime = priceSeries[i - 1][0];
             const yearsElapsed = (time - prevTime) / (1000 * 60 * 60 * 24 * 365);
             if (inRange) {
-                const fees = val_lp_principal * apr * yearsElapsed;
+                // Dynamic APR Scaling: input 'apr' is for a 1.5 default range width
+                const rangeWidth = maxPct - minPct;
+                const effectiveApr = apr * (1.5 / rangeWidth);
+                const fees = val_lp_principal * effectiveApr * yearsElapsed;
                 accumulatedFees += fees;
             }
         }

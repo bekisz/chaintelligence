@@ -41,7 +41,21 @@
                     <div id="quote-results" class="search-results hidden"></div>
                 </div>
 
-                <button id="run-btn" class="primary-btn">Run Backtest</button>
+                <div class="input-group">
+                    <label>Est. APR for -50% - +100% range</label>
+                    <input type="number" id="apr-input" value="20" placeholder="20">
+                </div>
+
+                <div class="input-group date-input">
+                    <label>Start Date</label>
+                    <input type="date" id="start-date">
+                </div>
+                <div class="input-group date-input">
+                    <label>End Date</label>
+                    <input type="date" id="end-date">
+                </div>
+
+                <button id="run-btn" class="primary-btn">Run</button>
             </div>
 
             <!-- V3 Settings Row -->
@@ -53,18 +67,6 @@
                 <div class="input-group">
                     <label>Max Range %</label>
                     <input type="number" id="max-range" value="100" placeholder="100">
-                </div>
-                <div class="input-group">
-                    <label>Est. APR %</label>
-                    <input type="number" id="apr-input" value="20" placeholder="20">
-                </div>
-                <div class="input-group">
-                    <label>Start Date</label>
-                    <input type="date" id="start-date">
-                </div>
-                <div class="input-group">
-                    <label>End Date</label>
-                    <input type="date" id="end-date">
                 </div>
                 <div class="input-group">
                     <label>Rebalance</label>

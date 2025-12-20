@@ -48,6 +48,7 @@ h1 {
     font-weight: 600;
     background: linear-gradient(to right, #60a5fa, #a78bfa);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.5rem;
 }
@@ -67,10 +68,15 @@ h1 {
 
 .selection-row {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
+    /* Align labels at the bottom */
     justify-content: space-between;
     gap: 1rem;
     width: 100%;
+}
+
+.date-input {
+    flex: 0 0 160px !important;
 }
 
 /* Removed .asset-selector */
@@ -83,7 +89,8 @@ label {
 
 .search-container {
     position: relative;
-    flex: 1 1 0;
+    flex: 1.5 1 0;
+    /* Give slightly more weight to searches */
     /* Force equal width */
     min-width: 0;
     /* Prevent overflow */
@@ -222,20 +229,24 @@ label {
 }
 
 .primary-btn {
-    padding: 0.75rem 1.5rem;
-    background: var(--accent);
+    padding: 0.75rem 3rem;
+    /* Doubled horizontal padding */
+    background: #FF007A;
+    /* Uniswap Pink */
     color: white;
     border: none;
     border-radius: 8px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
     height: 46px;
-    /* Match input height roughly */
 }
 
 .primary-btn:hover {
-    background: #2563eb;
+    background: #e6006e;
+    /* Slightly darker pink */
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 0, 122, 0.3);
 }
 
 .chart-container {
