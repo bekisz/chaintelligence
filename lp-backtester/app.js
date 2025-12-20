@@ -7,6 +7,7 @@ let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
 
 let strategies = [];
 let nextStrategyId = 1;
+let summaryChartInstance = null;
 
 // --- Initialization ---
 
@@ -78,13 +79,13 @@ async function init() {
 
     // Load coins then add initial strategy
     await fetchCoinList();
-    addStrategy(); // Start with one strategy
+    addStrategy("Wide Ranged Non-rebalancing"); // Start with one strategy
     updateAllCharts(); // Initial run
 }
 
 // --- Strategy Management ---
 
-function addStrategy() {
+function addStrategy(customName = null) {
     const container = document.getElementById('strategies-container');
     const template = document.getElementById('strategy-template');
     if (!container || !template) return;
@@ -93,7 +94,7 @@ function addStrategy() {
     const block = clone.querySelector('.strategy-block');
     const id = nextStrategyId++;
     block.dataset.id = id;
-    block.querySelector('.strategy-title-input').value = `Strategy #${id}`;
+    block.querySelector('.strategy-title-input').value = customName || `Strategy #${id}`;
 
     // Elements inside the block
     const strategy = {
@@ -105,12 +106,10 @@ function addStrategy() {
         rebalanceDelayInput: block.querySelector('.rebalance-delay'),
         loading: block.querySelector('.loading-overlay'),
         errorMessage: block.querySelector('.error-message'),
-        hodlReturnEl: block.querySelector('.hodl-return'),
-        lpReturnEl: block.querySelector('.lp-return'),
-        lpDiffEl: block.querySelector('.lp-diff'),
-        feesEl: block.querySelector('.fees-collected'),
         canvas: block.querySelector('.strategy-chart'),
-        chartInstance: null
+        chartInstance: null,
+        relativeCanvas: block.querySelector('.relative-chart'),
+        relativeChartInstance: null
     };
 
     // Event listeners are now handled via delegation in init()
@@ -126,6 +125,7 @@ function removeStrategy(id) {
 
     const strategy = strategies[index];
     if (strategy.chartInstance) strategy.chartInstance.destroy();
+    if (strategy.relativeChartInstance) strategy.relativeChartInstance.destroy();
     strategy.block.remove();
     strategies.splice(index, 1);
 }
@@ -235,6 +235,7 @@ async function updateAllCharts() {
 
         // Global shared params
         const baseAprPct = parseFloat(aprInput.value) / 100;
+        const allResults = [];
 
         // Process each strategy
         strategies.forEach(s => {
@@ -243,11 +244,14 @@ async function updateAllCharts() {
                 const maxPct = parseFloat(s.maxRangeInput.value) / 100;
                 const rebalanceMode = s.rebalanceInput.value || 'none';
                 const delayDays = parseInt(s.rebalanceDelayInput.value) || 1;
+                const strategyName = s.block.querySelector('.strategy-title-input').value || `Strategy #${s.id}`;
 
                 const results = calculateV3Backtest(ratioSeries, minPct, maxPct, baseAprPct, rebalanceMode, delayDays);
 
                 s.chartInstance = renderChart(results, s.canvas, s.chartInstance);
-                updateStrategyInfo(results, s);
+                s.relativeChartInstance = renderRelativeChart(results, s.relativeCanvas, s.relativeChartInstance);
+
+                allResults.push({ name: strategyName, ...results });
             } catch (err) {
                 console.error(`Strategy ${s.id} error:`, err);
                 if (s.errorMessage) {
@@ -258,6 +262,17 @@ async function updateAllCharts() {
                 if (s.loading) s.loading.classList.remove('active');
             }
         });
+
+        // Render Summary Chart
+        const summarySection = document.getElementById('summary-section');
+        if (summarySection) {
+            if (allResults.length > 0) {
+                summarySection.classList.remove('hidden');
+                summaryChartInstance = renderSummaryChart(allResults, document.getElementById('summaryChart'), summaryChartInstance);
+            } else {
+                summarySection.classList.add('hidden');
+            }
+        }
 
     } catch (globalError) {
         console.error("Global Error:", globalError);
@@ -387,7 +402,13 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, baseApr, rebalanceMode
         minRangeSeries.push((P_min / P0_initial) * 100);
         maxRangeSeries.push((P_max / P0_initial) * 100);
     }
-    return { hodlData, lpTotalData, asset1Data, asset2Data, accumulatedFees, minRangeSeries, maxRangeSeries };
+
+    const relativeSeries = lpTotalData.map((d, i) => {
+        const hodlVal = hodlData[i][1];
+        return [d[0], ((d[1] / hodlVal) - 1) * 100];
+    });
+
+    return { hodlData, lpTotalData, asset1Data, asset2Data, accumulatedFees, minRangeSeries, maxRangeSeries, relativeSeries };
 }
 
 function renderChart(results, canvas, existingInstance) {
@@ -422,19 +443,88 @@ function renderChart(results, canvas, existingInstance) {
     });
 }
 
-function updateStrategyInfo(results, s) {
-    const { hodlData, lpTotalData, accumulatedFees } = results;
-    if (!hodlData.length) return;
-    const endHodl = hodlData[hodlData.length - 1][1], endLp = lpTotalData[lpTotalData.length - 1][1];
-    const hodlRet = endHodl - 100, lpRet = endLp - 100, diff = endLp - endHodl;
+function renderRelativeChart(results, canvas, existingInstance) {
+    if (existingInstance) existingInstance.destroy();
 
-    s.hodlReturnEl.textContent = `${hodlRet > 0 ? '+' : ''}${hodlRet.toFixed(2)}%`;
-    s.hodlReturnEl.className = 'value ' + (hodlRet >= 0 ? 'positive' : 'negative');
-    s.lpReturnEl.textContent = `${lpRet > 0 ? '+' : ''}${lpRet.toFixed(2)}%`;
-    s.lpReturnEl.className = 'value ' + (lpRet >= 0 ? 'positive' : 'negative');
-    s.lpDiffEl.textContent = `${diff > 0 ? '+' : ''}${diff.toFixed(2)}%`;
-    s.lpDiffEl.className = 'value ' + (diff >= 0 ? 'positive' : 'negative');
-    s.feesEl.textContent = `+${accumulatedFees.toFixed(2)}`;
+    const { relativeSeries } = results;
+    const labels = relativeSeries.map(d => new Date(d[0]).toLocaleDateString());
+
+    return new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Return over HODL (%)',
+                data: relativeSeries.map(d => d[1]),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%` } },
+                legend: { display: false }
+            },
+            scales: {
+                x: { display: false },
+                y: {
+                    grid: { color: '#2d3748' },
+                    ticks: { color: '#9ca3af', callback: (val) => val.toFixed(1) + '%' },
+                    title: { display: false }
+                }
+            }
+        }
+    });
+}
+
+function renderSummaryChart(allResults, canvas, existingInstance) {
+    if (existingInstance) existingInstance.destroy();
+
+    const labels = allResults[0].hodlData.map(d => new Date(d[0]).toLocaleDateString());
+    const datasets = [];
+
+    // Base performance lines (HODL, Single Assets) - only take from first result
+    const first = allResults[0];
+    datasets.push({ label: 'HODL', data: first.hodlData.map(d => d[1]), borderColor: '#9ca3af', borderWidth: 2, pointRadius: 0 });
+    datasets.push({ label: `Only ${baseAsset.symbol.toUpperCase()}`, data: first.asset1Data.map(d => d[1]), borderColor: '#f59e0b', borderWidth: 1, pointRadius: 0, borderDash: [2, 2] });
+    datasets.push({ label: `Only ${quoteAsset.symbol.toUpperCase()}`, data: first.asset2Data.map(d => d[1]), borderColor: '#ef4444', borderWidth: 1, pointRadius: 0, borderDash: [2, 2] });
+
+    // LP lines for each strategy
+    const colors = ['#FF007A', '#3b82f6', '#10b981', '#a855f7', '#ec4899', '#06b6d4'];
+    allResults.forEach((res, idx) => {
+        datasets.push({
+            label: `LP: ${res.name}`,
+            data: res.lpTotalData.map(d => d[1]),
+            borderColor: colors[idx % colors.length],
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false
+        });
+    });
+
+    return new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` } },
+                legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 20 } }
+            },
+            scales: {
+                x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
+                y: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af' }, title: { display: true, text: 'Value (100 base)' } }
+            }
+        }
+    });
 }
 
 // Ensure init runs

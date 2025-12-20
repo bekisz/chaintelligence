@@ -400,15 +400,36 @@ label {
     background-color: rgba(239, 68, 68, 0.1);
 }
 
-.chart-container {
-    position: relative;
-    height: 350px;
-    width: 100%;
+.chart-wrapper {
     margin: 1.5rem 0;
-    z-index: 1;
 }
 
-/* Loading & Info styles... same as before */
+.chart-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    padding-left: 0.5rem;
+    border-left: 3px solid var(--accent);
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    /* Reduced to fit two per strategy */
+    width: 100%;
+    z-index: 1;
+    background-color: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.relative-chart-container {
+    height: 250px;
+    /* Even smaller for the relative line */
+}
+
+/* Loading & Info styles */
 .loading-overlay {
     position: absolute;
     top: 0;
@@ -464,34 +485,43 @@ label {
     }
 }
 
-.price-info {
-    display: flex;
-    justify-content: space-around;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-}
-
-.info-item {
-    text-align: center;
-}
-
-.info-item .label {
-    display: block;
-    color: var(--text-secondary);
-    font-size: 0.8rem;
-    margin-bottom: 0.25rem;
-}
-
-.info-item .value {
-    display: block;
-    font-size: 1.5rem;
-    font-weight: 600;
-}
-
 .positive {
     color: var(--success);
 }
 
 .negative {
     color: var(--danger);
+}
+
+/* Summary Section */
+.summary-section {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+}
+
+.summary-section.hidden {
+    display: none;
+}
+
+.summary-header {
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.summary-header h2 {
+    font-size: 1.8rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.summary-chart-container {
+    background-color: var(--item-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem;
+    height: 350px;
+    /* Matched to individual strategy charts */
+    position: relative;
+    margin-bottom: 4rem;
 }
