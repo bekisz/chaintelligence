@@ -124,17 +124,48 @@ function addStrategy(customName = null) {
         block,
         minRangeInput: block.querySelector('.min-range'),
         maxRangeInput: block.querySelector('.max-range'),
-        rebalanceInput: block.querySelector('.rebalance-select'),
+        rebalanceToggle: block.querySelector('.rebalance-toggle'),
+        rebalanceSubFields: block.querySelector('.group-controls.disabled'),
+        rebalanceMinInput: block.querySelector('.rebalance-min'),
+        rebalanceMaxInput: block.querySelector('.rebalance-max'),
         rebalanceDelayInput: block.querySelector('.rebalance-delay'),
         loading: block.querySelector('.loading-overlay'),
         errorMessage: block.querySelector('.error-message'),
         canvas: block.querySelector('.strategy-chart'),
         chartInstance: null,
         relativeCanvas: block.querySelector('.relative-chart'),
-        relativeChartInstance: null
+        relativeChartInstance: null,
+        rebalanceRangeManuallyChanged: false
     };
 
-    // Event listeners are now handled via delegation in init()
+    // Toggle logic
+    strategy.rebalanceToggle.addEventListener('change', () => {
+        if (strategy.rebalanceToggle.checked) {
+            strategy.rebalanceSubFields.classList.remove('disabled');
+        } else {
+            strategy.rebalanceSubFields.classList.add('disabled');
+        }
+    });
+
+    // Sync logic: LP Range -> Rebalance Range (if not decoupled)
+    const syncRebalanceRange = () => {
+        if (!strategy.rebalanceRangeManuallyChanged) {
+            strategy.rebalanceMinInput.value = strategy.minRangeInput.value;
+            strategy.rebalanceMaxInput.value = strategy.maxRangeInput.value;
+        }
+    };
+
+    strategy.minRangeInput.addEventListener('input', syncRebalanceRange);
+    strategy.maxRangeInput.addEventListener('input', syncRebalanceRange);
+
+    strategy.rebalanceMinInput.addEventListener('input', () => {
+        strategy.rebalanceRangeManuallyChanged = true;
+    });
+    strategy.rebalanceMaxInput.addEventListener('input', () => {
+        strategy.rebalanceRangeManuallyChanged = true;
+    });
+
+    // Event listeners are now handled via delegation in init() for Run button etc.
     strategies.push(strategy);
     container.appendChild(clone);
 
@@ -159,15 +190,31 @@ async function fetchCoinList() {
         const cached = localStorage.getItem('coingecko_top_100');
         const timestamp = localStorage.getItem('coingecko_top_100_ts');
         const now = Date.now();
+
+        // Load from cache if valid
         if (cached && timestamp && (now - timestamp < 86400000)) {
             allCoins = JSON.parse(cached);
-            return;
+        } else {
+            const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false');
+            if (!response.ok) throw new Error('Failed to fetch coin list');
+            allCoins = await response.json();
+
+            localStorage.setItem('coingecko_top_100', JSON.stringify(allCoins));
+            localStorage.setItem('coingecko_top_100_ts', now);
         }
-        const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false');
-        if (!response.ok) throw new Error('Failed to fetch coin list');
-        allCoins = await response.json();
-        localStorage.setItem('coingecko_top_100', JSON.stringify(allCoins));
-        localStorage.setItem('coingecko_top_100_ts', now);
+
+        // Always check for EURC to be extra sure (handles potential cache mismatches)
+        if (!allCoins.find(c => c.id === 'euro-coin' || c.symbol === 'eurc')) {
+            const eurcResponse = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=euro-coin');
+            if (eurcResponse.ok) {
+                const eurcData = await eurcResponse.json();
+                if (eurcData.length > 0) {
+                    allCoins.push(eurcData[0]);
+                    // Update cache with EURC if we just added it
+                    localStorage.setItem('coingecko_top_100', JSON.stringify(allCoins));
+                }
+            }
+        }
     } catch (error) {
         console.error("Error loading coins:", error);
     }
@@ -264,11 +311,13 @@ async function updateAllCharts() {
             try {
                 const minPct = parseFloat(s.minRangeInput.value) / 100;
                 const maxPct = parseFloat(s.maxRangeInput.value) / 100;
-                const rebalanceMode = s.rebalanceInput.value || 'none';
+                const rebMinPct = parseFloat(s.rebalanceMinInput.value) / 100;
+                const rebMaxPct = parseFloat(s.rebalanceMaxInput.value) / 100;
+                const rebalanceMode = s.rebalanceToggle.checked ? 'delayed' : 'none';
                 const delayDays = parseInt(s.rebalanceDelayInput.value) || 1;
                 const strategyName = s.block.querySelector('.strategy-title-input').value || `Strategy #${s.id}`;
 
-                const results = calculateV3Backtest(ratioSeries, minPct, maxPct, baseAprPct, rebalanceMode, delayDays);
+                const results = calculateV3Backtest(ratioSeries, minPct, maxPct, rebMinPct, rebMaxPct, baseAprPct, rebalanceMode, delayDays);
 
                 s.chartInstance = renderChart(results, s.canvas, s.chartInstance);
                 s.relativeChartInstance = renderRelativeChart(results, s.relativeCanvas, s.relativeChartInstance);
@@ -355,11 +404,14 @@ function getLikidityAndAmounts(P, P_min, P_max, V_target) {
     return { L, x: x_L1 * L, y: y_L1 * L };
 }
 
-function calculateV3Backtest(priceSeries, minPct, maxPct, baseApr, rebalanceMode, delayDays) {
+function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, baseApr, rebalanceMode, delayDays) {
     const P0_initial = priceSeries[0][1];
     let P0 = P0_initial;
     let P_min = P0 * (1 + minPct);
     let P_max = P0 * (1 + maxPct);
+    let P_reb_min = P0 * (1 + rebMinPct);
+    let P_reb_max = P0 * (1 + rebMaxPct);
+
     let currentCapital = 100;
     let { L } = getLikidityAndAmounts(P0, P_min, P_max, currentCapital);
 
@@ -369,6 +421,7 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, baseApr, rebalanceMode
 
     const hodlData = [], lpTotalData = [], asset1Data = [], asset2Data = [];
     const minRangeSeries = [], maxRangeSeries = [];
+    const minRebSeries = [], maxRebSeries = [];
     let accumulatedFees = 0, daysOutOfRange = 0;
 
     const rangeWidthBase = 1.5; // for -50% to +100%
@@ -404,10 +457,10 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, baseApr, rebalanceMode
 
         // Rebalance
         let shouldRebalance = false;
-        if (P < P_min || P > P_max) daysOutOfRange++;
+        if (P < P_reb_min || P > P_reb_max) daysOutOfRange++;
         else daysOutOfRange = 0;
 
-        if (rebalanceMode === 'immediate' && (P < P_min || P > P_max)) shouldRebalance = true;
+        if (rebalanceMode === 'immediate' && (P < P_reb_min || P > P_reb_max)) shouldRebalance = true;
         else if (rebalanceMode === 'delayed' && daysOutOfRange >= delayDays) {
             shouldRebalance = true;
             daysOutOfRange = 0;
@@ -419,6 +472,8 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, baseApr, rebalanceMode
             P0 = P;
             P_min = P0 * (1 + minPct);
             P_max = P0 * (1 + maxPct);
+            P_reb_min = P0 * (1 + rebMinPct);
+            P_reb_max = P0 * (1 + rebMaxPct);
             L = getLikidityAndAmounts(P0, P_min, P_max, currentCapital).L;
             val_lp_principal = currentCapital;
         }
@@ -426,6 +481,8 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, baseApr, rebalanceMode
         lpTotalData.push([time, val_lp_principal + accumulatedFees]);
         minRangeSeries.push((P_min / P0_initial) * 100);
         maxRangeSeries.push((P_max / P0_initial) * 100);
+        minRebSeries.push((P_reb_min / P0_initial) * 100);
+        maxRebSeries.push((P_reb_max / P0_initial) * 100);
     }
 
     const relativeSeries = lpTotalData.map((d, i) => {
@@ -433,13 +490,13 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, baseApr, rebalanceMode
         return [d[0], ((d[1] / hodlVal) - 1) * 100];
     });
 
-    return { hodlData, lpTotalData, asset1Data, asset2Data, accumulatedFees, minRangeSeries, maxRangeSeries, relativeSeries };
+    return { hodlData, lpTotalData, asset1Data, asset2Data, accumulatedFees, minRangeSeries, maxRangeSeries, minRebSeries, maxRebSeries, relativeSeries };
 }
 
 function renderChart(results, canvas, existingInstance) {
     if (existingInstance) existingInstance.destroy();
 
-    const { hodlData, lpTotalData, asset1Data, asset2Data, minRangeSeries, maxRangeSeries } = results;
+    const { hodlData, lpTotalData, asset1Data, asset2Data, minRangeSeries, maxRangeSeries, minRebSeries, maxRebSeries } = results;
     const labels = hodlData.map(d => new Date(d[0]).toLocaleDateString());
 
     return new Chart(canvas.getContext('2d'), {
@@ -447,6 +504,8 @@ function renderChart(results, canvas, existingInstance) {
         data: {
             labels,
             datasets: [
+                { label: 'Rebalance Max', data: maxRebSeries, borderColor: 'rgba(16, 185, 129, 0.4)', borderWidth: 1, pointRadius: 0, borderDash: [2, 2], fill: false },
+                { label: 'Rebalance Min', data: minRebSeries, borderColor: 'rgba(16, 185, 129, 0.4)', borderWidth: 1, pointRadius: 0, borderDash: [2, 2], fill: false },
                 { label: 'Range High', data: maxRangeSeries, borderColor: '#10b981', borderWidth: 1, pointRadius: 0, borderDash: [5, 5] },
                 { label: 'Range Low', data: minRangeSeries, borderColor: '#10b981', borderWidth: 1, pointRadius: 0, borderDash: [5, 5] },
                 { label: `Only ${baseAsset.symbol.toUpperCase()}`, data: asset1Data.map(d => d[1]), borderColor: '#f59e0b', borderWidth: 1, pointRadius: 0, borderDash: [2, 2] },

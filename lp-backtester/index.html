@@ -126,25 +126,44 @@
 
                 <div class="strategy-content">
                     <div class="v3-settings-row">
-                        <div class="input-group">
-                            <label>Min Range %</label>
-                            <input type="number" class="min-range" value="-50" placeholder="-50">
+                        <!-- LP Range Group -->
+                        <div class="settings-group">
+                            <div class="group-title">LP Range</div>
+                            <div class="group-controls">
+                                <div class="input-group">
+                                    <label>Min %</label>
+                                    <input type="number" class="min-range" value="-50" placeholder="-50">
+                                </div>
+                                <div class="input-group">
+                                    <label>Max %</label>
+                                    <input type="number" class="max-range" value="100" placeholder="100">
+                                </div>
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <label>Max Range %</label>
-                            <input type="number" class="max-range" value="100" placeholder="100">
-                        </div>
-                        <div class="input-group">
-                            <label>Rebalance</label>
-                            <select class="rebalance-select">
-                                <option value="none">None</option>
-                                <option value="immediate">Immediate</option>
-                                <option value="delayed">Delayed</option>
-                            </select>
-                        </div>
-                        <div class="input-group">
-                            <label>Delay (Days)</label>
-                            <input type="number" class="rebalance-delay" value="3" placeholder="3" min="1">
+
+                        <!-- Rebalance Group -->
+                        <div class="settings-group">
+                            <div class="group-title">
+                                <span>Rebalance</span>
+                                <label class="switch">
+                                    <input type="checkbox" class="rebalance-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="group-controls disabled" id="rebalance-sub-fields">
+                                <div class="input-group">
+                                    <label>Delay (Days)</label>
+                                    <input type="number" class="rebalance-delay" value="3" placeholder="3" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label>Range Min %</label>
+                                    <input type="number" class="rebalance-min" value="-50" placeholder="-50">
+                                </div>
+                                <div class="input-group">
+                                    <label>Range Max %</label>
+                                    <input type="number" class="rebalance-max" value="100" placeholder="100">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
