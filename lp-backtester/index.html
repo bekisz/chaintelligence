@@ -78,6 +78,15 @@
                 <p class="subtitle">Consolidated performance of all active strategies</p>
             </div>
             <div class="summary-chart-container">
+                <button class="enlarge-btn" title="Enlarge Chart" data-chart-type="summary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <polyline points="9 21 3 21 3 15"></polyline>
+                        <line x1="21" y1="3" x2="14" y2="10"></line>
+                        <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
+                </button>
                 <canvas id="summaryChart"></canvas>
             </div>
         </div>
@@ -136,7 +145,19 @@
                     </div>
 
                     <div class="chart-wrapper">
-                        <div class="chart-label">Price & LP Range</div>
+                        <div class="chart-header-row">
+                            <div class="chart-label">Price & LP Range</div>
+                            <button class="enlarge-btn" title="Enlarge Chart" data-chart-type="main">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <polyline points="9 21 3 21 3 15"></polyline>
+                                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                                </svg>
+                            </button>
+                        </div>
                         <div class="chart-container">
                             <div class="loading-overlay">
                                 <div class="spinner"></div>
@@ -147,7 +168,19 @@
                     </div>
 
                     <div class="chart-wrapper relative-wrapper">
-                        <div class="chart-label">Relative Return over HODL (%)</div>
+                        <div class="chart-header-row">
+                            <div class="chart-label">Relative Return over HODL (%)</div>
+                            <button class="enlarge-btn" title="Enlarge Chart" data-chart-type="relative">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <polyline points="9 21 3 21 3 15"></polyline>
+                                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                                </svg>
+                            </button>
+                        </div>
                         <div class="chart-container relative-chart-container">
                             <canvas class="relative-chart"></canvas>
                         </div>
@@ -155,6 +188,24 @@
                 </div>
             </div>
         </template>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Chart View</h3>
+                <button id="close-modal-btn" class="close-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <canvas id="enlargedChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <script src="config.js"></script>

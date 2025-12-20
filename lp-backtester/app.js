@@ -8,6 +8,8 @@ let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
 let strategies = [];
 let nextStrategyId = 1;
 let summaryChartInstance = null;
+let enlargedChartInstance = null;
+let lastCalculatedResults = []; // Store results for enlargement later
 
 // --- Initialization ---
 
@@ -47,6 +49,7 @@ async function init() {
         strategiesContainer.addEventListener('click', (e) => {
             const toggleBtn = e.target.closest('.toggle-strategy-btn');
             const removeBtn = e.target.closest('.remove-strategy-btn');
+            const enlargeBtn = e.target.closest('.enlarge-btn');
 
             if (toggleBtn) {
                 const block = toggleBtn.closest('.strategy-block');
@@ -56,7 +59,26 @@ async function init() {
                 if (block && block.dataset.id) {
                     removeStrategy(parseInt(block.dataset.id));
                 }
+            } else if (enlargeBtn) {
+                handleEnlarge(enlargeBtn);
             }
+        });
+    }
+
+    const summarySection = document.getElementById('summary-section');
+    if (summarySection) {
+        summarySection.addEventListener('click', (e) => {
+            const enlargeBtn = e.target.closest('.enlarge-btn');
+            if (enlargeBtn) handleEnlarge(enlargeBtn);
+        });
+    }
+
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modalOverlay = document.getElementById('modal-overlay');
+    if (closeModalBtn && modalOverlay) {
+        closeModalBtn.addEventListener('click', hideModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) hideModal();
         });
     }
 
@@ -250,6 +272,7 @@ async function updateAllCharts() {
 
                 s.chartInstance = renderChart(results, s.canvas, s.chartInstance);
                 s.relativeChartInstance = renderRelativeChart(results, s.relativeCanvas, s.relativeChartInstance);
+                s.lastResults = results; // Store for enlargement
 
                 allResults.push({ name: strategyName, ...results });
             } catch (err) {
@@ -269,8 +292,10 @@ async function updateAllCharts() {
             if (allResults.length > 0) {
                 summarySection.classList.remove('hidden');
                 summaryChartInstance = renderSummaryChart(allResults, document.getElementById('summaryChart'), summaryChartInstance);
+                lastCalculatedResults = allResults;
             } else {
                 summarySection.classList.add('hidden');
+                lastCalculatedResults = [];
             }
         }
 
@@ -525,6 +550,65 @@ function renderSummaryChart(allResults, canvas, existingInstance) {
             }
         }
     });
+}
+
+// --- Modal Logic ---
+
+function handleEnlarge(btn) {
+    const type = btn.dataset.chartType;
+    const block = btn.closest('.strategy-block');
+    const summarySection = btn.closest('.summary-section');
+
+    let results = null;
+    let title = "";
+    let renderFn = null;
+
+    if (summarySection) {
+        results = lastCalculatedResults;
+        title = "Combined Performance Summary";
+        renderFn = renderSummaryChart;
+    } else if (block) {
+        const id = parseInt(block.dataset.id);
+        const strategyName = block.querySelector('.strategy-title-input').value;
+        // Find the full results object for this strategy
+        // We need to match by name or find a way to store results by ID
+        // Let's quickly store them in the strategies array during run
+        const strategy = strategies.find(s => s.id === id);
+        if (strategy && strategy.lastResults) {
+            results = strategy.lastResults;
+            if (type === 'main') {
+                title = `${strategyName} - Price & LP Range`;
+                renderFn = renderChart;
+            } else {
+                title = `${strategyName} - Relative Return over HODL (%)`;
+                renderFn = renderRelativeChart;
+            }
+        }
+    }
+
+    if (results && renderFn) {
+        showModal(title);
+        const canvas = document.getElementById('enlargedChart');
+        enlargedChartInstance = renderFn(results, canvas, enlargedChartInstance);
+    }
+}
+
+function showModal(title) {
+    const modal = document.getElementById('modal-overlay');
+    const titleEl = document.getElementById('modal-title');
+    titleEl.textContent = title;
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // Prevent scrolling
+}
+
+function hideModal() {
+    const modal = document.getElementById('modal-overlay');
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+    if (enlargedChartInstance) {
+        enlargedChartInstance.destroy();
+        enlargedChartInstance = null;
+    }
 }
 
 // Ensure init runs
