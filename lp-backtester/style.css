@@ -89,8 +89,8 @@ label {
 
 .search-container {
     position: relative;
-    flex: 1.5 1 0;
-    /* Give slightly more weight to searches */
+    flex: 0.75 1 0;
+    /* Reduced weight to shrink selectors */
     /* Force equal width */
     min-width: 0;
     /* Prevent overflow */
@@ -228,6 +228,26 @@ label {
     border-color: var(--accent);
 }
 
+.secondary-btn {
+    padding: 0.75rem 1.5rem;
+    background-color: var(--item-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 46px;
+}
+
+.secondary-btn:hover {
+    background-color: var(--border);
+    border-color: var(--text-secondary);
+}
+
 .primary-btn {
     padding: 0.75rem 3rem;
     /* Doubled horizontal padding */
@@ -249,13 +269,143 @@ label {
     box-shadow: 0 4px 12px rgba(255, 0, 122, 0.3);
 }
 
+/* Strategy Container & Blocks */
+#strategies-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.strategy-block {
+    background-color: var(--item-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: transform 0.2s;
+}
+
+.strategy-block:hover {
+    border-color: var(--accent);
+}
+
+.strategy-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.strategy-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.toggle-strategy-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    width: 32px;
+    height: 32px;
+}
+
+.toggle-strategy-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.chevron-icon {
+    transition: transform 0.3s ease;
+}
+
+.strategy-block.collapsed .chevron-icon {
+    transform: rotate(-90deg);
+}
+
+.strategy-content {
+    transition: all 0.3s ease;
+    overflow: hidden;
+    max-height: 5000px;
+    /* Increased limit */
+    opacity: 1;
+}
+
+.strategy-block.collapsed .strategy-content {
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    pointer-events: none;
+}
+
+.strategy-title-input {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--accent);
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    width: 250px;
+    outline: none;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.strategy-title-input:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.strategy-title-input:focus {
+    border-color: var(--accent);
+    background: var(--bg-color);
+    width: 350px;
+    /* Expand on focus */
+}
+
+.edit-icon {
+    color: var(--text-secondary);
+    opacity: 0.5;
+    pointer-events: none;
+    /* Let clicks pass to input */
+}
+
+.strategy-title-input:focus+.edit-icon {
+    display: none;
+}
+
+.remove-strategy-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.remove-strategy-btn:hover {
+    color: var(--danger);
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
 .chart-container {
     position: relative;
-    height: 400px;
+    height: 350px;
     width: 100%;
-    margin-bottom: 2rem;
+    margin: 1.5rem 0;
     z-index: 1;
-    /* Below results */
 }
 
 /* Loading & Info styles... same as before */
