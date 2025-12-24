@@ -11,6 +11,31 @@ let summaryChartInstance = null;
 let enlargedChartInstance = null;
 let lastCalculatedResults = []; // Store results for enlargement later
 
+// --- URL Parameter Management ---
+
+function getURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        token1: params.get('token1'),
+        token2: params.get('token2'),
+        apr: params.get('apr'),
+        start: params.get('start'),
+        end: params.get('end')
+    };
+}
+
+function updateURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    if (baseAsset) params.set('token1', baseAsset.symbol.toLowerCase());
+    if (quoteAsset) params.set('token2', quoteAsset.symbol.toLowerCase());
+    if (aprInput) params.set('apr', aprInput.value);
+    if (startDateInput) params.set('start', startDateInput.value);
+    if (endDateInput) params.set('end', endDateInput.value);
+
+    const newUrl = window.location.pathname + '?' + params.toString();
+    window.history.replaceState({}, '', newUrl);
+}
+
 // --- Initialization ---
 
 async function init() {
@@ -27,8 +52,14 @@ async function init() {
     runBtn = document.getElementById('run-btn');
 
     // Attach Global Listeners
-    if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => { baseAsset = coin; });
-    if (quoteSearchInput && quoteResults) setupSearch(quoteSearchInput, quoteResults, (coin) => { quoteAsset = coin; });
+    if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => {
+        baseAsset = coin;
+        updateURLParams();
+    });
+    if (quoteSearchInput && quoteResults) setupSearch(quoteSearchInput, quoteResults, (coin) => {
+        quoteAsset = coin;
+        updateURLParams();
+    });
 
     if (swapBtn) {
         swapBtn.addEventListener('click', () => {
@@ -37,6 +68,7 @@ async function init() {
             quoteAsset = temp;
             if (baseSearchInput) baseSearchInput.value = baseAsset.symbol.toUpperCase();
             if (quoteSearchInput) quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
+            updateURLParams();
         });
     }
 
@@ -86,6 +118,11 @@ async function init() {
         runBtn.addEventListener('click', updateAllCharts);
     }
 
+    // Global settings listeners
+    if (aprInput) aprInput.addEventListener('input', updateURLParams);
+    if (startDateInput) startDateInput.addEventListener('input', updateURLParams);
+    if (endDateInput) endDateInput.addEventListener('input', updateURLParams);
+
     // Set Defaults
     if (baseSearchInput) baseSearchInput.value = baseAsset.symbol.toUpperCase();
     if (quoteSearchInput) quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
@@ -101,13 +138,36 @@ async function init() {
 
     // Load coins then add initial strategy
     await fetchCoinList();
-    addStrategy("Wide Ranged Non-rebalancing"); // Start with one strategy
+
+    // Check URL Params
+    const urlParams = getURLParams();
+
+    if (urlParams.apr) aprInput.value = urlParams.apr;
+    if (urlParams.start) startDateInput.value = urlParams.start;
+    if (urlParams.end) endDateInput.value = urlParams.end;
+
+    if (urlParams.token1) {
+        const coin1 = allCoins.find(c => c.symbol.toLowerCase() === urlParams.token1.toLowerCase());
+        if (coin1) {
+            baseAsset = coin1;
+            if (baseSearchInput) baseSearchInput.value = baseAsset.symbol.toUpperCase();
+        }
+    }
+    if (urlParams.token2) {
+        const coin2 = allCoins.find(c => c.symbol.toLowerCase() === urlParams.token2.toLowerCase());
+        if (coin2) {
+            quoteAsset = coin2;
+            if (quoteSearchInput) quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
+        }
+    }
+
+    addStrategy("Wide Ranged Non-rebalancing"); // Default initial strategy
     updateAllCharts(); // Initial run
 }
 
 // --- Strategy Management ---
 
-function addStrategy(customName = null) {
+function addStrategy(config = {}) {
     const container = document.getElementById('strategies-container');
     const template = document.getElementById('strategy-template');
     if (!container || !template) return;
@@ -116,7 +176,9 @@ function addStrategy(customName = null) {
     const block = clone.querySelector('.strategy-block');
     const id = nextStrategyId++;
     block.dataset.id = id;
-    block.querySelector('.strategy-title-input').value = customName || `Strategy #${id}`;
+
+    const titleInput = block.querySelector('.strategy-title-input');
+    titleInput.value = config.name || `Strategy #${id}`;
 
     // Elements inside the block
     const strategy = {
@@ -135,8 +197,22 @@ function addStrategy(customName = null) {
         chartInstance: null,
         relativeCanvas: block.querySelector('.relative-chart'),
         relativeChartInstance: null,
-        rebalanceRangeManuallyChanged: false
+        rebalanceRangeManuallyChanged: config.rebMan || false
     };
+
+    // Apply config if provided
+    if (config.min !== undefined) strategy.minRangeInput.value = config.min;
+    if (config.max !== undefined) strategy.maxRangeInput.value = config.max;
+    if (config.reb !== undefined) {
+        strategy.rebalanceToggle.checked = config.reb;
+        if (config.reb) strategy.rebalanceSubFields.classList.remove('disabled');
+    }
+    if (config.rebMin !== undefined) strategy.rebalanceMinInput.value = config.rebMin;
+    if (config.rebMax !== undefined) strategy.rebalanceMaxInput.value = config.rebMax;
+    if (config.rebDelay !== undefined) strategy.rebalanceDelayInput.value = config.rebDelay;
+
+    // Serialization trigger on inputs
+    // (Removed strategy-specific URL updates to keep URL clean)
 
     // Toggle logic
     strategy.rebalanceToggle.addEventListener('change', () => {
@@ -251,6 +327,7 @@ function removeStrategy(id) {
     if (strategy.relativeChartInstance) strategy.relativeChartInstance.destroy();
     strategy.block.remove();
     strategies.splice(index, 1);
+    updateURLParams();
 }
 
 // --- Search Logic ---
