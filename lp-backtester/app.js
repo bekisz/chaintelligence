@@ -158,18 +158,88 @@ function addStrategy(customName = null) {
     strategy.minRangeInput.addEventListener('input', syncRebalanceRange);
     strategy.maxRangeInput.addEventListener('input', syncRebalanceRange);
 
-    strategy.rebalanceMinInput.addEventListener('input', () => {
-        strategy.rebalanceRangeManuallyChanged = true;
-    });
     strategy.rebalanceMaxInput.addEventListener('input', () => {
         strategy.rebalanceRangeManuallyChanged = true;
     });
 
+    // Range Validation Logic
+    const validateRange = (minEl, maxEl) => {
+        let minVal = parseFloat(minEl.value);
+        let maxVal = parseFloat(maxEl.value);
+
+        if (isNaN(minVal) || isNaN(maxVal)) {
+            minEl.classList.remove('invalid-input');
+            maxEl.classList.remove('invalid-input');
+            return true;
+        }
+
+        const isValid = minVal <= maxVal;
+        if (isValid) {
+            minEl.classList.remove('invalid-input');
+            maxEl.classList.remove('invalid-input');
+        } else {
+            minEl.classList.add('invalid-input');
+            maxEl.classList.add('invalid-input');
+        }
+        return isValid;
+    };
+
+    const checkGlobalValidity = () => {
+        const runBtn = document.getElementById('run-btn');
+        let allValid = true;
+
+        strategies.forEach(s => {
+            const isLpValid = validateRange(s.minRangeInput, s.maxRangeInput);
+            let isRebValid = true;
+            if (s.rebalanceToggle.checked) {
+                isRebValid = validateRange(s.rebalanceMinInput, s.rebalanceMaxInput);
+            } else {
+                // If rebalance is OFF, clear invalid styles from rebalance fields
+                s.rebalanceMinInput.classList.remove('invalid-input');
+                s.rebalanceMaxInput.classList.remove('invalid-input');
+            }
+
+            if (!isLpValid || !isRebValid) {
+                allValid = false;
+            }
+        });
+
+        runBtn.disabled = !allValid;
+    };
+
+    strategy.minRangeInput.addEventListener('input', () => {
+        syncRebalanceRange();
+        checkGlobalValidity();
+    });
+    strategy.maxRangeInput.addEventListener('input', () => {
+        syncRebalanceRange();
+        checkGlobalValidity();
+    });
+
+    strategy.rebalanceMinInput.addEventListener('input', () => {
+        strategy.rebalanceRangeManuallyChanged = true;
+        checkGlobalValidity();
+    });
+    strategy.rebalanceMaxInput.addEventListener('input', () => {
+        strategy.rebalanceRangeManuallyChanged = true;
+        checkGlobalValidity();
+    });
+
+    strategy.rebalanceToggle.addEventListener('change', () => {
+        if (strategy.rebalanceToggle.checked) {
+            strategy.rebalanceSubFields.classList.remove('disabled');
+        } else {
+            strategy.rebalanceSubFields.classList.add('disabled');
+        }
+        checkGlobalValidity();
+    });
+
+    // Initial check
+    checkGlobalValidity();
+
     // Event listeners are now handled via delegation in init() for Run button etc.
     strategies.push(strategy);
     container.appendChild(clone);
-
-    // If we already have data, we might want to run it, but let's wait for the user to click Run
 }
 
 function removeStrategy(id) {
