@@ -179,6 +179,7 @@ function addStrategy(config = {}) {
 
     const titleInput = block.querySelector('.strategy-title-input');
     titleInput.value = config.name || `Strategy #${id}`;
+    block.querySelector('.strategy-id').textContent = `#${id}`;
 
     // Elements inside the block
     const strategy = {

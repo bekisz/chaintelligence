@@ -476,11 +476,19 @@ input:checked+.slider:before {
     background: rgba(255, 255, 255, 0.02);
 }
 
+.strategy-id {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 400;
+    margin-left: 0.25rem;
+    opacity: 0.6;
+}
+
 .strategy-title-input:focus {
     border-color: var(--accent);
     background: var(--bg-color);
-    width: 500px;
-    /* Expand on focus */
+    width: 450px;
+    /* Adjusted to make room for ID */
 }
 
 .edit-icon {
