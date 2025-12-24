@@ -15,22 +15,95 @@ let lastCalculatedResults = []; // Store results for enlargement later
 
 function getURLParams() {
     const params = new URLSearchParams(window.location.search);
-    return {
+    const result = {
         token1: params.get('token1'),
         token2: params.get('token2'),
         apr: params.get('apr'),
         start: params.get('start'),
-        end: params.get('end')
+        end: params.get('end'),
+        strategies: []
     };
+
+    // Parse strategy[n].key parameters
+    const strategyMap = {};
+    for (const [key, value] of params.entries()) {
+        const match = key.match(/^strategy\[(\d+)\]\.(.+)$/);
+        if (match) {
+            const index = match[1];
+            const property = match[2];
+            if (!strategyMap[index]) strategyMap[index] = {};
+
+            const parts = property.split('.');
+            let current = strategyMap[index];
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (i === parts.length - 1) {
+                    // Final part: set the value
+                    if (current[part] && typeof current[part] === 'object') {
+                        current[part]._ = value;
+                    } else {
+                        current[part] = value;
+                    }
+                } else {
+                    // Intermediate part: ensure object exists
+                    if (!current[part] || typeof current[part] !== 'object') {
+                        const oldVal = current[part];
+                        current[part] = oldVal ? { _: oldVal } : {};
+                    }
+                    current = current[part];
+                }
+            }
+        }
+    }
+
+    // Convert map to sorted array
+    const sortedIndices = Object.keys(strategyMap).sort((a, b) => a - b);
+    result.strategies = sortedIndices.map(idx => {
+        const s = strategyMap[idx];
+        return {
+            name: s.name,
+            min: s.range?.min || s.min,
+            max: s.range?.max || s.max,
+            reb: s.rebalance === 'true' || s.reb === 'true' || (typeof s.rebalance === 'object' && s.rebalance._ === 'true'),
+            rebMin: s.rebalance?.range?.min || s.rebalanceRange?.min || s.rebMin,
+            rebMax: s.rebalance?.range?.max || s.rebalanceRange?.max || s.rebMax,
+            rebDelay: s.rebalance?.delay || s.rebalanceDelay || s.rebDelay,
+            rebMan: s.rebalance?.manual === 'true' || s.rebalanceManual === 'true' || s.rebMan === 'true'
+        };
+    });
+
+    return result;
 }
 
 function updateURLParams() {
     const params = new URLSearchParams(window.location.search);
+
+    // Clear old strategy params
+    for (const key of Array.from(params.keys())) {
+        if (key.startsWith('strategy[')) params.delete(key);
+    }
+
     if (baseAsset) params.set('token1', baseAsset.symbol.toLowerCase());
     if (quoteAsset) params.set('token2', quoteAsset.symbol.toLowerCase());
     if (aprInput) params.set('apr', aprInput.value);
     if (startDateInput) params.set('start', startDateInput.value);
     if (endDateInput) params.set('end', endDateInput.value);
+
+    strategies.forEach((s, i) => {
+        const idx = i + 1; // 1-based indexing for readability
+        const prefix = `strategy[${idx}]`;
+        params.set(`${prefix}.name`, s.block.querySelector('.strategy-title-input').value);
+        params.set(`${prefix}.range.min`, s.minRangeInput.value);
+        params.set(`${prefix}.range.max`, s.maxRangeInput.value);
+        params.set(`${prefix}.rebalance`, s.rebalanceToggle.checked);
+
+        if (s.rebalanceToggle.checked) {
+            params.set(`${prefix}.rebalance.range.min`, s.rebalanceMinInput.value);
+            params.set(`${prefix}.rebalance.range.max`, s.rebalanceMaxInput.value);
+            params.set(`${prefix}.rebalance.delay`, s.rebalanceDelayInput.value);
+            params.set(`${prefix}.rebalance.manual`, s.rebalanceRangeManuallyChanged);
+        }
+    });
 
     const newUrl = window.location.pathname + '?' + params.toString();
     window.history.replaceState({}, '', newUrl);
@@ -161,7 +234,14 @@ async function init() {
         }
     }
 
-    addStrategy("Wide Ranged Non-rebalancing"); // Default initial strategy
+    if (urlParams.strategies && urlParams.strategies.length > 0) {
+        urlParams.strategies.forEach(sConfig => {
+            addStrategy(sConfig);
+        });
+    } else {
+        addStrategy({ name: "Wide Ranged Non-rebalancing" });
+    }
+
     updateAllCharts(); // Initial run
 }
 
@@ -213,7 +293,16 @@ function addStrategy(config = {}) {
     if (config.rebDelay !== undefined) strategy.rebalanceDelayInput.value = config.rebDelay;
 
     // Serialization trigger on inputs
-    // (Removed strategy-specific URL updates to keep URL clean)
+    const inputsToWatch = [
+        strategy.minRangeInput, strategy.maxRangeInput,
+        strategy.rebalanceToggle, strategy.rebalanceMinInput,
+        strategy.rebalanceMaxInput, strategy.rebalanceDelayInput,
+        titleInput
+    ];
+    inputsToWatch.forEach(input => {
+        input.addEventListener('input', updateURLParams);
+        input.addEventListener('change', updateURLParams);
+    });
 
     // Toggle logic
     strategy.rebalanceToggle.addEventListener('change', () => {
