@@ -885,7 +885,10 @@ function renderSummaryChart(allResults, canvas, existingInstance) {
             maintainAspectRatio: false,
             interaction: { intersect: false, mode: 'index' },
             plugins: {
-                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` } },
+                tooltip: {
+                    itemSort: (a, b) => b.raw - a.raw,
+                    callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` }
+                },
                 legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 20 } }
             },
             scales: {
