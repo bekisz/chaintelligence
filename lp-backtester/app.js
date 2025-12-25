@@ -1,6 +1,7 @@
 // Global State
 let baseSearchInput, quoteSearchInput, baseResults, quoteResults, swapBtn;
 let aprInput, startDateInput, endDateInput, addStrategyBtn, runBtn;
+let chartScaleSelect;
 let allCoins = [];
 let baseAsset = { id: 'ethereum', symbol: 'eth', name: 'Ethereum' };
 let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
@@ -9,6 +10,7 @@ let strategies = [];
 let nextStrategyId = 1;
 let summaryChartInstance = null;
 let enlargedChartInstance = null;
+let currentEnlargedState = null;
 let lastCalculatedResults = []; // Store results for enlargement later
 
 // --- URL Parameter Management ---
@@ -134,6 +136,7 @@ async function init() {
     endDateInput = document.getElementById('end-date');
     addStrategyBtn = document.getElementById('add-strategy-btn');
     runBtn = document.getElementById('run-btn');
+    chartScaleSelect = document.getElementById('chart-scale-select');
 
     // Attach Global Listeners
     if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => {
@@ -158,6 +161,10 @@ async function init() {
 
     if (addStrategyBtn) {
         addStrategyBtn.addEventListener('click', () => addStrategy());
+    }
+
+    if (chartScaleSelect) {
+        chartScaleSelect.addEventListener('change', updateAllCharts);
     }
 
     const strategiesContainer = document.getElementById('strategies-container');
@@ -608,6 +615,23 @@ async function updateAllCharts() {
             }
         }
 
+        // If we have an enlarged chart open, re-render it to reflect potential changes (like Log Scale)
+        if (currentEnlargedState) {
+            const canvas = document.getElementById('enlargedChart');
+            if (currentEnlargedState.type === 'summary') {
+                enlargedChartInstance = renderSummaryChart(allResults, canvas, enlargedChartInstance);
+            } else {
+                const strategy = strategies.find(s => s.id === currentEnlargedState.id);
+                if (strategy && strategy.lastResults) {
+                    if (currentEnlargedState.type === 'main') {
+                        enlargedChartInstance = renderChart(strategy.lastResults, canvas, enlargedChartInstance);
+                    } else if (currentEnlargedState.type === 'relative') {
+                        enlargedChartInstance = renderRelativeChart(strategy.lastResults, canvas, enlargedChartInstance);
+                    }
+                }
+            }
+        }
+
     } catch (globalError) {
         console.error("Global Error:", globalError);
         strategies.forEach(s => {
@@ -806,7 +830,12 @@ function renderChart(results, canvas, existingInstance) {
             plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` } } },
             scales: {
                 x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 8 } },
-                y: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af' }, title: { display: true, text: 'Value (100 base)' } }
+                y: {
+                    type: chartScaleSelect ? chartScaleSelect.value : 'linear',
+                    grid: { color: '#2d3748' },
+                    ticks: { color: '#9ca3af' },
+                    title: { display: true, text: 'Value (100 base)' }
+                }
             }
         }
     });
@@ -893,7 +922,12 @@ function renderSummaryChart(allResults, canvas, existingInstance) {
             },
             scales: {
                 x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
-                y: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af' }, title: { display: true, text: 'Value (100 base)' } }
+                y: {
+                    type: chartScaleSelect ? chartScaleSelect.value : 'linear',
+                    grid: { color: '#2d3748' },
+                    ticks: { color: '#9ca3af' },
+                    title: { display: true, text: 'Value (100 base)' }
+                }
             }
         }
     });
@@ -937,6 +971,13 @@ function handleEnlarge(btn) {
         showModal(title);
         const canvas = document.getElementById('enlargedChart');
         enlargedChartInstance = renderFn(results, canvas, enlargedChartInstance);
+
+        // Store state for live updates
+        if (summarySection) {
+            currentEnlargedState = { type: 'summary' };
+        } else if (block) {
+            currentEnlargedState = { id: parseInt(block.dataset.id), type: type };
+        }
     }
 }
 
@@ -952,6 +993,7 @@ function hideModal() {
     const modal = document.getElementById('modal-overlay');
     modal.classList.add('hidden');
     document.body.style.overflow = '';
+    currentEnlargedState = null;
     if (enlargedChartInstance) {
         enlargedChartInstance.destroy();
         enlargedChartInstance = null;
