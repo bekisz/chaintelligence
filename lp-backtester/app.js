@@ -60,11 +60,20 @@ function getURLParams() {
     const sortedIndices = Object.keys(strategyMap).sort((a, b) => a - b);
     result.strategies = sortedIndices.map(idx => {
         const s = strategyMap[idx];
+        const isReb = s.rebalance === 'true' || s.reb === 'true' || (typeof s.rebalance === 'object' && s.rebalance._ === 'true');
+
+        // Priority: type > rebalance.type > (rebalance:boolean ? 'time-delayed' : 'simple')
+        let type = s.type || s.rebalance?.type || (isReb ? 'time-delayed' : 'simple');
+
+        // Backward compatibility mapping
+        if (type === 'none') type = 'simple';
+        if (type === 'delayed') type = 'time-delayed';
+
         return {
             name: s.name,
             min: s.range?.min || s.min,
             max: s.range?.max || s.max,
-            reb: s.rebalance === 'true' || s.reb === 'true' || (typeof s.rebalance === 'object' && s.rebalance._ === 'true'),
+            type: type,
             rebMin: s.rebalance?.range?.min || s.rebalanceRange?.min || s.rebMin,
             rebMax: s.rebalance?.range?.max || s.rebalanceRange?.max || s.rebMax,
             rebDelay: s.rebalance?.delay || s.rebalanceDelay || s.rebDelay,
@@ -95,9 +104,11 @@ function updateURLParams() {
         params.set(`${prefix}.name`, s.block.querySelector('.strategy-title-input').value);
         params.set(`${prefix}.range.min`, s.minRangeInput.value);
         params.set(`${prefix}.range.max`, s.maxRangeInput.value);
-        params.set(`${prefix}.rebalance`, s.rebalanceToggle.checked);
 
-        if (s.rebalanceToggle.checked) {
+        const type = s.rebalanceType.value;
+        params.set(`${prefix}.type`, type);
+
+        if (type !== 'simple') {
             params.set(`${prefix}.rebalance.range.min`, s.rebalanceMinInput.value);
             params.set(`${prefix}.rebalance.range.max`, s.rebalanceMaxInput.value);
             params.set(`${prefix}.rebalance.delay`, s.rebalanceDelayInput.value);
@@ -267,8 +278,8 @@ function addStrategy(config = {}) {
         block,
         minRangeInput: block.querySelector('.min-range'),
         maxRangeInput: block.querySelector('.max-range'),
-        rebalanceToggle: block.querySelector('.rebalance-toggle'),
-        rebalanceSubFields: block.querySelector('.group-controls.disabled'),
+        rebalanceType: block.querySelector('.rebalance-type'),
+        rebalanceParamsRow: block.querySelector('.rebalance-params-row'),
         rebalanceMinInput: block.querySelector('.rebalance-min'),
         rebalanceMaxInput: block.querySelector('.rebalance-max'),
         rebalanceDelayInput: block.querySelector('.rebalance-delay'),
@@ -284,19 +295,32 @@ function addStrategy(config = {}) {
     // Apply config if provided
     if (config.min !== undefined) strategy.minRangeInput.value = config.min;
     if (config.max !== undefined) strategy.maxRangeInput.value = config.max;
-    if (config.reb !== undefined) {
-        strategy.rebalanceToggle.checked = config.reb;
-        if (config.reb) strategy.rebalanceSubFields.classList.remove('disabled');
-    }
+    if (config.type !== undefined) strategy.rebalanceType.value = config.type;
     if (config.rebMin !== undefined) strategy.rebalanceMinInput.value = config.rebMin;
     if (config.rebMax !== undefined) strategy.rebalanceMaxInput.value = config.rebMax;
     if (config.rebDelay !== undefined) strategy.rebalanceDelayInput.value = config.rebDelay;
 
-    // Serialization trigger on inputs
+    // Visibility toggle based on type
+    const toggleRebalanceFields = () => {
+        const isNone = strategy.rebalanceType.value === 'simple';
+        if (isNone) {
+            strategy.rebalanceParamsRow.classList.add('disabled');
+            strategy.rebalanceMinInput.disabled = true;
+            strategy.rebalanceMaxInput.disabled = true;
+            strategy.rebalanceDelayInput.disabled = true;
+        } else {
+            strategy.rebalanceParamsRow.classList.remove('disabled');
+            strategy.rebalanceMinInput.disabled = false;
+            strategy.rebalanceMaxInput.disabled = false;
+            strategy.rebalanceDelayInput.disabled = false;
+        }
+    };
+    toggleRebalanceFields();
+
     // Event Listeners for serialization and URL updates
     const inputsToWatch = [
         strategy.minRangeInput, strategy.maxRangeInput,
-        strategy.rebalanceToggle, strategy.rebalanceMinInput,
+        strategy.rebalanceType, strategy.rebalanceMinInput,
         strategy.rebalanceMaxInput, strategy.rebalanceDelayInput,
         titleInput
     ];
@@ -305,13 +329,8 @@ function addStrategy(config = {}) {
         input.addEventListener('change', updateURLParams);
     });
 
-    // Rebalance toggle logic (UI only)
-    strategy.rebalanceToggle.addEventListener('change', () => {
-        if (strategy.rebalanceToggle.checked) {
-            strategy.rebalanceSubFields.classList.remove('disabled');
-        } else {
-            strategy.rebalanceSubFields.classList.add('disabled');
-        }
+    strategy.rebalanceType.addEventListener('change', () => {
+        toggleRebalanceFields();
         checkGlobalValidity();
     });
 
@@ -382,12 +401,26 @@ function checkGlobalValidity() {
     strategies.forEach(s => {
         const isLpValid = validateRange(s.minRangeInput, s.maxRangeInput);
         let isRebValid = true;
-        if (s.rebalanceToggle.checked) {
+        if (s.rebalanceType.value !== 'simple') {
             isRebValid = validateRange(s.rebalanceMinInput, s.rebalanceMaxInput);
+
+            // Settled rebalance requires delay > 1
+            if (s.rebalanceType.value === 'settled') {
+                const delay = parseInt(s.rebalanceDelayInput.value);
+                if (isNaN(delay) || delay <= 1) {
+                    isRebValid = false;
+                    s.rebalanceDelayInput.classList.add('invalid-input');
+                } else {
+                    s.rebalanceDelayInput.classList.remove('invalid-input');
+                }
+            } else {
+                s.rebalanceDelayInput.classList.remove('invalid-input');
+            }
         } else {
-            // If rebalance is OFF, clear invalid styles from rebalance fields
+            // ... (rest of the logic)
             s.rebalanceMinInput.classList.remove('invalid-input');
             s.rebalanceMaxInput.classList.remove('invalid-input');
+            s.rebalanceDelayInput.classList.remove('invalid-input');
         }
 
         if (!isLpValid || !isRebValid) {
@@ -540,7 +573,7 @@ async function updateAllCharts() {
                 const maxPct = parseFloat(s.maxRangeInput.value) / 100;
                 const rebMinPct = parseFloat(s.rebalanceMinInput.value) / 100;
                 const rebMaxPct = parseFloat(s.rebalanceMaxInput.value) / 100;
-                const rebalanceMode = s.rebalanceToggle.checked ? 'delayed' : 'none';
+                const rebalanceMode = s.rebalanceType.value;
                 const delayDays = parseInt(s.rebalanceDelayInput.value) || 1;
                 const strategyName = s.block.querySelector('.strategy-title-input').value || `Strategy #${s.id}`;
 
@@ -684,29 +717,50 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
 
         // Rebalance logic
         let shouldRebalance = false;
-        if (P < P_reb_min || P > P_reb_max) {
-            daysOutOfRange++;
-        } else {
-            daysOutOfRange = 0;
-        }
+        let rebalanceCenterPrice = P;
 
-        if (rebalanceMode === 'immediate' && (P < P_reb_min || P > P_reb_max)) {
-            shouldRebalance = true;
-        } else if (rebalanceMode === 'delayed' && daysOutOfRange >= delayDays) {
-            shouldRebalance = true;
-            daysOutOfRange = 0;
+        if (rebalanceMode !== 'simple') {
+            if (P < P_reb_min || P > P_reb_max) {
+                daysOutOfRange++;
+            } else {
+                daysOutOfRange = 0;
+            }
+
+            if (rebalanceMode === 'time-delayed' && daysOutOfRange >= delayDays) {
+                shouldRebalance = true;
+            } else if (rebalanceMode === 'settled' && daysOutOfRange >= delayDays) {
+                // Check stability in the last delayDays
+                const window = priceSeries.slice(i - delayDays + 1, i + 1);
+                const prices = window.map(p => p[1]);
+
+                // Geometric Average
+                const sumLog = prices.reduce((a, b) => a + Math.log(b), 0);
+                const geoAvg = Math.exp(sumLog / delayDays);
+
+                // Stability Check: prices within user-defined rebalance boundaries relative to geoAvg
+                const isStable = prices.every(p => {
+                    const rel = p / geoAvg;
+                    return rel >= (1 + rebMinPct) && rel <= (1 + rebMaxPct);
+                });
+
+                if (isStable) {
+                    shouldRebalance = true;
+                    rebalanceCenterPrice = geoAvg;
+                }
+            }
         }
 
         if (shouldRebalance) {
             currentCapital = val_lp_principal + accumulatedFees;
             accumulatedFees = 0;
-            P0 = P;
+            P0 = rebalanceCenterPrice;
             P_min = P0 * (1 + minPct);
             P_max = P0 * (1 + maxPct);
             P_reb_min = P0 * (1 + rebMinPct);
             P_reb_max = P0 * (1 + rebMaxPct);
             L = getLikidityAndAmounts(P0, P_min, P_max, currentCapital).L;
             val_lp_principal = currentCapital;
+            daysOutOfRange = 0;
         }
 
         lpTotalData.push([time, val_lp_principal + accumulatedFees]);
