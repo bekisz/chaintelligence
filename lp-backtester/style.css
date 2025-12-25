@@ -750,12 +750,13 @@ input::-webkit-calendar-picker-indicator:hover {
     background-color: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 16px;
-    width: 90%;
-    max-width: 1200px;
-    max-height: 90vh;
+    width: 95%;
+    max-width: 1600px;
+    height: 95vh;
+    max-height: 95vh;
     display: flex;
     flex-direction: column;
-    padding: 2rem;
+    padding: 1.5rem;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
 }
 
@@ -763,8 +764,8 @@ input::-webkit-calendar-picker-indicator:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--border);
 }
 
@@ -793,8 +794,9 @@ input::-webkit-calendar-picker-indicator:hover {
 
 .modal-body {
     flex: 1;
-    min-height: 500px;
+    min-height: 0;
     position: relative;
+    overflow: hidden;
 }
 
 #enlargedChart {
