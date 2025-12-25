@@ -293,6 +293,7 @@ function addStrategy(config = {}) {
     if (config.rebDelay !== undefined) strategy.rebalanceDelayInput.value = config.rebDelay;
 
     // Serialization trigger on inputs
+    // Event Listeners for serialization and URL updates
     const inputsToWatch = [
         strategy.minRangeInput, strategy.maxRangeInput,
         strategy.rebalanceToggle, strategy.rebalanceMinInput,
@@ -304,13 +305,14 @@ function addStrategy(config = {}) {
         input.addEventListener('change', updateURLParams);
     });
 
-    // Toggle logic
+    // Rebalance toggle logic (UI only)
     strategy.rebalanceToggle.addEventListener('change', () => {
         if (strategy.rebalanceToggle.checked) {
             strategy.rebalanceSubFields.classList.remove('disabled');
         } else {
             strategy.rebalanceSubFields.classList.add('disabled');
         }
+        checkGlobalValidity();
     });
 
     // Sync logic: LP Range -> Rebalance Range (if not decoupled)
@@ -321,58 +323,7 @@ function addStrategy(config = {}) {
         }
     };
 
-    strategy.minRangeInput.addEventListener('input', syncRebalanceRange);
-    strategy.maxRangeInput.addEventListener('input', syncRebalanceRange);
-
-    strategy.rebalanceMaxInput.addEventListener('input', () => {
-        strategy.rebalanceRangeManuallyChanged = true;
-    });
-
-    // Range Validation Logic
-    const validateRange = (minEl, maxEl) => {
-        let minVal = parseFloat(minEl.value);
-        let maxVal = parseFloat(maxEl.value);
-
-        if (isNaN(minVal) || isNaN(maxVal)) {
-            minEl.classList.remove('invalid-input');
-            maxEl.classList.remove('invalid-input');
-            return true;
-        }
-
-        const isValid = minVal <= maxVal;
-        if (isValid) {
-            minEl.classList.remove('invalid-input');
-            maxEl.classList.remove('invalid-input');
-        } else {
-            minEl.classList.add('invalid-input');
-            maxEl.classList.add('invalid-input');
-        }
-        return isValid;
-    };
-
-    const checkGlobalValidity = () => {
-        const runBtn = document.getElementById('run-btn');
-        let allValid = true;
-
-        strategies.forEach(s => {
-            const isLpValid = validateRange(s.minRangeInput, s.maxRangeInput);
-            let isRebValid = true;
-            if (s.rebalanceToggle.checked) {
-                isRebValid = validateRange(s.rebalanceMinInput, s.rebalanceMaxInput);
-            } else {
-                // If rebalance is OFF, clear invalid styles from rebalance fields
-                s.rebalanceMinInput.classList.remove('invalid-input');
-                s.rebalanceMaxInput.classList.remove('invalid-input');
-            }
-
-            if (!isLpValid || !isRebValid) {
-                allValid = false;
-            }
-        });
-
-        runBtn.disabled = !allValid;
-    };
-
+    // Combined Range Listeners
     strategy.minRangeInput.addEventListener('input', () => {
         syncRebalanceRange();
         checkGlobalValidity();
@@ -391,21 +342,60 @@ function addStrategy(config = {}) {
         checkGlobalValidity();
     });
 
-    strategy.rebalanceToggle.addEventListener('change', () => {
-        if (strategy.rebalanceToggle.checked) {
-            strategy.rebalanceSubFields.classList.remove('disabled');
-        } else {
-            strategy.rebalanceSubFields.classList.add('disabled');
-        }
-        checkGlobalValidity();
-    });
+    strategy.rebalanceDelayInput.addEventListener('input', checkGlobalValidity);
 
     // Initial check
     checkGlobalValidity();
 
-    // Event listeners are now handled via delegation in init() for Run button etc.
     strategies.push(strategy);
     container.appendChild(clone);
+}
+
+// Range Validation Logic
+function validateRange(minEl, maxEl) {
+    let minVal = parseFloat(minEl.value);
+    let maxVal = parseFloat(maxEl.value);
+
+    if (isNaN(minVal) || isNaN(maxVal)) {
+        minEl.classList.remove('invalid-input');
+        maxEl.classList.remove('invalid-input');
+        return true;
+    }
+
+    const isValid = minVal <= maxVal;
+    if (isValid) {
+        minEl.classList.remove('invalid-input');
+        maxEl.classList.remove('invalid-input');
+    } else {
+        minEl.classList.add('invalid-input');
+        maxEl.classList.add('invalid-input');
+    }
+    return isValid;
+}
+
+function checkGlobalValidity() {
+    const runBtn = document.getElementById('run-btn');
+    if (!runBtn) return;
+
+    let allValid = true;
+
+    strategies.forEach(s => {
+        const isLpValid = validateRange(s.minRangeInput, s.maxRangeInput);
+        let isRebValid = true;
+        if (s.rebalanceToggle.checked) {
+            isRebValid = validateRange(s.rebalanceMinInput, s.rebalanceMaxInput);
+        } else {
+            // If rebalance is OFF, clear invalid styles from rebalance fields
+            s.rebalanceMinInput.classList.remove('invalid-input');
+            s.rebalanceMaxInput.classList.remove('invalid-input');
+        }
+
+        if (!isLpValid || !isRebValid) {
+            allValid = false;
+        }
+    });
+
+    runBtn.disabled = !allValid;
 }
 
 function removeStrategy(id) {
@@ -692,13 +682,17 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
             }
         }
 
-        // Rebalance
+        // Rebalance logic
         let shouldRebalance = false;
-        if (P < P_reb_min || P > P_reb_max) daysOutOfRange++;
-        else daysOutOfRange = 0;
+        if (P < P_reb_min || P > P_reb_max) {
+            daysOutOfRange++;
+        } else {
+            daysOutOfRange = 0;
+        }
 
-        if (rebalanceMode === 'immediate' && (P < P_reb_min || P > P_reb_max)) shouldRebalance = true;
-        else if (rebalanceMode === 'delayed' && daysOutOfRange >= delayDays) {
+        if (rebalanceMode === 'immediate' && (P < P_reb_min || P > P_reb_max)) {
+            shouldRebalance = true;
+        } else if (rebalanceMode === 'delayed' && daysOutOfRange >= delayDays) {
             shouldRebalance = true;
             daysOutOfRange = 0;
         }
