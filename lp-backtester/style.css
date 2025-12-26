@@ -569,6 +569,42 @@ input::-webkit-calendar-picker-indicator:hover {
     margin: 1.5rem 0;
 }
 
+.chart-wrapper.collapsed .chart-container {
+    display: none;
+}
+
+.chart-wrapper.collapsed .chevron-icon {
+    transform: rotate(-90deg);
+}
+
+.chart-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.toggle-chart-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    width: 24px;
+    height: 24px;
+}
+
+.toggle-chart-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+
 .chart-header-row {
     display: flex;
     justify-content: space-between;
@@ -623,6 +659,11 @@ input::-webkit-calendar-picker-indicator:hover {
     background-color: rgba(255, 255, 255, 0.02);
     border-radius: 8px;
     padding: 0.5rem;
+}
+
+.settings-container {
+    height: auto;
+    min-height: 100px;
 }
 
 .relative-chart-container {

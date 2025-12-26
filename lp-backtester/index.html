@@ -165,46 +165,65 @@
                 </div>
 
                 <div class="strategy-content">
-                    <div class="v3-settings-row">
-                        <!-- LP Range Group -->
-                        <div class="settings-group lp-group">
-                            <div class="group-title">LP Range</div>
-                            <div class="group-controls">
-                                <div class="input-group">
-                                    <label>Min %</label>
-                                    <input type="number" class="min-range" value="-50" placeholder="-50">
-                                </div>
-                                <div class="input-group">
-                                    <label>Max %</label>
-                                    <input type="number" class="max-range" value="100" placeholder="100">
-                                </div>
+                    <div class="chart-wrapper parameters-wrapper">
+                        <div class="chart-header-row">
+                            <div class="chart-title-group">
+                                <button class="toggle-chart-btn" title="Toggle Parameters">
+                                    <svg class="chevron-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="chart-label">Parameters</div>
                             </div>
                         </div>
-
-                        <!-- Rebalance Group -->
-                        <div class="settings-group rebalance-group">
-                            <div class="group-title">Rebalance</div>
-                            <div class="group-controls">
-                                <div class="input-group">
-                                    <label>Type</label>
-                                    <select class="rebalance-type">
-                                        <option value="simple">None</option>
-                                        <option value="time-delayed" selected>Time-delayed</option>
-                                        <option value="settled">Settled</option>
-                                    </select>
+                        <div class="chart-container settings-container">
+                            <div class="v3-settings-row">
+                                <!-- LP Range Group -->
+                                <div class="settings-group lp-group">
+                                    <div class="group-title">LP Range</div>
+                                    <div class="group-controls">
+                                        <div class="input-group">
+                                            <label>Min %</label>
+                                            <input type="number" class="min-range" value="-50" placeholder="-50">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Max %</label>
+                                            <input type="number" class="max-range" value="100" placeholder="100">
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="rebalance-params-row">
-                                    <div class="input-group">
-                                        <label>Delay (Days)</label>
-                                        <input type="number" class="rebalance-delay" value="3" placeholder="3" min="1">
-                                    </div>
-                                    <div class="input-group">
-                                        <label>Range Min %</label>
-                                        <input type="number" class="rebalance-min" value="-50" placeholder="-50">
-                                    </div>
-                                    <div class="input-group">
-                                        <label>Range Max %</label>
-                                        <input type="number" class="rebalance-max" value="100" placeholder="100">
+
+                                <!-- Rebalance Group -->
+                                <div class="settings-group rebalance-group">
+                                    <div class="group-title">Rebalance</div>
+                                    <div class="group-controls">
+                                        <div class="input-group">
+                                            <label>Type</label>
+                                            <select class="rebalance-type">
+                                                <option value="simple">None</option>
+                                                <option value="time-delayed" selected>Time-delayed</option>
+                                                <option value="settled">Settled</option>
+                                            </select>
+                                        </div>
+                                        <div class="rebalance-params-row">
+                                            <div class="input-group">
+                                                <label>Delay (Days)</label>
+                                                <input type="number" class="rebalance-delay" value="3" placeholder="3"
+                                                    min="1">
+                                            </div>
+                                            <div class="input-group">
+                                                <label>Range Min %</label>
+                                                <input type="number" class="rebalance-min" value="-50"
+                                                    placeholder="-50">
+                                            </div>
+                                            <div class="input-group">
+                                                <label>Range Max %</label>
+                                                <input type="number" class="rebalance-max" value="100"
+                                                    placeholder="100">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -213,7 +232,16 @@
 
                     <div class="chart-wrapper">
                         <div class="chart-header-row">
-                            <div class="chart-label">Price & LP Range</div>
+                            <div class="chart-title-group">
+                                <button class="toggle-chart-btn" title="Toggle Chart">
+                                    <svg class="chevron-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="chart-label">Price & LP Range</div>
+                            </div>
                             <button class="enlarge-btn" title="Enlarge Chart" data-chart-type="main">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -234,9 +262,46 @@
                         </div>
                     </div>
 
-                    <div class="chart-wrapper relative-wrapper">
+                    <div class="chart-wrapper volatility-wrapper collapsed">
                         <div class="chart-header-row">
-                            <div class="chart-label">Relative Return over HODL (%)</div>
+                            <div class="chart-title-group">
+                                <button class="toggle-chart-btn" title="Toggle Chart">
+                                    <svg class="chevron-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="chart-label">Volatility</div>
+                            </div>
+                            <button class="enlarge-btn" title="Enlarge Chart" data-chart-type="volatility">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <polyline points="9 21 3 21 3 15"></polyline>
+                                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="chart-container">
+                            <canvas class="volatility-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-wrapper relative-wrapper collapsed">
+                        <div class="chart-header-row">
+                            <div class="chart-title-group">
+                                <button class="toggle-chart-btn" title="Toggle Chart">
+                                    <svg class="chevron-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="chart-label">Relative Return over HODL (%)</div>
+                            </div>
                             <button class="enlarge-btn" title="Enlarge Chart" data-chart-type="relative">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
