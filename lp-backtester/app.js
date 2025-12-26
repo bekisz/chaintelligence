@@ -9,6 +9,7 @@ let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
 let strategies = [];
 let nextStrategyId = 1;
 let summaryChartInstance = null;
+let yoySummaryChartInstance = null;
 let enlargedChartInstance = null;
 let currentEnlargedState = null;
 let lastCalculatedResults = []; // Store results for enlargement later
@@ -608,6 +609,7 @@ async function updateAllCharts() {
             if (allResults.length > 0) {
                 summarySection.classList.remove('hidden');
                 summaryChartInstance = renderSummaryChart(allResults, document.getElementById('summaryChart'), summaryChartInstance);
+                yoySummaryChartInstance = renderYoYChart(allResults, document.getElementById('yoySummaryChart'), yoySummaryChartInstance);
                 lastCalculatedResults = allResults;
             } else {
                 summarySection.classList.add('hidden');
@@ -620,6 +622,8 @@ async function updateAllCharts() {
             const canvas = document.getElementById('enlargedChart');
             if (currentEnlargedState.type === 'summary') {
                 enlargedChartInstance = renderSummaryChart(allResults, canvas, enlargedChartInstance);
+            } else if (currentEnlargedState.type === 'yoy-summary') {
+                enlargedChartInstance = renderYoYChart(allResults, canvas, enlargedChartInstance);
             } else {
                 const strategy = strategies.find(s => s.id === currentEnlargedState.id);
                 if (strategy && strategy.lastResults) {
@@ -802,6 +806,40 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
     return { hodlData, lpTotalData, asset1Data, asset2Data, accumulatedFees, minRangeSeries, maxRangeSeries, minRebSeries, maxRebSeries, relativeSeries };
 }
 
+function calculateYoY(series) {
+    // series is array of [timestamp, value]
+    // returns array of [timestamp, yoyPct]
+    // window is 365 days (approx 31536000000 ms)
+    const msPerYear = 365 * 24 * 60 * 60 * 1000;
+    const yoySeries = [];
+    let pastIndex = 0;
+
+    for (let i = 0; i < series.length; i++) {
+        const [currentTime, currentValue] = series[i];
+
+        // Advance pastIndex until it's roughly 1 year ago
+        while (pastIndex < i && (currentTime - series[pastIndex + 1][0]) > msPerYear) {
+            pastIndex++;
+        }
+
+        const [pastTime, pastValue] = series[pastIndex];
+        const timeDiff = currentTime - pastTime;
+
+        // If we found a point roughly 1 year ago (within 10% margin is usually strict enough backtest, 
+        // but let's just use exact match logic or closest point >= 365 days)
+        // Here we just check if timeDiff is close to 1 year.
+        // If the dataset < 1 year, this loop produces nothing or initial noise.
+        // Let's enforce that timeDiff > 360 days.
+        if (timeDiff >= 360 * 24 * 60 * 60 * 1000) {
+            const yoy = ((currentValue / pastValue) - 1) * 100;
+            yoySeries.push([currentTime, yoy]);
+        } else {
+            // Not enough data yet
+        }
+    }
+    return yoySeries;
+}
+
 function renderChart(results, canvas, existingInstance) {
     if (existingInstance) existingInstance.destroy();
 
@@ -933,6 +971,69 @@ function renderSummaryChart(allResults, canvas, existingInstance) {
     });
 }
 
+
+function renderYoYChart(allResults, canvas, existingInstance) {
+    if (existingInstance) existingInstance.destroy();
+
+    const colors = ['#FF007A', '#3b82f6', '#10b981', '#a855f7', '#ec4899', '#06b6d4'];
+    const datasets = [];
+
+    // HODL YoY
+    if (allResults.length > 0) {
+        const hodlSeries = calculateYoY(allResults[0].hodlData);
+        if (hodlSeries.length > 0) {
+            datasets.push({ label: 'HODL', data: hodlSeries.map(d => d[1]), borderColor: '#9ca3af', borderWidth: 2, pointRadius: 0 });
+        }
+    }
+
+    allResults.forEach((res, idx) => {
+        const yoy = calculateYoY(res.lpTotalData);
+        if (yoy.length > 0) {
+            datasets.push({
+                label: `LP: ${res.name}`,
+                data: yoy.map(d => d[1]),
+                borderColor: colors[idx % colors.length],
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: false
+            });
+        }
+    });
+
+    // Use labels from the filtered HODL YoY timestamps
+    let labels = [];
+    if (allResults.length > 0) {
+        const hodlYoY = calculateYoY(allResults[0].hodlData);
+        labels = hodlYoY.map(d => new Date(d[0]).toLocaleDateString());
+    }
+
+    return new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                tooltip: {
+                    itemSort: (a, b) => b.raw - a.raw,
+                    callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%` }
+                },
+                legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 20 } }
+            },
+            scales: {
+                x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
+                y: {
+                    type: 'linear', // Always linear for pct return
+                    grid: { color: '#2d3748' },
+                    ticks: { color: '#9ca3af', callback: (val) => val.toFixed(1) + '%' },
+                    title: { display: true, text: 'YoY Return (%)' }
+                }
+            }
+        }
+    });
+}
+
 // --- Modal Logic ---
 
 function handleEnlarge(btn) {
@@ -948,6 +1049,10 @@ function handleEnlarge(btn) {
         results = lastCalculatedResults;
         title = "Combined Performance Summary";
         renderFn = renderSummaryChart;
+    } else if (type === 'yoy-summary') {
+        results = lastCalculatedResults;
+        title = "Year-over-Year Return (%)";
+        renderFn = renderYoYChart;
     } else if (block) {
         const id = parseInt(block.dataset.id);
         const strategyName = block.querySelector('.strategy-title-input').value;
@@ -974,7 +1079,7 @@ function handleEnlarge(btn) {
 
         // Store state for live updates
         if (summarySection) {
-            currentEnlargedState = { type: 'summary' };
+            currentEnlargedState = { type: type }; // type is 'summary' or 'yoy-summary'
         } else if (block) {
             currentEnlargedState = { id: parseInt(block.dataset.id), type: type };
         }
