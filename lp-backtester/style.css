@@ -912,6 +912,84 @@ input::-webkit-calendar-picker-indicator:hover {
     width: 100%;
 }
 
-.v3-settings-row.params-row {
+/* Info Icon Styles */
+.info-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0;
+    margin-left: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    transition: color 0.2s;
+    vertical-align: middle;
+}
+
+.info-btn:hover {
+    color: var(--accent);
+}
+
+.group-title {
+    display: flex;
+    align-items: center;
+}
+
+/* Modal Text Content Styles */
+.modal-text-content {
+    color: var(--text-primary);
+    overflow-y: auto;
+    height: 100%;
+    padding: 1rem;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.modal-text-content.hidden {
+    display: none;
+}
+
+.help-content h2 {
+    color: var(--accent);
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 1.3rem;
+}
+
+.help-content h2:first-child {
     margin-top: 0;
+}
+
+.help-content p {
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+}
+
+.help-content ul,
+.help-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.help-content li {
+    margin-bottom: 0.5rem;
+}
+
+.help-content strong {
+    color: var(--text-primary);
+}
+
+.help-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2rem 0;
+}
+
+.help-content code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
 }

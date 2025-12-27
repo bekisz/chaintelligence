@@ -14,6 +14,49 @@ let enlargedChartInstance = null;
 let currentEnlargedState = null;
 let lastCalculatedResults = []; // Store results for enlargement later
 
+const STRATEGY_HELP_CONTENT = `
+<div class="help-content">
+    <h2>1. Non-rebalancing</h2>
+    <p><strong>Description</strong>: A static liquidity position with no rebalancing logic. The position remains at the initial price boundaries until the end of the simulation.</p>
+    <ul>
+        <li><strong>Trigger</strong>: None.</li>
+        <li><strong>Action</strong>: None.</li>
+    </ul>
+
+    <hr>
+
+    <h2>2. Time-delayed Rebalancing</h2>
+    <p><strong>Description</strong>: Rebalances the position once the price has spent a consecutive number of days outside of the defined <strong>Rebalance Range</strong>.</p>
+    <ul>
+        <li><strong>Trigger</strong>: Price stays below <code>Rebalance Min %</code> or above <code>Rebalance Max %</code> for <code>Delay</code> consecutive days.</li>
+        <li><strong>Action</strong>: The entire capital (principal + fees) is consolidated and redeployed centered on the <strong>current market price</strong>.</li>
+    </ul>
+
+    <hr>
+
+    <h2>3. Settled Rebalancing</h2>
+    <p><strong>Description</strong>: A more conservative strategy that only rebalances once the market has "settled" into a new price range after a breach.</p>
+    <ul>
+        <li><strong>Trigger</strong>: 
+            <ol>
+                <li>Price outside <code>Rebalance Range</code> for at least <code>Delay</code> consecutive days.</li>
+                <li>Price volatility during those days remains consistent (prices stay within rebalance boundaries relative to the geometric average).</li>
+            </ol>
+        </li>
+        <li><strong>Action</strong>: Redeployed centered on the <strong>Geometric Average Price</strong> of the settlement period.</li>
+    </ul>
+
+    <hr>
+
+    <h2>4. Periodic Rebalance</h2>
+    <p><strong>Description</strong>: A time-based strategy that rebalances the position at a fixed interval, regardless of price action.</p>
+    <ul>
+        <li><strong>Trigger</strong>: <code>Delay</code> days have passed since start or last rebalance.</li>
+        <li><strong>Action</strong>: Redeployed centered on the <strong>current market price</strong>.</li>
+    </ul>
+</div>
+`;
+
 // --- URL Parameter Management ---
 
 function getURLParams() {
@@ -202,6 +245,14 @@ async function init() {
             if (enlargeBtn) handleEnlarge(enlargeBtn);
         });
     }
+
+    // Modal Events
+    document.addEventListener('click', (e) => {
+        const infoBtn = e.target.closest('.info-btn');
+        if (infoBtn) {
+            showModal("LP Strategy Types", STRATEGY_HELP_CONTENT, true);
+        }
+    });
 
     const closeModalBtn = document.getElementById('close-modal-btn');
     const modalOverlay = document.getElementById('modal-overlay');
@@ -1257,10 +1308,26 @@ function handleEnlarge(btn) {
     }
 }
 
-function showModal(title) {
+
+function showModal(title, content, isHtml = false) {
     const modal = document.getElementById('modal-overlay');
     const titleEl = document.getElementById('modal-title');
+    const canvas = document.getElementById('enlargedChart');
+    const textContent = document.getElementById('modal-text-content');
+
     titleEl.textContent = title;
+
+    if (isHtml) {
+        canvas.classList.add('hidden');
+        textContent.classList.remove('hidden');
+        textContent.innerHTML = content;
+    } else {
+        // Prepare for chart
+        canvas.classList.remove('hidden');
+        textContent.classList.add('hidden');
+        textContent.innerHTML = '';
+    }
+
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden'; // Prevent scrolling
 }

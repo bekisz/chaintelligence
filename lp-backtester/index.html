@@ -192,7 +192,18 @@
                             <div class="v3-settings-row params-row">
                                 <!-- Type Group -->
                                 <div class="settings-group type-group">
-                                    <div class="group-title">Type</div>
+                                    <div class="group-title">
+                                        Type
+                                        <button class="info-btn" title="Learn about Strategy Types">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="12" cy="12" r="10"></circle>
+                                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                            </svg>
+                                        </button>
+                                    </div>
                                     <div class="group-controls">
                                         <div class="input-group">
                                             <label>Strategy</label>
@@ -354,6 +365,7 @@
             </div>
             <div class="modal-body">
                 <canvas id="enlargedChart"></canvas>
+                <div id="modal-text-content" class="modal-text-content hidden"></div>
             </div>
         </div>
     </div>
