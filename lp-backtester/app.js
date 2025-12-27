@@ -755,7 +755,7 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
     const hodlData = [], lpTotalData = [], asset1Data = [], asset2Data = [];
     const minRangeSeries = [], maxRangeSeries = [];
     const minRebSeries = [], maxRebSeries = [];
-    let accumulatedFees = 0, daysOutOfRange = 0;
+    let accumulatedFees = 0, daysOutOfRange = 0, lastRebalanceTime = priceSeries[0][0];
 
     const rangeWidthBase = 1.5; // for -50% to +100%
 
@@ -793,13 +793,19 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         let rebalanceCenterPrice = P;
 
         if (rebalanceMode === 'periodic') {
-            // Periodic rebalance: check exactly every N days
-            daysOutOfRange++;
+            // Periodic rebalance: check time elapsed since last rebalance
+            // We use time (ms) instead of iteration count to handle potential data gaps
+            const msSinceLast = time - (typeof lastRebalanceTime === 'undefined' ? priceSeries[0][0] : lastRebalanceTime);
+            // delayDays is in days, convert to ms. Subtract 1 hour buffer to handle DST/slight timestamp variances
+            const requiredMs = (delayDays * 24 * 60 * 60 * 1000) - 3600000;
 
-            if (daysOutOfRange >= delayDays) {
+            if (msSinceLast >= requiredMs) {
                 shouldRebalance = true;
                 rebalanceCenterPrice = P;
             }
+
+            // Increment daysOutOfRange solely for chart visualization/debugging if needed
+            daysOutOfRange++;
         } else if (rebalanceMode !== 'simple') {
             if (P < P_reb_min || P > P_reb_max) {
                 daysOutOfRange++;
@@ -842,6 +848,7 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
             L = getLikidityAndAmounts(P0, P_min, P_max, currentCapital).L;
             val_lp_principal = currentCapital;
             daysOutOfRange = 0;
+            lastRebalanceTime = time;
         }
 
         lpTotalData.push([time, val_lp_principal + accumulatedFees]);
