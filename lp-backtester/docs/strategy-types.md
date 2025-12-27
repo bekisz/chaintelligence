@@ -40,3 +40,15 @@ The LP Backtester supports three distinct strategy types to simulate different l
 The new center price $P_{new}$ is calculated as:
 $$P_{new} = \exp\left(\frac{1}{N} \sum_{i=1}^N \ln(P_i)\right)$$
 where $N$ is the Delay (Days).
+
+---
+
+## 4. Periodic Rebalance
+**Description**: A time-based strategy that rebalances the position at a fixed interval, regardless of price action.
+
+- **Trigger**: `Delay` days have passed since the simulation start or the last rebalance.
+- **Action**: The entire capital is consolidated and redeployed centered on the **current market price**.
+- **Input Parameters**:
+    - **LP Range (Min/Max %)**: Boundaries for earning fees.
+    - **Delay (Days)**: The mandatory rebalancing interval (e.g., every 7 days).
+    - **Rebalance Range (Min/Max %)**: *Disabled/Not used* for this strategy.

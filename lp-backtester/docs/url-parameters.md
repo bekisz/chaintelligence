@@ -21,7 +21,7 @@ Strategies use a structured key format: `strategy[n].property`. Indices start fr
 | `strategy[n].name` | Custom name for the strategy. |
 | `strategy[n].range.min` | Minimum range % for the LP position. |
 | `strategy[n].range.max` | Maximum range % for the LP position. |
-| `strategy[n].type` | Strategy type (`simple`, `time-delayed`, or `settled`). |
+| `strategy[n].type` | Strategy type (`simple`, `time-delayed`, `periodic`, or `settled`). |
 | `strategy[n].rebalance.range.min` | Rebalance trigger threshold (min %). |
 | `strategy[n].rebalance.range.max` | Rebalance trigger threshold (max %). |
 | `strategy[n].rebalance.delay` | Rebalance delay in days. |
@@ -36,6 +36,9 @@ Strategies use a structured key format: `strategy[n].property`. Indices start fr
 
 ### eth-USDC with 20% APR and Settled Rebalancing with custom rebalance range
 `?token1=ETH&token2=USDC&apr=20&strategy[1].name=SettledStrategy&strategy[1].type=settled&strategy[1].rebalance.delay=12&strategy[1].rebalance.range.min=-25&strategy[1].rebalance.range.max=22`
+
+### Periodic Rebalance (Weekly)
+`?token1=ETH&strategy[1].name=WeeklyRebalance&strategy[1].type=periodic&strategy[1].rebalance.delay=7`
 
 > [!TIP]
 > This hierarchical format makes the URL readable and easy to modify manually for advanced testing.

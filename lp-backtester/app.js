@@ -325,10 +325,19 @@ function addStrategy(config = {}) {
             strategy.rebalanceMinInput.disabled = true;
             strategy.rebalanceMaxInput.disabled = true;
             strategy.rebalanceDelayInput.disabled = true;
+        } else if (strategy.rebalanceType.value === 'periodic') {
+            strategy.rebalanceParamsRow.classList.remove('disabled');
+            strategy.rebalanceMinInput.disabled = true;
+            strategy.rebalanceMaxInput.disabled = true;
+            strategy.rebalanceMinInput.parentElement.classList.add('disabled-input'); // Optional styling
+            strategy.rebalanceMaxInput.parentElement.classList.add('disabled-input');
+            strategy.rebalanceDelayInput.disabled = false;
         } else {
             strategy.rebalanceParamsRow.classList.remove('disabled');
             strategy.rebalanceMinInput.disabled = false;
             strategy.rebalanceMaxInput.disabled = false;
+            strategy.rebalanceMinInput.parentElement.classList.remove('disabled-input');
+            strategy.rebalanceMaxInput.parentElement.classList.remove('disabled-input');
             strategy.rebalanceDelayInput.disabled = false;
         }
     };
@@ -425,6 +434,14 @@ function checkGlobalValidity() {
             if (s.rebalanceType.value === 'settled') {
                 const delay = parseInt(s.rebalanceDelayInput.value);
                 if (isNaN(delay) || delay <= 1) {
+                    isRebValid = false;
+                    s.rebalanceDelayInput.classList.add('invalid-input');
+                } else {
+                    s.rebalanceDelayInput.classList.remove('invalid-input');
+                }
+            } else if (s.rebalanceType.value === 'periodic') {
+                const delay = parseInt(s.rebalanceDelayInput.value);
+                if (isNaN(delay) || delay < 1) {
                     isRebValid = false;
                     s.rebalanceDelayInput.classList.add('invalid-input');
                 } else {
@@ -775,7 +792,15 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         let shouldRebalance = false;
         let rebalanceCenterPrice = P;
 
-        if (rebalanceMode !== 'simple') {
+        if (rebalanceMode === 'periodic') {
+            // Periodic rebalance: check exactly every N days
+            daysOutOfRange++;
+
+            if (daysOutOfRange >= delayDays) {
+                shouldRebalance = true;
+                rebalanceCenterPrice = P;
+            }
+        } else if (rebalanceMode !== 'simple') {
             if (P < P_reb_min || P > P_reb_max) {
                 daysOutOfRange++;
             } else {
