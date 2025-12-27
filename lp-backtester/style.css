@@ -894,6 +894,24 @@ input::-webkit-calendar-picker-indicator:hover {
     display: none;
 }
 
+
+
 .tab-content.active {
     display: block;
+}
+
+/* Param Layout Styles */
+.settings-group.type-group {
+    flex: 0.8;
+    /* Make it slightly wider than LP group if needed, or equal */
+    min-width: 180px;
+}
+
+.type-group .input-group input,
+.type-group .input-group select {
+    width: 100%;
+}
+
+.v3-settings-row.params-row {
+    margin-top: 0;
 }

@@ -189,7 +189,23 @@
                             </div>
                         </div>
                         <div class="chart-container settings-container">
-                            <div class="v3-settings-row">
+                            <div class="v3-settings-row params-row">
+                                <!-- Type Group -->
+                                <div class="settings-group type-group">
+                                    <div class="group-title">Type</div>
+                                    <div class="group-controls">
+                                        <div class="input-group">
+                                            <label>Strategy</label>
+                                            <select class="rebalance-type">
+                                                <option value="simple">Non-rebalancing</option>
+                                                <option value="time-delayed" selected>Time-delayed</option>
+                                                <option value="periodic">Periodic</option>
+                                                <option value="settled">Settled</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- LP Range Group -->
                                 <div class="settings-group lp-group">
                                     <div class="group-title">LP Range</div>
@@ -207,17 +223,8 @@
 
                                 <!-- Rebalance Group -->
                                 <div class="settings-group rebalance-group">
-                                    <div class="group-title">Rebalance</div>
+                                    <div class="group-title">Rebalance Parameters</div>
                                     <div class="group-controls">
-                                        <div class="input-group">
-                                            <label>Type</label>
-                                            <select class="rebalance-type">
-                                                <option value="simple">None</option>
-                                                <option value="time-delayed" selected>Time-delayed</option>
-                                                <option value="periodic">Periodic</option>
-                                                <option value="settled">Settled</option>
-                                            </select>
-                                        </div>
                                         <div class="rebalance-params-row">
                                             <div class="input-group">
                                                 <label>Delay (Days)</label>
