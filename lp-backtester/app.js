@@ -14,6 +14,31 @@ let enlargedChartInstance = null;
 let currentEnlargedState = null;
 let lastCalculatedResults = []; // Store results for enlargement later
 
+const CHART_ZOOM_OPTIONS = {
+    zoom: {
+        wheel: { enabled: true },
+        pinch: { enabled: true },
+        drag: {
+            enabled: true,
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            borderColor: '#3b82f6',
+            borderWidth: 1,
+            threshold: 10
+        },
+        mode: 'x',
+    },
+    pan: {
+        enabled: true,
+        mode: 'x',
+        modifierKey: 'shift',
+    }
+};
+
+// Explicitly register the plugin if available globally
+if (window.Chart && window.ChartZoom) {
+    Chart.register(window.ChartZoom);
+}
+
 const STRATEGY_HELP_CONTENT = `
 <div class="help-content">
     <h2>1. Non-rebalancing</h2>
@@ -1084,7 +1109,13 @@ function renderChart(results, canvas, existingInstance) {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { intersect: false, mode: 'index' },
-            plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` } } },
+            plugins: {
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` } },
+                zoom: {
+                    zoom: CHART_ZOOM_OPTIONS.zoom,
+                    pan: CHART_ZOOM_OPTIONS.pan
+                }
+            },
             scales: {
                 x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 8 } },
                 y: {
@@ -1124,7 +1155,11 @@ function renderRelativeChart(results, canvas, existingInstance) {
             interaction: { intersect: false, mode: 'index' },
             plugins: {
                 tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%` } },
-                legend: { display: false }
+                legend: { display: false },
+                zoom: {
+                    zoom: CHART_ZOOM_OPTIONS.zoom,
+                    pan: CHART_ZOOM_OPTIONS.pan
+                }
             },
             scales: {
                 x: { display: false },
@@ -1175,7 +1210,11 @@ function renderSummaryChart(allResults, canvas, existingInstance) {
                     itemSort: (a, b) => b.raw - a.raw,
                     callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` }
                 },
-                legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 20 } }
+                legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 20 } },
+                zoom: {
+                    zoom: CHART_ZOOM_OPTIONS.zoom,
+                    pan: CHART_ZOOM_OPTIONS.pan
+                }
             },
             scales: {
                 x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
@@ -1238,7 +1277,11 @@ function renderYoYChart(allResults, canvas, existingInstance) {
                     itemSort: (a, b) => b.raw - a.raw,
                     callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%` }
                 },
-                legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 20 } }
+                legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 20 } },
+                zoom: {
+                    zoom: CHART_ZOOM_OPTIONS.zoom,
+                    pan: CHART_ZOOM_OPTIONS.pan
+                }
             },
             scales: {
                 x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
@@ -1408,6 +1451,10 @@ function renderVolatilityChart(volatilityData, canvas, existingInstance) {
                 legend: {
                     display: true, // Show legend for multiple lines
                     labels: { color: '#9ca3af', boxWidth: 12, padding: 15 }
+                },
+                zoom: {
+                    zoom: CHART_ZOOM_OPTIONS.zoom,
+                    pan: CHART_ZOOM_OPTIONS.pan
                 }
             },
             scales: {
