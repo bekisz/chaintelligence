@@ -267,7 +267,25 @@ async function init() {
         addStrategy({ name: "Wide Ranged Non-rebalancing" });
     }
 
+    setupTabs();
     updateAllCharts(); // Initial run
+}
+
+function setupTabs() {
+    const tabs = document.querySelectorAll('.tab-btn');
+    const contents = document.querySelectorAll('.tab-content');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            contents.forEach(c => c.classList.remove('active'));
+
+            tab.classList.add('active');
+            const targetId = `tab-${tab.dataset.tab}`;
+            const target = document.getElementById(targetId);
+            if (target) target.classList.add('active');
+        });
+    });
 }
 
 // --- Strategy Management ---
@@ -650,13 +668,15 @@ async function updateAllCharts() {
         const summarySection = document.getElementById('summary-section');
         if (summarySection) {
             if (allResults.length > 0) {
-                summarySection.classList.remove('hidden');
+                // summarySection.classList.remove('hidden'); // No longer needed, controlled by tabs
                 summaryChartInstance = renderSummaryChart(allResults, document.getElementById('summaryChart'), summaryChartInstance);
                 yoySummaryChartInstance = renderYoYChart(allResults, document.getElementById('yoySummaryChart'), yoySummaryChartInstance);
                 lastCalculatedResults = allResults;
             } else {
-                summarySection.classList.add('hidden');
+                // summarySection.classList.add('hidden'); // Don't hide the section, just charts empty
                 lastCalculatedResults = [];
+                if (summaryChartInstance) summaryChartInstance.destroy();
+                if (yoySummaryChartInstance) yoySummaryChartInstance.destroy();
             }
         }
 
