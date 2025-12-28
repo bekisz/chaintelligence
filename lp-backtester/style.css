@@ -740,6 +740,54 @@ input::-webkit-calendar-picker-indicator:hover {
     color: var(--danger);
 }
 
+/* Input group spacing */
+.global-settings .input-group {
+    margin-right: 1.5rem;
+}
+
+.radio-options {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.radio-label input {
+    margin: 0;
+    cursor: pointer;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    padding-top: 1.5rem;
+    /* Align with inputs that have labels */
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.checkbox-label input {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
 /* Summary Section */
 .summary-section {
     margin-top: 4rem;

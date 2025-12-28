@@ -35,7 +35,7 @@ const CHART_ZOOM_OPTIONS = {
 };
 
 // Explicitly register the plugin if available globally
-if (window.Chart && window.ChartZoom) {
+if (typeof window !== 'undefined' && window.Chart && window.ChartZoom) {
     Chart.register(window.ChartZoom);
 }
 
@@ -153,6 +153,67 @@ function getURLParams() {
     });
 
     return result;
+}
+
+// Helper to downsample data to roughly daily points for main charts
+function downsampleResults(results, useHourly) {
+    if (!useHourly) return results; // Already daily
+
+    // We need to filter indices based on timestamp day changes to keep alignment
+    // Use the primary time series (hodlData) to determine indices
+    const indicesToKeep = [];
+    let lastDateStr = '';
+
+    results.hodlData.forEach((d, i) => {
+        const dateStr = new Date(d[0]).toDateString();
+        // Keep first point of each new day
+        if (dateStr !== lastDateStr) {
+            indicesToKeep.push(i);
+            lastDateStr = dateStr;
+        }
+    });
+
+    // Helper to filter array by indices
+    const filterByIndex = (arr) => (arr ? arr.filter((_, i) => indicesToKeep.includes(i)) : []);
+
+    return {
+        ...results,
+        hodlData: filterByIndex(results.hodlData),
+        lpTotalData: filterByIndex(results.lpTotalData),
+        asset1Data: filterByIndex(results.asset1Data),
+        asset2Data: filterByIndex(results.asset2Data),
+        minRangeSeries: filterByIndex(results.minRangeSeries),
+        maxRangeSeries: filterByIndex(results.maxRangeSeries),
+        minRebSeries: filterByIndex(results.minRebSeries),
+        maxRebSeries: filterByIndex(results.maxRebSeries),
+        relativeSeries: filterByIndex(results.relativeSeries),
+        // Note: singular values like 'finalValue' remain unchanged
+    };
+}
+
+function downsampleVolatility(volData, useHourly) {
+    if (!useHourly) return volData;
+
+    // Vol data is simple [time, value] arrays
+    // We can just filter each array
+    const filterSeries = (series) => {
+        const kept = [];
+        let lastDateStr = '';
+        series.forEach(d => {
+            const dateStr = new Date(d[0]).toDateString();
+            if (dateStr !== lastDateStr) {
+                kept.push(d);
+                lastDateStr = dateStr;
+            }
+        });
+        return kept;
+    };
+
+    return {
+        v7d: filterSeries(volData.v7d),
+        v30d: filterSeries(volData.v30d),
+        v90d: filterSeries(volData.v90d)
+    };
 }
 
 function updateURLParams() {
@@ -680,11 +741,22 @@ async function updateAllCharts() {
             endDatePoints = d.getTime();
         }
 
+        const hourlyRadio = document.querySelector('input[name="resolution"][value="hourly"]');
+        const useHourly = hourlyRadio && hourlyRadio.checked;
+
         // Fetch shared price data once
-        const [baseData, quoteData] = await Promise.all([
-            fetchHistory(baseAsset.symbol.toUpperCase(), apiKey),
-            fetchHistory(quoteAsset.symbol.toUpperCase(), apiKey)
+        const [rawBaseData, rawQuoteData] = await Promise.all([
+            fetchHistory(baseAsset.symbol.toUpperCase(), apiKey, useHourly, startDatePoints, endDatePoints),
+            fetchHistory(quoteAsset.symbol.toUpperCase(), apiKey, useHourly, startDatePoints, endDatePoints)
         ]);
+
+        // Sort and Deduplicate
+        const processData = (data) => {
+            const sorted = data.sort((a, b) => a[0] - b[0]);
+            return sorted.filter((d, i) => i === 0 || d[0] !== sorted[i - 1][0]);
+        };
+        const baseData = processData(rawBaseData);
+        const quoteData = processData(rawQuoteData);
 
         let ratioSeries = calculateRatioSeries(baseData, quoteData);
         ratioSeries = ratioSeries.filter(p => p[0] >= startDatePoints && p[0] <= endDatePoints);
@@ -721,14 +793,20 @@ async function updateAllCharts() {
 
 
                 const results = calculateV3Backtest(ratioSeries, minPct, maxPct, rebMinPct, rebMaxPct, baseAprPct, rebalanceMode, delayDays);
+                const displayResults = downsampleResults(results, useHourly);
 
-                s.chartInstance = renderChart(results, s.canvas, s.chartInstance);
+                s.chartInstance = renderChart(displayResults, s.canvas, s.chartInstance);
+                s.relativeChartInstance = renderRelativeChart(displayResults, s.relativeCanvas, s.relativeChartInstance);
 
-                s.relativeChartInstance = renderRelativeChart(results, s.relativeCanvas, s.relativeChartInstance);
-                s.volatilityChartInstance = renderVolatilityChart(volatilityData, s.volatilityCanvas, s.volatilityChartInstance);
-                s.lastResults = { ...results, volatilityData }; // Store for enlargement
+                const displayVol = downsampleVolatility(volatilityData, useHourly);
+                s.volatilityChartInstance = renderVolatilityChart(displayVol, s.volatilityCanvas, s.volatilityChartInstance);
 
-                allResults.push({ name: strategyName, ...results });
+                s.lastResults = { ...results, volatilityData }; // Store FULL results for enlargement
+
+                allResults.push({ name: strategyName, ...results }); // Store FULL results for summary calculation consistency (if needed)
+                // But wait, renderSummaryChart needs to take an array.
+                // Let's store full results there, and renderSummaryChart should probably downsample if it's too heavy?
+                // Or create a parallel 'allDisplayResults' array.
             } catch (err) {
                 console.error(`Strategy ${s.id} error:`, err);
                 if (s.errorMessage) {
@@ -744,10 +822,12 @@ async function updateAllCharts() {
         const summarySection = document.getElementById('summary-section');
         if (summarySection) {
             if (allResults.length > 0) {
-                // summarySection.classList.remove('hidden'); // No longer needed, controlled by tabs
-                summaryChartInstance = renderSummaryChart(allResults, document.getElementById('summaryChart'), summaryChartInstance);
-                yoySummaryChartInstance = renderYoYChart(allResults, document.getElementById('yoySummaryChart'), yoySummaryChartInstance);
-                lastCalculatedResults = allResults;
+                // Downsample for summary display
+                const allDisplayResults = allResults.map(r => ({ ...r, ...downsampleResults(r, useHourly) }));
+
+                summaryChartInstance = renderSummaryChart(allDisplayResults, document.getElementById('summaryChart'), summaryChartInstance);
+                yoySummaryChartInstance = renderYoYChart(allDisplayResults, document.getElementById('yoySummaryChart'), yoySummaryChartInstance);
+                lastCalculatedResults = allResults; // Store FULL results for Enlarge
             } else {
                 // summarySection.classList.add('hidden'); // Don't hide the section, just charts empty
                 lastCalculatedResults = [];
@@ -789,13 +869,60 @@ async function updateAllCharts() {
     }
 }
 
-async function fetchHistory(symbol, apiKey) {
-    const url = `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${symbol}&tsym=USD&allData=true&api_key=${apiKey}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`API Error ${res.status}`);
-    const json = await res.json();
-    if (json.Response === 'Error') throw new Error(json.Message);
-    return json.Data.Data.map(d => [d.time * 1000, d.close]);
+async function fetchHistory(symbol, apiKey, useHourly = false, startTime = 0, endTime = Date.now()) {
+    if (!useHourly) {
+        // Daily: fetch all data at once
+        const url = `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${symbol}&tsym=USD&allData=true&api_key=${apiKey}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`API Error ${res.status}`);
+        const json = await res.json();
+        if (json.Response === 'Error') throw new Error(json.Message);
+        return json.Data.Data.map(d => [d.time * 1000, d.close]);
+    } else {
+        // Hourly: Paginate backwards from endTime until startTime
+        let allPoints = [];
+        let toTs = Math.floor(endTime / 1000);
+        const limit = 2000;
+        const startTs = Math.floor(startTime / 1000);
+        let fetches = 0;
+        const MAX_FETCHES = 50; // Safety limit (~4-5 years)
+
+        while (fetches < MAX_FETCHES) {
+            const url = `https://min-api.cryptocompare.com/data/v2/histohour?fsym=${symbol}&tsym=USD&limit=${limit}&toTs=${toTs}&api_key=${apiKey}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`API Error ${res.status}`);
+            const json = await res.json();
+            if (json.Response === 'Error') throw new Error(json.Message);
+
+            const data = json.Data.Data;
+            if (!data || data.length === 0) break;
+
+            // Prepend data (since we are fetching backwards)
+            // But wait, API returns data chronological [oldest ... newest] ending at toTs.
+            // So we should prepend this chunk to our master list?
+            // Yes, because the next fetch will get OLDER data.
+            // Actually, let's just collect arrays and concat + sort later to be safe?
+            // No, standard pagination: 
+            // Call 1 (toTs=Now): Returns [Now-2000, ... Now]. We verify last point ~ Now.
+            // Call 2 (toTs=Now-2000-1h): Returns [Now-4000, ... Now-2001].
+            // So we should collect them: [Call N, ... Call 2, Call 1].
+
+            // Map to our format [ms, price]
+            const chunk = data.map(d => [d.time * 1000, d.close]);
+            allPoints = [...chunk, ...allPoints];
+
+            const earliestTime = data[0].time;
+            if (earliestTime <= startTs) break; // Reached start date
+
+            toTs = earliestTime - 3600; // Move before the earliest point
+            fetches++;
+
+            // Rate limit civility (optional but good practice)
+            await new Promise(r => setTimeout(r, 100));
+        }
+
+        return allPoints;
+    }
 }
 
 function calculateRatioSeries(basePrices, quotePrices) {
@@ -851,7 +978,14 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
     const hodlData = [], lpTotalData = [], asset1Data = [], asset2Data = [];
     const minRangeSeries = [], maxRangeSeries = [];
     const minRebSeries = [], maxRebSeries = [];
-    let accumulatedFees = 0, daysOutOfRange = 0, lastRebalanceTime = priceSeries[0][0];
+    let accumulatedFees = 0;
+    let daysOutOfRange = 0;
+    let lastRebalanceTime = priceSeries[0] ? priceSeries[0][0] : 0;
+
+    // Check initial range state
+    if (P0 < P_reb_min || P0 > P_reb_max) {
+        daysOutOfRange = 0.0001; // Small non-zero start if initially out
+    }
 
     const rangeWidthBase = 1.5; // for -50% to +100%
 
@@ -879,6 +1013,7 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         if (i > 0) {
             const yearsElapsed = (time - priceSeries[i - 1][0]) / (1000 * 60 * 60 * 24 * 365);
             if (inRange) {
+                // baseApr is already a decimal (e.g. 0.2 for 20%)
                 const effectiveApr = baseApr * (rangeWidthBase / (maxPct - minPct));
                 accumulatedFees += val_lp_principal * effectiveApr * yearsElapsed;
             }
@@ -890,21 +1025,17 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
 
         if (rebalanceMode === 'periodic') {
             // Periodic rebalance: check time elapsed since last rebalance
-            // We use time (ms) instead of iteration count to handle potential data gaps
-            const msSinceLast = time - (typeof lastRebalanceTime === 'undefined' ? priceSeries[0][0] : lastRebalanceTime);
-            // delayDays is in days, convert to ms. Subtract 1 hour buffer to handle DST/slight timestamp variances
+            const msSinceLast = time - lastRebalanceTime;
             const requiredMs = (delayDays * 24 * 60 * 60 * 1000) - 3600000;
 
             if (msSinceLast >= requiredMs) {
                 shouldRebalance = true;
                 rebalanceCenterPrice = P;
             }
-
-            // Increment daysOutOfRange solely for chart visualization/debugging if needed
-            daysOutOfRange++;
         } else if (rebalanceMode !== 'simple') {
+            const timeStepDays = i > 0 ? (time - priceSeries[i - 1][0]) / (1000 * 60 * 60 * 24) : 0;
             if (P < P_reb_min || P > P_reb_max) {
-                daysOutOfRange++;
+                daysOutOfRange += timeStepDays;
             } else {
                 daysOutOfRange = 0;
             }
@@ -912,13 +1043,15 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
             if (rebalanceMode === 'time-delayed' && daysOutOfRange >= delayDays) {
                 shouldRebalance = true;
             } else if (rebalanceMode === 'settled' && daysOutOfRange >= delayDays) {
-                // Check stability in the last delayDays
-                const window = priceSeries.slice(i - delayDays + 1, i + 1);
+                // Check stability in actual time window
+                const step = timeStepDays || (1 / 24); // Fallback to 1h if step is 0
+                const requiredPoints = Math.max(1, Math.floor(delayDays / step));
+                const window = priceSeries.slice(Math.max(0, i - requiredPoints + 1), i + 1);
                 const prices = window.map(p => p[1]);
 
                 // Geometric Average
                 const sumLog = prices.reduce((a, b) => a + Math.log(b), 0);
-                const geoAvg = Math.exp(sumLog / delayDays);
+                const geoAvg = Math.exp(sumLog / prices.length);
 
                 // Stability Check: prices within user-defined rebalance boundaries relative to geoAvg
                 const isStable = prices.every(p => {
@@ -934,6 +1067,12 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         }
 
         if (shouldRebalance) {
+            if (rebalanceMode === 'periodic') {
+                console.log(`[Rebalance ${time}] Mode: Periodic, Time: ${new Date(time).toLocaleString()}, Interval: ${delayDays} days`);
+            } else {
+                console.log(`[Rebalance ${time}] Mode: ${rebalanceMode}, Time: ${new Date(time).toLocaleString()}, Out of range for: ${daysOutOfRange.toFixed(2)} days`);
+            }
+
             currentCapital = val_lp_principal + accumulatedFees;
             accumulatedFees = 0;
             P0 = rebalanceCenterPrice;
@@ -951,6 +1090,7 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         minRangeSeries.push((P_min / P0_initial) * 100);
         maxRangeSeries.push((P_max / P0_initial) * 100);
         minRebSeries.push((P_reb_min / P0_initial) * 100);
+        maxRebSeries.push((P_reb_max / P0_initial) * 100);
     }
 
     return {
@@ -970,12 +1110,21 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
     };
 }
 
-function calculateRollingVolatility(priceSeries, windowSize = 30) {
+function calculateRollingVolatility(priceSeries, windowInDays = 30) {
+    if (priceSeries.length < 2) return [];
+
+    // Detect resolution: points per day
+    const firstTime = priceSeries[0][0];
+    const lastTime = priceSeries[priceSeries.length - 1][0];
+    const totalDays = (lastTime - firstTime) / (1000 * 60 * 60 * 24);
+    const pointsPerDay = priceSeries.length / (totalDays || 1);
+
+    // Window size in points
+    const windowSize = Math.max(2, Math.floor(windowInDays * pointsPerDay));
+
     if (priceSeries.length < windowSize + 1) return [];
 
     const volatilitySeries = [];
-
-    // Calculate daily log returns: ln(Pt / Pt-1)
     const logReturns = [];
     for (let i = 1; i < priceSeries.length; i++) {
         const r = Math.log(priceSeries[i][1] / priceSeries[i - 1][1]);
@@ -983,26 +1132,16 @@ function calculateRollingVolatility(priceSeries, windowSize = 30) {
     }
 
     // Calculate rolling std dev and annualize
-    // Volatility starts from index `windowSize` (needs `windowSize` prior returns)
     for (let i = windowSize; i < priceSeries.length; i++) {
         const time = priceSeries[i][0];
-
-        // Slice returns window. Note: returns index i corresponds to price change i-1 to i.
-        // We want returns ending at time i. logReturns[i-1] is the return from i-1 to i.
-        // So window is logReturns[i - windowSize ... i-1] (length windowSize)
         const windowReturns = logReturns.slice(i - windowSize, i);
-
-        // Mean return
         const mean = windowReturns.reduce((sum, val) => sum + val, 0) / windowSize;
-
-        // Variance
         const variance = windowReturns.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (windowSize - 1);
-
-        // Std Dev
         const stdDev = Math.sqrt(variance);
 
-        // Annualize: stdDev * sqrt(365) * 100 (for percentage)
-        const annualizedVol = stdDev * Math.sqrt(365) * 100;
+        // Annualize: stdDev * sqrt(points per year) * 100
+        const pointsPerYear = pointsPerDay * 365;
+        const annualizedVol = stdDev * Math.sqrt(pointsPerYear) * 100;
 
         volatilitySeries.push([time, annualizedVol]);
     }
@@ -1387,8 +1526,13 @@ function hideModal() {
 }
 
 // Ensure init runs
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-else init();
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+}
 
 function renderVolatilityChart(volatilityData, canvas, existingInstance) {
     if (existingInstance) existingInstance.destroy();
@@ -1470,4 +1614,8 @@ function renderVolatilityChart(volatilityData, canvas, existingInstance) {
             }
         }
     });
+}
+// --- Exports for testing ---
+if (typeof module !== 'undefined') {
+    module.exports = { calculateV3Backtest, getLikidityAndAmounts };
 }
