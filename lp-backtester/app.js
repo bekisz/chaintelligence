@@ -1068,9 +1068,9 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
 
         if (shouldRebalance) {
             if (rebalanceMode === 'periodic') {
-                console.log(`[Rebalance ${time}] Mode: Periodic, Time: ${new Date(time).toLocaleString()}, Interval: ${delayDays} days`);
+                // console.log(`[Rebalance ${time}] Mode: Periodic, Time: ${new Date(time).toLocaleString()}, Interval: ${delayDays} days`);
             } else {
-                console.log(`[Rebalance ${time}] Mode: ${rebalanceMode}, Time: ${new Date(time).toLocaleString()}, Out of range for: ${daysOutOfRange.toFixed(2)} days`);
+                // console.log(`[Rebalance ${time}] Mode: ${rebalanceMode}, Time: ${new Date(time).toLocaleString()}, Out of range for: ${daysOutOfRange.toFixed(2)} days`);
             }
 
             currentCapital = val_lp_principal + accumulatedFees;

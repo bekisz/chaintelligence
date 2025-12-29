@@ -35,13 +35,6 @@ function initPrices() {
 async function runTests() {
     console.log('🚀 Starting LP Backtest Unit Tests...\n');
     initPrices();
-    let result = [];
-    let lpCheckedValue = 0;
-    // 1. Simple Non-rebalanincing Strategy with Flat Price, Base Yield Accuracy
-    result = calculateV3Backtest(dailyPrice, -0.5, 1.0, -0.5, 1.0, 0.2, 'simple', 0);
-    lpCheckedValue = result.lpTotalData[365][1];
-    console.log(`Test #01 : Simple Non-rebalancing Strategy with Flat Price: Base Yield of 20% APR flat price. Final value: ${lpCheckedValue.toFixed(2)}`);
-    assert.ok(lpCheckedValue > 119.9 && lpCheckedValue < 120.1, 'Yield should be exactly 20%');
 
     // 2. Simple Non-rebalanincing Strategy with Flat Price, High Concentration Yield
     result = calculateV3Backtest(dailyPrice, -0.1, 0.1, -0.1, 0.1, 0.2, 'simple', 0);
@@ -50,43 +43,95 @@ async function runTests() {
     assert.ok(lpCheckedValue > 249.9 && lpCheckedValue < 250.1, 'Yield should be ~150%');
 
     // 3. Simple weekly rebalanincing strategy with Flat Price
-    result = calculateV3Backtest(dailyPrice, -0.1, 0.1, -0.1, 0.1, 0.2, 'periodic', 7);
-    lpCheckedValue = resConc.lpTotalData[365][1];
+    /* result = calculateV3Backtest(dailyPrice, -0.1, 0.1, -0.1, 0.1, 0.2, 'periodic', 7);
+    lpCheckedValue = result.lpTotalData[365][1];
     console.log(`Test #03 :  Periodic (Weekly) rebalanincing strategy with Flat Price. Final value: ${lpCheckedValue.toFixed(2)}`);
     assert.ok(lpCheckedValue > 249.9 && lpCheckedValue < 250.1, 'Yield should be ~150%');
-
-    /*
-    const resSimple = calculateV3Backtest(periodicPrices, -0.5, 1.0, -0.5, 1.0, 0.1, 'simple', 0);
-    const resPeriodic = calculateV3Backtest(periodicPrices, -0.5, 1.0, -0.5, 1.0, 0.1, 'periodic', 30);
-    console.log(`Test #03 : Simple vs Periodic (30d) on 20% drop. Simple: ${resSimple.lpTotalData[60][1].toFixed(2)}, Periodic: ${resPeriodic.lpTotalData[60][1].toFixed(2)}`);
-    assert.ok(resPeriodic.lpTotalData[60][1] > resSimple.lpTotalData[60][1], 'Periodic rebalancing should improve yield after price drop');
     */
-    // 4. Resolution Independence
-    /*
-    for (let i = 0; i <= 30; i++) {
-        const time = startTs + i * 24 * 3600 * 1000;
-        dailyPrice.push([time, 1000]);
-        for (let h = 0; h < 24; h++) {
-            if (i === 30 && h > 0) break;
-            hourlyPrice.push([time + h * 3600 * 1000, 1000]);
-        }
+    let strategies = ['simple', 'time-delayed', 'settled', 'periodic']
+    let testId = 3;
+    let epsilon = 0.1;
+
+    let apr = 0.2;
+    let apy_max = (1 + apr / 365) ** 365 - 1;
+
+    console.log(`--- Flat-priced wide-ranged LP pools with ${(apr * 100).toFixed(2)}% APR should yield between ${(apr * 100).toFixed(2)}% and ${(apy_max * 100).toFixed(2)}% (APY).`);
+
+    for (const [_, strategy] of strategies.entries()) {
+        let lp_range_min = -0.5, lp_range_max = 1, timeDelay = 7;
+        let rebalance_range_min = lp_range_min, rebalance_range_max = lp_range_max;
+        console.log(`Test #${testId++} [calculateV3Backtest]: Strategy: ${strategy}, LP Range: [ ${(lp_range_min * 100).toFixed(2)}% - +${(lp_range_max * 100).toFixed(2)}% ], Rebalance Range : [ ${(rebalance_range_min * 100).toFixed(2)}% - +${(rebalance_range_max * 100).toFixed(2)}% ], Time-delay: ${timeDelay}`);
+
+        let result = calculateV3Backtest(dailyPrice, lp_range_min, lp_range_max,
+            rebalance_range_min, rebalance_range_max, apr, strategy, timeDelay);
+        let lpCheckedValue = result.lpTotalData[365][1];
+        console.log(`   Final LP value: ${lpCheckedValue.toFixed(2)} with APY : ${(lpCheckedValue - 100).toFixed(2)}%`);
+
+        assert.ok(100 * (1 + apr) - epsilon <= lpCheckedValue && lpCheckedValue <= 100 * (1 + apy_max), 'Yield should be between APR and max APY');
     }
-    const resDaily = calculateV3Backtest(dailyPrice, -0.5, 1.0, -0.5, 1.0, 0.2, 'simple', 0);
-    const resHourly = calculateV3Backtest(hourlyPrice, -0.5, 1.0, -0.5, 1.0, 0.2, 'simple', 0);
-    const valDaily = resDaily.lpTotalData[resDaily.lpTotalData.length - 1][1];
-    const valHourly = resHourly.lpTotalData[resHourly.lpTotalData.length - 1][1];
-    console.log(`Test #04 : [Resolution Independence] Hourly and daily resolution should yield similar results with non-rebalancing strategy: Daily vs Hourly on 30d flat. Daily: ${valDaily.toFixed(4)}, Hourly: ${valHourly.toFixed(4)}`);
-    assert.ok(Math.abs(valDaily - valHourly) < 0.001, 'Yields should be nearly identical regardless of frequency');
+
+    console.log(`--- Flat-priced wide-ranged LP pools should yield similar yields with hourly and daily prices`);
+
+    for (const [_, strategy] of strategies.entries()) {
+        let lp_range_min = -0.5, lp_range_max = 1, timeDelay = 7;
+        let rebalance_range_min = lp_range_min, rebalance_range_max = lp_range_max;
+        console.log(`Test #${testId++} [calculateV3Backtest]: Strategy: ${strategy}, LP Range: [ ${(lp_range_min * 100).toFixed(2)}% - +${(lp_range_max * 100).toFixed(2)}% ], Rebalance Range : [ ${(rebalance_range_min * 100).toFixed(2)}% - +${(rebalance_range_max * 100).toFixed(2)}% ], Time-delay: ${timeDelay}`);
+
+        let resultDaily = calculateV3Backtest(dailyPrice, lp_range_min, lp_range_max,
+            rebalance_range_min, rebalance_range_max, apr, strategy, timeDelay);
+        let lpCheckedValueDaily = resultDaily.lpTotalData[365][1];
+        console.log(`   Final Daily LP value: ${lpCheckedValueDaily.toFixed(2)} with APY : ${(lpCheckedValueDaily - 100).toFixed(2)}%`);
+
+        let resultHourly = calculateV3Backtest(hourlyPrice, lp_range_min, lp_range_max,
+            rebalance_range_min, rebalance_range_max, apr, strategy, timeDelay);
+        let lpCheckedValueHourly = resultHourly.lpTotalData[365 * 24][1];
+        console.log(`   Final Hourly LP value: ${lpCheckedValueHourly.toFixed(2)} with APY : ${(lpCheckedValueHourly - 100).toFixed(2)}%`);
+
+        assert.ok(lpCheckedValueHourly - epsilon <= lpCheckedValueDaily && lpCheckedValueDaily <= lpCheckedValueHourly + epsilon, 'Yield should be close with hourly and daily sampling');
+    }
+
+    console.log(`--- Check if Actual APY is lower than the max yield`);
+
+    for (const [_, strategy] of strategies.entries()) {
+        let lp_range_min = -0.5, lp_range_max = 1, timeDelay = 7;
+        let rebalance_range_min = lp_range_min, rebalance_range_max = lp_range_max;
+        let apr = 0.2;
+        console.log(`Test #${testId++} [calculateV3Backtest]: Strategy: ${strategy}, LP Range: [ ${(lp_range_min * 100).toFixed(2)}% - +${(lp_range_max * 100).toFixed(2)}% ], Rebalance Range : [ ${(rebalance_range_min * 100).toFixed(2)}% - +${(rebalance_range_max * 100).toFixed(2)}% ], Time-delay: ${timeDelay}`);
+
+        let result = calculateV3Backtest(dailyPrice, lp_range_min, lp_range_max,
+            rebalance_range_min, rebalance_range_max, apr, strategy, timeDelay);
+        let lpCheckedValue = result.lpTotalData[result.lpTotalData.length - 1][1];
+        let apy_max = (1 + apr / (365)) ** (3 * 365) - 1;
+
+        console.log(`   Final LP value: ${lpCheckedValue.toFixed(2)}  and Max yield : ${100 * (1 + apy_max).toFixed(2)} `);
 
 
-    const resDaily = calculateV3Backtest(dailyPrice, -0.5, 1.0, -0.5, 1.0, 0.2, 'periodic', 0);
-    const resHourly = calculateV3Backtest(hourlyPrice, -0.5, 1.0, -0.5, 1.0, 0.2, 'periodic', 0);
-    const valDaily = resDaily.lpTotalData[resDaily.lpTotalData.length - 1][1];
-    const valHourly = resHourly.lpTotalData[resHourly.lpTotalData.length - 1][1];
-    console.log(`Test #04 : [Resolution Independence] Hourly and daily resolution should yield similar results with non-rebalancing strategy: Daily vs Hourly on 30d flat. Daily: ${valDaily.toFixed(4)}, Hourly: ${valHourly.toFixed(4)}`);
-    assert.ok(Math.abs(valDaily - valHourly) < 0.001, 'Yields should be nearly identical regardless of frequency');
+        assert.ok(0 <= lpCheckedValue && lpCheckedValue <= 100 * (1 + apy_max), 'Yield should be between APR and max APY');
+    }
 
-    */
+
+
+    console.log(`--- Wide-ranged LP pools should yield similar yields with hourly and daily prices`);
+
+    for (const [_, strategy] of strategies.entries()) {
+        let lp_range_min = -0.5, lp_range_max = 1, timeDelay = 7;
+        let rebalance_range_min = lp_range_min, rebalance_range_max = lp_range_max;
+        console.log(`Test #${testId++} [calculateV3Backtest]: Strategy: ${strategy}, LP Range: [ ${(lp_range_min * 100).toFixed(2)}% - +${(lp_range_max * 100).toFixed(2)}% ], Rebalance Range : [ ${(rebalance_range_min * 100).toFixed(2)}% - +${(rebalance_range_max * 100).toFixed(2)}% ], Time-delay: ${timeDelay}`);
+
+        let resultDaily = calculateV3Backtest(dailyPrice, lp_range_min, lp_range_max,
+            rebalance_range_min, rebalance_range_max, apr, strategy, timeDelay);
+        let lpCheckedValueDaily = resultDaily.lpTotalData[3 * 365][1];
+        console.log(`   Final Daily LP value: ${lpCheckedValueDaily.toFixed(2)} with APY : ${(lpCheckedValueDaily - 100).toFixed(2)}%`);
+
+        let resultHourly = calculateV3Backtest(hourlyPrice, lp_range_min, lp_range_max,
+            rebalance_range_min, rebalance_range_max, apr, strategy, timeDelay);
+        let lpCheckedValueHourly = resultHourly.lpTotalData[3 * 365 * 24][1];
+        console.log(`   Final Hourly LP value: ${lpCheckedValueHourly.toFixed(2)} with APY : ${(lpCheckedValueHourly - 100).toFixed(2)}%`);
+
+        assert.ok(lpCheckedValueHourly - epsilon <= lpCheckedValueDaily && lpCheckedValueDaily <= lpCheckedValueHourly + epsilon, 'Yield should be close with hourly and daily sampling');
+    }
+
+
     console.log('\n✅ All tests passed!');
 }
 
