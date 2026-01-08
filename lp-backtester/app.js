@@ -3,8 +3,8 @@ let baseSearchInput, quoteSearchInput, baseResults, quoteResults, swapBtn;
 let aprInput, startDateInput, endDateInput, addStrategyBtn, runBtn;
 let chartScaleSelect;
 let allCoins = [];
-let baseAsset = { id: 'ethereum', symbol: 'eth', name: 'Ethereum' };
-let quoteAsset = { id: 'usd-coin', symbol: 'usdc', name: 'USDC' };
+let baseAsset = new Asset('eth');
+let quoteAsset = new Asset('usdc');
 
 let strategies = [];
 let nextStrategyId = 1;
@@ -270,11 +270,11 @@ async function init() {
 
     // Attach Global Listeners
     if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => {
-        baseAsset = coin;
+        baseAsset = new Asset(coin.symbol);
         updateURLParams();
     });
     if (quoteSearchInput && quoteResults) setupSearch(quoteSearchInput, quoteResults, (coin) => {
-        quoteAsset = coin;
+        quoteAsset = new Asset(coin.symbol);
         updateURLParams();
     });
 
@@ -384,14 +384,14 @@ async function init() {
     if (urlParams.token1) {
         const coin1 = allCoins.find(c => c.symbol.toLowerCase() === urlParams.token1.toLowerCase());
         if (coin1) {
-            baseAsset = coin1;
+            baseAsset = new Asset(coin1.symbol);
             if (baseSearchInput) baseSearchInput.value = baseAsset.symbol.toUpperCase();
         }
     }
     if (urlParams.token2) {
         const coin2 = allCoins.find(c => c.symbol.toLowerCase() === urlParams.token2.toLowerCase());
         if (coin2) {
-            quoteAsset = coin2;
+            quoteAsset = new Asset(coin2.symbol);
             if (quoteSearchInput) quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
         }
     }
@@ -461,6 +461,9 @@ function addStrategy(config = {}) {
         relativeChartInstance: null,
         volatilityCanvas: block.querySelector('.volatility-chart'),
         volatilityChartInstance: null,
+        histogramCanvas: block.querySelector('.histogram-chart'),
+        histogramChartInstance: null,
+        expectedDurationLabel: block.querySelector('.expected-duration'),
         rebalanceRangeManuallyChanged: config.rebMan || false
     };
 
@@ -745,10 +748,13 @@ async function updateAllCharts() {
         const useHourly = hourlyRadio && hourlyRadio.checked;
 
         // Fetch shared price data once
-        const [rawBaseData, rawQuoteData] = await Promise.all([
-            fetchHistory(baseAsset.symbol.toUpperCase(), apiKey, useHourly, startDatePoints, endDatePoints),
-            fetchHistory(quoteAsset.symbol.toUpperCase(), apiKey, useHourly, startDatePoints, endDatePoints)
+        await Promise.all([
+            baseAsset.fetchHistory(useHourly, startDatePoints, endDatePoints),
+            quoteAsset.fetchHistory(useHourly, startDatePoints, endDatePoints)
         ]);
+
+        const rawBaseData = baseAsset.priceData;
+        const rawQuoteData = quoteAsset.priceData;
 
         // Sort and Deduplicate
         const processData = (data) => {
@@ -800,6 +806,11 @@ async function updateAllCharts() {
 
                 const displayVol = downsampleVolatility(volatilityData, useHourly);
                 s.volatilityChartInstance = renderVolatilityChart(displayVol, s.volatilityCanvas, s.volatilityChartInstance);
+
+                s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance);
+                if (s.expectedDurationLabel) {
+                    s.expectedDurationLabel.textContent = results.averageInRangeDuration.toFixed(1);
+                }
 
                 s.lastResults = { ...results, volatilityData }; // Store FULL results for enlargement
 
@@ -869,61 +880,6 @@ async function updateAllCharts() {
     }
 }
 
-async function fetchHistory(symbol, apiKey, useHourly = false, startTime = 0, endTime = Date.now()) {
-    if (!useHourly) {
-        // Daily: fetch all data at once
-        const url = `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${symbol}&tsym=USD&allData=true&api_key=${apiKey}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`API Error ${res.status}`);
-        const json = await res.json();
-        if (json.Response === 'Error') throw new Error(json.Message);
-        return json.Data.Data.map(d => [d.time * 1000, d.close]);
-    } else {
-        // Hourly: Paginate backwards from endTime until startTime
-        let allPoints = [];
-        let toTs = Math.floor(endTime / 1000);
-        const limit = 2000;
-        const startTs = Math.floor(startTime / 1000);
-        let fetches = 0;
-        const MAX_FETCHES = 50; // Safety limit (~4-5 years)
-
-        while (fetches < MAX_FETCHES) {
-            const url = `https://min-api.cryptocompare.com/data/v2/histohour?fsym=${symbol}&tsym=USD&limit=${limit}&toTs=${toTs}&api_key=${apiKey}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`API Error ${res.status}`);
-            const json = await res.json();
-            if (json.Response === 'Error') throw new Error(json.Message);
-
-            const data = json.Data.Data;
-            if (!data || data.length === 0) break;
-
-            // Prepend data (since we are fetching backwards)
-            // But wait, API returns data chronological [oldest ... newest] ending at toTs.
-            // So we should prepend this chunk to our master list?
-            // Yes, because the next fetch will get OLDER data.
-            // Actually, let's just collect arrays and concat + sort later to be safe?
-            // No, standard pagination: 
-            // Call 1 (toTs=Now): Returns [Now-2000, ... Now]. We verify last point ~ Now.
-            // Call 2 (toTs=Now-2000-1h): Returns [Now-4000, ... Now-2001].
-            // So we should collect them: [Call N, ... Call 2, Call 1].
-
-            // Map to our format [ms, price]
-            const chunk = data.map(d => [d.time * 1000, d.close]);
-            allPoints = [...chunk, ...allPoints];
-
-            const earliestTime = data[0].time;
-            if (earliestTime <= startTs) break; // Reached start date
-
-            toTs = earliestTime - 3600; // Move before the earliest point
-            fetches++;
-
-            // Rate limit civility (optional but good practice)
-            await new Promise(r => setTimeout(r, 100));
-        }
-
-        return allPoints;
-    }
-}
 
 function calculateRatioSeries(basePrices, quotePrices) {
     const series = [];
@@ -940,175 +896,7 @@ function calculateRatioSeries(basePrices, quotePrices) {
     return series;
 }
 
-function getLikidityAndAmounts(P, P_min, P_max, V_target) {
-    const sqrtP = Math.sqrt(P);
-    const sqrtPa = Math.sqrt(P_min);
-    const sqrtPb = Math.sqrt(P_max);
-    let x_L1 = 0, y_L1 = 0;
-
-    if (P < P_min) {
-        x_L1 = (1 / sqrtPa - 1 / sqrtPb);
-    } else if (P > P_max) {
-        y_L1 = (sqrtPb - sqrtPa);
-    } else {
-        x_L1 = (1 / sqrtP - 1 / sqrtPb);
-        y_L1 = (sqrtP - sqrtPa);
-    }
-
-    const V_L1 = x_L1 * P + y_L1;
-    const L = V_target / V_L1;
-    return { L, x: x_L1 * L, y: y_L1 * L };
-}
-
-function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, baseApr, rebalanceMode, delayDays) {
-    const P0_initial = priceSeries[0][1];
-    let P0 = P0_initial;
-    let P_min = P0 * (1 + minPct);
-    let P_max = P0 * (1 + maxPct);
-    let P_reb_min = P0 * (1 + rebMinPct);
-    let P_reb_max = P0 * (1 + rebMaxPct);
-
-    let currentCapital = 100;
-    let { L } = getLikidityAndAmounts(P0, P_min, P_max, currentCapital);
-
-    const initialPos = getLikidityAndAmounts(P0, P_min, P_max, 100);
-    const initial_x_hodl = initialPos.x, initial_y_hodl = initialPos.y;
-    const amt_asset1 = 100 / P0_initial, amt_asset2 = 100;
-
-    const hodlData = [], lpTotalData = [], asset1Data = [], asset2Data = [];
-    const minRangeSeries = [], maxRangeSeries = [];
-    const minRebSeries = [], maxRebSeries = [];
-    let accumulatedFees = 0;
-    let daysOutOfRange = 0;
-    let lastRebalanceTime = priceSeries[0] ? priceSeries[0][0] : 0;
-
-    // Check initial range state
-    if (P0 < P_reb_min || P0 > P_reb_max) {
-        daysOutOfRange = 0.0001; // Small non-zero start if initially out
-    }
-
-    const rangeWidthBase = 1.5; // for -50% to +100%
-
-    for (let i = 0; i < priceSeries.length; i++) {
-        const [time, P] = priceSeries[i];
-        hodlData.push([time, initial_x_hodl * P + initial_y_hodl]);
-        asset1Data.push([time, amt_asset1 * P]);
-        asset2Data.push([time, amt_asset2]);
-
-        const sqrtP = Math.sqrt(P), sqrtPa = Math.sqrt(P_min), sqrtPb = Math.sqrt(P_max);
-        let x_t = 0, y_t = 0, inRange = false;
-
-        if (P < P_min) {
-            x_t = (1 / sqrtPa - 1 / sqrtPb) * L;
-        } else if (P > P_max) {
-            y_t = (sqrtPb - sqrtPa) * L;
-        } else {
-            x_t = (1 / sqrtP - 1 / sqrtPb) * L;
-            y_t = (sqrtP - sqrtPa) * L;
-            inRange = true;
-        }
-
-        let val_lp_principal = x_t * P + y_t;
-
-        if (i > 0) {
-            const yearsElapsed = (time - priceSeries[i - 1][0]) / (1000 * 60 * 60 * 24 * 365);
-            if (inRange) {
-                // baseApr is already a decimal (e.g. 0.2 for 20%)
-                const effectiveApr = baseApr * (rangeWidthBase / (maxPct - minPct));
-                accumulatedFees += val_lp_principal * effectiveApr * yearsElapsed;
-            }
-        }
-
-        // Rebalance logic
-        let shouldRebalance = false;
-        let rebalanceCenterPrice = P;
-
-        if (rebalanceMode === 'periodic') {
-            // Periodic rebalance: check time elapsed since last rebalance
-            const msSinceLast = time - lastRebalanceTime;
-            const requiredMs = (delayDays * 24 * 60 * 60 * 1000) - 3600000;
-
-            if (msSinceLast >= requiredMs) {
-                shouldRebalance = true;
-                rebalanceCenterPrice = P;
-            }
-        } else if (rebalanceMode !== 'simple') {
-            const timeStepDays = i > 0 ? (time - priceSeries[i - 1][0]) / (1000 * 60 * 60 * 24) : 0;
-            if (P < P_reb_min || P > P_reb_max) {
-                daysOutOfRange += timeStepDays;
-            } else {
-                daysOutOfRange = 0;
-            }
-
-            if (rebalanceMode === 'time-delayed' && daysOutOfRange >= delayDays) {
-                shouldRebalance = true;
-            } else if (rebalanceMode === 'settled' && daysOutOfRange >= delayDays) {
-                // Check stability in actual time window
-                const step = timeStepDays || (1 / 24); // Fallback to 1h if step is 0
-                const requiredPoints = Math.max(1, Math.floor(delayDays / step));
-                const window = priceSeries.slice(Math.max(0, i - requiredPoints + 1), i + 1);
-                const prices = window.map(p => p[1]);
-
-                // Geometric Average
-                const sumLog = prices.reduce((a, b) => a + Math.log(b), 0);
-                const geoAvg = Math.exp(sumLog / prices.length);
-
-                // Stability Check: prices within user-defined rebalance boundaries relative to geoAvg
-                const isStable = prices.every(p => {
-                    const rel = p / geoAvg;
-                    return rel >= (1 + rebMinPct) && rel <= (1 + rebMaxPct);
-                });
-
-                if (isStable) {
-                    shouldRebalance = true;
-                    rebalanceCenterPrice = geoAvg;
-                }
-            }
-        }
-
-        if (shouldRebalance) {
-            if (rebalanceMode === 'periodic') {
-                // console.log(`[Rebalance ${time}] Mode: Periodic, Time: ${new Date(time).toLocaleString()}, Interval: ${delayDays} days`);
-            } else {
-                // console.log(`[Rebalance ${time}] Mode: ${rebalanceMode}, Time: ${new Date(time).toLocaleString()}, Out of range for: ${daysOutOfRange.toFixed(2)} days`);
-            }
-
-            currentCapital = val_lp_principal + accumulatedFees;
-            accumulatedFees = 0;
-            P0 = rebalanceCenterPrice;
-            P_min = P0 * (1 + minPct);
-            P_max = P0 * (1 + maxPct);
-            P_reb_min = P0 * (1 + rebMinPct);
-            P_reb_max = P0 * (1 + rebMaxPct);
-            L = getLikidityAndAmounts(P0, P_min, P_max, currentCapital).L;
-            val_lp_principal = currentCapital;
-            daysOutOfRange = 0;
-            lastRebalanceTime = time;
-        }
-
-        lpTotalData.push([time, val_lp_principal + accumulatedFees]);
-        minRangeSeries.push((P_min / P0_initial) * 100);
-        maxRangeSeries.push((P_max / P0_initial) * 100);
-        minRebSeries.push((P_reb_min / P0_initial) * 100);
-        maxRebSeries.push((P_reb_max / P0_initial) * 100);
-    }
-
-    return {
-        hodlData,
-        lpTotalData,
-        daysOutOfRange,
-        minRangeSeries,
-        maxRangeSeries,
-        minRebSeries,
-        maxRebSeries,
-        asset1Data,
-        asset2Data,
-        relativeSeries: lpTotalData.map((d, i) => {
-            const hodlVal = hodlData[i][1];
-            return [d[0], ((d[1] / hodlVal) - 1) * 100];
-        })
-    };
-}
+// Core math logic moved to logic.js
 
 function calculateRollingVolatility(priceSeries, windowInDays = 30) {
     if (priceSeries.length < 2) return [];
@@ -1148,46 +936,6 @@ function calculateRollingVolatility(priceSeries, windowInDays = 30) {
 
     return volatilitySeries;
 }
-
-function renderChart(results, canvas, existingChart) {
-    const ctx = canvas.getContext('2d');
-    const isLog = chartScaleSelect ? chartScaleSelect.value === 'logarithmic' : false;
-
-    const datasets = [
-        {
-            label: 'HODL Value',
-            data: results.hodlData.map(d => ({ x: d[0], y: d[1] })),
-            borderColor: '#60a5fa', // Blue
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.1
-        },
-        {
-            label: 'LP Strategy Value',
-            data: results.lpTotalData.map(d => ({ x: d[0], y: d[1] })),
-            borderColor: '#10b981', // Green
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.1
-        },
-        // Range lines
-        {
-            label: 'LP Min',
-            data: results.hodlData.map((d, i) => ({ x: d[0], y: d[1] * (1 + results.minRangeSeries[i] / 100) / (1 + (results.minRangeSeries[i] / 100 * 0)) })), // Approximate visualization logic simplified in original? No, let's look at original logic.
-            // Wait, the original renderChart logic isn't fully visible in view_file.
-            // I should just ADD the new render functions and let the existing ones be. 
-            // I am replacing content, so I need to be careful not to delete renderChart if I don't have its full code.
-            // The view_file output ended at line 800 and renderChart wasn't fully shown.
-            // I will implement calculateRollingVolatility and renderVolatilityChart AFTER calculateV3Backtest and BEFORE other render functions if possible, or at the end of file.
-            // BUT, I need to make sure I don't overwrite renderChart if I don't have it.
-            // Checking the file view again... line 800 is inside calculateV3Backtest. 
-            // I will assume renderChart is further down.
-            // I will APPEND the new functions at the end of the file or after calculateV3Backtest.
-            // I need to read the rest of the file first to be safe.
-        }
-    ];
-}
-
 
 function calculateYoY(series) {
     // series is array of [timestamp, value]
@@ -1469,6 +1217,9 @@ function handleEnlarge(btn) {
             } else if (type === 'volatility') {
                 title = `${strategyName} - Annualized Volatility`;
                 renderFn = renderVolatilityChart;
+            } else if (type === 'histogram') {
+                title = `${strategyName} - In-range Duration Histogram`;
+                renderFn = (res, canvas, instance) => renderHistogram(res.inRangeDurations, canvas, instance);
             } else {
                 title = `${strategyName} - Relative Return over HODL (%)`;
                 renderFn = renderRelativeChart;
@@ -1615,7 +1366,64 @@ function renderVolatilityChart(volatilityData, canvas, existingInstance) {
         }
     });
 }
-// --- Exports for testing ---
-if (typeof module !== 'undefined') {
-    module.exports = { calculateV3Backtest, getLikidityAndAmounts };
+
+function renderHistogram(durations, canvas, existingInstance) {
+    if (existingInstance) existingInstance.destroy();
+    if (!durations || durations.length === 0) return null;
+
+    // Create bins for the histogram
+    const maxVal = Math.max(...durations);
+    const binSize = 1; // Fixed 1-day resolution as requested
+    const binCount = Math.max(1, Math.ceil(maxVal / binSize));
+    const bins = new Array(binCount).fill(0);
+    const labels = [];
+
+    durations.forEach(d => {
+        const binIdx = Math.min(binCount - 1, Math.floor(d / binSize));
+        bins[binIdx]++;
+    });
+
+    for (let i = 0; i < binCount; i++) {
+        labels.push(`${i}`);
+    }
+
+    return new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Frequency',
+                data: bins,
+                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                borderColor: '#3b82f6',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `Count: ${ctx.parsed.y} (${((ctx.parsed.y / durations.length) * 100).toFixed(1)}%)`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#2d3748' },
+                    ticks: { color: '#9ca3af' },
+                    title: { display: true, text: 'Duration (Days)', color: '#9ca3af', font: { size: 10 } }
+                },
+                y: {
+                    grid: { color: '#2d3748' },
+                    ticks: { color: '#9ca3af' },
+                    title: { display: true, text: 'Occurrences', color: '#9ca3af', font: { size: 10 } }
+                }
+            }
+        }
+    });
 }
+
+// --- Initialization ---

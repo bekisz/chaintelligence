@@ -1,44 +1,18 @@
 const assert = require('assert').strict;
-const { randomInt } = require('crypto');
+
 const { calculateV3Backtest, getLiquidityAndAmounts, LiquidityPoolPosition } = require('./logic.js');
 
-
-const dailyPrice = [];
-const hourlyPrice = [];
-
-
-function initPrices() {
-    const startTs = Date.now();
-    for (let day = 0; day <= 3 * 365; day++) {
-        let price;
-        if (day <= 365) {
-            price = 1000;
-        } else if (day < 1.5 * 365) {
-            price = 800;
-        } else if (day < 2 * 365) {
-            price = 1800;
-        } else if (day < 3 * 365) {
-            price = 1000 + 10 * (day % 365); // Use day instead of broken randomInt
-        } else {
-            price = 2000;
-        }
-        dailyPrice.push([startTs + day * 24 * 3600 * 1000, price]);
-        for (let hour = 0; hour < 24; hour++) {
-            hourlyPrice.push([startTs + day * 24 * 3600 * 1000 + hour * 3600 * 1000, price]);
-        }
-    }
-
-}
-// --- Test Cases ---
 
 
 
 async function runTests() {
-    console.log('🚀 Starting LP Backtest Unit Tests...\n');
-    initPrices();
+    console.log('🚀 Starting LP  Tests...\n');
 
+    let lp = new LiquidityPool(new Asset("ETH"), new Asset("USDC"), referenceApr = 0.2);
+    let position = lp.createPositionFromCapital(1500, 3000, 6000, 100);
+    let result = position.calculateV3Backtest(dailyPrice, -0.1, 0.1, -0.1, 0.1, 'simple', 0);
     // 2. Simple Non-rebalanincing Strategy with Flat Price, High Concentration Yield
-    let result = calculateV3Backtest(dailyPrice, -0.1, 0.1, -0.1, 0.1, 0.2, 'simple', 0);
+    //let result = calculateV3Backtest(dailyPrice, -0.1, 0.1, -0.1, 0.1, 0.2, 'simple', 0);
     let lpCheckedValue = result.lpTotalData[365][1];
     console.log(`Test #02 : Simple Non-rebalanincing Strategy with Flat Price : 20% APR narrow range (7.5x). Final value: ${lpCheckedValue.toFixed(2)}`);
     assert.ok(lpCheckedValue > 249.0 && lpCheckedValue < 251.0, 'Yield should be ~150%');

@@ -9,6 +9,7 @@
     --border: #2d3748;
     --success: #10b981;
     --danger: #ef4444;
+    --chart-grid: rgba(255, 255, 255, 0.05);
 }
 
 * {
@@ -586,6 +587,19 @@ input::-webkit-calendar-picker-indicator:hover {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.stats-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    margin-left: 0.5rem;
+    opacity: 0.8;
+}
+
+.expected-duration {
+    color: var(--accent);
+    font-weight: 600;
 }
 
 .toggle-chart-btn {
