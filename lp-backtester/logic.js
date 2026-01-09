@@ -313,6 +313,45 @@ function calculateInRangeDurations(priceSeries, minPct, maxPct) {
     return durations;
 }
 
+/**
+ * Calculates the number of days needed in-range to cover the maximum IL at boundaries.
+ */
+function calculateBreakEvenDays(minPct, maxPct, baseApr) {
+    // Normalizing price to 1.0
+    const P0 = 1.0;
+    const Pa = 1.0 + minPct;
+    const Pb = 1.0 + maxPct;
+
+    const sqrtP0 = Math.sqrt(P0);
+    const sqrtPa = Math.sqrt(Pa);
+    const sqrtPb = Math.sqrt(Pb);
+
+    // Initial assets for L=1
+    const x0 = (1 / sqrtP0 - 1 / sqrtPb);
+    const y0 = (sqrtP0 - sqrtPa);
+
+    // LP Value at Pa (entirely in asset X)
+    const valPa_LP = (1 / sqrtPa - 1 / sqrtPb) * Pa; // Since y_t = 0
+    const valPa_HODL = x0 * Pa + y0;
+    const lossPa = 1 - (valPa_LP / valPa_HODL);
+
+    // LP Value at Pb (entirely in asset Y)
+    const valPb_LP = (sqrtPb - sqrtPa); // Since x_t = 0
+    const valPb_HODL = x0 * Pb + y0;
+    const lossPb = 1 - (valPb_LP / valPb_HODL);
+
+    const maxLoss = Math.max(lossPa, lossPb);
+
+    // Daily fee return
+    const rangeWidthBase = 1.5; // matching logic.js
+    const effectiveApr = baseApr * (rangeWidthBase / (maxPct - minPct));
+    const dailyReturn = effectiveApr / 365;
+
+    if (dailyReturn <= 0) return 0;
+
+    return maxLoss / dailyReturn;
+}
+
 function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, baseApr, rebalanceMode, delayDays) {
     const P0_initial = priceSeries[0][1];
     let P0 = P0_initial;
@@ -453,13 +492,14 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
             return [d[0], ((d[1] / hodlVal) - 1) * 100];
         }),
         inRangeDurations,
-        averageInRangeDuration
+        averageInRangeDuration,
+        breakEvenDays: calculateBreakEvenDays(minPct, maxPct, baseApr)
     };
 }
 
 // --- Exports for testing and browser ---
 if (typeof module !== 'undefined') {
-    module.exports = { calculateV3Backtest, getLiquidityAndAmounts, LiquidityPoolPosition, LiquidityPool, Asset, calculateInRangeDurations };
+    module.exports = { calculateV3Backtest, getLiquidityAndAmounts, LiquidityPoolPosition, LiquidityPool, Asset, calculateInRangeDurations, calculateBreakEvenDays };
 }
 if (typeof window !== 'undefined') {
     window.calculateV3Backtest = calculateV3Backtest;
@@ -468,4 +508,5 @@ if (typeof window !== 'undefined') {
     window.LiquidityPool = LiquidityPool;
     window.Asset = Asset;
     window.calculateInRangeDurations = calculateInRangeDurations;
+    window.calculateBreakEvenDays = calculateBreakEvenDays;
 }

@@ -464,6 +464,7 @@ function addStrategy(config = {}) {
         histogramCanvas: block.querySelector('.histogram-chart'),
         histogramChartInstance: null,
         expectedDurationLabel: block.querySelector('.expected-duration'),
+        breakEvenDurationLabel: block.querySelector('.break-even-duration'),
         rebalanceRangeManuallyChanged: config.rebMan || false
     };
 
@@ -807,9 +808,12 @@ async function updateAllCharts() {
                 const displayVol = downsampleVolatility(volatilityData, useHourly);
                 s.volatilityChartInstance = renderVolatilityChart(displayVol, s.volatilityCanvas, s.volatilityChartInstance);
 
-                s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance);
+                s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance, results.breakEvenDays);
                 if (s.expectedDurationLabel) {
                     s.expectedDurationLabel.textContent = results.averageInRangeDuration.toFixed(1);
+                }
+                if (s.breakEvenDurationLabel) {
+                    s.breakEvenDurationLabel.textContent = results.breakEvenDays.toFixed(1);
                 }
 
                 s.lastResults = { ...results, volatilityData }; // Store FULL results for enlargement
@@ -1367,7 +1371,7 @@ function renderVolatilityChart(volatilityData, canvas, existingInstance) {
     });
 }
 
-function renderHistogram(durations, canvas, existingInstance) {
+function renderHistogram(durations, canvas, existingInstance, breakEvenDays = 0) {
     if (existingInstance) existingInstance.destroy();
     if (!durations || durations.length === 0) return null;
 
@@ -1394,8 +1398,8 @@ function renderHistogram(durations, canvas, existingInstance) {
             datasets: [{
                 label: 'Frequency',
                 data: bins,
-                backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                borderColor: '#3b82f6',
+                backgroundColor: bins.map((_, i) => (i < breakEvenDays ? 'rgba(239, 68, 68, 0.6)' : 'rgba(59, 130, 246, 0.6)')),
+                borderColor: bins.map((_, i) => (i < breakEvenDays ? '#ef4444' : '#3b82f6')),
                 borderWidth: 1
             }]
         },
