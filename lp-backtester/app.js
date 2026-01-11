@@ -465,6 +465,7 @@ function addStrategy(config = {}) {
         histogramChartInstance: null,
         expectedDurationLabel: block.querySelector('.expected-duration'),
         breakEvenDurationLabel: block.querySelector('.break-even-duration'),
+        beatsStandardDurationLabel: block.querySelector('.beats-standard-duration'),
         rebalanceRangeManuallyChanged: config.rebMan || false
     };
 
@@ -808,12 +809,15 @@ async function updateAllCharts() {
                 const displayVol = downsampleVolatility(volatilityData, useHourly);
                 s.volatilityChartInstance = renderVolatilityChart(displayVol, s.volatilityCanvas, s.volatilityChartInstance);
 
-                s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance, results.breakEvenDays);
+                s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance, results.breakEvenDays, results.competitiveDays);
                 if (s.expectedDurationLabel) {
                     s.expectedDurationLabel.textContent = results.averageInRangeDuration.toFixed(1);
                 }
                 if (s.breakEvenDurationLabel) {
                     s.breakEvenDurationLabel.textContent = results.breakEvenDays.toFixed(1);
+                }
+                if (s.beatsStandardDurationLabel) {
+                    s.beatsStandardDurationLabel.textContent = isFinite(results.competitiveDays) ? results.competitiveDays.toFixed(1) : '∞';
                 }
 
                 s.lastResults = { ...results, volatilityData }; // Store FULL results for enlargement
@@ -1223,7 +1227,7 @@ function handleEnlarge(btn) {
                 renderFn = renderVolatilityChart;
             } else if (type === 'histogram') {
                 title = `${strategyName} - In-range Duration Histogram`;
-                renderFn = (res, canvas, instance) => renderHistogram(res.inRangeDurations, canvas, instance);
+                renderFn = (res, canvas, instance) => renderHistogram(res.inRangeDurations, canvas, instance, res.breakEvenDays, res.competitiveDays);
             } else {
                 title = `${strategyName} - Relative Return over HODL (%)`;
                 renderFn = renderRelativeChart;
@@ -1371,7 +1375,7 @@ function renderVolatilityChart(volatilityData, canvas, existingInstance) {
     });
 }
 
-function renderHistogram(durations, canvas, existingInstance, breakEvenDays = 0) {
+function renderHistogram(durations, canvas, existingInstance, breakEvenDays = 0, competitiveDays = Infinity) {
     if (existingInstance) existingInstance.destroy();
     if (!durations || durations.length === 0) return null;
 
@@ -1398,8 +1402,16 @@ function renderHistogram(durations, canvas, existingInstance, breakEvenDays = 0)
             datasets: [{
                 label: 'Frequency',
                 data: bins,
-                backgroundColor: bins.map((_, i) => (i < breakEvenDays ? 'rgba(239, 68, 68, 0.6)' : 'rgba(59, 130, 246, 0.6)')),
-                borderColor: bins.map((_, i) => (i < breakEvenDays ? '#ef4444' : '#3b82f6')),
+                backgroundColor: bins.map((_, i) => {
+                    if (i < breakEvenDays) return 'rgba(239, 68, 68, 0.6)'; // Red for absolute loss
+                    if (i < competitiveDays) return 'rgba(236, 72, 153, 0.6)'; // Pink for trailing vs standard
+                    return 'rgba(59, 130, 246, 0.6)'; // Blue for "tail end" (outperforming standard)
+                }),
+                borderColor: bins.map((_, i) => {
+                    if (i < breakEvenDays) return '#ef4444';
+                    if (i < competitiveDays) return '#ec4899';
+                    return '#3b82f6';
+                }),
                 borderWidth: 1
             }]
         },

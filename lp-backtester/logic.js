@@ -314,9 +314,19 @@ function calculateInRangeDurations(priceSeries, minPct, maxPct) {
 }
 
 /**
- * Calculates the number of days needed in-range to cover the maximum IL at boundaries.
+ * Calculates Uniswap V3 liquidity L for capital=1 at price=1.
  */
-function calculateBreakEvenDays(minPct, maxPct, baseApr) {
+function getLiquidityConcentration(minPct, maxPct) {
+    const Pa = 1.0 + minPct;
+    const Pb = 1.0 + maxPct;
+    // Formula: L = 1 / (2 - sqrt(Pa) - 1/sqrt(Pb))
+    return 1 / (2 - Math.sqrt(Pa) - 1 / Math.sqrt(Pb));
+}
+
+/**
+ * Calculates IL and Daily Return for a given range.
+ */
+function getRangeMetrics(minPct, maxPct, baseApr) {
     // Normalizing price to 1.0
     const P0 = 1.0;
     const Pa = 1.0 + minPct;
@@ -331,25 +341,51 @@ function calculateBreakEvenDays(minPct, maxPct, baseApr) {
     const y0 = (sqrtP0 - sqrtPa);
 
     // LP Value at Pa (entirely in asset X)
-    const valPa_LP = (1 / sqrtPa - 1 / sqrtPb) * Pa; // Since y_t = 0
+    const valPa_LP = (1 / sqrtPa - 1 / sqrtPb) * Pa;
     const valPa_HODL = x0 * Pa + y0;
     const lossPa = 1 - (valPa_LP / valPa_HODL);
 
     // LP Value at Pb (entirely in asset Y)
-    const valPb_LP = (sqrtPb - sqrtPa); // Since x_t = 0
+    const valPb_LP = (sqrtPb - sqrtPa);
     const valPb_HODL = x0 * Pb + y0;
     const lossPb = 1 - (valPb_LP / valPb_HODL);
 
     const maxLoss = Math.max(lossPa, lossPb);
 
     // Daily fee return
-    const rangeWidthBase = 1.5; // matching logic.js
-    const effectiveApr = baseApr * (rangeWidthBase / (maxPct - minPct));
+    const L_std = 1.7071; // Liquidity for -50%/+100% range
+    const L_custom = getLiquidityConcentration(minPct, maxPct);
+    const multiplier = L_custom / L_std;
+    const effectiveApr = baseApr * multiplier;
     const dailyReturn = effectiveApr / 365;
 
-    if (dailyReturn <= 0) return 0;
+    return { maxLoss, dailyReturn };
+}
 
+/**
+ * Calculates the number of days needed in-range to cover the maximum IL at boundaries.
+ */
+function calculateBreakEvenDays(minPct, maxPct, baseApr) {
+    const { maxLoss, dailyReturn } = getRangeMetrics(minPct, maxPct, baseApr);
+    if (dailyReturn <= 0) return 0;
     return maxLoss / dailyReturn;
+}
+
+/**
+ * Calculates when a strategy beats the standard -50%/+100% range.
+ */
+function calculateCompetitiveDays(minPct, maxPct, baseApr) {
+    const std = getRangeMetrics(-0.5, 1.0, baseApr);
+    const custom = getRangeMetrics(minPct, maxPct, baseApr);
+
+    const diffReturn = custom.dailyReturn - std.dailyReturn;
+    const diffLoss = custom.maxLoss - std.maxLoss;
+
+    if (diffReturn <= 0) return Infinity; // Custom range earns less or same, will never beat std or only if IL is less.
+
+    // Competitive Days = (IL_custom - IL_std) / (r_custom - r_std)
+    const d = diffLoss / diffReturn;
+    return Math.max(0, d);
 }
 
 function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, baseApr, rebalanceMode, delayDays) {
@@ -388,7 +424,9 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         daysOutOfRange = 0.0001;
     }
 
-    const rangeWidthBase = 1.5; // for -50% to +100%
+    const L_std = getLiquidityConcentration(-0.5, 1.0); // for -50% to +100%
+    const L_custom = getLiquidityConcentration(minPct, maxPct);
+    const multiplier = L_custom / L_std;
 
     for (let i = 0; i < priceSeries.length; i++) {
         const [time, P] = priceSeries[i];
@@ -403,10 +441,11 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         const inRange = (P >= pos.P_min && P <= pos.P_max);
         let val_lp_principal = x_t * P + y_t;
 
+        // 1. Fee Calculation (Accrued daily based on current position)
         if (i > 0) {
             const yearsElapsed = (time - priceSeries[i - 1][0]) / (1000 * 60 * 60 * 24 * 365);
             if (inRange) {
-                const effectiveApr = pos.referenceApr * (rangeWidthBase / (maxPct - minPct));
+                const effectiveApr = pos.referenceApr * multiplier;
                 accumulatedFees += val_lp_principal * effectiveApr * yearsElapsed;
             }
         }
@@ -493,13 +532,14 @@ function calculateV3Backtest(priceSeries, minPct, maxPct, rebMinPct, rebMaxPct, 
         }),
         inRangeDurations,
         averageInRangeDuration,
-        breakEvenDays: calculateBreakEvenDays(minPct, maxPct, baseApr)
+        breakEvenDays: calculateBreakEvenDays(minPct, maxPct, baseApr),
+        competitiveDays: calculateCompetitiveDays(minPct, maxPct, baseApr)
     };
 }
 
 // --- Exports for testing and browser ---
 if (typeof module !== 'undefined') {
-    module.exports = { calculateV3Backtest, getLiquidityAndAmounts, LiquidityPoolPosition, LiquidityPool, Asset, calculateInRangeDurations, calculateBreakEvenDays };
+    module.exports = { calculateV3Backtest, getLiquidityAndAmounts, LiquidityPoolPosition, LiquidityPool, Asset, calculateInRangeDurations, calculateBreakEvenDays, calculateCompetitiveDays, getLiquidityConcentration };
 }
 if (typeof window !== 'undefined') {
     window.calculateV3Backtest = calculateV3Backtest;
@@ -509,4 +549,6 @@ if (typeof window !== 'undefined') {
     window.Asset = Asset;
     window.calculateInRangeDurations = calculateInRangeDurations;
     window.calculateBreakEvenDays = calculateBreakEvenDays;
+    window.calculateCompetitiveDays = calculateCompetitiveDays;
+    window.getLiquidityConcentration = getLiquidityConcentration;
 }
