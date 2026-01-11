@@ -293,22 +293,43 @@ function calculateInRangeDurations(priceSeries, minPct, maxPct) {
     const intervalDays = totalDays / (priceSeries.length - 1) || 1;
 
     const durations = [];
-    for (let i = 0; i < priceSeries.length; i++) {
-        const startPrice = priceSeries[i][1];
-        const minPrice = startPrice * (1 + minPct);
-        const maxPrice = startPrice * (1 + maxPct);
-        let count = 0;
 
-        for (let j = i + 1; j < priceSeries.length; j++) {
+    // We use a "Sliding Window" approach (O(N^2)) as requested by the user.
+    // "Backtest for each and every day... and throw away those that don't get out of range".
+    // This creates overlapping segments.
+    // However, we strictly filter "censored" segments (those that reach the end of data without breaking).
+
+    const N = priceSeries.length;
+    for (let i = 0; i < N; i++) {
+        const anchorPrice = priceSeries[i][1];
+        const minP = anchorPrice * (1 + minPct);
+        const maxP = anchorPrice * (1 + maxPct);
+
+        let j = i + 1;
+
+        while (j < N) {
             const p = priceSeries[j][1];
-            if (p >= minPrice && p <= maxPrice) {
-                count++;
+            if (p >= minP && p <= maxP) {
+                j++;
             } else {
-                break;
+                break; // Exited range
             }
         }
-        // Convert count of points to days
-        durations.push(count * intervalDays);
+
+        // Duration calculation
+        // The count of valid points including start is (j - i).
+        // Elapsed duration is (j - i - 1) * intervalDays, or roughly proportional.
+        // If broke immediately at j=i+1, elapsed is 0 days.
+        const effectiveCount = j - i;
+
+        // Filter Censored Data:
+        // If the loop terminated because j reached the end of the series (j === N),
+        // it means the range never broke. This is a "censored" duration.
+        const isCensored = (j === N);
+
+        if (!isCensored && effectiveCount > 1) {
+            durations.push((effectiveCount - 1) * intervalDays);
+        }
     }
     return durations;
 }

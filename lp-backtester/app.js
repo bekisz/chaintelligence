@@ -270,6 +270,7 @@ async function init() {
 
     // Attach Global Listeners
     if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => {
+        console.log("Selected new base asset:", coin.symbol);
         baseAsset = new Asset(coin.symbol);
         updateURLParams();
     });
@@ -746,14 +747,36 @@ async function updateAllCharts() {
             endDatePoints = d.getTime();
         }
 
+        // --- SYNC INPUTS WITH ASSETS ---
+        // Fix for bug where user types symbol but doesn't click dropdown
+        if (baseSearchInput && baseAsset) {
+            const inputVal = baseSearchInput.value.trim().toUpperCase();
+            if (inputVal && inputVal !== baseAsset.symbol.toUpperCase()) {
+                console.log(`Syncing Base Asset: ${baseAsset.symbol} -> ${inputVal}`);
+                const coin = allCoins.find(c => c.symbol.toUpperCase() === inputVal);
+                // Use found coin ID/Symbol or default to input value if not found in top 100
+                baseAsset = new Asset(coin ? coin.symbol : inputVal);
+            }
+        }
+        if (quoteSearchInput && quoteAsset) {
+            const inputVal = quoteSearchInput.value.trim().toUpperCase();
+            if (inputVal && inputVal !== quoteAsset.symbol.toUpperCase()) {
+                console.log(`Syncing Quote Asset: ${quoteAsset.symbol} -> ${inputVal}`);
+                const coin = allCoins.find(c => c.symbol.toUpperCase() === inputVal);
+                quoteAsset = new Asset(coin ? coin.symbol : inputVal);
+            }
+        }
+
         const hourlyRadio = document.querySelector('input[name="resolution"][value="hourly"]');
         const useHourly = hourlyRadio && hourlyRadio.checked;
 
         // Fetch shared price data once
+        console.log(`Fetching history for: Base=${baseAsset.symbol}, Quote=${quoteAsset.symbol}`);
         await Promise.all([
             baseAsset.fetchHistory(useHourly, startDatePoints, endDatePoints),
             quoteAsset.fetchHistory(useHourly, startDatePoints, endDatePoints)
         ]);
+        console.log(`Fetch complete. Base data points: ${baseAsset.priceData?.length}`);
 
         const rawBaseData = baseAsset.priceData;
         const rawQuoteData = quoteAsset.priceData;
@@ -809,7 +832,7 @@ async function updateAllCharts() {
                 const displayVol = downsampleVolatility(volatilityData, useHourly);
                 s.volatilityChartInstance = renderVolatilityChart(displayVol, s.volatilityCanvas, s.volatilityChartInstance);
 
-                s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance, results.breakEvenDays, results.competitiveDays);
+                s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance, results.breakEvenDays, results.competitiveDays, results.averageInRangeDuration);
                 if (s.expectedDurationLabel) {
                     s.expectedDurationLabel.textContent = results.averageInRangeDuration.toFixed(1);
                 }
@@ -899,7 +922,9 @@ function calculateRatioSeries(basePrices, quotePrices) {
             qIdx++;
         }
         const [qTime, qPrice] = quotePrices[qIdx];
-        if (qPrice !== 0) series.push([time, bPrice / qPrice]);
+        if (qPrice > 0 && bPrice > 0) {
+            series.push([time, bPrice / qPrice]);
+        }
     }
     return series;
 }
@@ -1227,7 +1252,7 @@ function handleEnlarge(btn) {
                 renderFn = renderVolatilityChart;
             } else if (type === 'histogram') {
                 title = `${strategyName} - In-range Duration Histogram`;
-                renderFn = (res, canvas, instance) => renderHistogram(res.inRangeDurations, canvas, instance, res.breakEvenDays, res.competitiveDays);
+                renderFn = (res, canvas, instance) => renderHistogram(res.inRangeDurations, canvas, instance, res.breakEvenDays, res.competitiveDays, res.averageInRangeDuration);
             } else {
                 title = `${strategyName} - Relative Return over HODL (%)`;
                 renderFn = renderRelativeChart;
@@ -1375,7 +1400,7 @@ function renderVolatilityChart(volatilityData, canvas, existingInstance) {
     });
 }
 
-function renderHistogram(durations, canvas, existingInstance, breakEvenDays = 0, competitiveDays = Infinity) {
+function renderHistogram(durations, canvas, existingInstance, breakEvenDays = 0, competitiveDays = Infinity, averageDuration = null) {
     if (existingInstance) existingInstance.destroy();
     if (!durations || durations.length === 0) return null;
 
@@ -1438,7 +1463,59 @@ function renderHistogram(durations, canvas, existingInstance, breakEvenDays = 0,
                     title: { display: true, text: 'Occurrences', color: '#9ca3af', font: { size: 10 } }
                 }
             }
-        }
+        },
+        plugins: [{
+            id: 'expectedDurationLine',
+            afterDatasetsDraw(chart) {
+                if (averageDuration === null || typeof averageDuration !== 'number') return;
+
+                const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
+
+                // Interpolate X position for the average duration
+                // Bins are 0, 1, 2... so index matches value.
+                const idx = Math.floor(averageDuration);
+                const nextIdx = idx + 1;
+
+                const x1 = x.getPixelForValue(idx);
+                let xPos = x1;
+
+                // If we have a next bin, interpolate
+                if (x1 !== undefined) {
+                    const x2 = x.getPixelForValue(nextIdx);
+                    if (x2 !== undefined) {
+                        const fraction = averageDuration - idx;
+                        xPos = x1 + (x2 - x1) * fraction;
+                    }
+                }
+
+                // If xPos is invalid or NaN (e.g. average > max bin), clamp to right edge?
+                // But x.getPixelForValue might return undefined if out of range.
+                // If undefined, let's try getPixelForValue(binCount-1)
+
+                if (xPos === undefined || isNaN(xPos)) {
+                    // Try max
+                    xPos = x.getPixelForValue(binCount - 1);
+                }
+
+                if (xPos !== undefined) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#fbbf24'; // Amber
+                    ctx.setLineDash([5, 5]);
+                    ctx.moveTo(xPos, top);
+                    ctx.lineTo(xPos, bottom);
+                    ctx.stroke();
+
+                    // Label
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.font = 'bold 11px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`Exp: ${averageDuration.toFixed(1)}d`, xPos, top + 12);
+                    ctx.restore();
+                }
+            }
+        }]
     });
 }
 
