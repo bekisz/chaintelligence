@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uniswap V3 LP Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Uniswap V3 Positions</h1>
+            <p class="subtitle">Live Liquidity Dashboard</p>
+            <div class="api-key-container">
+                <input type="text" id="address-input" placeholder="Enter Wallet Address"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; width: 350px;">
+                <button id="save-address-btn"
+                    style="padding: 0.5rem 1rem; cursor: pointer; background: #22c55e; border: none; border-radius: 4px; color: white;">Save
+                    Address</button>
+            </div>
+
+            <div class="api-key-container" style="margin-top: 1rem;">
+                <input type="password" id="api-key-input" placeholder="Enter Graph API Key"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white;">
+                <button id="save-key-btn"
+                    style="padding: 0.5rem 1rem; cursor: pointer; background: #3b82f6; border: none; border-radius: 4px; color: white;">Save
+                    Key</button>
+            </div>
+        </header>
+
+        <main id="dashboard-grid" class="dashboard-grid">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
