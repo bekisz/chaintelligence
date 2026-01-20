@@ -8,118 +8,281 @@ let apiKey = localStorage.getItem('graph_api_key') || '';
 // Uniswap V3 Subgraph ID on The Graph Network
 const SUBGRAPH_ID = '5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV';
 
-function getSubgraphUrl() {
-    if (!apiKey) {
-        // Fallback to hosted service in case it miraculously works or for non-mainnet (but this is mainnet)
-        // Or return null to trigger prompt
+const NETWORKS = {
+    'mainnet': {
+        name: 'Ethereum',
+        v3: ['5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV'],
+        v4: [
+            'DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G' // Confirmed working V4 subgraph
+        ]
+    },
+    'arbitrum': {
+        name: 'Arbitrum',
+        v3: [], // IDs were invalid/not found
+        v4: []  // IDs were invalid/not found
+    },
+    'base': {
+        name: 'Base', // IDs were invalid/not found
+        v3: [],
+        v4: []
+    }
+};
+
+function getSubgraphUrl(subgraphId) {
+    if (!apiKey || !subgraphId) return null;
+    return `https://gateway.thegraph.com/api/${apiKey}/subgraphs/id/${subgraphId}`;
+}
+
+async function fetchNetworkData(networkKey, addresses) {
+    const network = NETWORKS[networkKey];
+    const data = { allPositions: [], allBaselines: {}, ethPriceUSD: 0 };
+
+    // Group fetch tasks for v3 and v4
+    const tasks = [];
+    if (network.v3) network.v3.forEach(id => tasks.push(fetchProtocolData(id, addresses, 'v3', network.name)));
+    if (network.v4) network.v4.forEach(id => tasks.push(fetchProtocolData(id, addresses, 'v4', network.name)));
+
+    const results = await Promise.all(tasks);
+    results.forEach(res => {
+        if (res && res.positions) {
+            data.allPositions.push(...res.positions);
+            Object.assign(data.allBaselines, res.baselines);
+            data.ethPriceUSD = Math.max(data.ethPriceUSD, res.ethPriceUSD);
+        }
+    });
+
+    return data;
+}
+
+async function fetchProtocolData(subgraphId, addresses, version, networkName) {
+    const url = getSubgraphUrl(subgraphId);
+    if (!url) {
+        console.warn(`[WARN] Skipping ${networkName} ${version} (ID: ${subgraphId}) due to missing API key or subgraph ID.`);
         return null;
     }
-    return `https://gateway.thegraph.com/api/${apiKey}/subgraphs/id/${SUBGRAPH_ID}`;
+
+    const now = Math.floor(Date.now() / 1000);
+
+    // Addresses array for query construction
+    const addressesString = addresses.map(a => `\\"${a.toLowerCase()}\\"`).join(',');
+
+    let query;
+
+    if (version === 'v4') {
+        // V4: Event-based (ModifyLiquidity)
+        // Corrected Schema based on verification:
+        // Pool has token0, token1, token0Price (no currency0/1 or price)
+        query = `
+        {
+            modifyLiquidities(
+                where: { origin_in: [${addressesString}] },
+                first: 1000,
+                orderBy: timestamp,
+                orderDirection: asc
+            ) {
+                id
+                transaction { id }
+                timestamp
+                pool {
+                    id
+                    token0 { symbol decimals derivedETH }
+                    token1 { symbol decimals derivedETH }
+                    feeTier
+                    tick
+                    token0Price
+                    token1Price
+                }
+                tickLower
+                tickUpper
+                amount
+            }
+            bundle(id: "1") {
+                ethPriceUSD
+            }
+        }
+        `;
+    } else {
+        // V3: Position Entity-based
+        query = `
+        {
+            bundle(id: "1") { ethPriceUSD }
+            positions(where: { owner_in: [${addressesString}], liquidity_gt: 0 }) {
+                id
+                liquidity
+                tickLower { tickIdx feeGrowthOutside0X128 feeGrowthOutside1X128 }
+                tickUpper { tickIdx feeGrowthOutside0X128 feeGrowthOutside1X128 }
+                feeGrowthInside0LastX128
+                feeGrowthInside1LastX128
+                collectedFeesToken0
+                collectedFeesToken1
+                token0 { symbol decimals derivedETH }
+                token1 { symbol decimals derivedETH }
+                pool {
+                    id
+                    feeTier
+                    tick
+                    token0Price
+                    token1Price
+                    feeGrowthGlobal0X128
+                    feeGrowthGlobal1X128
+                }
+            }
+            positionSnapshots(
+                where: { owner_in: [${addressesString}] },
+                orderBy: timestamp, orderDirection: desc, first: 100
+            ) {
+                id position { id } timestamp feeGrowthInside0LastX128 feeGrowthInside1LastX128 collectedFeesToken0 collectedFeesToken1
+            }
+        }
+        `;
+    }
+
+    try {
+        console.log(`[FETCH] Querying ${networkName} ${version}...`);
+        const response = await fetch(url, { method: 'POST', body: JSON.stringify({ query }) });
+        const json = await response.json();
+
+        if (json.errors) {
+            console.warn(`[WARN] GraphQL errors for ${networkName} ${version}:`, json.errors);
+            return null;
+        }
+
+        const ethPriceUSD = parseFloat(json.data.bundle?.ethPriceUSD || 0);
+        let positions = [];
+        const baselines = {};
+
+        if (version === 'v4') {
+            // === V4 Reconstruction Logic ===
+            const events = json.data.modifyLiquidities || [];
+
+            // Group by identifier: pool + ticks
+            const positionsMap = {};
+
+            events.forEach(evt => {
+                const poolId = evt.pool.id;
+                const tL = evt.tickLower;
+                const tU = evt.tickUpper;
+                // Create a synthetic ID for the position
+                const posKey = `${poolId}-${tL}-${tU}-${evt.pool.feeTier}`;
+
+                if (!positionsMap[posKey]) {
+                    // Initialize if new
+                    positionsMap[posKey] = {
+                        id: posKey,
+                        network: networkName,
+                        version: 'v4',
+                        // Map V4 structure to V3 expectation
+                        pool: {
+                            id: evt.pool.id,
+                            feeTier: evt.pool.feeTier,
+                            tick: parseInt(evt.pool.tick || 0),
+                            token0Price: evt.pool.token0Price || "0",
+                            token1Price: evt.pool.token1Price || "0",
+                            // Missing global fee growth data in events
+                            feeGrowthGlobal0X128: "0",
+                            feeGrowthGlobal1X128: "0"
+                        },
+                        token0: evt.pool.token0 || { symbol: '???', decimals: 18, derivedETH: 0 },
+                        token1: evt.pool.token1 || { symbol: '???', decimals: 18, derivedETH: 0 },
+                        tickLower: { tickIdx: parseInt(tL), feeGrowthOutside0X128: "0", feeGrowthOutside1X128: "0" },
+                        tickUpper: { tickIdx: parseInt(tU), feeGrowthOutside0X128: "0", feeGrowthOutside1X128: "0" },
+                        liquidity: BigInt(0),
+                        // Fees tracking not available in this reconstruction method yet
+                        feeGrowthInside0LastX128: "0",
+                        feeGrowthInside1LastX128: "0",
+                        collectedFeesToken0: "0",
+                        collectedFeesToken1: "0"
+                    };
+                }
+
+                // Aggregate Liquidity
+                if (evt.amount) {
+                    positionsMap[posKey].liquidity += BigInt(evt.amount);
+                }
+            });
+
+            // Filter out closed positions (liquidity <= 0) and formatted
+            positions = Object.values(positionsMap)
+                .filter(p => p.liquidity > 0n)
+                .map(p => {
+                    p.liquidity = p.liquidity.toString();
+                    p.ethPriceUSD = ethPriceUSD;
+                    return p;
+                });
+
+            console.log(`[V4] Reconstructed ${positions.length} active positions from ${events.length} events.`);
+
+        } else {
+            // === V3 Standard Processing ===
+            if (json.data.positions) {
+                positions = json.data.positions.map(p => ({
+                    ...p,
+                    version: 'v3',
+                    network: networkName,
+                    ethPriceUSD: ethPriceUSD,
+                    // Ensure tick objects are parsed if coming from different schema versions
+                    tickLower: typeof p.tickLower === 'object' ? p.tickLower : { tickIdx: parseInt(p.tickLower) },
+                    tickUpper: typeof p.tickUpper === 'object' ? p.tickUpper : { tickIdx: parseInt(p.tickUpper) }
+                }));
+            }
+
+            // Snapshot processing (V3 only for now)
+            if (json.data.positionSnapshots) {
+                const grouped = {};
+                json.data.positionSnapshots.forEach(s => {
+                    if (!grouped[s.position.id]) grouped[s.position.id] = [];
+                    grouped[s.position.id].push(s);
+                });
+
+                // Helper to find closest snapshot
+                Object.keys(grouped).forEach(posId => {
+                    const snaps = grouped[posId];
+                    let b24 = null; let d24 = Infinity;
+                    let b7 = null; let d7 = Infinity;
+                    // Current time is in seconds
+                    snaps.forEach(s => {
+                        const age = now - s.timestamp;
+                        // 24h search (allow 4h buffer to ignore very recent updates if wanted, but standard is find closest to 24h)
+                        // Using simplier logic: closest to 24h ago
+                        const diff24 = Math.abs(age - 86400);
+                        if (age >= 3600 && diff24 < d24) { d24 = diff24; b24 = s; }
+
+                        const diff7 = Math.abs(age - 604800);
+                        if (age >= 86400 && diff7 < d7) { d7 = diff7; b7 = s; }
+                    });
+                    baselines[posId] = { snap24h: b24, snap7d: b7 };
+                });
+            }
+        }
+
+        return { positions, baselines, ethPriceUSD };
+
+    } catch (e) {
+        console.error(`Fetch failed for ${networkName} ${version}:`, e);
+        return null;
+    }
 }
 
 async function fetchPositions() {
-    const url = getSubgraphUrl();
-    if (!url) {
-        throw new Error("Missing Graph API Key. Please enter it above.");
-    }
+    const addresses = targetAddress.split(',').map(a => a.trim()).filter(a => a.startsWith('0x'));
+    if (addresses.length === 0) throw new Error("No valid Ethereum addresses found.");
 
-    // Calculate timestamp for 24 hours ago
-    const timestamp24hAgo = Math.floor(Date.now() / 1000) - (24 * 60 * 60);
+    const results = await Promise.all(Object.keys(NETWORKS).map(key => fetchNetworkData(key, addresses)));
 
-    const query = `
-    {
-        bundle(id: "1") {
-            ethPriceUSD
-        }
-        positions(where: { owner: "${targetAddress}", liquidity_gt: 0 }) {
-            id
-            token0 {
-                symbol
-                decimals
-                derivedETH
-            }
-            token1 {
-                symbol
-                decimals
-                derivedETH
-            }
-            liquidity
-            feeGrowthInside0LastX128
-            feeGrowthInside1LastX128
-            tickLower {
-                tickIdx
-                feeGrowthOutside0X128
-                feeGrowthOutside1X128
-            }
-            tickUpper {
-                tickIdx
-                feeGrowthOutside0X128
-                feeGrowthOutside1X128
-            }
-            pool {
-                id
-                feeTier
-                tick
-                token0Price
-                token1Price
-                feeGrowthGlobal0X128
-                feeGrowthGlobal1X128
-            }
-        }
-        positionSnapshots(
-            where: { 
-                owner: "${targetAddress}"
-            },
-            orderBy: timestamp,
-            orderDirection: desc,
-            first: 100
-        ) {
-            id
-            position {
-                id
-            }
-            timestamp
-            feeGrowthInside0LastX128
-            feeGrowthInside1LastX128
-            collectedFeesToken0
-            collectedFeesToken1
-        }
-    }
-    `;
+    const aggregated = {
+        positions: [],
+        baselinesByPos: {},
+        ethPriceUSD: 0
+    };
 
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-        });
+    results.forEach(res => {
+        if (!res) return;
+        aggregated.positions.push(...res.allPositions);
+        Object.assign(aggregated.baselinesByPos, res.allBaselines);
+        if (res.ethPriceUSD > aggregated.ethPriceUSD) aggregated.ethPriceUSD = res.ethPriceUSD;
+    });
 
-        const json = await response.json();
-        if (json.errors) {
-            throw new Error(json.errors[0].message);
-        }
-
-        // Create a map of position ID to its most recent snapshot from 24h ago
-        const snapshotMap = {};
-        if (json.data.positionSnapshots) {
-            json.data.positionSnapshots.forEach(snap => {
-                const posId = snap.position.id;
-                // Keep only the most recent snapshot for each position (already ordered desc)
-                if (!snapshotMap[posId]) {
-                    snapshotMap[posId] = snap;
-                }
-            });
-        }
-
-        return {
-            positions: json.data.positions,
-            ethPriceUSD: parseFloat(json.data.bundle?.ethPriceUSD || 0),
-            snapshots24h: snapshotMap
-        };
-    } catch (error) {
-        console.error("Failed to fetch positions:", error);
-        throw error;
-    }
+    return aggregated;
 }
 
 function tickToPrice(tick) {
@@ -275,212 +438,170 @@ function formatCurrencyUSD(val) {
     return val.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
 
-function renderPositions(positions, ethPriceUSD, snapshots24h = {}) {
+function calculateAccrual(pos, snapshot, currentFees, p0_eth, p1_eth, ethPriceUSD, totalValueUSD, windowLabel) {
+    if (!snapshot) return null;
+
+    const nowMs = Date.now();
+    const snapshotMs = snapshot.timestamp * 1000;
+    const daysSince = (nowMs - snapshotMs) / (1000 * 60 * 60 * 24);
+
+    // Filter: If we want a 7d average but the snapshot is < 2 days old, it's not a reliable "7d" measure
+    if (windowLabel === '7d' && daysSince < 2) return null;
+    if (daysSince <= 0) return null;
+
+    // Formula: Accrued = (Current_Collected - Historical_Collected) + Current_Unclaimed
+    // We use the collected fees from the snapshot provided (which could be 24h or 7d old)
+    const collected0Delta = parseFloat(pos.collectedFeesToken0 || 0) - parseFloat(snapshot.collectedFeesToken0 || 0);
+    const collected1Delta = parseFloat(pos.collectedFeesToken1 || 0) - parseFloat(snapshot.collectedFeesToken1 || 0);
+
+    const totalAccrued0 = Math.max(0, collected0Delta + currentFees.fee0);
+    const totalAccrued1 = Math.max(0, collected1Delta + currentFees.fee1);
+
+    const dailyAccrued0 = totalAccrued0 / daysSince;
+    const dailyAccrued1 = totalAccrued1 / daysSince;
+
+    const dailyUSD = (dailyAccrued0 * p0_eth + dailyAccrued1 * p1_eth) * ethPriceUSD;
+    const projectedApr = totalValueUSD > 0 ? (dailyUSD * 365 / totalValueUSD) * 100 : 0;
+
+    return {
+        dailyAccrued0,
+        dailyAccrued1,
+        dailyUSD,
+        projectedApr,
+        daysSince,
+        snapshotDate: new Date(snapshotMs).toLocaleDateString()
+    };
+}
+
+function renderPositions(positions, ethPriceUSD, baselinesByPos = {}) {
     const grid = document.getElementById('dashboard-grid');
     grid.innerHTML = '';
 
     if (!positions || positions.length === 0) {
-        grid.innerHTML = '<div class="error-message">No active positions found for this address.</div>';
+        grid.innerHTML = '<div class="error-message">No active positions found for the provided addresses.</div>';
         return;
     }
 
-    positions.forEach(pos => {
+    // First process all positions to calculate values and enable sorting
+    const processedPositions = positions.map(pos => {
         const t0 = pos.token0?.symbol || '???';
         const t1 = pos.token1?.symbol || '???';
         const fee = (pos.pool?.feeTier || 0) / 10000;
+        const net = pos.network || 'Ethereum';
 
-        let dec0 = parseInt(pos.token0?.decimals);
-        let dec1 = parseInt(pos.token1?.decimals);
-
-        if (isNaN(dec0)) { dec0 = 18; }
-        if (isNaN(dec1)) { dec1 = 18; }
-
-        // Correctly access nested tickIdx
-        let tickLower = parseInt(pos.tickLower?.tickIdx ?? pos.tickLower);
-        let tickUpper = parseInt(pos.tickUpper?.tickIdx ?? pos.tickUpper);
+        const dec0 = parseInt(pos.token0?.decimals) || 18;
+        const dec1 = parseInt(pos.token1?.decimals) || 18;
+        const tickLower = parseInt(pos.tickLower?.tickIdx ?? pos.tickLower);
+        const tickUpper = parseInt(pos.tickUpper?.tickIdx ?? pos.tickUpper);
         let currentTick = parseInt(pos.pool.tick);
 
-        // Fallback if pool.tick is missing
-        if (isNaN(currentTick)) {
-            if (pos.pool.token1Price) {
-                const price = parseFloat(pos.pool.token1Price);
-                const rawPrice = price / Math.pow(10, dec0 - dec1);
-                currentTick = Math.floor(Math.log(rawPrice) / Math.log(1.0001));
-            }
+        if (isNaN(currentTick) && pos.pool.token1Price) {
+            const price = parseFloat(pos.pool.token1Price);
+            const rawPrice = price / Math.pow(10, dec0 - dec1);
+            currentTick = Math.floor(Math.log(rawPrice) / Math.log(1.0001));
         }
 
-        // Calculate Prices
-        const priceLowRaw = tickToPrice(tickLower);
-        const priceHighRaw = tickToPrice(tickUpper);
-        const currentPriceRaw = tickToPrice(currentTick);
+        const priceLow = tickToPrice(tickLower) * Math.pow(10, dec0 - dec1);
+        const priceHigh = tickToPrice(tickUpper) * Math.pow(10, dec0 - dec1);
+        const currentPrice = tickToPrice(currentTick) * Math.pow(10, dec0 - dec1);
 
-        const decimalAdjustment = Math.pow(10, dec0 - dec1);
-
-        const priceLow = priceLowRaw * decimalAdjustment;
-        const priceHigh = priceHighRaw * decimalAdjustment;
-        const currentPrice = currentPriceRaw * decimalAdjustment;
-
-        // Calculate Amounts
         const amounts = getAmountsForLiquidity(pos.liquidity, currentTick, tickLower, tickUpper, dec0, dec1);
-
-        // Calculate Uncollected Fees
         const fees = getUncollectedFees(
-            pos.liquidity,
-            currentTick,
-            tickLower,
-            tickUpper,
-            pos.pool.feeGrowthGlobal0X128,
-            pos.pool.feeGrowthGlobal1X128,
-            pos.tickLower?.feeGrowthOutside0X128,
-            pos.tickLower?.feeGrowthOutside1X128,
-            pos.tickUpper?.feeGrowthOutside0X128,
-            pos.tickUpper?.feeGrowthOutside1X128,
-            pos.feeGrowthInside0LastX128,
-            pos.feeGrowthInside1LastX128,
+            pos.liquidity, currentTick, tickLower, tickUpper,
+            pos.pool.feeGrowthGlobal0X128, pos.pool.feeGrowthGlobal1X128,
+            pos.tickLower?.feeGrowthOutside0X128, pos.tickLower?.feeGrowthOutside1X128,
+            pos.tickUpper?.feeGrowthOutside0X128, pos.tickUpper?.feeGrowthOutside1X128,
+            pos.feeGrowthInside0LastX128, pos.feeGrowthInside1LastX128,
             dec0, dec1
         );
 
-        // Calculate Fees since snapshot (representing "last action" or historical point)
-        let feesSinceSnapshot = { fee0: 0, fee1: 0 };
-        let hasSnapshotData = false;
-        const snapshot = snapshots24h[pos.id];
-
-        if (snapshot && snapshot.feeGrowthInside0LastX128) {
-            hasSnapshotData = true;
-            feesSinceSnapshot = getUncollectedFees(
-                pos.liquidity,
-                currentTick,
-                tickLower,
-                tickUpper,
-                pos.pool.feeGrowthGlobal0X128,
-                pos.pool.feeGrowthGlobal1X128,
-                pos.tickLower?.feeGrowthOutside0X128,
-                pos.tickLower?.feeGrowthOutside1X128,
-                pos.tickUpper?.feeGrowthOutside0X128,
-                pos.tickUpper?.feeGrowthOutside1X128,
-                snapshot.feeGrowthInside0LastX128,
-                snapshot.feeGrowthInside1LastX128,
-                dec0, dec1
-            );
-        }
-
-        // Calculate USD Values
-        // Value = (amt0 * price0_usd) + (amt1 * price1_usd)
-        let totalValueUSD = 0;
-        let feesValueUSD = 0;
-        let feesSinceSnapshotUSD = 0;
-
         const p0_eth = parseFloat(pos.token0.derivedETH || 0);
         const p1_eth = parseFloat(pos.token1.derivedETH || 0);
+        const totalValueUSD = ((amounts.amount0 || 0) * p0_eth + (amounts.amount1 || 0) * p1_eth) * ethPriceUSD;
+        const feesValueUSD = (fees.fee0 * p0_eth + fees.fee1 * p1_eth) * ethPriceUSD;
 
-        if (!isNaN(amounts.amount0) && !isNaN(amounts.amount1)) {
-            const v0 = amounts.amount0 * p0_eth * ethPriceUSD;
-            const v1 = amounts.amount1 * p1_eth * ethPriceUSD;
-            totalValueUSD = v0 + v1;
-        }
+        const baselines = baselinesByPos[pos.id] || {};
+        const metrics24h = calculateAccrual(pos, baselines.snap24h, fees, p0_eth, p1_eth, ethPriceUSD, totalValueUSD, "24h");
+        const metrics7d = calculateAccrual(pos, baselines.snap7d, fees, p0_eth, p1_eth, ethPriceUSD, totalValueUSD, "7d");
 
-        if (!isNaN(fees.fee0) && !isNaN(fees.fee1)) {
-            const fv0 = fees.fee0 * p0_eth * ethPriceUSD;
-            const fv1 = fees.fee1 * p1_eth * ethPriceUSD;
-            feesValueUSD = fv0 + fv1;
-        }
-
-        if (hasSnapshotData && !isNaN(feesSinceSnapshot.fee0) && !isNaN(feesSinceSnapshot.fee1)) {
-            const fdv0 = feesSinceSnapshot.fee0 * p0_eth * ethPriceUSD;
-            const fdv1 = feesSinceSnapshot.fee1 * p1_eth * ethPriceUSD;
-            feesSinceSnapshotUSD = fdv0 + fdv1;
-        }
-
-        // Check Range
         const inRange = currentTick >= tickLower && currentTick <= tickUpper;
 
-        const card = document.createElement('div');
-        card.className = 'position-card';
-        card.innerHTML = `
-            <div class="range-status ${inRange ? 'status-in-range' : 'status-out-range'}">
-                ${inRange ? 'In Range' : 'Out of Range'}
-            </div>
+        return {
+            pos, t0, t1, fee, net, amounts, fees, totalValueUSD, feesValueUSD,
+            metrics24h, metrics7d, inRange, priceLow, priceHigh, currentPrice
+        };
+    });
+
+    // Sort by Total Value USD Descending
+    processedPositions.sort((a, b) => b.totalValueUSD - a.totalValueUSD);
+
+    processedPositions.forEach(item => {
+        const { pos, t0, t1, fee, net, amounts, fees, totalValueUSD, feesValueUSD, metrics24h, metrics7d, inRange, priceLow, priceHigh, currentPrice } = item;
+        const ver = pos.version || 'v3';
+
+        const row = document.createElement('div');
+        row.className = 'position-card';
+        row.innerHTML = `
             <div class="card-header">
-                <div class="pair-name">
-                    ${t0} / ${t1}
-                </div>
-                <div class="fee-tier">${fee}%</div>
-            </div>
-
-            <div class="card-metric" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
-                <div class="metric-label">Approx. Value</div>
-                <div class="metric-value" style="color: #22c55e; font-size: 1.5rem;">${formatCurrencyUSD(totalValueUSD)}</div>
-            </div>
-
-            <div class="card-metric" style="background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 8px; margin-bottom: 0.5rem;">
-                <div class="metric-label">Estimated Assets</div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span>${formatCurrency(amounts.amount0)} <strong>${t0}</strong></span>
-                    <span>${formatCurrency(amounts.amount1)} <strong>${t1}</strong></span>
+                <div class="pair-name" style="font-size: 1.1rem">${t0}/${t1} <span class="fee-tier">${fee}%</span></div>
+                <div style="font-size: 0.75rem; color: #60a5fa; font-weight: 600; margin-top: 0.2rem;">${net} <span style="opacity: 0.6">(${ver})</span></div>
+                <div class="range-status ${inRange ? 'status-in-range' : 'status-out-range'}" style="margin-top: 0.5rem">
+                    ${inRange ? 'IN RANGE' : 'OUT RANGE'}
                 </div>
             </div>
 
-            <div class="card-metric" style="background: rgba(59, 130, 246, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: ${hasSnapshotData ? '0.5rem' : '1rem'};">
-                <div class="metric-label" style="display:flex; justify-content:space-between">
-                    <span>Unclaimed Fees</span>
-                    <span style="color: #60a5fa">${formatCurrencyUSD(feesValueUSD)}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #cbd5e1;">
-                    <span>${formatCurrency(fees.fee0)} <strong>${t0}</strong></span>
-                    <span>${formatCurrency(fees.fee1)} <strong>${t1}</strong></span>
+            <div>
+                <div class="metric-label">Value & Assets</div>
+                <div class="metric-value" style="color: #22c55e">${formatCurrencyUSD(totalValueUSD)}</div>
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">
+                    ${formatCurrency(amounts.amount0)} ${t0}<br>
+                    ${formatCurrency(amounts.amount1)} ${t1}
                 </div>
             </div>
 
-            ${hasSnapshotData ? `
-            <div class="card-metric" style="background: rgba(34, 197, 94, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 0.5rem;">
-                <div class="metric-label" style="display:flex; justify-content:space-between">
-                    <span>Fees Since Last Action</span>
-                    <span style="color: #22c55e">${formatCurrencyUSD(feesSinceSnapshotUSD)}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #cbd5e1;">
-                    <span>+${formatCurrency(feesSinceSnapshot.fee0)} <strong>${t0}</strong></span>
-                    <span>+${formatCurrency(feesSinceSnapshot.fee1)} <strong>${t1}</strong></span>
-                </div>
-                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; text-align: center;">
-                    Since ${new Date(snapshot.timestamp * 1000).toLocaleDateString()} ${new Date(snapshot.timestamp * 1000).toLocaleTimeString()}
+            <div style="background: rgba(59, 130, 246, 0.05); padding: 0.5rem; border-radius: 8px;">
+                <div class="metric-label">Unclaimed Fees</div>
+                <div class="metric-value" style="color: #60a5fa">${formatCurrencyUSD(feesValueUSD)}</div>
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">
+                    ${formatCurrency(fees.fee0)} ${t0}<br>
+                    ${formatCurrency(fees.fee1)} ${t1}
                 </div>
             </div>
-            ` : ''}
 
-            ${hasSnapshotData && (parseFloat(snapshot.collectedFeesToken0 || 0) > 0 || parseFloat(snapshot.collectedFeesToken1 || 0) > 0) ? `
-            <div class="card-metric" style="background: rgba(168, 85, 247, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid rgba(168, 85, 247, 0.3);">
-                <div class="metric-label" style="display:flex; justify-content:space-between">
-                    <span>Total Fees Collected</span>
-                    <span style="color: #a855f7">All-Time</span>
+            ${metrics24h ? `
+            <div>
+                <div class="metric-label">24h Est. Accrual</div>
+                <div class="metric-value">${formatCurrencyUSD(metrics24h.dailyUSD)}</div>
+                <div style="color: var(--accent-green); font-weight: 600; font-size: 0.85rem; margin-top: 0.15rem;">
+                    ${metrics24h.projectedApr.toFixed(1)}% APR
                 </div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #cbd5e1; margin-top: 0.25rem;">
-                    <span>${formatCurrency(parseFloat(snapshot.collectedFeesToken0))} <strong>${t0}</strong></span>
-                    <span>${formatCurrency(parseFloat(snapshot.collectedFeesToken1))} <strong>${t1}</strong></span>
-                </div>
+                <div style="font-size: 0.6rem; color: #64748b;">v. ${metrics24h.snapshotDate}</div>
             </div>
-            ` : (hasSnapshotData ? `
-            <div style="margin-bottom: 1rem;"></div>
-            ` : '')}
+            ` : '<div>-</div>'}
+
+            ${metrics7d ? `
+            <div>
+                <div class="metric-label">7d Avg. Accrual</div>
+                <div class="metric-value">${formatCurrencyUSD(metrics7d.dailyUSD)}</div>
+                <div style="color: var(--accent-green); font-weight: 600; font-size: 0.85rem; margin-top: 0.15rem;">
+                    ${metrics7d.projectedApr.toFixed(1)}% APR
+                </div>
+                <div style="font-size: 0.6rem; color: #64748b;">v. ${metrics7d.snapshotDate}</div>
+            </div>
+            ` : '<div>-</div>'}
 
             <div class="price-range-display">
                 <div class="range-row">
-                    <span class="metric-label">Min Price</span>
-                    <span class="metric-value">${formatCurrency(priceLow)}</span>
+                    <span>${formatCurrency(priceLow)}</span>
+                    <span style="opacity: 0.5">-</span>
+                    <span>${formatCurrency(priceHigh)}</span>
                 </div>
-                <div class="range-row">
-                    <span class="metric-label">Max Price</span>
-                    <span class="metric-value">${formatCurrency(priceHigh)}</span>
+                <div class="current-price-indicator">
+                    Now: <strong>${formatCurrency(currentPrice)}</strong>
                 </div>
-                 <div class="current-price-indicator">
-                    Current: <strong>${formatCurrency(currentPrice)}</strong> ${t1}/${t0}
-                </div>
-            </div>
-            
-            <div style="margin-top: 1rem; font-size: 0.75rem; color: #64748b; text-align: center;">
-                Liquidity (Raw): ${parseInt(pos.liquidity).toExponential(2)}
             </div>
         `;
-        grid.appendChild(card);
+        grid.appendChild(row);
     });
 }
 
@@ -503,13 +624,17 @@ async function init() {
     if (saveAddressBtn) {
         saveAddressBtn.addEventListener('click', () => {
             const val = addressInput.value.trim().toLowerCase();
-            if (val && val.startsWith('0x')) {
-                localStorage.setItem('lp_target_address', val);
-                targetAddress = val;
-                alert('Address Saved. Refreshing...');
-                location.reload();
-            } else {
-                alert('Please enter a valid Ethereum address starting with 0x');
+            if (val) {
+                // Basic validation: at least one token looks like 0x...
+                const parts = val.split(',').map(p => p.trim());
+                if (parts.some(p => p.startsWith('0x'))) {
+                    localStorage.setItem('lp_target_address', val);
+                    targetAddress = val;
+                    alert('Addresses Saved. Refreshing...');
+                    location.reload();
+                } else {
+                    alert('Please enter at least one valid Ethereum address starting with 0x');
+                }
             }
         });
     }
@@ -528,7 +653,7 @@ async function init() {
 
     try {
         const data = await fetchPositions();
-        renderPositions(data.positions, data.ethPriceUSD, data.snapshots24h);
+        renderPositions(data.positions, data.ethPriceUSD, data.baselinesByPos);
     } catch (err) {
         document.getElementById('dashboard-grid').innerHTML = `
             <div class="error-message">

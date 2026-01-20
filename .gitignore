@@ -1,2 +1,4 @@
 *.png
 .ipynb_checkpoints
+secrets.js
+**/secrets.js
