@@ -31,7 +31,7 @@ class UniswapV3Fetcher:
         if self.verbose:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
-    def _build_swap_query(self, start_timestamp: int, end_timestamp: int, skip: int, filter_field: str, filter_values: List[str]) -> str:
+    def _build_swap_query(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_values: List[str]) -> str:
         """Build GraphQL query for swap events with specific filter"""
         # Format addresses for GraphQL array
         addr_list = str(filter_values).replace("'", '"')
@@ -40,7 +40,6 @@ class UniswapV3Fetcher:
         {{
           swaps(
             first: {MAX_RESULTS_PER_QUERY}
-            skip: {skip}
             orderBy: timestamp
             orderDirection: asc
             where: {{
@@ -98,14 +97,14 @@ class UniswapV3Fetcher:
         return None
     
     def _fetch_swaps_with_filter(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_addresses: List[str]) -> List[Dict]:
-        """Fetch all swaps matching a specific filter condition"""
+        """Fetch all swaps matching a specific filter condition using cursor pagination"""
         self._log(f"Fetching swaps where {filter_field} matches target tokens...")
         
         found_swaps = []
-        skip = 0
+        current_start_time = start_timestamp
         
         while True:
-            query = self._build_swap_query(start_timestamp, end_timestamp, skip, filter_field, filter_addresses)
+            query = self._build_swap_query(current_start_time, end_timestamp, filter_field, filter_addresses)
             result = self._execute_query(query)
             
             if not result or 'data' not in result:
@@ -118,30 +117,58 @@ class UniswapV3Fetcher:
                 break
             
             # Normalize swaps immediately
+            swaps_added = 0
+            last_timestamp = 0
+            
+            # Helper for safe conversion
+            to_float = lambda x: float(x) if x is not None else 0.0
+            to_int = lambda x: int(x) if x is not None else 0
+            
             for swap in swaps:
-                token0_addr = swap['token0']['id'].lower()
-                token1_addr = swap['token1']['id'].lower()
+                # Safe access to nested objects
+                token0 = swap.get('token0') or {}
+                token1 = swap.get('token1') or {}
+                transaction = swap.get('transaction') or {}
+                
+                t0_addr = token0.get('id', '').lower()
+                t1_addr = token1.get('id', '').lower()
                 
                 normalized_swap = {
-                    'id': swap['id'],
-                    'timestamp': int(swap['timestamp']),
-                    'tx_hash': swap['transaction']['id'],
-                    'token0_address': token0_addr,
-                    'token1_address': token1_addr,
-                    'token0_symbol': ADDRESS_TO_SYMBOL.get(token0_addr, swap['token0']['symbol']),
-                    'token1_symbol': ADDRESS_TO_SYMBOL.get(token1_addr, swap['token1']['symbol']),
-                    'amount0': float(swap['amount0']),
-                    'amount1': float(swap['amount1']),
-                    'amountUSD': float(swap['amountUSD'])
+                    'id': swap.get('id', 'unknown'),
+                    'timestamp': to_int(swap.get('timestamp')),
+                    'tx_hash': transaction.get('id', 'unknown'),
+                    'token0_address': t0_addr,
+                    'token1_address': t1_addr,
+                    'token0_symbol': ADDRESS_TO_SYMBOL.get(t0_addr, token0.get('symbol') or 'UNKNOWN'),
+                    'token1_symbol': ADDRESS_TO_SYMBOL.get(t1_addr, token1.get('symbol') or 'UNKNOWN'),
+                    'amount0': to_float(swap.get('amount0')),
+                    'amount1': to_float(swap.get('amount1')),
+                    'amountUSD': to_float(swap.get('amountUSD'))
                 }
                 found_swaps.append(normalized_swap)
+                last_timestamp = normalized_swap['timestamp']
+                swaps_added += 1
             
-            self._log(f"Fetched {len(swaps)} swaps for {filter_field} (Total: {len(found_swaps)})")
-            
-            skip += MAX_RESULTS_PER_QUERY
+            last_date = datetime.fromtimestamp(last_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+            self._log(f"Fetched {len(swaps)} swaps for {filter_field} (Total: {len(found_swaps)}) - Last TS: {last_timestamp} ({last_date})")
             
             if len(swaps) < MAX_RESULTS_PER_QUERY:
                 break
+                
+            # Update cursor for next page
+            # We use the timestamp of the last item.
+            # If the last item has same timestamp as current_start_time, we might get stuck in a loop
+            # if there are > 1000 items in the same second. 
+            # But standard behavior is strict ordering by timestamp. 
+            # If we set new start to last_timestamp, we rely on final deduplication to remove overlaps.
+            
+            if last_timestamp == current_start_time:
+                # Edge case: Entire page has same timestamp. 
+                # We simply increment to next second to avoid infinite loop.
+                # This risks missing some swaps in that exact second but prevents hanging.
+                current_start_time += 1
+            else:
+                current_start_time = last_timestamp
                 
         return found_swaps
 

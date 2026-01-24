@@ -116,6 +116,23 @@ python main.py --days 7 --tokens AAVE LINK UNI WETH
 
 Token symbols are case-insensitive. If you specify invalid tokens, the app will show you the list of valid options.
 
+### Understanding the Data (Multi-hop Routing)
+
+Important: **This tool tracks distinct Swap Events in Liquidity Pools.**
+
+If a user executes a multi-hop trade, e.g., `EURCV -> EURC -> USDC -> LINK`:
+
+1. It executes a swap in the **EURC-EURCV** pool.
+2. It executes a swap in the **EURC-USDC** pool.
+3. It executes a swap in the **USDC-LINK** pool.
+
+This counts as **3 separate transactions** in the data, one for each pair.
+
+- If you run with `--tokens EURCV`, you will see only the **EURC-EURCV** swap (the only one involving EURCV).
+- If you run with `--tokens EURCV EURC USDC LINK`, you would see volumes in all three pairs.
+
+The "Tx Count" metric represents the number of swap events, not necessarily distinct user intents. A single user operation can trigger multiple swap events (routing).
+
 ### Debugging
 
 Enable verbose logging:

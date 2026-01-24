@@ -109,7 +109,9 @@ class SwapAggregator:
             'total_volume_usd': total_volume,
             'total_transactions': total_txs,
             'avg_volume_per_pair': total_volume / len(self.pair_data) if self.pair_data else 0,
-            'avg_txs_per_pair': total_txs / len(self.pair_data) if self.pair_data else 0
+            'avg_txs_per_pair': total_txs / len(self.pair_data) if self.pair_data else 0,
+            'earliest_swap': min((t['timestamp'] for p in self.pair_data.values() for t in p['transactions']), default=0),
+            'latest_swap': max((t['timestamp'] for p in self.pair_data.values() for t in p['transactions']), default=0)
         }
     
     def get_token_volumes(self) -> Dict[str, Dict]:
