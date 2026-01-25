@@ -83,11 +83,11 @@ class RouteAnalyzer:
             # So start_token should have POSITIVE amount.
             
             if first_swap['token0_symbol'] == start_token and first_swap['amount0'] > 0:
-                current_token = first_swap['token1_symbol'] # Output of first swap
-                path = [start_token, current_token]
+                current_token = first_swap['token1_symbol']
+                path = [start_token, first_swap['fee_tier'], current_token]
             elif first_swap['token1_symbol'] == start_token and first_swap['amount1'] > 0:
-                current_token = first_swap['token0_symbol'] # Output of first swap
-                path = [start_token, current_token]
+                current_token = first_swap['token0_symbol']
+                path = [start_token, first_swap['fee_tier'], current_token]
             else:
                 # This transaction doesn't start with our target token swap
                 continue
@@ -98,33 +98,24 @@ class RouteAnalyzer:
                 next_swap = tx_events[i]
                 
                 # Check if this swap connects to our current token
-                # The input of this swap should be our current_token (which was output of prev swap)
-                # So current_token should be the one with POSITIVE amount in this swap
-                
                 if next_swap['token0_symbol'] == current_token and next_swap['amount0'] > 0:
                     current_token = next_swap['token1_symbol']
+                    path.append(next_swap['fee_tier'])
                     path.append(current_token)
                 elif next_swap['token1_symbol'] == current_token and next_swap['amount1'] > 0:
                     current_token = next_swap['token0_symbol']
+                    path.append(next_swap['fee_tier'])
                     path.append(current_token)
                 else:
                     # Broken chain or complex multi-branch tx
-                    # For simple routing, we expect linear chain.
                     pass
             
             # Check if route ended at desired token
             if path[-1] == end_token:
-                # Calculate total volume for the *input* of the trade (the start token side)
-                # Volume is usually tracked in USD, we can just sum the USD volume of all segments?
-                # No, volume of the trade is the input amount * price. 
-                # Aggregating volume of all hops would double count.
-                # Let's take the max USD volume of any hop as the trade volume? 
-                # Or average? Or just the first hop?
-                # Best proxy is probably the first hop's USD value.
-                
+                # Calculate total volume (using first hop as proxy)
                 route_vol_usd = tx_events[0]['amountUSD']
                 
-                # Volume Fallback for low-liquidity pairs (e.g., EURC-EURCV)
+                # Volume Fallback for low-liquidity pairs
                 if route_vol_usd < 0.01:
                     # Approximate prices for fallback
                     PRICES = {
@@ -137,7 +128,6 @@ class RouteAnalyzer:
                         'WBTC': 95000.0
                     }
                     
-                    first_swap = tx_events[0]
                     t0_sym = first_swap['token0_symbol']
                     t1_sym = first_swap['token1_symbol']
                     
@@ -145,7 +135,6 @@ class RouteAnalyzer:
                         route_vol_usd = abs(first_swap['amount0']) * PRICES[t0_sym]
                     elif t1_sym in PRICES:
                         route_vol_usd = abs(first_swap['amount1']) * PRICES[t1_sym]
-                
                 
                 valid_routes.append({
                     'tx_hash': tx_hash,
@@ -158,7 +147,15 @@ class RouteAnalyzer:
         stats = {}
         
         for route in valid_routes:
-            path_str = ' -> '.join(route['path'])
+            # Format path: TokenA -- fee% --> TokenB -- fee% --> TokenC
+            path_parts = []
+            for i in range(len(route['path'])):
+                if i % 2 == 0:
+                    path_parts.append(route['path'][i])
+                else:
+                    path_parts.append(f"-- {route['path'][i]} -->")
+            
+            path_str = ' '.join(path_parts)
             
             if path_str not in stats:
                 stats[path_str] = {
@@ -181,7 +178,7 @@ class RouteAnalyzer:
                 'volume': data['volume_usd'],
                 'avg_volume': data['volume_usd'] / data['tx_count'] if data['tx_count'] > 0 else 0,
                 'pct_volume': (data['volume_usd'] / total_vol * 100) if total_vol > 0 else 0,
-                'hops': len(data['path']) - 1 # Hops = number of arrows
+                'hops': len(data['path']) // 2 # Hops = number of fee tiers in path list
             })
             
         # Sort by volume descending

@@ -60,7 +60,7 @@ Examples:
     )
     date_group.add_argument(
         '--days',
-        type=int,
+        type=float,
         help='Number of days to look back from today'
     )
     

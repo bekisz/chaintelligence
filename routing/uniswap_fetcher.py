@@ -64,6 +64,9 @@ class UniswapV3Fetcher:
             amount0
             amount1
             amountUSD
+            pool {{
+              feeTier
+            }}
           }}
         }}
         """
@@ -143,7 +146,8 @@ class UniswapV3Fetcher:
                     'token1_symbol': ADDRESS_TO_SYMBOL.get(t1_addr, token1.get('symbol') or 'UNKNOWN'),
                     'amount0': to_float(swap.get('amount0')),
                     'amount1': to_float(swap.get('amount1')),
-                    'amountUSD': to_float(swap.get('amountUSD'))
+                    'amountUSD': to_float(swap.get('amountUSD')),
+                    'fee_tier': f"{to_float((swap.get('pool') or {}).get('feeTier')) / 10000}%"
                 }
                 found_swaps.append(normalized_swap)
                 last_timestamp = normalized_swap['timestamp']
