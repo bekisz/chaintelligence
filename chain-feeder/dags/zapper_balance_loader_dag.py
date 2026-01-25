@@ -1,4 +1,4 @@
-from airflow import DAG
+from airflow import DAG, Dataset
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from datetime import timedelta
@@ -18,6 +18,8 @@ default_args = {
 }
 
 DB_CONN = "dbname=chaintelligence user=airflow password=airflow host=postgres port=5432"
+
+lp_snapshots_dataset = Dataset("postgres://chaintelligence/lp_snapshots")
 
 def etl_process(**kwargs):
     # 1. Fetch
@@ -74,6 +76,7 @@ with DAG(
     run_etl = PythonOperator(
         task_id='fetch_and_load_zapper',
         python_callable=etl_process,
+        outlets=[lp_snapshots_dataset],
     )
 
     run_etl

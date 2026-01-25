@@ -86,3 +86,6 @@ TOKEN_ADDRESSES = [token['address'].lower() for token in TOKENS.values()]
 
 # Create reverse lookup: address -> symbol
 ADDRESS_TO_SYMBOL = {token['address'].lower(): symbol for symbol, token in TOKENS.items()}
+
+# Postgres Configuration
+DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=localhost port=5432')

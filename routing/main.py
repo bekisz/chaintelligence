@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from tabulate import tabulate
 
 from uniswap_fetcher import UniswapV3Fetcher
+from postgres_fetcher import PostgresFetcher
 from aggregator import SwapAggregator
 
 
@@ -103,6 +104,13 @@ Examples:
         help='Analyze routing paths between two tokens (e.g. "EURC-EURCV")'
     )
     
+    parser.add_argument(
+        '--source',
+        choices=['db', 'graph'],
+        default='db',
+        help='Data source: "db" for Postgres, "graph" for The Graph (default: db)'
+    )
+    
     args = parser.parse_args()
     
     # Determine date range
@@ -154,7 +162,10 @@ Examples:
             
     try:
         # Fetch swap data
-        fetcher = UniswapV3Fetcher(verbose=args.verbose)
+        if args.source == 'db':
+            fetcher = PostgresFetcher(verbose=args.verbose)
+        else:
+            fetcher = UniswapV3Fetcher(verbose=args.verbose)
         
         # If doing route analysis, we should probably fetch ALL tokens to ensure intermediate hops are captured
         # Unless user explicitly restricted with --tokens

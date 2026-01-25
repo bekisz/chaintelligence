@@ -1,10 +1,12 @@
-from airflow import DAG
+from airflow import DAG, Dataset
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 import sys
 import os
 
 from utils.uniswap_utils import UniswapV3Fetcher, PostgresStorage
+
+uniswap_v3_swaps_dataset = Dataset("postgres://chaintelligence/uniswap_v3_swaps")
 
 default_args = {
     'owner': 'airflow',
@@ -56,4 +58,5 @@ with DAG(
     fetch_task = PythonOperator(
         task_id='fetch_and_store_swaps',
         python_callable=fetch_and_store_swaps,
+        outlets=[uniswap_v3_swaps_dataset],
     )
