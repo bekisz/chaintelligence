@@ -9368,3 +9368,17 @@
 [2026-01-25T18:57:46.581+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:46.581+0000] {dag.py:3036} INFO - Sync 1 DAGs
 [2026-01-25T18:57:46.599+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:46.599+0000] {dag.py:3823} INFO - Setting next_dagrun for zapper_balance_loader to 2026-01-25 18:45:00+00:00, run_after=2026-01-25 19:00:00+00:00
 [2026-01-25T18:57:46.620+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/zapper_balance_loader_dag.py took 0.074 seconds
+[2026-01-25T18:57:57.464+0000] {processor.py:161} INFO - Started process (PID=27137) to work on /opt/airflow/dags/zapper_balance_loader_dag.py
+[2026-01-25T18:57:57.465+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/zapper_balance_loader_dag.py for tasks to queue
+[2026-01-25T18:57:57.467+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:57.466+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/zapper_balance_loader_dag.py
+[2026-01-25T18:57:57.488+0000] {processor.py:840} INFO - DAG(s) 'zapper_balance_loader' retrieved from /opt/airflow/dags/zapper_balance_loader_dag.py
+[2026-01-25T18:57:57.526+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:57.526+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-01-25T18:57:57.563+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:57.563+0000] {dag.py:3823} INFO - Setting next_dagrun for zapper_balance_loader to 2026-01-25 18:45:00+00:00, run_after=2026-01-25 19:00:00+00:00
+[2026-01-25T18:57:57.606+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/zapper_balance_loader_dag.py took 0.145 seconds
+[2026-01-25T18:58:07.858+0000] {processor.py:161} INFO - Started process (PID=27388) to work on /opt/airflow/dags/zapper_balance_loader_dag.py
+[2026-01-25T18:58:07.859+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/zapper_balance_loader_dag.py for tasks to queue
+[2026-01-25T18:58:07.860+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:58:07.860+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/zapper_balance_loader_dag.py
+[2026-01-25T18:58:07.897+0000] {processor.py:840} INFO - DAG(s) 'zapper_balance_loader' retrieved from /opt/airflow/dags/zapper_balance_loader_dag.py
+[2026-01-25T18:58:07.942+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:58:07.942+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-01-25T18:58:07.984+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:58:07.984+0000] {dag.py:3823} INFO - Setting next_dagrun for zapper_balance_loader to 2026-01-25 18:45:00+00:00, run_after=2026-01-25 19:00:00+00:00
+[2026-01-25T18:58:08.010+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/zapper_balance_loader_dag.py took 0.165 seconds
