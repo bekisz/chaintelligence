@@ -1,0 +1,35 @@
+[2026-01-25T15:22:32.654+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps manual__2026-01-25T15:17:28.048176+00:00 [queued]>
+[2026-01-25T15:22:32.660+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps manual__2026-01-25T15:17:28.048176+00:00 [queued]>
+[2026-01-25T15:22:32.660+0000] {taskinstance.py:2170} INFO - Starting attempt 2 of 2
+[2026-01-25T15:22:32.670+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): fetch_and_store_swaps> on 2026-01-25 15:17:28.048176+00:00
+[2026-01-25T15:22:32.683+0000] {standard_task_runner.py:60} INFO - Started process 30091 to run task
+[2026-01-25T15:22:32.697+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'the_graph_uniswap_v3_swaps', 'fetch_and_store_swaps', 'manual__2026-01-25T15:17:28.048176+00:00', '--job-id', '8', '--raw', '--subdir', 'DAGS_FOLDER/the_graph_uniswap_v3_swaps_dag.py', '--cfg-path', '/tmp/tmpkp0mjiki']
+[2026-01-25T15:22:32.701+0000] {standard_task_runner.py:88} INFO - Job 8: Subtask fetch_and_store_swaps
+[2026-01-25T15:22:32.752+0000] {task_command.py:423} INFO - Running <TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps manual__2026-01-25T15:17:28.048176+00:00 [running]> on host f2da44f39545
+[2026-01-25T15:22:32.808+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='***' AIRFLOW_CTX_DAG_ID='the_graph_uniswap_v3_swaps' AIRFLOW_CTX_TASK_ID='fetch_and_store_swaps' AIRFLOW_CTX_EXECUTION_DATE='2026-01-25T15:17:28.048176+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-01-25T15:17:28.048176+00:00'
+[2026-01-25T15:22:32.819+0000] {logging_mixin.py:188} INFO - Incremental run: Last record at 2025-11-01 11:35:23. Fetching new swaps...
+[2026-01-25T15:22:32.819+0000] {logging_mixin.py:188} INFO - Fetching swaps from 2025-11-01 11:35:24 to 2026-01-25 15:22:32.819851
+[2026-01-25T15:22:33.917+0000] {logging_mixin.py:188} INFO - [15:22:33] Fetched 1000 swaps from token0_in (Total: 1000)
+[2026-01-25T15:22:33.993+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+  File "/opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py", line 42, in fetch_and_store_swaps
+    swaps = fetcher.fetch_swaps(start_date, end_date, on_batch_callback=storage.save_swaps)
+  File "/opt/airflow/dags/utils/uniswap_utils.py", line 129, in fetch_swaps
+    swaps_token0 = self._fetch_swaps_with_filter(start_ts, end_ts, "token0_in", TOKEN_ADDRESSES, on_batch_callback)
+  File "/opt/airflow/dags/utils/uniswap_utils.py", line 119, in _fetch_swaps_with_filter
+    on_batch_callback(batch_swaps)
+  File "/opt/airflow/dags/utils/uniswap_utils.py", line 166, in save_swaps
+    cur.executemany(insert_query, data)
+psycopg2.errors.StringDataRightTruncation: value too long for type character varying(20)
+
+[2026-01-25T15:22:34.004+0000] {taskinstance.py:1138} INFO - Marking task as FAILED. dag_id=the_graph_uniswap_v3_swaps, task_id=fetch_and_store_swaps, execution_date=20260125T151728, start_date=20260125T152232, end_date=20260125T152234
+[2026-01-25T15:22:34.014+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 8 for task fetch_and_store_swaps (value too long for type character varying(20)
+; 30091)
+[2026-01-25T15:22:34.042+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-01-25T15:22:34.057+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check
