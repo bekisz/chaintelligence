@@ -9391,3 +9391,17 @@
 [2026-01-25T18:57:25.212+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:25.212+0000] {dag.py:3036} INFO - Sync 1 DAGs
 [2026-01-25T18:57:25.256+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:25.256+0000] {dag.py:3823} INFO - Setting next_dagrun for the_graph_uniswap_v3_swaps to 2026-01-25 18:00:00+00:00, run_after=2026-01-25 19:00:00+00:00
 [2026-01-25T18:57:25.325+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py took 0.211 seconds
+[2026-01-25T18:57:36.195+0000] {processor.py:161} INFO - Started process (PID=26638) to work on /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py
+[2026-01-25T18:57:36.200+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py for tasks to queue
+[2026-01-25T18:57:36.201+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:36.201+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py
+[2026-01-25T18:57:36.287+0000] {processor.py:840} INFO - DAG(s) 'the_graph_uniswap_v3_swaps' retrieved from /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py
+[2026-01-25T18:57:36.334+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:36.334+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-01-25T18:57:36.409+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:36.409+0000] {dag.py:3823} INFO - Setting next_dagrun for the_graph_uniswap_v3_swaps to 2026-01-25 18:00:00+00:00, run_after=2026-01-25 19:00:00+00:00
+[2026-01-25T18:57:36.443+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py took 0.267 seconds
+[2026-01-25T18:57:46.543+0000] {processor.py:161} INFO - Started process (PID=26889) to work on /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py
+[2026-01-25T18:57:46.544+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py for tasks to queue
+[2026-01-25T18:57:46.544+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:46.544+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py
+[2026-01-25T18:57:46.561+0000] {processor.py:840} INFO - DAG(s) 'the_graph_uniswap_v3_swaps' retrieved from /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py
+[2026-01-25T18:57:46.612+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:46.612+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-01-25T18:57:46.690+0000] {logging_mixin.py:188} INFO - [2026-01-25T18:57:46.689+0000] {dag.py:3823} INFO - Setting next_dagrun for the_graph_uniswap_v3_swaps to 2026-01-25 18:00:00+00:00, run_after=2026-01-25 19:00:00+00:00
+[2026-01-25T18:57:46.734+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py took 0.195 seconds
