@@ -37,8 +37,8 @@ def etl_process(**kwargs):
         cur = conn.cursor()
         
         insert_query = """
-        INSERT INTO lp_snapshots (address, protocol, network, position_label, balance_usd, assets, unclaimed)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO lp_snapshots (address, protocol, network, position_label, balance_usd, assets, unclaimed, images)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         
         count = 0
@@ -50,7 +50,8 @@ def etl_process(**kwargs):
                 p["position_label"],
                 p["balance_usd"],
                 json.dumps(p["assets"]),
-                json.dumps(p["unclaimed"])
+                json.dumps(p["unclaimed"]),
+                json.dumps(p.get("images", []))
             ))
             count += 1
         

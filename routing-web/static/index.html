@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaintelligence | Route Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <nav class="glass main-nav">
+            <a href="/" class="active">Route Analysis</a>
+            <a href="/lp">LP Positions</a>
+        </nav>
+
+        <header>
+            <div class="logo">
+                <span class="logo-icon">▲</span>
+                <h1>Chaintelligence</h1>
+            </div>
+            <p class="subtitle">Uniswap V3 Multi-hop Route Optimizer</p>
+        </header>
+
+        <main>
+            <section class="controls glass">
+                <div class="input-group">
+                    <label for="start-token">Start Token</label>
+                    <input type="text" id="start-token" placeholder="e.g. USDC" value="USDC">
+                </div>
+                <div class="input-group">
+                    <label for="end-token">End Token</label>
+                    <input type="text" id="end-token" placeholder="e.g. USDT" value="USDT">
+                </div>
+                <div class="input-group">
+                    <label for="days">Lookback (Days)</label>
+                    <input type="number" id="days" step="0.1" value="1">
+                </div>
+                <button id="analyze-btn" class="primary-btn">Analyze Routes</button>
+            </section>
+
+            <section id="results-section" class="results-container hidden">
+                <div class="summary-cards">
+                    <div class="card glass">
+                        <h3>Total Volume</h3>
+                        <p id="total-volume" class="stat">--</p>
+                    </div>
+                    <div class="card glass">
+                        <h3>Total TXs</h3>
+                        <p id="total-tx" class="stat">--</p>
+                    </div>
+                </div>
+
+                <div class="table-container glass">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Route Path</th>
+                                <th>TX Count</th>
+                                <th>Volume</th>
+                                <th>Avg Volume</th>
+                                <th>% Volume</th>
+                            </tr>
+                        </thead>
+                        <tbody id="routes-body">
+                            <!-- Results will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div id="loader" class="loader-container hidden">
+                <div class="spinner"></div>
+                <p>Analyzing routes from Postgres...</p>
+            </div>
+
+            <div id="no-data" class="no-data-msg hidden">
+                <p>No swap data found for the specified period and tokens.</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Chaintelligence. Powered by Uniswap V3.</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

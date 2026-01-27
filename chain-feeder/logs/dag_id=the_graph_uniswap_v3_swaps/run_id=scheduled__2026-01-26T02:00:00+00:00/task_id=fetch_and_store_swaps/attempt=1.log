@@ -1,0 +1,23 @@
+[2026-01-26T03:00:02.404+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T02:00:00+00:00 [queued]>
+[2026-01-26T03:00:02.410+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T02:00:00+00:00 [queued]>
+[2026-01-26T03:00:02.410+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2026-01-26T03:00:02.427+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): fetch_and_store_swaps> on 2026-01-26 02:00:00+00:00
+[2026-01-26T03:00:02.433+0000] {standard_task_runner.py:60} INFO - Started process 45473 to run task
+[2026-01-26T03:00:02.438+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'the_graph_uniswap_v3_swaps', 'fetch_and_store_swaps', 'scheduled__2026-01-26T02:00:00+00:00', '--job-id', '67', '--raw', '--subdir', 'DAGS_FOLDER/the_graph_uniswap_v3_swaps_dag.py', '--cfg-path', '/tmp/tmpijt62f6l']
+[2026-01-26T03:00:02.441+0000] {standard_task_runner.py:88} INFO - Job 67: Subtask fetch_and_store_swaps
+[2026-01-26T03:00:02.495+0000] {task_command.py:423} INFO - Running <TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T02:00:00+00:00 [running]> on host f2da44f39545
+[2026-01-26T03:00:02.560+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='***' AIRFLOW_CTX_DAG_ID='the_graph_uniswap_v3_swaps' AIRFLOW_CTX_TASK_ID='fetch_and_store_swaps' AIRFLOW_CTX_EXECUTION_DATE='2026-01-26T02:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2026-01-26T02:00:00+00:00'
+[2026-01-26T03:00:02.570+0000] {logging_mixin.py:188} INFO - Incremental run: Last record at 2026-01-26 02:31:23. Fetching new swaps...
+[2026-01-26T03:00:02.571+0000] {logging_mixin.py:188} INFO - Fetching swaps from 2026-01-26 02:31:24 to 2026-01-26 03:00:02.571423
+[2026-01-26T03:00:04.380+0000] {logging_mixin.py:188} INFO - [03:00:04] Fetched 1000 swaps from token0_in (Total: 1000)
+[2026-01-26T03:00:05.272+0000] {logging_mixin.py:188} INFO - [03:00:05] Fetched 375 swaps from token0_in (Total: 1375)
+[2026-01-26T03:00:06.580+0000] {logging_mixin.py:188} INFO - [03:00:06] Fetched 1000 swaps from token1_in (Total: 1000)
+[2026-01-26T03:00:08.020+0000] {logging_mixin.py:188} INFO - [03:00:08] Fetched 1000 swaps from token1_in (Total: 2000)
+[2026-01-26T03:00:08.564+0000] {logging_mixin.py:188} INFO - [03:00:08] Fetched 16 swaps from token1_in (Total: 2016)
+[2026-01-26T03:00:08.588+0000] {logging_mixin.py:188} INFO - Fetch complete. Total unique swaps processed: 2247
+[2026-01-26T03:00:08.589+0000] {logging_mixin.py:188} INFO - Successfully synchronized swaps.
+[2026-01-26T03:00:08.595+0000] {python.py:201} INFO - Done. Returned value was: None
+[2026-01-26T03:00:08.619+0000] {logging_mixin.py:188} WARNING - /home/***/.local/lib/python3.8/site-packages/***/models/baseoperator.py:1469 RemovedInAirflow3Warning: Passing 'execution_date' to 'TaskInstance.xcom_push()' is deprecated.
+[2026-01-26T03:00:08.655+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=the_graph_uniswap_v3_swaps, task_id=fetch_and_store_swaps, execution_date=20260126T020000, start_date=20260126T030002, end_date=20260126T030008
+[2026-01-26T03:00:08.690+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-01-26T03:00:08.726+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

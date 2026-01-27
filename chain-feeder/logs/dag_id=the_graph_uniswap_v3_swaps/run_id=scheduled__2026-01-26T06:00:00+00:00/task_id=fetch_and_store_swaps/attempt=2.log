@@ -1,0 +1,38 @@
+[2026-01-26T08:09:39.012+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T06:00:00+00:00 [queued]>
+[2026-01-26T08:09:39.025+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T06:00:00+00:00 [queued]>
+[2026-01-26T08:09:39.026+0000] {taskinstance.py:2170} INFO - Starting attempt 2 of 2
+[2026-01-26T08:09:39.061+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): fetch_and_store_swaps> on 2026-01-26 06:00:00+00:00
+[2026-01-26T08:09:39.097+0000] {standard_task_runner.py:60} INFO - Started process 89583 to run task
+[2026-01-26T08:09:39.120+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'the_graph_uniswap_v3_swaps', 'fetch_and_store_swaps', 'scheduled__2026-01-26T06:00:00+00:00', '--job-id', '89', '--raw', '--subdir', 'DAGS_FOLDER/the_graph_uniswap_v3_swaps_dag.py', '--cfg-path', '/tmp/tmphj2l04rz']
+[2026-01-26T08:09:39.124+0000] {standard_task_runner.py:88} INFO - Job 89: Subtask fetch_and_store_swaps
+[2026-01-26T08:09:39.191+0000] {task_command.py:423} INFO - Running <TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T06:00:00+00:00 [running]> on host f2da44f39545
+[2026-01-26T08:09:39.379+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='***' AIRFLOW_CTX_DAG_ID='the_graph_uniswap_v3_swaps' AIRFLOW_CTX_TASK_ID='fetch_and_store_swaps' AIRFLOW_CTX_EXECUTION_DATE='2026-01-26T06:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2026-01-26T06:00:00+00:00'
+[2026-01-26T08:09:39.397+0000] {logging_mixin.py:188} INFO - Incremental run: Last record at 2026-01-26 05:59:59. Fetching new swaps...
+[2026-01-26T08:09:39.399+0000] {logging_mixin.py:188} INFO - Fetching swaps from 2026-01-26 06:00:00 to 2026-01-26 08:09:39.399385
+[2026-01-26T08:09:39.423+0000] {logging_mixin.py:188} INFO - [08:09:39] Request failed (attempt 1/3): HTTPSConnectionPool(host='gateway.thegraph.com', port=443): Max retries exceeded with url: /api/ed92ce6476320a3dc899d334acb3998a/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0xffff6ee20fd0>: Failed to establish a new connection: [Errno -2] Name or service not known'))
+[2026-01-26T08:09:40.434+0000] {logging_mixin.py:188} INFO - [08:09:40] Request failed (attempt 2/3): HTTPSConnectionPool(host='gateway.thegraph.com', port=443): Max retries exceeded with url: /api/ed92ce6476320a3dc899d334acb3998a/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0xffff6ee20e50>: Failed to establish a new connection: [Errno -2] Name or service not known'))
+[2026-01-26T08:09:44.311+0000] {logging_mixin.py:188} INFO - [08:09:44] Fetched 1000 swaps from token0_in (Total: 1000)
+[2026-01-26T08:09:48.364+0000] {logging_mixin.py:188} INFO - [08:09:48] Fetched 1000 swaps from token0_in (Total: 2000)
+[2026-01-26T08:09:54.004+0000] {logging_mixin.py:188} INFO - [08:09:54] Fetched 1000 swaps from token0_in (Total: 3000)
+[2026-01-26T08:09:58.392+0000] {logging_mixin.py:188} INFO - [08:09:58] Fetched 1000 swaps from token0_in (Total: 4000)
+[2026-01-26T08:10:02.611+0000] {logging_mixin.py:188} INFO - [08:10:02] Fetched 1000 swaps from token0_in (Total: 5000)
+[2026-01-26T08:10:04.345+0000] {logging_mixin.py:188} INFO - [08:10:04] Fetched 1000 swaps from token0_in (Total: 6000)
+[2026-01-26T08:10:07.233+0000] {logging_mixin.py:188} INFO - [08:10:07] Fetched 875 swaps from token0_in (Total: 6875)
+[2026-01-26T08:10:09.895+0000] {logging_mixin.py:188} INFO - [08:10:09] Fetched 1000 swaps from token1_in (Total: 1000)
+[2026-01-26T08:10:11.453+0000] {logging_mixin.py:188} INFO - [08:10:11] Fetched 1000 swaps from token1_in (Total: 2000)
+[2026-01-26T08:10:13.112+0000] {logging_mixin.py:188} INFO - [08:10:13] Fetched 1000 swaps from token1_in (Total: 3000)
+[2026-01-26T08:10:14.870+0000] {logging_mixin.py:188} INFO - [08:10:14] Fetched 1000 swaps from token1_in (Total: 4000)
+[2026-01-26T08:10:17.457+0000] {logging_mixin.py:188} INFO - [08:10:17] Fetched 1000 swaps from token1_in (Total: 5000)
+[2026-01-26T08:10:18.952+0000] {logging_mixin.py:188} INFO - [08:10:18] Fetched 1000 swaps from token1_in (Total: 6000)
+[2026-01-26T08:10:21.460+0000] {logging_mixin.py:188} INFO - [08:10:21] Fetched 1000 swaps from token1_in (Total: 7000)
+[2026-01-26T08:10:23.963+0000] {logging_mixin.py:188} INFO - [08:10:23] Fetched 1000 swaps from token1_in (Total: 8000)
+[2026-01-26T08:10:26.000+0000] {logging_mixin.py:188} INFO - [08:10:25] Fetched 1000 swaps from token1_in (Total: 9000)
+[2026-01-26T08:10:27.463+0000] {logging_mixin.py:188} INFO - [08:10:27] Fetched 1000 swaps from token1_in (Total: 10000)
+[2026-01-26T08:10:28.687+0000] {logging_mixin.py:188} INFO - [08:10:28] Fetched 520 swaps from token1_in (Total: 10520)
+[2026-01-26T08:10:29.141+0000] {logging_mixin.py:188} INFO - Fetch complete. Total unique swaps processed: 11588
+[2026-01-26T08:10:29.143+0000] {logging_mixin.py:188} INFO - Successfully synchronized swaps.
+[2026-01-26T08:10:29.231+0000] {python.py:201} INFO - Done. Returned value was: None
+[2026-01-26T08:10:29.406+0000] {logging_mixin.py:188} WARNING - /home/***/.local/lib/python3.8/site-packages/***/models/baseoperator.py:1469 RemovedInAirflow3Warning: Passing 'execution_date' to 'TaskInstance.xcom_push()' is deprecated.
+[2026-01-26T08:10:29.742+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=the_graph_uniswap_v3_swaps, task_id=fetch_and_store_swaps, execution_date=20260126T060000, start_date=20260126T080939, end_date=20260126T081029
+[2026-01-26T08:10:29.865+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-01-26T08:10:30.009+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

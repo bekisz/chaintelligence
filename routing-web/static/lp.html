@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaintelligence | LP Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <nav class="glass main-nav">
+            <a href="/">Route Analysis</a>
+            <a href="/lp" class="active">LP Positions</a>
+        </nav>
+
+        <header>
+            <div class="logo">
+                <span class="logo-icon">▲</span>
+                <h1>Liquidity Dashboard</h1>
+            </div>
+            <p class="subtitle">Zapper-integrated Portfolio Overview</p>
+        </header>
+
+        <main>
+            <section id="lp-summary-section" class="results-container">
+                <div class="summary-cards">
+                    <div class="card glass highlight-card">
+                        <h3>Total Portfolio Value</h3>
+                        <p id="total-portfolio-value" class="stat">--</p>
+                    </div>
+                    <div class="card glass highlight-card highlight-accent">
+                        <h3>Total Unclaimed Rewards</h3>
+                        <p id="total-rewards" class="stat">--</p>
+                    </div>
+                </div>
+
+                <div id="positions-grid" class="positions-grid">
+                    <!-- Position cards will be injected here -->
+                </div>
+            </section>
+
+            <div id="loader" class="loader-container hidden">
+                <div class="spinner"></div>
+                <p>Fetching LP snapshots from Postgres...</p>
+            </div>
+
+            <div id="no-data" class="no-data-msg hidden">
+                <p>No liquidity position snapshots found in the database.</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Chaintelligence. Powered by Zapper & Postgres.</p>
+        </footer>
+    </div>
+
+    <script src="/static/lp.js"></script>
+</body>
+
+</html>

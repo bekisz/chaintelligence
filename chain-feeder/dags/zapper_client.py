@@ -98,7 +98,8 @@ def fetch_zapper_data():
                         "position_label": label,
                         "balance_usd": balance_usd,
                         "assets": [],
-                        "unclaimed": []
+                        "unclaimed": [],
+                        "images": p_node.get("displayProps", {}).get("images", [])
                     }
 
                     # Parse tokens

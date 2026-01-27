@@ -1,0 +1,88 @@
+[2026-01-26T10:00:04.273+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T09:00:00+00:00 [queued]>
+[2026-01-26T10:00:04.304+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T09:00:00+00:00 [queued]>
+[2026-01-26T10:00:04.304+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2026-01-26T10:00:04.332+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): fetch_and_store_swaps> on 2026-01-26 09:00:00+00:00
+[2026-01-26T10:00:04.345+0000] {standard_task_runner.py:60} INFO - Started process 43459 to run task
+[2026-01-26T10:00:04.356+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'the_graph_uniswap_v3_swaps', 'fetch_and_store_swaps', 'scheduled__2026-01-26T09:00:00+00:00', '--job-id', '103', '--raw', '--subdir', 'DAGS_FOLDER/the_graph_uniswap_v3_swaps_dag.py', '--cfg-path', '/tmp/tmp33mz15v6']
+[2026-01-26T10:00:04.366+0000] {standard_task_runner.py:88} INFO - Job 103: Subtask fetch_and_store_swaps
+[2026-01-26T10:00:04.503+0000] {task_command.py:423} INFO - Running <TaskInstance: the_graph_uniswap_v3_swaps.fetch_and_store_swaps scheduled__2026-01-26T09:00:00+00:00 [running]> on host f2da44f39545
+[2026-01-26T10:00:04.673+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='***' AIRFLOW_CTX_DAG_ID='the_graph_uniswap_v3_swaps' AIRFLOW_CTX_TASK_ID='fetch_and_store_swaps' AIRFLOW_CTX_EXECUTION_DATE='2026-01-26T09:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2026-01-26T09:00:00+00:00'
+[2026-01-26T10:00:04.705+0000] {logging_mixin.py:188} INFO - Incremental run: Last record at 2026-01-26 08:59:59. Fetching new swaps...
+[2026-01-26T10:00:04.706+0000] {logging_mixin.py:188} INFO - Fetching swaps from 2026-01-26 09:00:00 to 2026-01-26 10:00:04.705989
+[2026-01-26T10:00:06.157+0000] {logging_mixin.py:188} INFO - [10:00:06] Fetched 1000 swaps from token0_in (Total: 1000)
+[2026-01-26T10:00:09.165+0000] {logging_mixin.py:188} INFO - [10:00:09] Fetched 1000 swaps from token0_in (Total: 2000)
+[2026-01-26T10:00:12.061+0000] {logging_mixin.py:188} INFO - [10:00:12] Fetched 818 swaps from token0_in (Total: 2818)
+[2026-01-26T10:00:16.493+0000] {logging_mixin.py:188} INFO - [10:00:16] Fetched 1000 swaps from token1_in (Total: 1000)
+[2026-01-26T10:00:18.086+0000] {logging_mixin.py:188} INFO - [10:00:18] Fetched 1000 swaps from token1_in (Total: 2000)
+[2026-01-26T10:24:07.879+0000] {logging_mixin.py:188} INFO - [10:24:07] Request failed (attempt 1/3): HTTPSConnectionPool(host='gateway.thegraph.com', port=443): Read timed out. (read timeout=30)
+[2026-01-26T10:24:17.083+0000] {local_task_job_runner.py:302} WARNING - State of this instance has been externally set to up_for_retry. Terminating instance.
+[2026-01-26T10:24:17.201+0000] {process_utils.py:131} INFO - Sending 15 to group 43459. PIDs of all processes in the group: [43459]
+[2026-01-26T10:24:17.204+0000] {process_utils.py:86} INFO - Sending the signal 15 to group 43459
+[2026-01-26T10:24:17.231+0000] {taskinstance.py:2450} ERROR - Received SIGTERM. Terminating subprocesses.
+[2026-01-26T10:24:17.310+0000] {logging_mixin.py:188} INFO - [10:24:17] Request failed (attempt 2/3): Task received SIGTERM signal
+[2026-01-26T10:24:19.364+0000] {logging_mixin.py:188} INFO - [10:24:19] Request failed (attempt 3/3): HTTPSConnectionPool(host='gateway.thegraph.com', port=443): Max retries exceeded with url: /api/ed92ce6476320a3dc899d334acb3998a/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0xffff6ee368e0>: Failed to establish a new connection: [Errno -2] Name or service not known'))
+[2026-01-26T10:24:19.377+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/connection.py", line 174, in _new_conn
+    conn = connection.create_connection(
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/util/connection.py", line 72, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "/usr/local/lib/python3.8/socket.py", line 918, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno -2] Name or service not known
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/connectionpool.py", line 715, in urlopen
+    httplib_response = self._make_request(
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/connectionpool.py", line 404, in _make_request
+    self._validate_conn(conn)
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/connectionpool.py", line 1058, in _validate_conn
+    conn.connect()
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/connection.py", line 363, in connect
+    self.sock = conn = self._new_conn()
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/connection.py", line 186, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPSConnection object at 0xffff6ee368e0>: Failed to establish a new connection: [Errno -2] Name or service not known
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/requests/adapters.py", line 486, in send
+    resp = conn.urlopen(
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/connectionpool.py", line 799, in urlopen
+    retries = retries.increment(
+  File "/home/airflow/.local/lib/python3.8/site-packages/urllib3/util/retry.py", line 592, in increment
+    raise MaxRetryError(_pool, url, error or ResponseError(cause))
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='gateway.thegraph.com', port=443): Max retries exceeded with url: /api/ed92ce6476320a3dc899d334acb3998a/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0xffff6ee368e0>: Failed to establish a new connection: [Errno -2] Name or service not known'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+  File "/opt/airflow/dags/the_graph_uniswap_v3_swaps_dag.py", line 44, in fetch_and_store_swaps
+    swaps = fetcher.fetch_swaps(start_date, end_date, on_batch_callback=storage.save_swaps)
+  File "/opt/airflow/dags/utils/uniswap_utils.py", line 130, in fetch_swaps
+    swaps_token1 = self._fetch_swaps_with_filter(start_ts, end_ts, "token1_in", TOKEN_ADDRESSES, on_batch_callback)
+  File "/opt/airflow/dags/utils/uniswap_utils.py", line 80, in _fetch_swaps_with_filter
+    result = self._execute_query(query)
+  File "/opt/airflow/dags/utils/uniswap_utils.py", line 56, in _execute_query
+    response = self.session.post(
+  File "/home/airflow/.local/lib/python3.8/site-packages/requests/sessions.py", line 637, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/requests/adapters.py", line 519, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='gateway.thegraph.com', port=443): Max retries exceeded with url: /api/ed92ce6476320a3dc899d334acb3998a/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0xffff6ee368e0>: Failed to establish a new connection: [Errno -2] Name or service not known'))
+[2026-01-26T10:24:19.479+0000] {taskinstance.py:1138} INFO - Marking task as FAILED. dag_id=the_graph_uniswap_v3_swaps, task_id=fetch_and_store_swaps, execution_date=20260126T090000, start_date=20260126T100004, end_date=20260126T102419
+[2026-01-26T10:24:19.547+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 103 for task fetch_and_store_swaps (HTTPSConnectionPool(host='gateway.thegraph.com', port=443): Max retries exceeded with url: /api/ed92ce6476320a3dc899d334acb3998a/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0xffff6ee368e0>: Failed to establish a new connection: [Errno -2] Name or service not known')); 43459)
+[2026-01-26T10:24:19.594+0000] {process_utils.py:79} INFO - Process psutil.Process(pid=43459, status='terminated', exitcode=1, started='10:00:04') (43459) terminated with exit code 1
