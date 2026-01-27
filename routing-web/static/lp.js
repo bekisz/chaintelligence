@@ -67,6 +67,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const images = (pos.images && pos.images.length > 0) ? pos.images.slice(0, 2) : ['/static/favicon.png'];
                 const iconsHtml = images.map(img => `<img src="${img}" class="pos-icon-stacked" onerror="this.src='/static/favicon.png'">`).join('');
 
+                // Calculate accrual badge
+                const delta = pos.reward_delta_usd || 0;
+                const accrualHtml = delta > 0
+                    ? `<span class="accrual-tag positive">+${formatUSD(delta)} accrued</span>`
+                    : delta < 0
+                        ? `<span class="accrual-tag negative">${formatUSD(delta)} (claimed?)</span>`
+                        : '';
+
                 row.innerHTML = `
                     <div class="pos-info">
                         <div class="pos-main">
@@ -84,25 +92,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     
                     <div class="pos-assets">
-                        ${pos.assets.map(asset => `
+                        ${pos.assets.filter(a => a.symbol).map(asset => `
                             <div class="asset-item">
-                                <span class="asset-sym">${asset.symbol || '---'}</span>
-                                <span class="asset-amt">${asset.balance.toFixed(4)}</span>
-                                <span class="asset-usd">${formatUSD(asset.usd)}</span>
+                                <span class="asset-sym">${asset.symbol}</span>
+                                <span class="asset-amt">${(asset.balance || 0).toFixed(4)}</span>
+                                <span class="asset-usd">${formatUSD(asset.balanceUSD || 0)}</span>
                             </div>
                         `).join('')}
                     </div>
                     
                     <div class="pos-rewards">
                         <div class="reward-items">
-                            ${Object.entries(pos.unclaimed).map(([sym, bal]) => `
+                            ${pos.unclaimed.filter(u => u.symbol).map(u => `
                                 <div class="reward-item">
-                                    <span class="reward-label">${sym}</span>
-                                    <span class="reward-val">${bal.toFixed(4)}</span>
+                                    <span class="reward-label">${u.symbol}</span>
+                                    <span class="reward-val">${(u.balance || 0).toFixed(4)}</span>
                                 </div>
                             `).join('')}
                         </div>
-                        <span class="reward-total">${formatUSD(pos.total_unclaimed_usd)}</span>
+                        <div class="reward-footer">
+                            ${accrualHtml}
+                            <span class="reward-total">${formatUSD(pos.total_unclaimed_usd)}</span>
+                        </div>
                     </div>
                     
                     <div class="pos-value">
@@ -113,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 positionsGrid.appendChild(row);
             });
+
 
         } catch (error) {
             console.error('Error fetching LP summary:', error);

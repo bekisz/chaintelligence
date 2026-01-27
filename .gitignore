@@ -2,3 +2,9 @@
 .ipynb_checkpoints
 secrets.js
 **/secrets.js
+__pycache__/
+*.py[cod]
+*$py.class
+logs/
+**/logs/
+.env

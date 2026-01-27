@@ -80,43 +80,63 @@ async def lp_summary():
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         
+        # Query to get snapshots grouped by position to calculate deltas
+        # We'll fetch more than 50 to ensure we have enough for deltas per position
         query = """
         SELECT 
             id, timestamp, address, protocol, network, position_label, balance_usd,
-            asset0_symbol, asset0_balance, asset0_usd,
-            asset1_symbol, asset1_balance, asset1_usd,
-            unclaimed_asset0_balance, unclaimed_asset1_balance,
-            total_unclaimed_usd,
-            images
+            assets, unclaimed, images, total_unclaimed_usd
         FROM v_lp_snapshots_summary
         ORDER BY timestamp DESC
-        LIMIT 50
+        LIMIT 200
         """
         
         cur.execute(query)
         rows = cur.fetchall()
         
-        results = []
+        # Organize by position to find latest two for delta
+        pos_history = {}
         for row in rows:
+            key = f"{row[3]}-{row[5]}-{row[4]}" # protocol-label-network
+            if key not in pos_history:
+                pos_history[key] = []
+            pos_history[key].append(row)
+
+        results = []
+        # Keep only the latest snapshot for each position for the response, but include delta
+        for key, snapshots in pos_history.items():
+            latest = snapshots[0]
+            
+            # Use raw assets/unclaimed
+            assets = latest[7] if latest[7] else []
+            unclaimed = latest[8] if latest[8] else []
+            
+            # Get delta from previous snapshot if it exists
+            delta_usd = 0
+            if len(snapshots) > 1:
+                previous = snapshots[1]
+                prev_unclaimed_usd = float(previous[10]) if previous[10] else 0
+                latest_unclaimed_usd = float(latest[10]) if latest[10] else 0
+                delta_usd = latest_unclaimed_usd - prev_unclaimed_usd
+
             results.append({
-                "id": row[0],
-                "timestamp": row[1].isoformat(),
-                "address": row[2],
-                "protocol": row[3],
-                "network": row[4],
-                "position_label": row[5],
-                "balance_usd": float(row[6]) if row[6] else 0,
-                "assets": [
-                    {"symbol": row[7], "balance": float(row[8]) if row[8] else 0, "usd": float(row[9]) if row[9] else 0},
-                    {"symbol": row[10], "balance": float(row[11]) if row[11] else 0, "usd": float(row[12]) if row[12] else 0}
-                ],
-                "unclaimed": {
-                    row[7]: float(row[13]) if row[13] else 0,
-                    row[10]: float(row[14]) if row[14] else 0
-                },
-                "total_unclaimed_usd": float(row[15]) if row[15] else 0,
-                "images": row[16]
+                "id": latest[0],
+                "timestamp": latest[1].isoformat(),
+                "address": latest[2],
+                "protocol": latest[3],
+                "network": latest[4],
+                "position_label": latest[5],
+                "balance_usd": float(latest[6]) if latest[6] else 0,
+                "assets": assets,
+                "unclaimed": unclaimed,
+                "total_unclaimed_usd": float(latest[10]) if latest[10] else 0,
+                "reward_delta_usd": delta_usd,
+                "images": latest[9]
             })
+            
+        # Re-sort results by balance_usd descending
+        results.sort(key=lambda x: x["balance_usd"], reverse=True)
+
             
         cur.close()
         conn.close()

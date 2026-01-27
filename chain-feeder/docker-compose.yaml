@@ -1,13 +1,23 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.8.1
+  image: apache/airflow:3.0.0
   environment: &airflow-common-env
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests}
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
-    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution/'
+    AIRFLOW__CORE__INTERNAL_API_SECRET_KEY: ${INTERNAL_API_SECRET_KEY}
+    AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
+
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.providers.fab.auth_manager.api.auth.backend.session'
+    AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
+    AIRFLOW__SIMPLE_AUTH_MANAGER__USERS: 'airflow:airflow'
+
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 10
+    AIRFLOW__CORE__INTERNAL_API_URL: 'http://airflow-webserver:8080'
     GRAPH_API_KEY: ${GRAPH_API_KEY}
   volumes:
     - ./dags:/opt/airflow/dags
@@ -50,11 +60,14 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
-    command: bash -c "rm -f /opt/airflow/airflow-webserver.pid && airflow webserver"
+    command: api-server
+    environment:
+      <<: *airflow-common-env
     ports:
       - "8081:8080"
     healthcheck:
-      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health" ]
+
       interval: 10s
       timeout: 10s
       retries: 5
@@ -64,9 +77,22 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    environment:
+      <<: *airflow-common-env
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    environment:
+      <<: *airflow-common-env
     restart: always
     depends_on:
       <<: *airflow-common-depends-on

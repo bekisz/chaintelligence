@@ -1,12 +1,13 @@
-from airflow import DAG, Dataset
-from airflow.operators.python import PythonOperator
+from airflow import DAG
+from airflow.sdk import Asset
+from airflow.providers.standard.operators.python import PythonOperator
 from datetime import datetime, timedelta
 import sys
 import os
 
 from utils.uniswap_utils import UniswapV3Fetcher, PostgresStorage
 
-uniswap_v3_swaps_dataset = Dataset("postgres://chaintelligence/uniswap_v3_swaps")
+uniswap_v3_swaps_asset = Asset("postgres://postgres/chaintelligence/public/uniswap_v3_swaps")
 
 default_args = {
     'owner': 'airflow',
@@ -50,7 +51,7 @@ with DAG(
     'the_graph_uniswap_v3_swaps',
     default_args=default_args,
     description='Fetch Uniswap V3 swaps for tracked tokens',
-    schedule_interval=timedelta(hours=1),
+    schedule=timedelta(hours=1),
     catchup=False,
     tags=['uniswap', 'swaps', 'defi'],
 ) as dag:
@@ -58,5 +59,5 @@ with DAG(
     fetch_task = PythonOperator(
         task_id='fetch_and_store_swaps',
         python_callable=fetch_and_store_swaps,
-        outlets=[uniswap_v3_swaps_dataset],
+        outlets=[uniswap_v3_swaps_asset],
     )

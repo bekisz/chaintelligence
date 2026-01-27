@@ -1,27 +1,27 @@
-from airflow import DAG
-from airflow.sdk import Asset
-from airflow.providers.standard.operators.python import PythonOperator
-from datetime import datetime, timedelta
+#!/usr/bin/env python3
+"""
+Standalone Zapper ETL script - runs outside of Airflow
+Can be executed via cron or manually
+"""
+import sys
+import os
 import logging
 import psycopg2
 import json
 
+# Add dags directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dags'))
+
 from zapper_client import fetch_zapper_data
 
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-}
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
-DB_CONN = "dbname=chaintelligence user=airflow password=airflow host=postgres port=5432"
+DB_CONN = "dbname=chaintelligence user=airflow password=airflow host=localhost port=5432"
 
-lp_snapshots_asset = Asset("postgres://postgres/chaintelligence/public/lp_snapshots")
-
-def etl_process(**kwargs):
+def etl_process():
     # 1. Fetch
     logging.info("Starting Zapper Fetch...")
     positions = fetch_zapper_data()
@@ -64,20 +64,12 @@ def etl_process(**kwargs):
         logging.error(f"Database insertion failed: {e}")
         raise
 
-with DAG(
-    'zapper_balance_loader',
-    default_args=default_args,
-    description='Fetch Uniswap LP data via Zapper every 15 mins',
-    schedule='*/15 * * * *',
-    start_date=datetime(2025, 1, 1),
-    catchup=False,
-    tags=['defi', 'uniswap'],
-) as dag:
-
-    run_etl = PythonOperator(
-        task_id='fetch_and_load_zapper',
-        python_callable=etl_process,
-        outlets=[lp_snapshots_asset],
-    )
-
-    run_etl
+if __name__ == "__main__":
+    try:
+        logging.info("Starting Zapper ETL process...")
+        etl_process()
+        logging.info("Zapper ETL process completed successfully")
+        sys.exit(0)
+    except Exception as e:
+        logging.error(f"Zapper ETL process failed: {e}", exc_info=True)
+        sys.exit(1)

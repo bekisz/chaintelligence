@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS lp_snapshots (
     position_label VARCHAR(255),
     balance_usd NUMERIC,
     assets JSONB,
-    unclaimed JSONB
+    unclaimed JSONB,
+    images JSONB
 );
 
 -- Table for raw Uniswap V3 swap events
@@ -79,16 +80,10 @@ SELECT
     network,
     position_label,
     balance_usd,
-    -- Extract first two assets (typical for Uniswap)
-    assets->0->>'symbol' as asset0_symbol,
-    (assets->0->>'balance')::NUMERIC as asset0_balance,
-    (assets->0->>'balanceUSD')::NUMERIC as asset0_usd,
-    assets->1->>'symbol' as asset1_symbol,
-    (assets->1->>'balance')::NUMERIC as asset1_balance,
-    (assets->1->>'balanceUSD')::NUMERIC as asset1_usd,
-    -- Extract individual unclaimed balances by matching symbols
-    (SELECT (u->>'balance')::NUMERIC FROM jsonb_array_elements(unclaimed) u WHERE u->>'symbol' = assets->0->>'symbol' LIMIT 1) as unclaimed_asset0_balance,
-    (SELECT (u->>'balance')::NUMERIC FROM jsonb_array_elements(unclaimed) u WHERE u->>'symbol' = assets->1->>'symbol' LIMIT 1) as unclaimed_asset1_balance,
-    -- Extract total rewards
+    assets,
+    unclaimed,
+    images,
+    -- Extract total rewards for sorting/summary
     COALESCE((SELECT SUM((u->>'balanceUSD')::NUMERIC) FROM jsonb_array_elements(unclaimed) u), 0) as total_unclaimed_usd
 FROM lp_snapshots;
+
