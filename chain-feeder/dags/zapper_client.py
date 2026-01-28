@@ -23,11 +23,15 @@ query PortfolioApps($addresses: [Address!]!) {
                                             node {
                                                 __typename
                                                 ... on AppTokenPositionBalance {
+                                                    key
+                                                    address
                                                     displayProps { label images }
                                                     balanceUSD
                                                     tokens { symbol balance balanceUSD price }
                                                 }
                                                 ... on ContractPositionBalance {
+                                                    key
+                                                    address
                                                     balanceUSD
                                                     displayProps { label images }
                                                     tokens {
@@ -61,6 +65,8 @@ def fetch_zapper_data():
 
     try:
         response = requests.post(ENDPOINT, json={"query": QUERY, "variables": variables}, headers=headers)
+        if response.status_code != 200:
+            logger.error(f"GraphQL Error (Status {response.status_code}): {response.text}")
         response.raise_for_status()
         data = response.json()
         
@@ -89,10 +95,12 @@ def fetch_zapper_data():
                     label = p_node.get("displayProps", {}).get("label") or "Position"
                     balance_usd = p_node.get("balanceUSD", 0)
                     type_name = p_node.get("__typename")
+                    position_id = p_node.get("key")
 
                     # Structure for DB
                     position_record = {
                         "address": TARGET_ADDRESS,
+                        "position_key": position_id or f"{TARGET_ADDRESS}:{label}",
                         "protocol": app_name,
                         "network": network,
                         "position_label": label,

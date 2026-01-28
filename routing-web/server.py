@@ -81,11 +81,10 @@ async def lp_summary():
         cur = conn.cursor()
         
         # Query to get snapshots grouped by position to calculate deltas
-        # We'll fetch more than 50 to ensure we have enough for deltas per position
         query = """
         SELECT 
             id, timestamp, address, protocol, network, position_label, balance_usd,
-            assets, unclaimed, images, total_unclaimed_usd
+            assets, unclaimed, images, total_unclaimed_usd, position_key
         FROM v_lp_snapshots_summary
         ORDER BY timestamp DESC
         LIMIT 200
@@ -97,7 +96,7 @@ async def lp_summary():
         # Organize by position to find latest two for delta
         pos_history = {}
         for row in rows:
-            key = f"{row[3]}-{row[5]}-{row[4]}" # protocol-label-network
+            key = row[11] if row[11] else f"{row[3]}-{row[5]}-{row[4]}" # Use position_key, fallback to old key
             if key not in pos_history:
                 pos_history[key] = []
             pos_history[key].append(row)
@@ -123,6 +122,7 @@ async def lp_summary():
                 "id": latest[0],
                 "timestamp": latest[1].isoformat(),
                 "address": latest[2],
+                "position_key": latest[11],
                 "protocol": latest[3],
                 "network": latest[4],
                 "position_label": latest[5],

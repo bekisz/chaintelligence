@@ -1,8 +1,10 @@
-import psycopg2
-import json
-from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-DB_CONN = "dbname=chaintelligence user=airflow password=airflow host=localhost port=5432"
+load_dotenv()
+
+DB_CONN = os.getenv('DATA_WAREHOUSE_DB', "dbname=chaintelligence user=airflow password=airflow host=localhost port=5432")
+
 
 def calculate_fee_accrual():
     try:

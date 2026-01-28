@@ -17,7 +17,13 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-DB_CONN = "dbname=chaintelligence user=airflow password=airflow host=postgres port=5432"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DB_CONN = os.getenv('DATA_WAREHOUSE_DB', "dbname=chaintelligence user=airflow password=airflow host=postgres port=5432")
+
 
 lp_snapshots_asset = Asset("postgres://postgres/chaintelligence/public/lp_snapshots")
 
@@ -37,14 +43,15 @@ def etl_process(**kwargs):
         cur = conn.cursor()
         
         insert_query = """
-        INSERT INTO lp_snapshots (address, protocol, network, position_label, balance_usd, assets, unclaimed, images)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO lp_snapshots (address, position_key, protocol, network, position_label, balance_usd, assets, unclaimed, images)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         
         count = 0
         for p in positions:
             cur.execute(insert_query, (
                 p["address"],
+                p.get("position_key"),
                 p["protocol"],
                 p["network"],
                 p["position_label"],

@@ -19,7 +19,12 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-DB_CONN = "dbname=chaintelligence user=airflow password=airflow host=localhost port=5432"
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DB_CONN = os.getenv('DATA_WAREHOUSE_DB', "dbname=chaintelligence user=airflow password=airflow host=localhost port=5432")
+
 
 def etl_process():
     # 1. Fetch

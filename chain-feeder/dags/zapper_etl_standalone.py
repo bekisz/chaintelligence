@@ -3,7 +3,13 @@ import json
 import logging
 from zapper_client import fetch_zapper_data
 
-DB_CONN = "dbname=chaintelligence user=airflow password=airflow host=localhost port=5432"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DB_CONN = os.getenv('DATA_WAREHOUSE_DB', "dbname=chaintelligence user=airflow password=airflow host=localhost port=5432")
+
 
 def etl_process():
     logging.info("Starting Zapper Fetch...")

@@ -20,12 +20,16 @@ TOKENS = {
 
 # The Graph Configuration
 GRAPH_API_KEY = os.getenv('GRAPH_API_KEY', '')
-UNISWAP_V3_SUBGRAPH_URL = f'https://gateway.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV'
+
+if not GRAPH_API_KEY or GRAPH_API_KEY == 'YOUR_GRAPH_API_KEY':
+    # Using the same fallback structure as routing/config.py
+    UNISWAP_V3_SUBGRAPH_URL = 'https://gateway-arbitrum.network.thegraph.com/api/[api-key]/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV'
+else:
+    UNISWAP_V3_SUBGRAPH_URL = f'https://gateway.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV'
+
 
 # Database Configuration
-AIRFLOW_CONN_METADATA_DB = os.getenv('AIRFLOW__DATABASE__SQL_ALCHEMY_CONN', 'postgresql+psycopg2://airflow:airflow@postgres/airflow')
-# Override to use the standard data warehouse DB (if different)
-DATA_WAREHOUSE_DB = "postgresql://airflow:airflow@postgres:5432/chaintelligence"
+DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=postgres port=5432')
 
 # Fetcher Settings
 MAX_RESULTS_PER_QUERY = 1000
