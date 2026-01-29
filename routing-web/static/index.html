@@ -4,98 +4,251 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chaintelligence | Route Analysis</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>Chaintelligence Portal</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/png" href="/static/favicon.png">
-    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #22d3ee;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        .background-blobs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            filter: blur(80px);
+            opacity: 0.4;
+        }
+
+        .blob {
+            position: absolute;
+            width: 40vw;
+            height: 40vw;
+            border-radius: 50%;
+        }
+
+        .blob-1 {
+            top: -10%;
+            left: -10%;
+            background: var(--primary);
+            animation: move 20s infinite alternate;
+        }
+
+        .blob-2 {
+            bottom: -10%;
+            right: -10%;
+            background: var(--accent);
+            animation: move 25s infinite alternate-reverse;
+        }
+
+        @keyframes move {
+            from {
+                transform: translate(0, 0);
+            }
+
+            to {
+                transform: translate(10%, 10%);
+            }
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 90%;
+            text-align: center;
+            z-index: 1;
+        }
+
+        header {
+            margin-bottom: 4rem;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, #fff, var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2.5rem;
+            border-radius: 24px;
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            backdrop-filter: blur(12px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, var(--primary), var(--accent));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card i {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .card p {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .icon-box {
+            width: 64px;
+            height: 64px;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            font-size: 24px;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            margin-top: auto;
+            background: var(--primary);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .card:hover .btn {
+            background: var(--primary-hover);
+        }
+
+        footer {
+            margin-top: 5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 
 <body>
     <div class="background-blobs">
         <div class="blob blob-1"></div>
         <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
     </div>
 
     <div class="container">
-        <nav class="glass main-nav">
-            <a href="/" class="active">Route Analysis</a>
-            <a href="/lp">LP Positions</a>
-        </nav>
-
         <header>
-            <div class="logo">
-                <span class="logo-icon">▲</span>
-                <h1>Chaintelligence</h1>
-            </div>
-            <p class="subtitle">Uniswap V3 Multi-hop Route Optimizer</p>
+            <h1>Chaintelligence</h1>
+            <p class="subtitle">Unified DeFi Analytics & Strategy Platform</p>
         </header>
 
-        <main>
-            <section class="controls glass">
-                <div class="input-group">
-                    <label for="start-token">Start Token</label>
-                    <input type="text" id="start-token" placeholder="e.g. USDC" value="USDC">
-                </div>
-                <div class="input-group">
-                    <label for="end-token">End Token</label>
-                    <input type="text" id="end-token" placeholder="e.g. USDT" value="USDT">
-                </div>
-                <div class="input-group">
-                    <label for="days">Lookback (Days)</label>
-                    <input type="number" id="days" step="0.1" value="1">
-                </div>
-                <button id="analyze-btn" class="primary-btn">Analyze Routes</button>
-            </section>
+        <div class="grid">
+            <a href="/lp" class="card">
+                <div class="icon-box">📊</div>
+                <h2>LP Portfolio</h2>
+                <p>Monitor your liquidity positions across protocols. Real-time balance and reward tracking from Zapper
+                    snapshots.</p>
+                <div class="btn">View Portfolio</div>
+            </a>
 
-            <section id="results-section" class="results-container hidden">
-                <div class="summary-cards">
-                    <div class="card glass">
-                        <h3>Total Volume</h3>
-                        <p id="total-volume" class="stat">--</p>
-                    </div>
-                    <div class="card glass">
-                        <h3>Total TXs</h3>
-                        <p id="total-tx" class="stat">--</p>
-                    </div>
-                </div>
+            <a href="/routing" class="card">
+                <div class="icon-box">🔀</div>
+                <h2>Routing Analysis</h2>
+                <p>Analyze transaction paths and liquidity flows. Debug routes and identify the best paths for swaps.
+                </p>
+                <div class="btn">Explore Routes</div>
+            </a>
 
-                <div class="table-container glass">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Route Path</th>
-                                <th>TX Count</th>
-                                <th>Volume</th>
-                                <th>Avg Volume</th>
-                                <th>% Volume</th>
-                            </tr>
-                        </thead>
-                        <tbody id="routes-body">
-                            <!-- Results will be injected here -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            <a href="/backtester" class="card">
+                <div class="icon-box">⚖️</div>
+                <h2>LP Backtester</h2>
+                <p>Simulate Uniswap V3 positions historically. Optimize your ranges and fee accrual strategies.</p>
+                <div class="btn">Launch Backtester</div>
+            </a>
 
-            <div id="loader" class="loader-container hidden">
-                <div class="spinner"></div>
-                <p>Analyzing routes from Postgres...</p>
-            </div>
-
-            <div id="no-data" class="no-data-msg hidden">
-                <p>No swap data found for the specified period and tokens.</p>
-            </div>
-        </main>
+            <a href="/docs" class="card">
+                <div class="icon-box">📜</div>
+                <h2>Developer API</h2>
+                <p>Interactive Swagger documentation for the Chaintelligence API. Explore endpoints for LP data and
+                    route
+                    analysis.</p>
+                <div class="btn">View API Docs</div>
+            </a>
+        </div>
 
         <footer>
-            <p>&copy; 2026 Chaintelligence. Powered by Uniswap V3.</p>
+            &copy; 2026 Chaintelligence Platform
         </footer>
     </div>
-
-    <script src="/static/app.js"></script>
 </body>
 
 </html>

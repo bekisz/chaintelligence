@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const routesBody = document.getElementById('routes-body');
     const loader = document.getElementById('loader');
     const noDataMsg = document.getElementById('no-data');
+    const startDateInput = document.getElementById('start-date');
+    const endDateInput = document.getElementById('end-date');
 
     const formatUSD = (amount) => {
         return new Intl.NumberFormat('en-US', {
@@ -22,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const startToken = startTokenInput.value.trim().toUpperCase();
         const endToken = endTokenInput.value.trim().toUpperCase();
         const days = parseFloat(daysInput.value);
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
 
         if (!startToken || !endToken) {
             alert('Please enter both start and end tokens.');
@@ -34,7 +38,12 @@ document.addEventListener('DOMContentLoaded', () => {
         noDataMsg.classList.add('hidden');
 
         try {
-            const response = await fetch(`/api/analyze?start_token=${startToken}&end_token=${endToken}&days=${days}`);
+            let url = `/api/analyze?start_token=${startToken}&end_token=${endToken}`;
+            if (days > 0) url += `&days=${days}`;
+            if (startDate) url += `&start_date=${startDate}`;
+            if (endDate) url += `&end_date=${endDate}`;
+
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error('API request failed');
             }
@@ -42,6 +51,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (!data.routes || data.routes.length === 0) {
+                let msg = 'No swap data found for the specified period and tokens.';
+                if (data.db_range) {
+                    msg += `<br/><small>Data available in DB from ${data.db_range.min} to ${data.db_range.max}</small>`;
+                }
+                noDataMsg.innerHTML = `<p>${msg}</p>`;
                 noDataMsg.classList.remove('hidden');
                 loader.classList.add('hidden');
                 return;
@@ -78,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     analyzeBtn.addEventListener('click', performAnalysis);
 
     // Allow Enter key to trigger analysis
-    [startTokenInput, endTokenInput, daysInput].forEach(input => {
+    [startTokenInput, endTokenInput, daysInput, startDateInput, endDateInput].forEach(input => {
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 performAnalysis();

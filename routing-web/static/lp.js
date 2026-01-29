@@ -95,8 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${pos.assets.filter(a => a.symbol).map(asset => `
                             <div class="asset-item">
                                 <span class="asset-sym">${asset.symbol}</span>
-                                <span class="asset-amt">${(asset.balance || 0).toFixed(4)}</span>
-                                <span class="asset-usd">${formatUSD(asset.balanceUSD || 0)}</span>
+                                <span class="asset-amt">${Number(asset.balance || 0).toFixed(4)}</span>
+                                <span class="asset-usd">${formatUSD(Number(asset.balanceUSD || 0))}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -106,19 +106,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${pos.unclaimed.filter(u => u.symbol).map(u => `
                                 <div class="reward-item">
                                     <span class="reward-label">${u.symbol}</span>
-                                    <span class="reward-val">${(u.balance || 0).toFixed(4)}</span>
+                                    <span class="reward-val">${Number(u.balance || 0).toFixed(4)}</span>
                                 </div>
                             `).join('')}
                         </div>
                         <div class="reward-footer">
                             ${accrualHtml}
-                            <span class="reward-total">${formatUSD(pos.total_unclaimed_usd)}</span>
+                            <span class="reward-total">${formatUSD(Number(pos.total_unclaimed_usd || 0))}</span>
                         </div>
                     </div>
                     
                     <div class="pos-value">
                         <span class="value-label">Total Position</span>
-                        <span class="value-amt">${formatUSD(pos.balance_usd)}</span>
+                        <span class="value-amt">${formatUSD(Number(pos.balance_usd || 0))}</span>
                         <span class="timestamp">${timeStr}</span>
                     </div>
                 `;
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Error fetching LP summary:', error);
-            noDataMsg.textContent = 'Failed to load position data.';
+            noDataMsg.textContent = `Error: ${error.message}`;
             noDataMsg.classList.remove('hidden');
         } finally {
             loader.classList.add('hidden');

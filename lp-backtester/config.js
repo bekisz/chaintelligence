@@ -1,5 +1,5 @@
 const CONFIG = {
-    CRYPTOCOMPARE_API_KEY: '777db0605f662ba6667a0c8d385d317262bd221764d4a3b01dc7a629e9592a49'
+    CRYPTOCOMPARE_API_KEY: '' // Loaded dynamically from server.py when running via Docker
 };
 
 if (typeof module !== 'undefined') {

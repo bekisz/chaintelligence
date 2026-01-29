@@ -1055,3 +1055,31 @@ input::-webkit-calendar-picker-indicator:hover {
     font-family: monospace;
     font-size: 0.9em;
 }
+/* Integrated Navigation */
+.main-nav {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.main-nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+}
+
+.main-nav a:hover,
+.main-nav a.active {
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.main-nav a.active {
+    border-bottom: 2px solid var(--accent);
+}

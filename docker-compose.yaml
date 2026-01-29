@@ -4,7 +4,7 @@ x-airflow-common: &airflow-common
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests}
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution/'
     AIRFLOW__CORE__INTERNAL_API_SECRET_KEY: ${INTERNAL_API_SECRET_KEY}
@@ -23,9 +23,9 @@ x-airflow-common: &airflow-common
     DATA_WAREHOUSE_DB: ${DATA_WAREHOUSE_DB}
     TARGET_ADDRESS: ${TARGET_ADDRESS}
   volumes:
-    - ./dags:/opt/airflow/dags
-    - ./logs:/opt/airflow/logs
-    - ./plugins:/opt/airflow/plugins
+    - ./chain-feeder/dags:/opt/airflow/dags
+    - ./chain-feeder/logs:/opt/airflow/logs
+    - ./chain-feeder/plugins:/opt/airflow/plugins
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
   depends_on: &airflow-common-depends-on
     postgres:
@@ -40,7 +40,7 @@ services:
       POSTGRES_DB: airflow
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
-      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+      - ./chain-feeder/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
     ports:
       - "5432:5432"
     healthcheck:
@@ -70,7 +70,6 @@ services:
       - "8081:8080"
     healthcheck:
       test: [ "CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health" ]
-
       interval: 10s
       timeout: 10s
       retries: 5
@@ -101,6 +100,24 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+
+  chaintelligence-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chaintelligence-server
+    environment:
+      - DATA_WAREHOUSE_DB=${DATA_WAREHOUSE_DB}
+      - GRAPH_API_KEY=${GRAPH_API_KEY}
+      - PORTAL_USERNAME=${PORTAL_USERNAME}
+      - PORTAL_PASSWORD=${PORTAL_PASSWORD}
+      - CRYPTOCOMPARE_API_KEY=${CRYPTOCOMPARE_API_KEY}
+    ports:
+      - "8000:8000"
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres-db-volume:
