@@ -13,10 +13,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Add routing directory to path to import fetcher and analyzer
+# Import routing logic from same directory
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.append(os.path.join(ROOT_DIR, 'routing'))
-
 try:
     from postgres_fetcher import PostgresFetcher
     from route_analyzer import RouteAnalyzer

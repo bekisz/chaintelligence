@@ -46,12 +46,21 @@ The application requires several environment variables to function. Create a `.e
 
 ### Airflow Internal Secrets (Required for DAG Scheduling)
 
-These can be generated using standard Airflow security tools or kept consistent across a deployment:
+These keys are essential for Airflow 3.0 internal security and data encryption. **They must be identical across all Airflow services** (webserver, scheduler, dag-processor) in a single deployment.
 
-- `INTERNAL_API_SECRET_KEY`
-- `FERNET_KEY`
-- `AIRFLOW_SECRET_KEY`
-- `JWT_SECRET`
+- `FERNET_KEY`: Used to encrypt sensitive data (like API keys) in the Airflow metadata database.
+- `INTERNAL_API_SECRET_KEY`: A shared secret that allows internal Airflow components to communicate securely.
+- `JWT_SECRET`: Used to sign JSON Web Tokens for API authentication and session security.
+- `AIRFLOW_SECRET_KEY`: Used by the web server for session management and CSRF protection.
+
+> [!TIP]
+> **Generating New Keys**: For a new deployment, you can generate a fresh key by running:
+>
+> ```bash
+> docker run --rm apache/airflow:3.0.0 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+> ```
+>
+> You can reuse the same generated string for all four keys for simplicity, or generate unique ones for each.
 
 ### Database
 

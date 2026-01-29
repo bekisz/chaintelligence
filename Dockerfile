@@ -10,12 +10,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/cache/*
 
 # Copy requirements and install
-COPY routing/requirements.txt ./routing_requirements.txt
-RUN pip install --no-cache-dir -r routing_requirements.txt
+COPY routing-web/requirements.txt ./routing_web_requirements.txt
+RUN pip install --no-cache-dir -r routing_web_requirements.txt
 RUN pip install --no-cache-dir fastapi uvicorn psycopg2-binary python-dotenv
 
 # Copy the application code
-COPY routing/ ./routing/
 COPY routing-web/ ./routing-web/
 COPY lp-backtester/ ./lp-backtester/
 
