@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS lp_snapshots (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     address VARCHAR(42),
-    position_key VARCHAR(100),
+    position_key VARCHAR(100) NOT NULL,
     protocol VARCHAR(50),
     network VARCHAR(50),
     position_label VARCHAR(255),

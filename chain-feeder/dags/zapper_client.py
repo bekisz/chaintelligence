@@ -1,7 +1,7 @@
 import requests
 import json
 import logging
-from zapper_config import ENDPOINT, AUTH_HEADER, TARGET_ADDRESS
+from zapper_config import ENDPOINT, AUTH_HEADER, TARGET_ADDRESSES
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,7 @@ query PortfolioApps($addresses: [Address!]!) {
             byAddress: byAccount(first: 50) {
                 edges {
                     node {
+                        accountAddress
                         appGroupBalances {
                             edges {
                                 node {
@@ -55,7 +56,7 @@ query PortfolioApps($addresses: [Address!]!) {
 
 def fetch_zapper_data():
     """Calculates and returns a list of position dictionaries."""
-    variables = {"addresses": [TARGET_ADDRESS]}
+    variables = {"addresses": TARGET_ADDRESSES}
     headers = {
         "Content-Type": "application/json",
         "Authorization": AUTH_HEADER,
@@ -82,7 +83,11 @@ def fetch_zapper_data():
         extracted_positions = []
 
         for acc in accounts:
-            app_groups = acc["node"]["appGroupBalances"]["edges"]
+            acc_node = acc["node"]
+            # The address being queried
+            owner_address = acc_node.get("accountAddress")
+            
+            app_groups = acc_node["appGroupBalances"]["edges"]
             for group in app_groups:
                 node = group["node"]
                 app_name = node["app"]["displayName"]
@@ -96,11 +101,16 @@ def fetch_zapper_data():
                     balance_usd = p_node.get("balanceUSD", 0)
                     type_name = p_node.get("__typename")
                     position_id = p_node.get("key")
+                    
+                    # Some positions might have their own 'address' (like a contract address)
+                    # but we want the owner address for the DB record grouping.
+                    # If Zapper doesn't provide it on the account node, we fall back.
+                    record_address = owner_address or p_node.get("address") or (TARGET_ADDRESSES[0] if TARGET_ADDRESSES else "unknown")
 
                     # Structure for DB
                     position_record = {
-                        "address": TARGET_ADDRESS,
-                        "position_key": position_id or f"{TARGET_ADDRESS}:{label}",
+                        "address": record_address,
+                        "position_key": position_id or f"{record_address}:{label}",
                         "protocol": app_name,
                         "network": network,
                         "position_label": label,

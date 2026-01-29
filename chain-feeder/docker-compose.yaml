@@ -19,6 +19,9 @@ x-airflow-common: &airflow-common
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 10
     AIRFLOW__CORE__INTERNAL_API_URL: 'http://airflow-webserver:8080'
     GRAPH_API_KEY: ${GRAPH_API_KEY}
+    ZAPPER_AUTH_HEADER: ${ZAPPER_AUTH_HEADER}
+    DATA_WAREHOUSE_DB: ${DATA_WAREHOUSE_DB}
+    TARGET_ADDRESS: ${TARGET_ADDRESS}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
