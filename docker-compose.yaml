@@ -2,6 +2,7 @@ x-airflow-common: &airflow-common
   image: apache/airflow:3.0.0
   environment: &airflow-common-env
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests}
+    PYTHONPATH: "/opt/airflow/dags:${PYTHONPATH:-}"
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
@@ -18,10 +19,15 @@ x-airflow-common: &airflow-common
 
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 10
     AIRFLOW__CORE__INTERNAL_API_URL: 'http://airflow-webserver:8080'
+    AIRFLOW__WEBSERVER__RATELIMIT_STORAGE_URI: "memory://"
+    AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: True
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: True
+    AIRFLOW__WEBSERVER__BASE_URL: http://46.224.119.131:8080
     GRAPH_API_KEY: ${GRAPH_API_KEY}
     ZAPPER_AUTH_HEADER: ${ZAPPER_AUTH_HEADER}
     DATA_WAREHOUSE_DB: ${DATA_WAREHOUSE_DB}
     TARGET_ADDRESS: ${TARGET_ADDRESS}
+
   volumes:
     - ./chain-feeder/dags:/opt/airflow/dags
     - ./chain-feeder/logs:/opt/airflow/logs

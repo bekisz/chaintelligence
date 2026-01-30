@@ -12,5 +12,3 @@ logs/
 !.env.example
 *.key
 *.pem
-zapper_config.py
-**/zapper_config.py
