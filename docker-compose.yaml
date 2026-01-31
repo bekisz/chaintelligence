@@ -1,5 +1,5 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.0.0
+  image: apache/airflow:3.1.6
   environment: &airflow-common-env
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests}
     PYTHONPATH: "/opt/airflow/dags:${PYTHONPATH:-}"
