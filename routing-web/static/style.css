@@ -338,6 +338,7 @@ header h1 {
     overflow: visible;
 }
 
+/* Old Fill (Deprecated/Fallback) */
 .range-bar-fill {
     position: absolute;
     height: 100%;
@@ -345,43 +346,123 @@ header h1 {
     transition: all 0.3s ease;
 }
 
-.range-bar-fill.in-range {
+/* New Segment */
+.range-segment {
+    position: absolute;
+    height: 100%;
+    border-radius: 3px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.range-bar-fill.in-range,
+.range-segment.in-range {
     background: linear-gradient(90deg, var(--accent) 0%, #34d399 100%);
 }
 
-.range-bar-fill.out-range {
+.range-bar-fill.warning,
+.range-segment.warning {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+.range-bar-fill.out-range,
+.range-segment.out-range {
     background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
 }
 
+/* Range Dots (Min/Max) */
+.range-dot {
+    position: absolute;
+    top: 0;
+    width: 6px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Current Price Wrapper */
 .range-current-price {
     position: absolute;
-    top: -2px;
-    width: 10px;
-    height: 10px;
+    top: 0;
+    width: 0;
+    height: 0;
+    transform: translateX(-50%);
+    z-index: 2;
+    overflow: visible;
+}
+
+/* The visual dot */
+.current-dot,
+.range-current-price.legacy-dot {
+    /* Backward compat if needed */
+    position: absolute;
+    top: -3px;
+    left: -6px;
+    /* Centering 12px width */
+    width: 12px;
+    height: 12px;
     background: white;
     border: 2px solid var(--primary);
     border-radius: 50%;
-    transform: translateX(-50%);
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
-    z-index: 2;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Status Colors for Dot */
+.current-dot.status-green {
+    border-color: #34d399;
+    background: #10b981;
+}
+
+.current-dot.status-yellow {
+    border-color: #f59e0b;
+    background: #fbbf24;
+}
+
+.current-dot.status-red {
+    border-color: #ef4444;
+    background: #f87171;
 }
 
 .range-labels {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 0.25rem;
+    position: relative;
+    /* Changed for absolute children */
+    height: 20px;
+    margin-top: 0.5rem;
     font-size: 0.65rem;
     color: var(--text-dim);
 }
 
+.range-labels span {
+    position: absolute;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
 .range-label-current {
     position: absolute;
-    top: -20px;
+    top: -24px;
+    left: 0;
     transform: translateX(-50%);
     font-size: 0.65rem;
     color: var(--primary);
     font-weight: 600;
     white-space: nowrap;
+}
+
+/* Status Colors for Label */
+.range-label-current.status-green {
+    color: #34d399;
+}
+
+.range-label-current.status-yellow {
+    color: #fbbf24;
+}
+
+.range-label-current.status-red {
+    color: #f87171;
 }
 
 /* Table Header */

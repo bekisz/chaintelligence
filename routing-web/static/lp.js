@@ -179,58 +179,111 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Calculate range data - use real data if available, otherwise mock
     const calculateRangeData = (position) => {
-        // Check if we have real range data from the API
         if (position.range_data && position.range_data.token_id) {
             const rd = position.range_data;
-
-            // Calculate percentage position within range
-            const tickRange = rd.tick_upper - rd.tick_lower;
-            const tickPosition = rd.current_tick - rd.tick_lower;
-            const currentPercent = tickRange > 0 ? (tickPosition / tickRange) * 100 : 50;
-
+            // Ensure numeric types
             return {
                 inRange: rd.in_range,
-                currentPercent: Math.max(0, Math.min(100, currentPercent)),
-                minPrice: rd.price_lower,
-                maxPrice: rd.price_upper,
-                currentPrice: rd.current_price
+                minPrice: Number(rd.price_lower),
+                maxPrice: Number(rd.price_upper),
+                currentPrice: Number(rd.current_price)
             };
         }
-
-        // Return null if no valid range data is found
         return null;
     };
 
     const createRangeIndicator = (rangeData) => {
         if (!rangeData) return '';
-        const { inRange, currentPercent, minPrice, maxPrice, currentPrice } = rangeData;
+        const { inRange, minPrice, maxPrice, currentPrice } = rangeData;
 
-        // Don't show range indicator if we have no price data
-        if (!minPrice && !maxPrice && !currentPrice) {
-            return '';
-        }
+        // Validations
+        if (minPrice == null || maxPrice == null || currentPrice == null) return '';
 
         const fmt = (n) => {
             if (n === undefined || n === null || isNaN(n)) return '-';
-            return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
         };
-        const rangeClass = inRange ? 'in-range' : 'out-range';
 
-        console.log('[DEBUG] Range Data:', rangeData);
+        // 1. Determine Visual Bounds (Prices)
+        // We want the slider to cover [minPrice, maxPrice] AND currentPrice, plus some padding.
+
+        let visualMin = Math.min(minPrice, currentPrice);
+        let visualMax = Math.max(maxPrice, currentPrice);
+
+        // Add padding (15%)
+        const rangeSpan = visualMax - visualMin;
+        const padding = rangeSpan * 0.15;
+
+        // Ensure visual range isn't zero
+        if (rangeSpan === 0) {
+            visualMin = visualMin * 0.9;
+            visualMax = visualMax * 1.1;
+        } else {
+            visualMin = Math.max(0, visualMin - padding); // Don't go below 0
+            visualMax = visualMax + padding;
+        }
+
+        const totalSpan = visualMax - visualMin;
+        if (totalSpan === 0) return ''; // Should not happen with padding
+
+        // 3. Determine Status Color
+        let statusColorClass = 'status-green'; // Default safe
+
+        if (currentPrice < minPrice || currentPrice > maxPrice) {
+            statusColorClass = 'status-red';
+        } else {
+            // Check proximity to edges within range (e.g., within 10% of edges)
+            const rangeWidth = maxPrice - minPrice;
+            const distToMin = (currentPrice - minPrice) / rangeWidth;
+            const distToMax = (maxPrice - currentPrice) / rangeWidth;
+
+            if (distToMin < 0.15 || distToMax < 0.15) {
+                statusColorClass = 'status-yellow';
+            }
+        }
+
+        // 2. Calculate Percentages for elements
+        const getPct = (price) => ((price - visualMin) / totalSpan) * 100;
+
+        const pctMin = Math.max(0, Math.min(100, getPct(minPrice)));
+        const pctMax = Math.max(0, Math.min(100, getPct(maxPrice)));
+        const pctCurr = Math.max(0, Math.min(100, getPct(currentPrice)));
+
+        // Range Bar width
+        const barLeft = Math.min(pctMin, pctMax);
+        const barWidth = Math.abs(pctMax - pctMin);
+
+        // Range segment color
+        // If status is yellow (warning), use warning color for segment
+        let rangeClass = inRange ? 'in-range' : 'out-range';
+        if (statusColorClass === 'status-yellow') {
+            rangeClass = 'warning';
+        }
 
         return `
             <div class="range-indicator">
-                <div class="range-bar-container">
-                    <div class="range-bar-fill ${rangeClass}" style="width: ${currentPercent}%"></div>
-                    <div class="range-current-price" style="left: ${currentPercent}%">
-                        <span class="range-label-current">${fmt(currentPrice)}</span>
+                <div class="range-bar-container wide-slider">
+                    <!-- The full track is implied by the container width -->
+                    
+                    <!-- The Active Range Segment -->
+                    <div class="range-segment ${rangeClass}" 
+                         style="left: ${barLeft}%; width: ${barWidth}%;"></div>
+                    
+                    <!-- Min/Max Dots -->
+                    <div class="range-dot min-dot" style="left: ${pctMin}%;"></div>
+                    <div class="range-dot max-dot" style="left: ${pctMax}%;"></div>
+
+                    <!-- Current Price Dot -->
+                    <div class="range-current-price" style="left: ${pctCurr}%">
+                        <span class="range-label-current ${statusColorClass}">${fmt(currentPrice)}</span>
+                        <div class="current-dot ${statusColorClass}"></div>
                     </div>
                 </div>
                 <div class="range-labels">
-                    <span>Min: ${fmt(minPrice)}</span>
-                    <span>Max: ${fmt(maxPrice)}</span>
+                    <!-- Position labels based on calculated percents to align with markers -->
+                    <span style="left: ${pctMin}%">Min: ${fmt(minPrice)}</span>
+                    <span style="left: ${pctMax}%">Max: ${fmt(maxPrice)}</span>
                 </div>
             </div>
         `;
