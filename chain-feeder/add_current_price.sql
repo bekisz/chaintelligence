@@ -52,8 +52,27 @@ SELECT
         (SELECT image_url FROM coin WHERE symbol = pool.coin1_symbol)
     ) as images,
     
-    -- Total unclaimed
-    0 as total_unclaimed_usd,
+    -- Total unclaimed (Calculated based on implied price from Balance USD)
+    -- Handle Stablecoin as Token0 (Inverted Price P = Price(T1)/Price(T0))
+    -- Normal Case (P = Price(T0)/Price(T1))
+    CASE 
+        WHEN s.balance_usd > 0 THEN
+            CASE 
+                -- Inverted Case: T0 is Stable, T1 is not. P = Price(T1)/Price(T0).
+                -- Formula: V * (C0 + C1*P) / (A0 + A1*P)
+                WHEN UPPER(pool.coin0_symbol) IN ('USDC', 'USDT', 'DAI', 'USDBC', 'USDB', 'EUROC', 'EURC') 
+                     AND UPPER(pool.coin1_symbol) NOT IN ('USDC', 'USDT', 'DAI', 'USDBC', 'USDB', 'EUROC', 'EURC') THEN
+                    (s.balance_usd * (s.coin0_claimable_amount + s.coin1_claimable_amount * COALESCE(s.current_price, pos.current_price, 0))) / 
+                    NULLIF(s.coin0_amount + s.coin1_amount * COALESCE(s.current_price, pos.current_price, 0), 0)
+                
+                -- Standard Case: P = Price(T0)/Price(T1).
+                -- Formula: V * (C0*P + C1) / (A0*P + A1)
+                ELSE
+                    (s.balance_usd * (s.coin0_claimable_amount * COALESCE(s.current_price, pos.current_price, 0) + s.coin1_claimable_amount)) / 
+                    NULLIF(s.coin0_amount * COALESCE(s.current_price, pos.current_price, 0) + s.coin1_amount, 0)
+            END
+        ELSE 0 
+    END as total_unclaimed_usd,
     
     -- Range data (Source from POS, not Snapshot for static/fetched fields)
     pos.token_id,
