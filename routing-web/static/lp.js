@@ -212,8 +212,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return '';
         }
 
-        const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fmt = (n) => {
+            if (n === undefined || n === null || isNaN(n)) return '-';
+            return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
         const rangeClass = inRange ? 'in-range' : 'out-range';
+
+        console.log('[DEBUG] Range Data:', rangeData);
 
         return `
             <div class="range-indicator">

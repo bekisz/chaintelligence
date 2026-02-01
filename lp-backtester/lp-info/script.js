@@ -424,17 +424,17 @@ function getUncollectedFees(
 }
 
 function formatCurrency(val) {
-    if (val === undefined || isNaN(val)) return 'NaN';
+    if (val === undefined || val === null || isNaN(val)) return 'NaN';
     if (!isFinite(val)) return '∞';
-    if (val < 0.000001) return val.toExponential(4);
-    if (val < 0.001) return val.toExponential(2);
+    if (val < 0.000001 && val > 0) return val.toExponential(4);
+    if (val < 0.001 && val > 0) return val.toExponential(2);
     if (val < 1) return val.toFixed(4);
     if (val < 100) return val.toFixed(2);
     return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function formatCurrencyUSD(val) {
-    if (val === undefined || isNaN(val)) return '-';
+    if (val === undefined || val === null || isNaN(val)) return '-';
     return val.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
 

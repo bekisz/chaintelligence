@@ -122,6 +122,9 @@ services:
     ports:
       - "8000:8000"
     restart: always
+    volumes:
+      - ./routing-web:/app/routing-web
+      - ./lp-backtester:/app/lp-backtester
     depends_on:
       postgres:
         condition: service_healthy

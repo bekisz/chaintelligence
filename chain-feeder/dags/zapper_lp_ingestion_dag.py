@@ -8,6 +8,8 @@ import logging
 import json
 import re
 
+import os
+
 # Import existing fetchers
 from zapper_client import fetch_zapper_data
 from uniswap_v3_range_fetcher import fetch_position_range_data
@@ -57,14 +59,35 @@ def ingest_coins(positions: list):
     if not positions:
         return
         
-    unique_symbols = set()
+    # Collect symbols and images
+    coin_data = {} # Symbol -> ImageURL
     
-    # Collect symbols from assets and unclaimed
+    # Collect symbols and images
+    coin_data = {} # Symbol -> ImageURL
+    
     for p in positions:
-        for a in p.get('assets', []):
-            unique_symbols.add(normalize_symbol(a.get('symbol')))
+        assets = p.get('assets', [])
+        images = p.get('images', []) # From displayProps
+        
+        # Heuristic: Map Asset[i] -> Image[i]
+        for i, a in enumerate(assets):
+            s = normalize_symbol(a.get('symbol'))
+            # If we have an image at this index, use it
+            img = images[i] if i < len(images) else None
+            
+            if s and img:
+                # Prefer existing non-null, or overwrite if we have nothing
+                if s not in coin_data or not coin_data[s]: 
+                    coin_data[s] = img
+            elif s and s not in coin_data:
+                 coin_data[s] = None
+
+        # Unclaimed usually doesn't have separate images in displayProps, 
+        # or they might be Mixed. We skip unclaimed image mapping unless we find a better source.
         for u in p.get('unclaimed', []):
-            unique_symbols.add(normalize_symbol(u.get('symbol')))
+            s = normalize_symbol(u.get('symbol'))
+            if s not in coin_data:
+                coin_data[s] = None
             
     # Insert keys if they don't exist
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
@@ -72,26 +95,29 @@ def ingest_coins(positions: list):
     cur = conn.cursor()
     
     inserted = 0
-    for sym in unique_symbols:
-        # We rely on existing Coin configuration (Hardness/Family) for known coins.
-        # For new/unknown coins, we insert with defaults.
+    updated = 0
+    for sym, img in coin_data.items():
         try:
+            # Upsert Coin: Insert if new, Update image if missing
             cur.execute("""
-                INSERT INTO coin (symbol, hardness, family)
-                VALUES (%s, 0, %s)
-                ON CONFLICT (symbol) DO NOTHING
-            """, (sym, sym))
-            if cur.rowcount > 0:
-                inserted += 1
+                INSERT INTO coin (symbol, hardness, family, image_url)
+                VALUES (%s, 0, %s, %s)
+                ON CONFLICT (symbol) DO UPDATE
+                SET image_url = COALESCE(coin.image_url, EXCLUDED.image_url)
+            """, (sym, sym, img))
+            
+            if cur.statusmessage.startswith("INSERT"): inserted += 1
+            else: updated += 1
+            
         except Exception as e:
-            logging.warning(f"Failed to insert coin {sym}: {e}")
+            logging.warning(f"Failed to upsert coin {sym}: {e}")
             conn.rollback()
             continue
             
     conn.commit()
     cur.close()
     conn.close()
-    logging.info(f"Ingested {inserted} new coins.")
+    logging.info(f"Ingested {inserted} new coins, updated {updated} existing.")
 
 @task(outlets=[asset_pools])
 def ingest_pools(positions: list):
@@ -230,42 +256,47 @@ def ingest_positions(positions: list):
 
 @task(outlets=[asset_positions])
 def fetch_missing_ranges():
-    """Fetches range data ONLY for positions that have no range data (Tick Lower is NULL)."""
+    """Fetches range data for positions missing ranges OR missing current state."""
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     conn = pg_hook.get_conn()
     cur = conn.cursor()
     
     # Select positions needing update
-    # Needs TokenID to fetch.
     cur.execute("""
         SELECT p.id, p.token_id, pool.network, pool.pool_name, p.wallet_address
         FROM liquidity_pool_position p
         JOIN liquidity_pool pool ON p.pool_id = pool.id
-        WHERE p.tick_lower IS NULL
-          AND p.token_id IS NOT NULL -- Can only fetch if we have Token ID
+        WHERE (p.tick_lower IS NULL OR p.current_tick IS NULL)
+          AND p.token_id IS NOT NULL 
           AND pool.protocol ILIKE '%Uniswap%'
     """)
     rows = cur.fetchall()
-    logging.info(f"Found {len(rows)} positions needing range backfill.")
+    logging.info(f"Found {len(rows)} positions needing range/state backfill.")
+    
+    api_key = os.environ.get("GRAPH_API_KEY")
     
     updated = 0
     for row in rows:
         pos_id, token_id, network, pool_name, wallet = row
-        
-        # Reconstruct label for fetcher (it expects "Name (Token ID: X)")
         label_for_fetcher = f"{pool_name} (Token ID: {token_id})"
         
-        data = fetch_position_range_data(label_for_fetcher, network)
+        data = fetch_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
         if data:
             try:
-                # Update Position Ranges
+                # Update Position Ranges AND Current State
                 cur.execute("""
                     UPDATE liquidity_pool_position
-                    SET tick_lower = %s, tick_upper = %s, price_lower = %s, price_upper = %s
+                    SET tick_lower = %s, tick_upper = %s, 
+                        price_lower = %s, price_upper = %s,
+                        current_tick = %s, current_price = %s
                     WHERE id = %s
-                """, (data['tick_lower'], data['tick_upper'], data['price_lower'], data['price_upper'], pos_id))
+                """, (
+                    data['tick_lower'], data['tick_upper'], 
+                    data['price_lower'], data['price_upper'], 
+                    data['current_tick'], data['current_price'],
+                    pos_id
+                ))
                 
-                # Also update Pool Fee Tier if found
                 if data.get('fee_tier'):
                     cur.execute("""
                         UPDATE liquidity_pool 
@@ -275,7 +306,7 @@ def fetch_missing_ranges():
                     """, (data['fee_tier'], pos_id))
                 
                 updated += 1
-                conn.commit() # Commit per success to save progress
+                conn.commit()
             except Exception as e:
                 conn.rollback()
                 logging.error(f"Error updating ranges for {pos_id}: {e}")
