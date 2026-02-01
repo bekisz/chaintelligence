@@ -7,7 +7,6 @@ from datetime import timedelta
 import logging
 import json
 import re
-
 import os
 
 # Import existing fetchers
@@ -45,6 +44,69 @@ def normalize_symbol(sym):
     s = SYMBOL_MAP.get(s, s)
     return s[:8] # Truncate to 8
 
+def get_standard_pool_info(label, assets, hardness_map):
+    c0, c1 = None, None
+    pool_name = None
+    reverted = False
+    
+    # Try from assets
+    if assets and len(assets) >= 2:
+        a0 = assets[0]
+        a1 = assets[1]
+        sym0 = normalize_symbol(a0.get('symbol'))
+        sym1 = normalize_symbol(a1.get('symbol'))
+        adr0 = a0.get('address', '').lower()
+        adr1 = a1.get('address', '').lower()
+        
+        h0 = hardness_map.get(sym0, 0)
+        h1 = hardness_map.get(sym1, 0)
+        
+        # Sort: C0=Softer, C1=Harder
+        is_swapped = False
+        if h0 > h1: is_swapped = True
+        elif h0 == h1 and sym0 > sym1: is_swapped = True
+        
+        if is_swapped:
+            c0, c1 = sym1, sym0
+            addr_c0, addr_c1 = adr1, adr0
+        else:
+            c0, c1 = sym0, sym1
+            addr_c0, addr_c1 = adr0, adr1
+            
+        pool_name = f"{c0} - {c1}"
+        
+        # Reverted Logic
+        if addr_c0 and addr_c1 and addr_c0 > addr_c1:
+            reverted = True
+            
+    else:
+        # Fallback from Label
+        base_label = re.sub(r'(\(Token ID:.*\)|#.*)', '', label).strip()
+        parts = re.split(r'[\/\-]', base_label)
+        if len(parts) >= 2:
+            s0 = normalize_symbol(parts[0])
+            s1 = normalize_symbol(parts[1])
+            
+            # Sort: C0=Softer, C1=Harder
+            h0 = hardness_map.get(s0, 0)
+            h1 = hardness_map.get(s1, 0)
+            
+            is_swapped = False
+            if h0 > h1: is_swapped = True
+            elif h0 == h1 and s0 > s1: is_swapped = True
+            
+            if is_swapped:
+                c0, c1 = s1, s0
+            else:
+                c0, c1 = s0, s1
+
+            pool_name = f"{c0} - {c1}"
+            reverted = False # Assumption
+        else:
+             pool_name = base_label
+    
+    return pool_name, c0, c1, reverted
+
 @task
 def fetch_zapper_balances():
     """Fetches raw LP data from Zapper API."""
@@ -59,9 +121,6 @@ def ingest_coins(positions: list):
     if not positions:
         return
         
-    # Collect symbols and images
-    coin_data = {} # Symbol -> ImageURL
-    
     # Collect symbols and images
     coin_data = {} # Symbol -> ImageURL
     
@@ -121,7 +180,7 @@ def ingest_coins(positions: list):
 
 @task(outlets=[asset_pools])
 def ingest_pools(positions: list):
-    """Identifies and ingests Liquidity Pools, ensuring correct Coin0/Coin1 ordering."""
+    """Identifies and ingests Liquidity Pools, ensuring correct Coin0/Coin1 ordering based on Hardness."""
     if not positions:
         logging.warning("ingest_pools received empty positions list.")
         return
@@ -133,57 +192,34 @@ def ingest_pools(positions: list):
     cur = conn.cursor()
 
     # Pre-fetch hardness map
-    cur.execute("SELECT symbol, hardness FROM coin")
-    hardness_map = {row[0]: row[1] for row in cur.fetchall()}
+    try:
+        cur.execute("SELECT symbol, hardness FROM coin")
+        hardness_map = {row[0].upper(): row[1] for row in cur.fetchall()}
+    except Exception as e:
+        logging.error(f"Error fetching hardness map: {e}")
+        hardness_map = {}
 
     for p in positions:
         protocol = p.get('protocol', 'Unknown')
         network = p.get('network', 'Unknown')
         label = p.get('position_label', 'Unknown')
-        
-        # Clean label to get base Name (remove Token ID)
-        pool_name = re.sub(r'(\(Token ID:.*\)|#.*)', '', label).strip()
-        
-        # Determine Coins from Assets
-        # Zapper 'assets' usually contains the 2 LP tokens.
         assets = p.get('assets', [])
-        coin_syms = []
-        if len(assets) >= 2:
-            coin_syms = [normalize_symbol(a.get('symbol')) for a in assets[:2]]
-        else:
-            # Fallback: Try parsing label? "ETH / USDC"
-            # This is risky, but better than nothing if assets missing (unlikely for active pos)
-            parts = re.split(r'[\/\-]', pool_name)
-            if len(parts) >= 2:
-                 coin_syms = [normalize_symbol(parts[0]), normalize_symbol(parts[1])]
-            else:
-                logging.warning(f"Could not determine tokens for pool {pool_name}. Skipping pool creation.")
-                continue
-
-        if len(coin_syms) != 2:
-             continue
-             
-        # Resolve Hardness
-        # Default to 0 if unknown
-        h0 = hardness_map.get(coin_syms[0], 0)
-        h1 = hardness_map.get(coin_syms[1], 0)
         
-        # Sort: Coin1 must be HARDER (Higher Score)
-        c0, c1 = coin_syms[0], coin_syms[1]
-        if h0 > h1:
-            c0, c1 = c1, c0 # Swap
-        elif h0 == h1:
-            if c0 > c1: c0, c1 = c1, c0 # Alphabetic tie-break
-            
+        pool_name, c0, c1, reverted = get_standard_pool_info(label, assets, hardness_map)
+        
+        if not pool_name: continue
+
         # Upsert Pool
-        # We don't have Fee Tier from Zapper summary easily unless we fetch Range data.
-        # We'll leave fee_tier NULL for now or update it later.
         try:
             cur.execute("""
-                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_symbol, coin1_symbol)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (network, protocol, pool_name, fee_tier) DO NOTHING
-            """, (network, protocol, pool_name, c0, c1))
+                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_symbol, coin1_symbol, pool_address, reverted)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (network, protocol, pool_name) DO UPDATE
+                SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
+                    reverted = EXCLUDED.reverted,
+                    coin0_symbol = EXCLUDED.coin0_symbol,
+                    coin1_symbol = EXCLUDED.coin1_symbol
+            """, (network, protocol, pool_name, c0, c1, p.get('pool_address'), reverted))
         except Exception as e:
             conn.rollback()
             logging.error(f"Error inserting pool {pool_name}: {e}")
@@ -202,18 +238,26 @@ def ingest_positions(positions: list):
     conn = pg_hook.get_conn()
     cur = conn.cursor()
     
+    # Pre-fetch hardness map
+    try:
+        cur.execute("SELECT symbol, hardness FROM coin")
+        hardness_map = {row[0].upper(): row[1] for row in cur.fetchall()}
+    except Exception as e:
+        logging.error(f"Error fetching hardness map: {e}")
+        hardness_map = {}
+    
     for p in positions:
         try:
             label = p.get('position_label', '')
-            pool_name = re.sub(r'(\(Token ID:.*\)|#.*)', '', label).strip()
+            assets = p.get('assets', [])
+            
+            pool_name, _, _, _ = get_standard_pool_info(label, assets, hardness_map)
+            
             network = p.get('network')
             protocol = p.get('protocol')
             address = p.get('address')
             
-            # Find Pool ID (assuming NULL fee tier for broad match, or need better matching)
-            # Problem: If multiple pools exist with same name but diff fee tiers?
-            # Zapper name usually doesn't include fee tier "ETH / USDC".
-            # We select the first matching pool for now.
+            # Find Pool ID (using Standardized Name)
             cur.execute("""
                 SELECT id FROM liquidity_pool 
                 WHERE network = %s AND protocol = %s AND pool_name = %s
@@ -221,13 +265,12 @@ def ingest_positions(positions: list):
             """, (network, protocol, pool_name))
             res = cur.fetchone()
             if not res:
-                logging.warning(f"Pool not found for position {label}. Skipping.")
+                logging.warning(f"Pool not found for position {label} (Standard: {pool_name}). Skipping.")
                 continue
             pool_id = res[0]
             
-            # Helper to extract Token ID locally if possible or leave NULL to be filled by Range Fetcher
+            # Helper to extract Token ID
             token_id = None
-            # Regex extract
             match = re.search(r'Token ID:\s*(\d+)', label, re.IGNORECASE)
             if match: token_id = match.group(1)
             else:
@@ -238,12 +281,12 @@ def ingest_positions(positions: list):
             pos_key = p.get("position_key") or f"{protocol}-{label}-{network}-{address}"
             
             # Upsert Position
-            # We do NOT overwrite ranges here. Only Token ID if we found it.
             cur.execute("""
                 INSERT INTO liquidity_pool_position (pool_id, position_key, wallet_address, token_id)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (position_key) DO UPDATE
-                SET token_id = COALESCE(liquidity_pool_position.token_id, EXCLUDED.token_id)
+                SET token_id = COALESCE(liquidity_pool_position.token_id, EXCLUDED.token_id),
+                    pool_id = EXCLUDED.pool_id  -- Update link to New Standard Pool if changed
             """, (pool_id, pos_key, address, token_id))
             
         except Exception as e:
@@ -283,27 +326,22 @@ def fetch_missing_ranges():
         data = fetch_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
         if data:
             try:
-                # Update Position Ranges AND Current State
+                # Update Position Ranges, Current State, AND Fee Tier
+                # Note: Fee tier is now on the Position, not the Pool
                 cur.execute("""
                     UPDATE liquidity_pool_position
                     SET tick_lower = %s, tick_upper = %s, 
                         price_lower = %s, price_upper = %s,
-                        current_tick = %s, current_price = %s
+                        current_tick = %s, current_price = %s,
+                        fee_tier = %s
                     WHERE id = %s
                 """, (
                     data['tick_lower'], data['tick_upper'], 
                     data['price_lower'], data['price_upper'], 
                     data['current_tick'], data['current_price'],
+                    data.get('fee_tier'),
                     pos_id
                 ))
-                
-                if data.get('fee_tier'):
-                    cur.execute("""
-                        UPDATE liquidity_pool 
-                        SET fee_tier = %s 
-                        WHERE id = (SELECT pool_id FROM liquidity_pool_position WHERE id = %s)
-                          AND fee_tier IS NULL
-                    """, (data['fee_tier'], pos_id))
                 
                 updated += 1
                 conn.commit()
@@ -359,8 +397,6 @@ def ingest_snapshots(positions: list):
                 elif s == c1_sym: v1_amt = bal
             
             # Map Claimable Rewards (Pending)
-            # Assuming rewards are in the constituent tokens
-            # Zapper puts pending fees in 'unclaimed'
             r0_amt = 0; r1_amt = 0
             unclaimed = p.get('unclaimed', [])
             for u in unclaimed:
@@ -368,14 +404,7 @@ def ingest_snapshots(positions: list):
                 bal = float(u.get('balance', 0))
                 if s == c0_sym: r0_amt = bal
                 elif s == c1_sym: r1_amt = bal
-                # Note: If reward is a 3rd token (e.g. UNI), we currently ignore it based on schema constraints
                 
-            # Current Tick/Price/In Range
-            # We ONLY have this if we fetch it. 
-            # If we didn't run fetcher this time, we insert NULLs.
-            # OR we can try to fetch just the pool state here? 
-            # User requirement: Fetch only at creation. So we leave NULL.
-            
             cur.execute("""
                 INSERT INTO liquidity_pool_position_snapshot
                 (position_id, timestamp, balance_usd, 

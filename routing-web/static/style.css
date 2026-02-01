@@ -610,7 +610,8 @@ header h1 {
 
 .asset-item {
     display: grid;
-    grid-template-columns: 60px 1fr 100px;
+    /* Grid changed to 2 columns: Symbol | Amount */
+    grid-template-columns: 80px 1fr;
     font-size: 0.85rem;
     align-items: center;
 }
@@ -620,9 +621,12 @@ header h1 {
     font-weight: 600;
 }
 
-.asset-usd {
+/* Removed .asset-usd style */
+
+.asset-amt {
     text-align: right;
     color: var(--text-main);
+    /* Moved color from usd to amt for visibility */
     font-weight: 600;
 }
 
@@ -662,6 +666,26 @@ header h1 {
     font-weight: 700;
     color: var(--accent);
 }
+
+.acc.protocol-tag {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wallet-tag {
+    font-size: 0.65rem;
+    color: #a5b4fc;
+    background: rgba(165, 180, 252, 0.1);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.3rem;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-weight: 700;
+}
+
 
 .accrual-tag {
     font-size: 0.65rem;

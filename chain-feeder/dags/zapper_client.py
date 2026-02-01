@@ -115,6 +115,7 @@ def fetch_zapper_data():
                         "network": network,
                         "position_label": label,
                         "balance_usd": balance_usd,
+                        "pool_address": p_node.get("address"), # Extracted Pool/Contract Address
                         "assets": [],
                         "unclaimed": [],
                         "images": p_node.get("displayProps", {}).get("images", [])

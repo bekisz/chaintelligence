@@ -3,6 +3,7 @@ let allPositions = [];
 let currentFilters = {
     network: 'all',
     protocol: 'all',
+    wallet: 'all',
     search: ''
 };
 let currentSort = 'value-desc';
@@ -17,21 +18,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // Filter and sort controls
     const networkFilter = document.getElementById('network-filter');
     const protocolFilter = document.getElementById('protocol-filter');
+    const walletFilter = document.getElementById('wallet-filter');
     const searchFilter = document.getElementById('search-filter');
     const sortBy = document.getElementById('sort-by');
 
     const formatUSD = (amount) => {
+        const n = Number(amount);
+        if (isNaN(n)) return '$0.00';
+
+        let digits = 2;
+        if (n > 100) digits = 0; // Round to integer if > 100
+
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD',
-            minimumFractionDigits: 2
-        }).format(amount);
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits
+        }).format(n);
+    };
+
+    const formatTokenAmount = (num) => {
+        if (!num) return '0.00';
+        const n = Number(num);
+        if (n === 0) return '0.00';
+
+        if (n > 100) {
+            // Round to integer if > 100
+            return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+        }
+
+        if (n >= 1) {
+            return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        // Small numbers: 2 significant digits
+        return n.toLocaleString('en-US', { maximumSignificantDigits: 2 });
     };
 
     const cleanLabel = (label) => {
         if (!label) return 'Position';
-        // "ETH / USDC (Token ID: 103718)" -> "ETH - USDC #103718"
-        return label.replace(/\(Token ID:\s*([^\)]+)\)/i, '#$1').replace(/\s*\/\s*/g, ' - ');
+        // Remove (Token ID: ...) completely
+        return label.replace(/\(Token ID:\s*([^\)]+)\)/i, '').replace(/\s*\/\s*/g, ' - ').trim();
     };
 
     const applyFiltersAndSort = () => {
@@ -45,6 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Apply protocol filter
         if (currentFilters.protocol !== 'all') {
             filtered = filtered.filter(p => p.protocol === currentFilters.protocol);
+        }
+
+        // Apply wallet filter
+        if (currentFilters.wallet !== 'all') {
+            filtered = filtered.filter(p => p.address === currentFilters.wallet);
         }
 
         // Apply search filter
@@ -103,9 +134,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const timeStr = new Date(pos.timestamp).toLocaleString();
             let cleanedLabel = cleanLabel(pos.position_label);
-            if (pos.range_data && pos.range_data.token_id && !cleanedLabel.includes('#')) {
-                cleanedLabel += ` #${pos.range_data.token_id}`;
-            }
+
+            // Wallet display (last 4 chars)
+            const walletAddr = pos.address || '';
+            const walletDisplay = walletAddr.length > 4 ? `...${walletAddr.slice(-4)}` : walletAddr;
 
             if (pos.isClosed) {
                 cleanedLabel += ' <span style="color:#f87171; font-size:0.8em;">(Closed)</span>';
@@ -119,11 +151,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const delta = pos.reward_delta_usd || 0;
             const accrualHtml = delta > 0
                 ? `<span class="accrual-tag positive">+${formatUSD(delta)} accrued</span>`
-                : delta < 0
-                    ? `<span class="accrual-tag negative">${formatUSD(delta)} (claimed?)</span>`
-                    : '';
+                : ''; // Removed negative case (red text)
 
-            // Calculate range data - will use real data if available from API
+            // Calculate range data
             const rangeData = calculateRangeData(pos);
             const rangeHtml = createRangeIndicator(rangeData);
 
@@ -138,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="pos-meta">
                             <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
+                            ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
                             <span class="protocol-tag">${pos.protocol}</span>
                         </div>
                     </div>
@@ -148,8 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${pos.assets.filter(a => a.symbol).map(asset => `
                         <div class="asset-item">
                             <span class="asset-sym">${asset.symbol}</span>
-                            <span class="asset-amt">${Number(asset.balance || 0).toFixed(4)}</span>
-                            <span class="asset-usd">${formatUSD(Number(asset.balanceUSD || 0))}</span>
+                            <span class="asset-amt">${formatTokenAmount(asset.balance)}</span>
+                            <!-- Removed asset-usd column ($0.00) -->
                         </div>
                     `).join('')}
                 </div>
@@ -159,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${pos.unclaimed.filter(u => u.symbol).map(u => `
                             <div class="reward-item">
                                 <span class="reward-label">${u.symbol}</span>
-                                <span class="reward-val">${Number(u.balance || 0).toFixed(4)}</span>
+                                <span class="reward-val">${formatTokenAmount(u.balance)}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -170,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 
                 <div class="pos-value">
-                    <span class="value-label">Total Position</span>
+                    <!-- Removed value-label "Total Position" -->
                     <span class="value-amt">${formatUSD(Number(pos.balance_usd || 0))}</span>
                     <span class="timestamp">${timeStr}</span>
                 </div>
@@ -202,6 +233,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const fmt = (n) => {
             if (n === undefined || n === null || isNaN(n)) return '-';
+            // Also apply int rounding rule for range labels? User said "each number on LP Dashboard"
+            if (n > 100) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
             return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
         };
 
@@ -255,8 +288,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const barWidth = Math.abs(pctMax - pctMin);
 
         // Range segment color
-        // If status is yellow (warning), use warning color for segment
-        let rangeClass = inRange ? 'in-range' : 'out-range';
+        // Use dynamic check for in-range color
+        const isInRange = (currentPrice >= Math.min(minPrice, maxPrice)) && (currentPrice <= Math.max(minPrice, maxPrice));
+        let rangeClass = isInRange ? 'in-range' : 'out-range';
         if (statusColorClass === 'status-yellow') {
             rangeClass = 'warning';
         }
@@ -314,16 +348,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Detect closed positions (older than 2 hours from latest fetch)
+            // Detect closed positions and Filter valid LP positions
+            const BLOCKED_PROTOCOLS = ['Aave Safety Module', 'Lido', 'Sky', 'Aave V3'];
+
             const uniqueRaw = Object.values(latestPositions);
             if (uniqueRaw.length > 0) {
                 const maxTs = Math.max(...uniqueRaw.map(p => new Date(p.timestamp).getTime()));
-                allPositions = uniqueRaw.map(p => {
-                    const pTs = new Date(p.timestamp).getTime();
-                    // Consider closed if older than 2 hours relative to the freshest data
-                    p.isClosed = (maxTs - pTs) > (2 * 60 * 60 * 1000);
-                    return p;
-                });
+                allPositions = uniqueRaw
+                    .filter(p => !BLOCKED_PROTOCOLS.includes(p.protocol)) // Filter blocked protocols
+                    .filter(p => p.assets && p.assets.length >= 2) // Filter: Must have at least 2 assets (LP)
+                    .map(p => {
+                        const pTs = new Date(p.timestamp).getTime();
+                        p.isClosed = (maxTs - pTs) > (2 * 60 * 60 * 1000);
+                        return p;
+                    });
             } else {
                 allPositions = [];
             }
@@ -334,10 +372,17 @@ document.addEventListener('DOMContentLoaded', () => {
             totalPortfolioValueEl.textContent = formatUSD(totalValue);
             totalRewardsEl.textContent = formatUSD(totalRewards);
 
-            // Populate protocol filter options
+            // Populate filters
             const protocols = [...new Set(allPositions.map(p => p.protocol))].sort();
             protocolFilter.innerHTML = '<option value="all">All Protocols</option>' +
                 protocols.map(p => `<option value="${p}">${p}</option>`).join('');
+
+            const wallets = [...new Set(allPositions.map(p => p.address).filter(a => a))].sort();
+            walletFilter.innerHTML = '<option value="all">All Wallets</option>' +
+                wallets.map(w => {
+                    const disp = w.length > 6 ? `...${w.slice(-4)}` : w;
+                    return `<option value="${w}">${disp}</option>`;
+                }).join('');
 
             // Apply initial filters and sorting
             applyFiltersAndSort();
@@ -366,6 +411,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (walletFilter) {
+        walletFilter.addEventListener('change', (e) => {
+            currentFilters.wallet = e.target.value;
+            applyFiltersAndSort();
+        });
+    }
+
     if (searchFilter) {
         searchFilter.addEventListener('input', (e) => {
             currentFilters.search = e.target.value;
@@ -389,4 +441,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fetchLPSummary();
 });
+
 /* Force reload */
