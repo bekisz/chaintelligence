@@ -1,5 +1,5 @@
 from airflow import DAG
-from airflow.decorators import task
+from airflow.sdk import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sdk import Asset
 import pendulum
@@ -33,7 +33,7 @@ default_args = {
 # Symbol Remapping for < 8 chars constraint
 SYMBOL_MAP = {
     'SAVINGS USDS': 'sUSDS',
-    'CLAIMABLE AAVE ON STKAAVE': 'clAAVE',
+    'CLAIMABLE AAVE ON STKAAVE': 'stkAAVE',
     'WRAPPED ETHER': 'WETH',
     'WRAPPED BITCOIN': 'WBTC',
     # Add others if seen frequently
