@@ -591,13 +591,16 @@ function renderPositions(positions, ethPriceUSD, baselinesByPos = {}) {
             ` : '<div>-</div>'}
 
             <div class="price-range-display">
-                <div class="range-row">
-                    <span>${formatCurrency(priceLow)}</span>
-                    <span style="opacity: 0.5">-</span>
-                    <span>${formatCurrency(priceHigh)}</span>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: #94a3b8; font-size: 0.75rem;">Min:</span>
+                    <span style="font-family: monospace; font-weight: 500;">${formatCurrency(priceLow)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+                    <span style="color: #94a3b8; font-size: 0.75rem;">Max:</span>
+                    <span style="font-family: monospace; font-weight: 500;">${formatCurrency(priceHigh)}</span>
                 </div>
                 <div class="current-price-indicator">
-                    Now: <strong>${formatCurrency(currentPrice)}</strong>
+                    Current: <strong>${formatCurrency(currentPrice)}</strong>
                 </div>
             </div>
         `;

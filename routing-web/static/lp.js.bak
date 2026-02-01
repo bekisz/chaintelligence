@@ -30,8 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const cleanLabel = (label) => {
         if (!label) return 'Position';
-        // "ETH / USDC (Token ID: 103718)" -> "ETH - USDC #103718"
-        return label.replace(/\(Token ID:\s*([^\)]+)\)/i, '#$1').replace(/\s*\/\s*/g, ' - ');
+        // "ETH / USDC (Token ID: 103718)" -> "ETH - USDC"
+        return label.split(' (Token ID:')[0].replace(/\s*\/\s*/g, ' - ');
     };
 
     const applyFiltersAndSort = () => {
@@ -54,12 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const label = cleanLabel(p.position_label).toLowerCase();
                 return label.includes(search);
             });
-        }
-
-        // Apply "Hide Closed" filter
-        const hideClosed = document.getElementById('hide-closed-filter')?.checked;
-        if (hideClosed) {
-            filtered = filtered.filter(p => !p.isClosed);
         }
 
         // Apply sorting
@@ -98,18 +92,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         positions.forEach(pos => {
             const row = document.createElement('div');
-            row.className = `position-row glass ${pos.isClosed ? 'closed-pos' : ''}`;
-            if (pos.isClosed) row.style.opacity = '0.6';
+            row.className = 'position-row glass';
 
             const timeStr = new Date(pos.timestamp).toLocaleString();
-            let cleanedLabel = cleanLabel(pos.position_label);
-            if (pos.range_data && pos.range_data.token_id && !cleanedLabel.includes('#')) {
-                cleanedLabel += ` #${pos.range_data.token_id}`;
-            }
-
-            if (pos.isClosed) {
-                cleanedLabel += ' <span style="color:#f87171; font-size:0.8em;">(Closed)</span>';
-            }
+            const cleanedLabel = cleanLabel(pos.position_label);
 
             // Get images (limit to 2 for LP pairs)
             const images = (pos.images && pos.images.length > 0) ? pos.images.slice(0, 2) : ['/static/favicon.png'];
@@ -256,28 +242,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Detect closed positions (older than 2 hours from latest fetch)
-            const uniqueRaw = Object.values(latestPositions);
-            if (uniqueRaw.length > 0) {
-                const maxTs = Math.max(...uniqueRaw.map(p => new Date(p.timestamp).getTime()));
-                allPositions = uniqueRaw.map(p => {
-                    const pTs = new Date(p.timestamp).getTime();
-                    // Consider closed if older than 2 hours relative to the freshest data
-                    p.isClosed = (maxTs - pTs) > (2 * 60 * 60 * 1000);
-                    return p;
-                });
-            } else {
-                allPositions = [];
-            }
+            const uniqueLatest = Object.values(latestPositions);
+            allPositions = uniqueLatest;
 
-            const totalValue = allPositions.reduce((sum, p) => sum + p.balance_usd, 0);
-            const totalRewards = allPositions.reduce((sum, p) => sum + p.total_unclaimed_usd, 0);
+            const totalValue = uniqueLatest.reduce((sum, p) => sum + p.balance_usd, 0);
+            const totalRewards = uniqueLatest.reduce((sum, p) => sum + p.total_unclaimed_usd, 0);
 
             totalPortfolioValueEl.textContent = formatUSD(totalValue);
             totalRewardsEl.textContent = formatUSD(totalRewards);
 
             // Populate protocol filter options
-            const protocols = [...new Set(allPositions.map(p => p.protocol))].sort();
+            const protocols = [...new Set(uniqueLatest.map(p => p.protocol))].sort();
             protocolFilter.innerHTML = '<option value="all">All Protocols</option>' +
                 protocols.map(p => `<option value="${p}">${p}</option>`).join('');
 
@@ -322,13 +297,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const hideClosedCheckbox = document.getElementById('hide-closed-filter');
-    if (hideClosedCheckbox) {
-        hideClosedCheckbox.addEventListener('change', () => {
-            applyFiltersAndSort();
-        });
-    }
-
     fetchLPSummary();
 });
-/* Force reload */

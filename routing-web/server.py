@@ -146,7 +146,9 @@ async def lp_summary():
         query = """
         SELECT 
             id, timestamp, address, protocol, network, position_label, balance_usd,
-            assets, unclaimed, images, total_unclaimed_usd, position_key
+            assets, unclaimed, images, total_unclaimed_usd, position_key,
+            token_id, tick_lower, tick_upper, current_tick,
+            price_lower, price_upper, current_price, in_range, fee_tier
         FROM v_lp_snapshots_summary
         ORDER BY timestamp DESC
         LIMIT 200
@@ -187,7 +189,19 @@ async def lp_summary():
                 "unclaimed": unclaimed,
                 "total_unclaimed_usd": float(latest[10]) if latest[10] else 0,
                 "reward_delta_usd": delta_usd,
-                "images": latest[9]
+                "images": latest[9],
+                # Range data (indices 12-20)
+                "range_data": {
+                    "token_id": latest[12],
+                    "tick_lower": latest[13],
+                    "tick_upper": latest[14],
+                    "current_tick": latest[15],
+                    "price_lower": float(latest[16]) if latest[16] else None,
+                    "price_upper": float(latest[17]) if latest[17] else None,
+                    "current_price": float(latest[18]) if latest[18] else None,
+                    "in_range": latest[19],
+                    "fee_tier": latest[20]
+                } if latest[12] else None  # Only include if token_id exists
             })
             
         results.sort(key=lambda x: x["balance_usd"], reverse=True)

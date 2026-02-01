@@ -1,0 +1,166 @@
+from airflow import DAG
+from airflow.sdk import Asset
+from airflow.providers.standard.operators.python import PythonOperator
+from datetime import datetime, timedelta
+import logging
+import psycopg2
+import json
+
+from zapper_client import fetch_zapper_data
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DB_CONN = os.getenv('DATA_WAREHOUSE_DB', "dbname=chaintelligence user=airflow password=airflow host=postgres port=5432")
+
+
+lp_snapshots_asset = Asset("postgres://postgres/chaintelligence/public/lp_snapshots")
+
+def etl_process(**kwargs):
+    # 1. Fetch from Zapper
+    logging.info("Starting Zapper Fetch...")
+    positions = fetch_zapper_data()
+    logging.info(f"Fetched {len(positions)} positions.")
+
+    if not positions:
+        logging.warning("No positions to insert.")
+        return
+
+    # 2. Enrich with Uniswap V3 range data
+    from uniswap_v3_range_fetcher import fetch_position_range_data
+    graph_api_key = os.getenv('GRAPH_API_KEY')
+    
+    enriched_positions = []
+    for p in positions:
+        # Check if this is a Uniswap V3 position
+        # Note: Zapper sometimes labels V3 positions as V4 or just Uniswap depending on version.
+        # We check for "uniswap" and try to extract Token ID. If Token ID exists, we treat it as V3 NFT.
+        protocol = p.get("protocol", "")
+        is_uniswap = "uniswap" in protocol.lower()
+        has_token_id = "Token ID:" in p.get("position_label", "") or "#" in p.get("position_label", "")
+        
+        if is_uniswap and has_token_id:
+            network = p.get("network")
+            position_label = p.get("position_label")
+            
+            logging.info(f"Fetching range data for {position_label} on {network}")
+            range_data = fetch_position_range_data(position_label, network, graph_api_key)
+            
+            if range_data:
+                p["range_data"] = range_data
+                logging.info(f"  ✓ Got range data: {range_data['price_lower']:.2f} - {range_data['price_upper']:.2f}, In Range: {range_data['in_range']}")
+            else:
+                logging.warning(f"  ✗ No range data found for {position_label}")
+                p["range_data"] = None
+        else:
+            p["range_data"] = None
+        
+        enriched_positions.append(p)
+
+    # 3. Connect & Insert
+    try:
+        conn = psycopg2.connect(DB_CONN)
+        cur = conn.cursor()
+        
+        import re
+        def clean_pool_name(label):
+             return re.sub(r'(\(Token ID:.*\)|#.*)', '', label).strip()
+        
+        count = 0
+        for p in enriched_positions:
+            rd = p.get("range_data")
+            
+            # A. Insert/Get Pool
+            pool_name = clean_pool_name(p["position_label"])
+            fee_tier = rd.get("fee_tier") if rd else None
+            
+            # Simple upsert for pool - Fee tier might change if refined data comes in, but typically static per pool
+            cur.execute("""
+                INSERT INTO liquidity_pool (network, protocol, pool_name, fee_tier)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (network, protocol, pool_name, fee_tier) DO UPDATE 
+                SET fee_tier = EXCLUDED.fee_tier -- No-op effectively, just to return ID if needed
+                RETURNING id
+            """, (p["network"], p["protocol"], pool_name, fee_tier))
+            pool_id = cur.fetchone()[0]
+            
+            # B. Insert/Get Position
+            token_id = rd.get("token_id") if rd else None
+            tick_lower = rd.get("tick_lower") if rd else None
+            tick_upper = rd.get("tick_upper") if rd else None
+            price_lower = rd.get("price_lower") if rd else None
+            price_upper = rd.get("price_upper") if rd else None
+            
+            # If position_key missing, fallback to generated one (should rarely happen with Zapper)
+            pos_key = p.get("position_key") or f"{p['protocol']}-{p['position_label']}-{p['network']}-{p['address']}"
+
+            cur.execute("""
+                INSERT INTO liquidity_pool_position 
+                (pool_id, position_key, wallet_address, token_id, tick_lower, tick_upper, price_lower, price_upper)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (position_key) DO UPDATE
+                SET 
+                    token_id = COALESCE(EXCLUDED.token_id, liquidity_pool_position.token_id),
+                    tick_lower = COALESCE(EXCLUDED.tick_lower, liquidity_pool_position.tick_lower),
+                    tick_upper = COALESCE(EXCLUDED.tick_upper, liquidity_pool_position.tick_upper),
+                    price_lower = COALESCE(EXCLUDED.price_lower, liquidity_pool_position.price_lower),
+                    price_upper = COALESCE(EXCLUDED.price_upper, liquidity_pool_position.price_upper)
+                RETURNING id
+            """, (pool_id, pos_key, p["address"], token_id, tick_lower, tick_upper, price_lower, price_upper))
+            position_id = cur.fetchone()[0]
+
+            # C. Insert Snapshot
+            cur.execute("""
+                INSERT INTO liquidity_pool_position_snapshot
+                (position_id, timestamp, balance_usd, assets, unclaimed, images, current_tick, current_price, in_range)
+                VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                position_id,
+                p["balance_usd"],
+                json.dumps(p["assets"]),
+                json.dumps(p["unclaimed"]),
+                json.dumps(p.get("images", [])),
+                rd.get("current_tick") if rd else None,
+                rd.get("current_price") if rd else None,
+                rd.get("in_range") if rd else None
+            ))
+
+            count += 1
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        logging.info(f"Successfully inserted {count} records into Postgres.")
+
+    except Exception as e:
+        logging.error(f"Database insertion failed: {e}")
+        raise
+
+with DAG(
+    'zapper_balance_loader',
+    default_args=default_args,
+    description='Fetch Uniswap LP data via Zapper every 15 mins',
+    schedule='*/15 * * * *',
+    start_date=datetime(2025, 1, 1),
+    catchup=False,
+    tags=['defi', 'uniswap'],
+) as dag:
+
+    run_etl = PythonOperator(
+        task_id='fetch_and_load_zapper',
+        python_callable=etl_process,
+        outlets=[lp_snapshots_asset],
+    )
+
+    run_etl

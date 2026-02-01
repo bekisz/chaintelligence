@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=2.1">
 </head>
 
 <body>
@@ -48,6 +48,39 @@
                     </div>
                 </div>
 
+                <div class="controls-bar glass">
+                    <div class="filter-group">
+                        <label>Filter:</label>
+                        <select id="network-filter">
+                            <option value="all">All Networks</option>
+                            <option value="Ethereum">Ethereum</option>
+                            <option value="Arbitrum">Arbitrum</option>
+                            <option value="Base">Base</option>
+                            <option value="Polygon">Polygon</option>
+                        </select>
+                        <select id="protocol-filter">
+                            <option value="all">All Protocols</option>
+                        </select>
+                        <input type="text" id="search-filter" placeholder="Search pair...">
+                        <div style="display:flex; align-items:center; margin-left:1rem;">
+                            <input type="checkbox" id="hide-closed-filter" checked>
+                            <label for="hide-closed-filter"
+                                style="margin-left:0.4rem; font-size:0.8rem; cursor:pointer; text-transform:none;">Hide
+                                Closed</label>
+                        </div>
+                    </div>
+                    <div class="sort-group">
+                        <label>Sort by:</label>
+                        <select id="sort-by">
+                            <option value="value-desc">Value (High to Low)</option>
+                            <option value="value-asc">Value (Low to High)</option>
+                            <option value="rewards-desc">Rewards (High to Low)</option>
+                            <option value="rewards-asc">Rewards (Low to High)</option>
+                            <option value="pair">Pair Name</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div id="positions-grid" class="positions-grid">
                     <!-- Position cards will be injected here -->
                 </div>
@@ -68,7 +101,7 @@
         </footer>
     </div>
 
-    <script src="/static/lp.js?v=1.1"></script>
+    <script src="/static/lp.js?v=5.0"></script>
 </body>
 
 </html>

@@ -1,0 +1,1 @@
+from dags.uniswap_v3_range_fetcher import fetch_position_range_data; import logging; logging.basicConfig(level=logging.INFO); print(fetch_position_range_data('EURC / EURCV (Token ID: 124668)', 'Ethereum'))
