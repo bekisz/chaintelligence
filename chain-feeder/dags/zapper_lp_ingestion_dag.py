@@ -300,13 +300,15 @@ def ingest_positions(positions: list):
 @task(outlets=[asset_positions])
 def fetch_missing_ranges():
     """Fetches range data for positions missing ranges OR missing current state."""
+    from uniswap_v4_range_fetcher import fetch_v4_position_range_data
+    
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     conn = pg_hook.get_conn()
     cur = conn.cursor()
     
-    # Select positions needing update
+    # Select positions needing update, including protocol
     cur.execute("""
-        SELECT p.id, p.token_id, pool.network, pool.pool_name, p.wallet_address
+        SELECT p.id, p.token_id, pool.network, pool.pool_name, p.wallet_address, pool.protocol
         FROM liquidity_pool_position p
         JOIN liquidity_pool pool ON p.pool_id = pool.id
         WHERE (p.tick_lower IS NULL OR p.current_tick IS NULL)
@@ -320,14 +322,18 @@ def fetch_missing_ranges():
     
     updated = 0
     for row in rows:
-        pos_id, token_id, network, pool_name, wallet = row
+        pos_id, token_id, network, pool_name, wallet, protocol = row
         label_for_fetcher = f"{pool_name} (Token ID: {token_id})"
         
-        data = fetch_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
+        data = None
+        if protocol == 'Uniswap V4':
+            data = fetch_v4_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
+        else:
+            data = fetch_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
+
         if data:
             try:
                 # Update Position Ranges, Current State, AND Fee Tier
-                # Note: Fee tier is now on the Position, not the Pool
                 cur.execute("""
                     UPDATE liquidity_pool_position
                     SET tick_lower = %s, tick_upper = %s, 
@@ -349,7 +355,7 @@ def fetch_missing_ranges():
                 conn.rollback()
                 logging.error(f"Error updating ranges for {pos_id}: {e}")
         else:
-             logging.warning(f"Failed to fetch range for {token_id} on {network}")
+             logging.warning(f"Failed to fetch range for {token_id} on {network} ({protocol})")
 
     cur.close()
     conn.close()
