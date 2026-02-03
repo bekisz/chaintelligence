@@ -129,13 +129,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         positions.forEach(pos => {
             const row = document.createElement('div');
-            row.className = `position-row glass ${pos.isClosed ? 'closed-pos' : ''}`;
+            // Remove 'glass' to avoid conflict with new solid theme
+            row.className = `position-row ${pos.isClosed ? 'closed-pos' : ''}`;
             if (pos.isClosed) row.style.opacity = '0.6';
 
             const timeStr = new Date(pos.timestamp).toLocaleString();
             let cleanedLabel = cleanLabel(pos.position_label);
 
-            // Wallet display (last 4 chars)
             const walletAddr = pos.address || '';
             const walletDisplay = walletAddr.length > 4 ? `...${walletAddr.slice(-4)}` : walletAddr;
 
@@ -143,33 +143,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 cleanedLabel += ' <span style="color:#f87171; font-size:0.8em;">(Closed)</span>';
             }
 
-            // Get images (limit to 2 for LP pairs)
             const images = (pos.images && pos.images.length > 0) ? pos.images.slice(0, 2) : ['/static/favicon.png'];
-            const iconsHtml = images.map(img => `<img src="${img}" class="pos-icon-stacked" onerror="this.src='/static/favicon.png'">`).join('');
+            // Add explicit width/height to icons
+            const iconsHtml = images.map(img => `<img src="${img}" width="32" height="32" class="pos-icon-stacked" onerror="this.src='/static/favicon.png'">`).join('');
 
-            // Calculate accrual badge
             const delta = pos.reward_delta_usd || 0;
             const accrualHtml = delta > 0
                 ? `<span class="accrual-tag positive">+${formatUSD(delta)} accrued</span>`
-                : ''; // Removed negative case (red text)
+                : '';
 
-            // Calculate range data
             const rangeData = calculateRangeData(pos);
             const rangeHtml = createRangeIndicator(rangeData);
 
             row.innerHTML = `
                 <div class="pos-info">
-                    <div class="pos-main">
-                        <div class="pos-header-with-icon">
-                            <div class="pos-icons-stack">
-                                ${iconsHtml}
-                            </div>
-                            <h4>${cleanedLabel}</h4>
+                    <div class="pos-header-with-icon">
+                        <div class="pos-icons-stack">
+                            ${iconsHtml}
                         </div>
-                        <div class="pos-meta">
-                            <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
-                            ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
-                            <span class="protocol-tag">${pos.protocol}</span>
+                        <div class="pos-title-area">
+                            <h4>${cleanedLabel}</h4>
+                            <div class="pos-meta">
+                                <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
+                                <span class="protocol-tag">${pos.protocol}</span>
+                                ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
+                            </div>
                         </div>
                     </div>
                     ${rangeHtml}
@@ -180,7 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="asset-item">
                             <span class="asset-sym">${asset.symbol}</span>
                             <span class="asset-amt">${formatTokenAmount(asset.balance)}</span>
-                            <!-- Removed asset-usd column ($0.00) -->
                         </div>
                     `).join('')}
                 </div>
@@ -201,9 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 
                 <div class="pos-value">
-                    <!-- Removed value-label "Total Position" -->
                     <span class="value-amt">${formatUSD(Number(pos.balance_usd || 0))}</span>
-                    <span class="timestamp">${timeStr}</span>
                 </div>
             `;
             positionsGrid.appendChild(row);
