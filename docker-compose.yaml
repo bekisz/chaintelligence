@@ -2,7 +2,7 @@ x-airflow-common: &airflow-common
   image: apache/airflow:3.1.6
   environment: &airflow-common-env
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests}
-    PYTHONPATH: "/opt/airflow/dags:${PYTHONPATH:-}"
+    PYTHONPATH: "/opt/airflow:/opt/airflow/dags:${PYTHONPATH:-}"
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
@@ -12,6 +12,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
     AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
+    CRYPTOCOMPARE_API_KEY: ${CRYPTOCOMPARE_API_KEY}
 
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.providers.fab.auth_manager.api.auth.backend.session'
     AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
@@ -31,6 +32,7 @@ x-airflow-common: &airflow-common
 
   volumes:
     - ./chain-feeder/dags:/opt/airflow/dags
+    - ./chain-feeder/include:/opt/airflow/include
     - ./chain-feeder/logs:/opt/airflow/logs
     - ./chain-feeder/plugins:/opt/airflow/plugins
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"

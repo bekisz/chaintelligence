@@ -86,53 +86,32 @@ class Asset {
         return data[clampedIndex][1];
     }
     /**
-     * Fetches historical price data and caches it.
+     * Fetches historical price data from our internal Postgres-backed API.
      */
     async fetchHistory(useHourly = false, startTime = 0, endTime = Date.now()) {
-        const apiKey = _CONFIG_INTERNAL.CRYPTOCOMPARE_API_KEY;
-        if (!useHourly) {
-            // Daily: fetch all data at once
-            const url = `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${this.symbol}&tsym=USD&allData=true&api_key=${apiKey}`;
+        try {
+            // Fetch from our local API
+            const url = `/api/price-history?symbol=${this.symbol}`;
             const res = await fetch(url);
-            if (!res.ok) throw new Error(`API Error ${res.status}`);
-            const json = await res.json();
-            if (json.Response === 'Error') throw new Error(json.Message);
-            this.#priceData = json.Data.Data.map(d => [d.time * 1000, d.close]);
-            // return this.priceData;
-        } else {
-            // Hourly: Paginate backwards from endTime until startTime
-            let allPoints = [];
-            let toTs = Math.floor(endTime / 1000);
-            const limit = 2000;
-            const startTs = Math.floor(startTime / 1000);
-            let fetches = 0;
-            const MAX_FETCHES = 50; // Safety limit (~4-5 years)
 
-            while (fetches < MAX_FETCHES) {
-                const url = `https://min-api.cryptocompare.com/data/v2/histohour?fsym=${this.symbol}&tsym=USD&limit=${limit}&toTs=${toTs}&api_key=${apiKey}`;
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`API Error ${res.status}`);
-                const json = await res.json();
-                if (json.Response === 'Error') throw new Error(json.Message);
-
-                const data = json.Data.Data;
-                if (!data || data.length === 0) break;
-
-                // Map to our format [ms, price]
-                const chunk = data.map(d => [d.time * 1000, d.close]);
-                allPoints = [...chunk, ...allPoints];
-
-                const earliestTime = data[0].time;
-                if (earliestTime <= startTs) break; // Reached start date
-
-                toTs = earliestTime - 3600; // Move before the earliest point
-                fetches++;
-
-                // Rate limit civility
-                await new Promise(r => setTimeout(r, 100));
+            if (!res.ok) {
+                // Fallback to CryptoCompare if local API fails? 
+                // No, user specifically wants Postgres.
+                throw new Error(`DB History API Error: ${res.status}`);
             }
-            this.#priceData = allPoints;
-            // return this.#priceData;
+
+            const json = await res.json();
+            if (!json.data || json.data.length === 0) {
+                throw new Error(`No historical data found in DB for ${this.symbol}`);
+            }
+
+            // Filter data by time if needed (server returns all)
+            this.#priceData = json.data.filter(d => d[0] >= startTime && d[0] <= endTime);
+            this.#isHourlyPriceData = false; // Currently server provides daily
+
+        } catch (error) {
+            console.error(`Failed to fetch history from DB for ${this.symbol}:`, error);
+            throw error;
         }
     }
 

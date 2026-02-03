@@ -9,10 +9,41 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png">
-    <link rel="stylesheet" href="/static/style.css?v=7.0">
+    <link rel="stylesheet" href="/static/style.css?v=13.0">
 </head>
 
 <body>
+    <!-- Unified Uniswap-Style Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/backtester" class="nav-link">Backtester</a>
+                <a href="/docs" class="nav-link">API</a>
+
+                <div class="dropdown">
+                    <button class="dropdown-toggle">
+                        <span>More</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+
+                        <a href="https://github.com" target="_blank" class="dropdown-item">
+                            <span class="dropdown-item-icon">🔗</span>
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
     <div class="background-blobs">
         <div class="blob blob-1"></div>
         <div class="blob blob-2"></div>
@@ -20,45 +51,52 @@
     </div>
 
     <div class="container">
-        <nav class="glass main-nav">
+        <nav class="main-nav" style="display: none;">
             <a href="/">Home</a>
             <a href="/routing" class="active">Route Analysis</a>
             <a href="/lp">LP Positions</a>
             <a href="/backtester">Backtester</a>
         </nav>
 
-        <header>
-            <div class="logo">
-                <span class="logo-icon">▲</span>
-                <h1>Chaintelligence</h1>
-            </div>
-            <p class="subtitle">Uniswap V3 Multi-hop Route Optimizer</p>
-        </header>
-
         <main>
-            <section class="controls glass">
-                <div class="input-group">
-                    <label for="start-token">Start Token</label>
-                    <input type="text" id="start-token" placeholder="e.g. USDC" value="USDC">
+            <div class="swap-container">
+                <div class="swap-card">
+                    <div class="swap-header">
+                        <h2>Route Analysis</h2>
+                    </div>
+
+                    <div class="token-input-container">
+                        <div class="token-input">
+                            <label>From</label>
+                            <input type="text" id="start-token" placeholder="Select token" value="USDC">
+                        </div>
+
+                        <div class="swap-arrow">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M7 13L12 18L17 13M7 6L12 11L17 6" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </div>
+
+                        <div class="token-input">
+                            <label>To</label>
+                            <input type="text" id="end-token" placeholder="Select token" value="USDT">
+                        </div>
+                    </div>
+                    <div class="date-range-container">
+                        <div class="input-group date-input">
+                            <label>Start Date</label>
+                            <input type="date" id="start-date">
+                        </div>
+                        <div class="input-group date-input">
+                            <label>End Date</label>
+                            <input type="date" id="end-date">
+                        </div>
+                    </div>
+
+                    <button id="analyze-btn" class="primary-btn">Analyze Routes</button>
                 </div>
-                <div class="input-group">
-                    <label for="end-token">End Token</label>
-                    <input type="text" id="end-token" placeholder="e.g. USDT" value="USDT">
-                </div>
-                <div class="input-group">
-                    <label for="days">Lookback (Days)</label>
-                    <input type="number" id="days" step="0.1" value="0">
-                </div>
-                <div class="input-group">
-                    <label for="start-date">Start Date</label>
-                    <input type="date" id="start-date">
-                </div>
-                <div class="input-group">
-                    <label for="end-date">End Date</label>
-                    <input type="date" id="end-date">
-                </div>
-                <button id="analyze-btn" class="primary-btn">Analyze Routes</button>
-            </section>
+            </div>
 
             <section id="results-section" class="results-container hidden">
                 <div class="summary-cards">
@@ -101,11 +139,11 @@
         </main>
 
         <footer>
-            <p>&copy; 2026 Chaintelligence. Powered by Uniswap V3.</p>
         </footer>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/nav.js"></script>
+    <script src="/static/app.js?v=2.0"></script>
 </body>
 
 </html>

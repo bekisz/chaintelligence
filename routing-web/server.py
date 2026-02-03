@@ -6,6 +6,7 @@ import psycopg2
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
@@ -26,7 +27,9 @@ except ImportError as e:
 app = FastAPI(
     title="Chaintelligence Portal API",
     description="Secure API for Chaintelligence DeFi analytics platform.",
-    version="1.1.0"
+    version="1.1.0",
+    docs_url=None,
+    redoc_url=None
 )
 
 # --- Authentication Middleware ---
@@ -136,6 +139,27 @@ async def analyze(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/date-range", tags=["Analytics"])
+async def get_date_range():
+    """Get the available date range from the swap data."""
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        cur.execute("SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM uniswap_v3_swaps")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if row and row[0] and row[1]:
+            return {
+                "min_date": row[0].isoformat(),
+                "max_date": row[1].isoformat()
+            }
+        else:
+            return {"min_date": None, "max_date": None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/lp-summary", tags=["Portfolio"])
 async def lp_summary():
     """Get the latest summary of LP snapshots."""
@@ -211,6 +235,36 @@ async def lp_summary():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/price-history", tags=["Asset Prices"])
+async def price_history(symbol: str):
+    """Get historical daily prices for a coin from Postgres."""
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        
+        # We allow matching on symbol case-insensitively
+        query = """
+        SELECT timestamp, price FROM coin_price_history
+        WHERE UPPER(symbol) = %s
+        ORDER BY timestamp ASC
+        """
+        cur.execute(query, (symbol.upper(),))
+        rows = cur.fetchall()
+        
+        # Format as [ [unix_ms, price], ... ] for the frontend
+        history = [[int(row[0].timestamp() * 1000), float(row[1])] for row in rows]
+        
+        cur.close()
+        conn.close()
+        
+        return {
+            "symbol": symbol.upper(),
+            "data": history
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # UI Routes (Excluded from Swagger schema)
 @app.get("/", include_in_schema=False)
 async def read_index():
@@ -223,6 +277,19 @@ async def read_routing():
 @app.get("/lp", include_in_schema=False)
 async def read_lp():
     return FileResponse('static/lp.html')
+
+@app.get("/docs", include_in_schema=False)
+async def custom_docs():
+    return FileResponse('static/api.html')
+
+@app.get("/swagger", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - API Specs",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        swagger_css_url="/static/swagger-custom.css"
+    )
 
 if __name__ == "__main__":
     import uvicorn

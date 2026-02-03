@@ -5,30 +5,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Liquidity Pool Backtester</title>
-    <link rel="icon" type="image/svg+xml" href="logo.svg">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=5.0">
 </head>
 
 <body>
+    <!-- Unified Uniswap-Style Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/backtester" class="nav-link">Backtester</a>
+                <a href="/docs" class="nav-link">API</a>
+
+                <div class="dropdown">
+                    <button class="dropdown-toggle">
+                        <span>More</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+
+                        <a href="https://github.com" target="_blank" class="dropdown-item">
+                            <span class="dropdown-item-icon">🔗</span>
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
     <div class="container">
-        <nav class="main-nav">
-            <a href="/">Home</a>
-            <a href="/routing">Route Analysis</a>
-            <a href="/lp">LP Positions</a>
-            <a href="/backtester" class="active">Backtester</a>
-        </nav>
         <header>
             <div class="title-row">
                 <img src="logo.svg" alt="Liquidity Pool Backtester Logo" class="header-logo">
                 <h1>Liquidity Pool Backtester</h1>
             </div>
-            <p class="subtitle">Comparing liquidity Pool Strategies</p>
+            <p class="subtitle">Comparing Liquidity Pool Strategies</p>
         </header>
 
         <div class="controls-wrapper">
@@ -421,6 +452,7 @@
 
     <script src="config.js"></script>
     <script src="logic.js"></script>
+    <script src="/static/nav.js"></script>
     <script src="app.js"></script>
 </body>
 

@@ -1,0 +1,3 @@
+common/.*
+__pycache__/.*
+\.bak$

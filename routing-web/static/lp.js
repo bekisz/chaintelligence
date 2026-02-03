@@ -165,8 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             <h4>${cleanedLabel}</h4>
                             <div class="pos-meta">
                                 <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
-                                <span class="protocol-tag">${pos.protocol}</span>
                                 ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
+                                <span class="protocol-tag">${pos.protocol}</span>
                             </div>
                         </div>
                     </div>

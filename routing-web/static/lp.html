@@ -9,11 +9,42 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png">
-    <link rel="stylesheet" href="/static/style.css?v=7.3">
-    <script src="/static/lp.js?v=7.3"></script>
+    <link rel="stylesheet" href="/static/style.css?v=12.0">
+    <script src="/static/lp.js?v=7.5"></script>
 </head>
 
 <body>
+    <!-- Unified Uniswap-Style Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/backtester" class="nav-link">Backtester</a>
+                <a href="/docs" class="nav-link">API</a>
+
+                <div class="dropdown">
+                    <button class="dropdown-toggle">
+                        <span>More</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+
+                        <a href="https://github.com" target="_blank" class="dropdown-item">
+                            <span class="dropdown-item-icon">🔗</span>
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
     <div class="background-blobs">
         <div class="blob blob-1"></div>
         <div class="blob blob-2"></div>
@@ -21,7 +52,7 @@
     </div>
 
     <div class="container">
-        <nav class="glass main-nav">
+        <nav class="glass main-nav" style="display: none;">
             <a href="/">Home</a>
             <a href="/routing">Route Analysis</a>
             <a href="/lp" class="active">LP Positions</a>
@@ -96,10 +127,10 @@
         </main>
 
         <footer>
-            <p>&copy; 2026 Chaintelligence. Powered by Zapper & Postgres.</p>
         </footer>
     </div>
 
+    <script src="/static/nav.js"></script>
     <!-- Script moved to head -->
 </body>
 

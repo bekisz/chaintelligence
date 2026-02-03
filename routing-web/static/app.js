@@ -1,8 +1,7 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const analyzeBtn = document.getElementById('analyze-btn');
     const startTokenInput = document.getElementById('start-token');
     const endTokenInput = document.getElementById('end-token');
-    const daysInput = document.getElementById('days');
     const resultsSection = document.getElementById('results-section');
     const totalVolumeEl = document.getElementById('total-volume');
     const totalTxEl = document.getElementById('total-tx');
@@ -11,6 +10,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const noDataMsg = document.getElementById('no-data');
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
+
+    // Fetch available date range from API and set defaults
+    try {
+        const response = await fetch('/api/date-range');
+        const dateRange = await response.json();
+
+        if (dateRange.min_date && dateRange.max_date) {
+            // Set min/max constraints on date inputs
+            startDateInput.min = dateRange.min_date;
+            startDateInput.max = dateRange.max_date;
+            endDateInput.min = dateRange.min_date;
+            endDateInput.max = dateRange.max_date;
+
+            // Set default end date to today (or max_date if today is beyond available data)
+            const today = new Date().toISOString().split('T')[0];
+            const maxDate = dateRange.max_date;
+            endDateInput.value = today <= maxDate ? today : maxDate;
+
+            // Set default start date to 30 days before end date (or min_date if less than 30 days available)
+            const endDate = new Date(endDateInput.value);
+            const thirtyDaysAgo = new Date(endDate);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+            startDateInput.value = thirtyDaysAgoStr >= dateRange.min_date ? thirtyDaysAgoStr : dateRange.min_date;
+        }
+    } catch (error) {
+        console.error('Error fetching date range:', error);
+        // Fallback: just set end date to today
+        const today = new Date().toISOString().split('T')[0];
+        endDateInput.value = today;
+    }
 
     const formatUSD = (amount) => {
         return new Intl.NumberFormat('en-US', {
@@ -23,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const performAnalysis = async () => {
         const startToken = startTokenInput.value.trim().toUpperCase();
         const endToken = endTokenInput.value.trim().toUpperCase();
-        const days = parseFloat(daysInput.value);
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
@@ -39,7 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             let url = `/api/analyze?start_token=${startToken}&end_token=${endToken}`;
-            if (days > 0) url += `&days=${days}`;
             if (startDate) url += `&start_date=${startDate}`;
             if (endDate) url += `&end_date=${endDate}`;
 
@@ -92,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
     analyzeBtn.addEventListener('click', performAnalysis);
 
     // Allow Enter key to trigger analysis
-    [startTokenInput, endTokenInput, daysInput, startDateInput, endDateInput].forEach(input => {
+    [startTokenInput, endTokenInput, startDateInput, endDateInput].forEach(input => {
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 performAnalysis();

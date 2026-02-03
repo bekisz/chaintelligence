@@ -6,249 +6,201 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chaintelligence Portal</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=12.0">
     <style>
-        :root {
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --text: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent: #22d3ee;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            overflow-x: hidden;
-        }
-
-        .background-blobs {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            filter: blur(80px);
-            opacity: 0.4;
-        }
-
-        .blob {
-            position: absolute;
-            width: 40vw;
-            height: 40vw;
-            border-radius: 50%;
-        }
-
-        .blob-1 {
-            top: -10%;
-            left: -10%;
-            background: var(--primary);
-            animation: move 20s infinite alternate;
-        }
-
-        .blob-2 {
-            bottom: -10%;
-            right: -10%;
-            background: var(--accent);
-            animation: move 25s infinite alternate-reverse;
-        }
-
-        @keyframes move {
-            from {
-                transform: translate(0, 0);
-            }
-
-            to {
-                transform: translate(10%, 10%);
-            }
-        }
-
-        .container {
-            max-width: 1000px;
-            width: 90%;
+        .home-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
             text-align: center;
-            z-index: 1;
         }
 
-        header {
+        .home-header {
             margin-bottom: 4rem;
         }
 
-        h1 {
+        .home-title {
             font-size: 3.5rem;
             font-weight: 700;
             margin-bottom: 1rem;
-            background: linear-gradient(to right, #fff, var(--accent));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--uniswap-pink);
         }
 
-        p.subtitle {
-            font-size: 1.2rem;
-            color: var(--text-muted);
+        .home-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
         }
 
-        .grid {
+        .cards-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 2rem;
+            margin-bottom: 4rem;
         }
 
-        .card {
-            background: var(--card-bg);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .feature-card {
+            background: var(--uniswap-card);
+            border: 1px solid var(--uniswap-border);
             padding: 2.5rem;
             border-radius: 24px;
             text-decoration: none;
-            color: var(--text);
+            color: var(--text-primary);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 1.5rem;
-            backdrop-filter: blur(12px);
             position: relative;
             overflow: hidden;
         }
 
-        .card::before {
+        .feature-card::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 4px;
-            background: linear-gradient(to right, var(--primary), var(--accent));
+            background: linear-gradient(90deg, var(--uniswap-pink), #FF6FA3);
             opacity: 0;
             transition: opacity 0.3s;
         }
 
-        .card:hover {
+        .feature-card:hover {
             transform: translateY(-10px);
-            border-color: rgba(99, 102, 241, 0.5);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            border-color: var(--uniswap-pink);
+            box-shadow: 0 20px 40px rgba(252, 116, 254, 0.2);
         }
 
-        .card:hover::before {
+        .feature-card:hover::before {
             opacity: 1;
         }
 
-        .card i {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .card h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-
-        .card p {
-            font-size: 0.95rem;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        .icon-box {
+        .card-icon {
             width: 64px;
             height: 64px;
-            background: rgba(99, 102, 241, 0.1);
+            background: rgba(252, 116, 254, 0.1);
             border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--accent);
-            font-size: 24px;
-            margin-bottom: 1rem;
+            font-size: 32px;
         }
 
-        .btn {
+        .feature-card h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .feature-card p {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .card-btn {
             margin-top: auto;
-            background: var(--primary);
+            background: var(--uniswap-pink);
             color: white;
             padding: 0.8rem 1.5rem;
             border-radius: 12px;
             font-weight: 600;
-            transition: background 0.3s;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px var(--uniswap-pink-glow);
         }
 
-        .card:hover .btn {
-            background: var(--primary-hover);
+        .feature-card:hover .card-btn {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px var(--uniswap-pink-glow);
         }
 
-        footer {
+        .home-footer {
             margin-top: 5rem;
-            color: var(--text-muted);
+            color: var(--text-secondary);
             font-size: 0.9rem;
         }
     </style>
 </head>
 
 <body>
-    <div class="background-blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-    </div>
+    <!-- Unified Uniswap-Style Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
 
-    <div class="container">
-        <header>
-            <h1>Chaintelligence</h1>
-            <p class="subtitle">Unified DeFi Analytics & Strategy Platform</p>
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/backtester" class="nav-link">Backtester</a>
+                <a href="/docs" class="nav-link">API</a>
+
+                <div class="dropdown">
+                    <button class="dropdown-toggle">
+                        <span>More</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+
+                        <a href="https://github.com" target="_blank" class="dropdown-item">
+                            <span class="dropdown-item-icon">🔗</span>
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="home-container">
+        <header class="home-header">
+            <h1 class="home-title">Chaintelligence</h1>
+            <p class="home-subtitle">Unified DeFi Analytics & Strategy Platform</p>
         </header>
 
-        <div class="grid">
-            <a href="/lp" class="card">
-                <div class="icon-box">📊</div>
+        <div class="cards-grid">
+            <a href="/lp" class="feature-card">
+                <div class="card-icon">📊</div>
                 <h2>LP Portfolio</h2>
                 <p>Monitor your liquidity positions across protocols. Real-time balance and reward tracking from Zapper
                     snapshots.</p>
-                <div class="btn">View Portfolio</div>
+                <div class="card-btn">View Portfolio</div>
             </a>
 
-            <a href="/routing" class="card">
-                <div class="icon-box">🔀</div>
+            <a href="/routing" class="feature-card">
+                <div class="card-icon">🔀</div>
                 <h2>Routing Analysis</h2>
                 <p>Analyze transaction paths and liquidity flows. Debug routes and identify the best paths for swaps.
                 </p>
-                <div class="btn">Explore Routes</div>
+                <div class="card-btn">Explore Routes</div>
             </a>
 
-            <a href="/backtester" class="card">
-                <div class="icon-box">⚖️</div>
+            <a href="/backtester" class="feature-card">
+                <div class="card-icon">⚖️</div>
                 <h2>LP Backtester</h2>
                 <p>Simulate Uniswap V3 positions historically. Optimize your ranges and fee accrual strategies.</p>
-                <div class="btn">Launch Backtester</div>
+                <div class="card-btn">Launch Backtester</div>
             </a>
 
-            <a href="/docs" class="card">
-                <div class="icon-box">📜</div>
+            <a href="/docs" class="feature-card">
+                <div class="card-icon">📜</div>
                 <h2>Developer API</h2>
                 <p>Interactive Swagger documentation for the Chaintelligence API. Explore endpoints for LP data and
                     route
                     analysis.</p>
-                <div class="btn">View API Docs</div>
+                <div class="card-btn">View API Docs</div>
             </a>
         </div>
 
-        <footer>
-            &copy; 2026 Chaintelligence Platform
+        <footer class="home-footer">
         </footer>
     </div>
+
+    <script src="/static/nav.js"></script>
 </body>
 
 </html>

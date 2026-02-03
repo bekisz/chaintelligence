@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaintelligence | API</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/style.css?v=13.0">
+    <style>
+        .api-container {
+            height: calc(100vh - 81px);
+            /* Header height + border approximately */
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: rgba(26, 29, 36, 0.4);
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Unified Uniswap-Style Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/backtester" class="nav-link">Backtester</a>
+                <a href="/docs" class="nav-link active">API</a>
+
+                <div class="dropdown">
+                    <button class="dropdown-toggle">
+                        <span>More</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+
+                        <a href="https://github.com" target="_blank" class="dropdown-item">
+                            <span class="dropdown-item-icon">🔗</span>
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="api-container">
+        <iframe src="/swagger"></iframe>
+    </div>
+</body>
+
+</html>
