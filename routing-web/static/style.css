@@ -22,6 +22,10 @@
     --uniswap-border: #40444F;
 }
 
+html {
+    overflow-y: scroll;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -45,6 +49,7 @@ body {
     position: sticky;
     top: 0;
     z-index: 1000;
+    line-height: 1.5;
 }
 
 .header-content {
@@ -69,15 +74,19 @@ body {
 }
 
 .logo-icon {
+    display: block;
     width: 40px;
     height: 40px;
     filter: drop-shadow(0 0 8px var(--uniswap-pink-glow));
 }
 
 .logo-text {
-    font-size: 1.5rem;
+    font-size: 24px;
+    /* Fixed px to avoid rem variances */
+    line-height: 1;
     font-weight: 700;
     color: var(--uniswap-pink);
+    display: block;
     /* Solid color to match request */
 }
 
@@ -96,6 +105,7 @@ body {
     font-size: 1rem;
     transition: all 0.2s;
     position: relative;
+    border-bottom: 2px solid transparent;
 }
 
 .nav-link:hover {

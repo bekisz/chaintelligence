@@ -71,6 +71,10 @@ async def auth_middleware(request: Request, call_next):
 # Serve static files for routing-web
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse('static/favicon.png')
+
 @app.get("/backtester/config.js", include_in_schema=False)
 async def get_backtester_config():
     """Dynamically serve CryptoCompare API key to the backtester."""
