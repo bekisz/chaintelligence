@@ -903,6 +903,26 @@ table th {
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    user-select: none;
+}
+
+table th.sortable {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+table th.sortable:hover {
+    color: var(--text-primary);
+}
+
+table th.sortable.sorted-active {
+    color: var(--uniswap-pink);
+}
+
+table th span {
+    font-size: 0.8em;
+    margin-left: 4px;
+    opacity: 0.5;
 }
 
 table td {
@@ -986,4 +1006,51 @@ footer {
     66% {
         transform: translate(-20px, 20px) scale(0.9);
     }
+}
+
+/* Route Path Visualization */
+.route-path-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.token-badge {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.route-arrow-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    padding: 0 4px;
+}
+
+.fee-pill {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 4px;
+    border-radius: 4px;
+    margin-bottom: -2px;
+    z-index: 1;
+}
+
+.route-arrow-svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.path-cell {
+    min-width: 250px;
 }

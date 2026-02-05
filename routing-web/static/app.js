@@ -62,6 +62,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        if (startToken === '*' && endToken === '*') {
+            alert('You cannot use * for both start and end tokens. One must be a specific token symbol.');
+            return;
+        }
+
         // Show loader, hide results
         loader.classList.remove('hidden');
         resultsSection.classList.add('hidden');
@@ -94,19 +99,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             totalVolumeEl.textContent = formatUSD(data.total_volume);
             totalTxEl.textContent = data.total_tx.toLocaleString();
 
-            // Render table
-            routesBody.innerHTML = '';
-            data.routes.forEach(route => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="path-cell">${route.path}</td>
-                    <td>${route.count.toLocaleString()}</td>
-                    <td class="font-bold">${formatUSD(route.volume)}</td>
-                    <td>${formatUSD(route.avg_volume)}</td>
-                    <td class="accent-text">${route.pct_volume.toFixed(1)}%</td>
-                `;
-                routesBody.appendChild(row);
-            });
+            currentRoutes = data.routes;
+            renderRoutes(currentRoutes);
 
             // Show results
             resultsSection.classList.remove('hidden');
@@ -117,6 +111,133 @@ document.addEventListener('DOMContentLoaded', async () => {
             loader.classList.add('hidden');
         }
     };
+
+    let currentRoutes = [];
+    let sortDirection = {
+        count: 'desc',
+        volume: 'desc',
+        avg: 'desc',
+        pct: 'desc'
+    };
+
+    const renderRoutes = (routes) => {
+        routesBody.innerHTML = '';
+        routes.forEach(route => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="path-cell">${renderPath(route)}</td>
+                <td>${route.count.toLocaleString()}</td>
+                <td class="font-bold">${formatUSD(route.volume)}</td>
+                <td>${formatUSD(route.avg_volume)}</td>
+                <td class="accent-text">${route.pct_volume.toFixed(1)}%</td>
+            `;
+            routesBody.appendChild(row);
+        });
+    };
+
+    const renderPath = (route) => {
+        let tokens = [];
+        let fees = [];
+
+        if (route.path_tokens) {
+            // New format from backend
+            for (let i = 0; i < route.path_tokens.length; i++) {
+                if (i % 2 === 0) tokens.push(route.path_tokens[i]);
+                else fees.push(route.path_tokens[i]);
+            }
+        } else {
+            // Fallback: parse old string format "TokenA -- 500 --> TokenB"
+            const parts = route.path.split(' ');
+            for (let i = 0; i < parts.length; i++) {
+                if (i % 4 === 0) tokens.push(parts[i]);
+                else if (i % 4 === 2) fees.push(parseInt(parts[i]));
+            }
+        }
+
+        let html = '<div class="route-path-container">';
+
+        tokens.forEach((token, idx) => {
+            html += `<span class="token-badge">${token}</span>`;
+
+            if (idx < tokens.length - 1) {
+                const feeVal = fees[idx];
+                let feeDisplay = '?';
+
+                if (feeVal !== undefined && feeVal !== null) {
+                    if (typeof feeVal === 'string' && feeVal.endsWith('%')) {
+                        feeDisplay = feeVal;
+                    } else {
+                        const feeNum = parseFloat(feeVal);
+                        if (!isNaN(feeNum)) {
+                            feeDisplay = (feeNum / 10000) + '%';
+                        }
+                    }
+                }
+
+                html += `
+                        <div class="route-arrow-wrapper">
+                            <span class="fee-pill">${feeDisplay}</span>
+                            <svg class="route-arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M5 12h14M12 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                    `;
+            }
+        });
+
+        html += '</div>';
+        return html;
+    };
+
+    const sortRoutes = (key, headerId) => {
+        if (!currentRoutes || currentRoutes.length === 0) return;
+
+        // Toggle direction
+        sortDirection[key] = sortDirection[key] === 'desc' ? 'asc' : 'desc';
+        const dir = sortDirection[key];
+
+        // Update indicators
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.classList.remove('sorted-active');
+            const span = th.querySelector('span');
+            if (span) span.textContent = '↕';
+        });
+
+        const activeHeader = document.querySelector(`#${headerId}`);
+        activeHeader.classList.add('sorted-active');
+        activeHeader.querySelector('span').textContent = dir === 'asc' ? '↑' : '↓';
+
+        console.log(`Sorting by ${key} (${dir})`);
+
+        // Sort data
+        currentRoutes.sort((a, b) => {
+            let valA, valB;
+
+            if (key === 'count') {
+                valA = a.count;
+                valB = b.count;
+            } else if (key === 'volume') {
+                valA = a.volume;
+                valB = b.volume;
+            } else if (key === 'avg') {
+                valA = a.avg_volume;
+                valB = b.avg_volume;
+            } else if (key === 'pct') {
+                valA = a.pct_volume;
+                valB = b.pct_volume;
+            }
+
+            return dir === 'asc' ? valA - valB : valB - valA;
+        });
+
+        renderRoutes(currentRoutes);
+    };
+
+    // Event listeners for sorting
+    document.getElementById('sort-count').addEventListener('click', () => sortRoutes('count', 'sort-count'));
+    document.getElementById('sort-vol').addEventListener('click', () => sortRoutes('volume', 'sort-vol'));
+    document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
+    document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
 
     analyzeBtn.addEventListener('click', performAnalysis);
 
