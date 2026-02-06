@@ -95,6 +95,37 @@ class AnalysisRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 
+def resolve_token_input(input_str: str) -> list[str]:
+    """
+    Resolve input string to a list of tokens.
+    Checks if input is a family name (e.g. 'USD') -> returns ['USDC', 'USDT', ...].
+    Otherwise returns [input].
+    """
+    if input_str == '*':
+        return ['*']
+        
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        
+        # Check if it's a family
+        # We search case-insensitive for family name
+        cur.execute("SELECT symbol FROM coin WHERE UPPER(family) = %s", (input_str.upper(),))
+        rows = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        if rows:
+            return [row[0] for row in rows]
+        
+        # Not a family, assume single token
+        return [input_str]
+        
+    except Exception as e:
+        print(f"Error resolving token family: {e}")
+        return [input_str]
+
 @app.get("/api/analyze", tags=["Analytics"])
 async def analyze(
     start_token: str,
@@ -137,10 +168,19 @@ async def analyze(
                 "db_range": {"min": db_min, "max": db_max}
             }
 
+        # Resolve tokens/families
+        start_tokens_list = resolve_token_input(start_token)
+        end_tokens_list = resolve_token_input(end_token)
+        
+        if not start_tokens_list: start_tokens_list = [start_token]
+        if not end_tokens_list: end_tokens_list = [end_token]
+
         analyzer = RouteAnalyzer(verbose=True)
-        analysis = analyzer.analyze_routes(swaps, start_token, end_token)
+        analysis = analyzer.analyze_routes(swaps, start_tokens_list, end_tokens_list)
         return analysis
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/date-range", tags=["Analytics"])

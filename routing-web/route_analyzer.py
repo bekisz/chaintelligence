@@ -22,35 +22,36 @@ class RouteAnalyzer:
         except (IndexError, ValueError):
             return 0
 
-    def analyze_routes(self, swaps: List[Dict], start_token: str, end_token: str) -> Dict:
+    def analyze_routes(self, swaps: List[Dict], start_tokens: List[str], end_tokens: List[str]) -> Dict:
         """
-        Analyze routing paths between start_token and end_token.
+        Analyze routing paths between start_tokens and end_tokens.
+        Inputs are lists (e.g. from families).
+        """
+        # Normalize inputs
+        if isinstance(start_tokens, str): start_tokens = [start_tokens]
+        if isinstance(end_tokens, str): end_tokens = [end_tokens]
         
-        Args:
-            swaps: List of normalized swap dictionaries
-            start_token: Symbol of the starting token (e.g. 'EURC')
-            end_token: Symbol of the ending token (e.g. 'EURCV')
-            
-        Returns:
-            Dictionary containing route statistics
-        """
-        # 1. Group swaps by transaction hash
-        tx_swaps = defaultdict(list)
-        for swap in swaps:
-            tx_swaps[swap['tx_hash']].append(swap)
-            
-        valid_routes = []
-        start_token = start_token.upper()
-        end_token = end_token.upper()
+        start_tokens = [t.upper() for t in start_tokens]
+        end_tokens = [t.upper() for t in end_tokens]
         
         # Validation: Allow at most one wildcard
-        if start_token == '*' and end_token == '*':
+        # If '*' is present in list, treat the whole list as wildcard mode?
+        # Yes, usually wildcard implies "Any".
+        start_is_wildcard = '*' in start_tokens
+        end_is_wildcard = '*' in end_tokens
+        
+        if start_is_wildcard and end_is_wildcard:
             return {
                 'routes': [],
                 'total_tx': 0,
                 'total_volume': 0
             }
         
+        # 1. Group swaps by transaction hash
+        tx_swaps = defaultdict(list)
+        for swap in swaps:
+            tx_swaps[swap['tx_hash']].append(swap)
+            
         # 2. Reconstruct path for each transaction
         stats = {}
         total_tx_count = 0
@@ -65,26 +66,37 @@ class RouteAnalyzer:
             path = []
             first_swap = tx_events[0]
             current_token = None
+            tx_start_token = None
             
             # Determine effective start token for this transaction
-            tx_start_token = start_token
-            if start_token == '*':
-                # Infer start from first swap
+            if start_is_wildcard:
+                # Infer start from first swap (standard wildcard logic)
                 if first_swap['amount0'] > 0:
                     tx_start_token = first_swap['token0_symbol']
                 elif first_swap['amount1'] > 0:
                     tx_start_token = first_swap['token1_symbol']
                 else:
                     continue
-
-            if first_swap['token0_symbol'] == tx_start_token and first_swap['amount0'] > 0:
-                current_token = first_swap['token1_symbol']
-                path = [tx_start_token, first_swap['fee_tier'], current_token]
-            elif first_swap['token1_symbol'] == tx_start_token and first_swap['amount1'] > 0:
-                current_token = first_swap['token0_symbol']
-                path = [tx_start_token, first_swap['fee_tier'], current_token]
+                    
+                # Setup path based on inferred start
+                if first_swap['token0_symbol'] == tx_start_token:
+                    current_token = first_swap['token1_symbol']
+                    path = [tx_start_token, first_swap['fee_tier'], current_token]
+                else:
+                    current_token = first_swap['token0_symbol']
+                    path = [tx_start_token, first_swap['fee_tier'], current_token]
             else:
-                continue
+                # Check membership
+                if first_swap['token0_symbol'] in start_tokens and first_swap['amount0'] > 0:
+                    tx_start_token = first_swap['token0_symbol']
+                    current_token = first_swap['token1_symbol']
+                    path = [tx_start_token, first_swap['fee_tier'], current_token]
+                elif first_swap['token1_symbol'] in start_tokens and first_swap['amount1'] > 0:
+                    tx_start_token = first_swap['token1_symbol']
+                    current_token = first_swap['token0_symbol']
+                    path = [tx_start_token, first_swap['fee_tier'], current_token]
+                else:
+                    continue
             
             # Process subsequent swaps
             for i in range(1, len(tx_events)):
@@ -98,8 +110,8 @@ class RouteAnalyzer:
                     path.append(next_swap['fee_tier'])
                     path.append(current_token)
             
-            # Check if route ended at desired token
-            if end_token == '*' or path[-1] == end_token:
+            # Check if route ended at desired token(s)
+            if end_is_wildcard or path[-1] in end_tokens:
                 # Calculate total volume (using first hop as proxy)
                 route_vol_usd = tx_events[0]['amountUSD']
                 
@@ -144,11 +156,33 @@ class RouteAnalyzer:
         total_vol = sum(r['volume_usd'] for r in stats.values())
         
         for path_str, data in stats.items():
+            # Calculate cumulative fee for the route
+            cumulative_fee = 0.0
+            path_list = data['path']
+            # Path format: [Token, Fee, Token, Fee, Token]
+            # Fees are at odd indices: 1, 3, 5...
+            for i in range(1, len(path_list), 2):
+                fee_val = path_list[i]
+                if isinstance(fee_val, str) and fee_val.endswith('%'):
+                    try:
+                        # '0.05%' -> 0.0005
+                        cumulative_fee += float(fee_val.strip('%')) / 100.0
+                    except ValueError:
+                        pass
+                elif isinstance(fee_val, (int, float)):
+                    # Assume raw partial (e.g. 500 for 0.05%) -> 500/10000/100 ? 
+                    # Or just 0.0005?
+                    # Based on previous debug, DB has strings. fallback to 0 if unknown.
+                    pass
+
+            market_size = data['volume_usd'] * cumulative_fee
+
             results.append({
                 'path': path_str,
                 'path_tokens': data['path'],
                 'count': data['tx_count'],
                 'volume': data['volume_usd'],
+                'market_size': market_size,
                 'avg_volume': data['volume_usd'] / data['tx_count'] if data['tx_count'] > 0 else 0,
                 'pct_volume': (data['volume_usd'] / total_vol * 100) if total_vol > 0 else 0,
                 'hops': len(data['path']) // 2 

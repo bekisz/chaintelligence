@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let sortDirection = {
         count: 'desc',
         volume: 'desc',
+        mkt: 'desc',
         avg: 'desc',
         pct: 'desc'
     };
@@ -128,6 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="path-cell">${renderPath(route)}</td>
                 <td>${route.count.toLocaleString()}</td>
                 <td class="font-bold">${formatUSD(route.volume)}</td>
+                <td>${formatUSD(route.market_size || 0)}</td>
                 <td>${formatUSD(route.avg_volume)}</td>
                 <td class="accent-text">${route.pct_volume.toFixed(1)}%</td>
             `;
@@ -219,6 +221,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (key === 'volume') {
                 valA = a.volume;
                 valB = b.volume;
+            } else if (key === 'mkt') {
+                valA = a.market_size || 0;
+                valB = b.market_size || 0;
             } else if (key === 'avg') {
                 valA = a.avg_volume;
                 valB = b.avg_volume;
@@ -236,6 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Event listeners for sorting
     document.getElementById('sort-count').addEventListener('click', () => sortRoutes('count', 'sort-count'));
     document.getElementById('sort-vol').addEventListener('click', () => sortRoutes('volume', 'sort-vol'));
+    document.getElementById('sort-mkt').addEventListener('click', () => sortRoutes('mkt', 'sort-mkt'));
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
 
