@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png?v=brain">
-    <link rel="stylesheet" href="/static/style.css?v=13.0">
+    <link rel="stylesheet" href="/static/style.css?v=17.0">
 </head>
 
 <body>
@@ -97,6 +97,14 @@
                 </div>
 
                 <div class="table-container glass">
+                    <div class="display-toggle-wrapper mode-fee" id="display-wrapper">
+                        <span class="toggle-label" id="label-fee" onclick="setMode('fee')">Fee Tier</span>
+                        <label class="switch">
+                            <input type="checkbox" id="display-mode-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label" id="label-apr" onclick="setMode('apr')">Avg APR</span>
+                    </div>
                     <table>
                         <thead>
                             <tr>
@@ -130,7 +138,7 @@
     </div>
 
     <script src="/static/nav.js"></script>
-    <script src="/static/app.js?v=3.4"></script>
+    <script src="/static/app.js?v=3.9"></script>
 </body>
 
 </html>

@@ -131,6 +131,61 @@ class UniswapV3Fetcher:
         unique = {s['id']: s for s in swaps_token0 + swaps_token1}
         return sorted(unique.values(), key=lambda x: x['timestamp'])
 
+    def fetch_pool_daily_data(self, token0_addr: str, token1_addr: str, fee_tier_bips: int, start_date: datetime) -> List[Dict]:
+        """
+        Fetches daily pool data for a specific pool defined by token pair and fee tier.
+        This queries the 'pools' entity first to find the ID, then 'poolDayDatas'.
+        """
+        start_ts = int(start_date.timestamp())
+        
+        # Ensure consistent token ordering for graph query
+        t0, t1 = sorted([token0_addr.lower(), token1_addr.lower()])
+        
+        query = f"""
+        {{
+          pools(where: {{
+            token0: "{t0}", 
+            token1: "{t1}", 
+            feeTier: {fee_tier_bips}
+          }}) {{
+            id
+            poolDayData(
+                where: {{ date_gte: {start_ts} }}
+                orderBy: date
+                orderDirection: asc
+            ) {{
+              date
+              tvlUSD
+              volumeUSD
+              txCount
+            }}
+          }}
+        }}
+        """
+        
+        result = self._execute_query(query)
+        if not result or 'data' not in result:
+            return []
+            
+        pools = result['data'].get('pools', [])
+        if not pools:
+            return []
+            
+        # Should be only one pool, but take the first
+        pool_data = pools[0]
+        day_datas = pool_data.get('poolDayData', [])
+        
+        normalized_data = []
+        for d in day_datas:
+             normalized_data.append({
+                 'date': datetime.fromtimestamp(int(d['date'])).date(),
+                 'tvl_usd': float(d.get('tvlUSD', 0) or 0),
+                 'volume_usd': float(d.get('volumeUSD', 0) or 0),
+                 'tx_count': int(d.get('txCount', 0) or 0),
+             })
+             
+        return normalized_data
+
 class PostgresStorage:
     def __init__(self):
         self.conn_str = DATA_WAREHOUSE_DB

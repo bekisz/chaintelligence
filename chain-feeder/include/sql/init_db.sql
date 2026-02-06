@@ -68,8 +68,22 @@ CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot (
     
     current_tick INTEGER,
     current_price NUMERIC,
+    current_price NUMERIC,
     in_range BOOLEAN
 );
+
+-- 4.5 LIQUIDITY POOL HISTORY TABLE
+CREATE TABLE IF NOT EXISTS liquidity_pool_history (
+    id SERIAL PRIMARY KEY,
+    pool_id INTEGER REFERENCES liquidity_pool(id),
+    date DATE NOT NULL,
+    tx_count INTEGER DEFAULT 0,
+    volume_usd NUMERIC DEFAULT 0,
+    tvl_usd NUMERIC DEFAULT 0,
+    UNIQUE(pool_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_lp_history_date ON liquidity_pool_history(date);
+CREATE INDEX IF NOT EXISTS idx_lp_history_pool ON liquidity_pool_history(pool_id);
 
 -- 5. UNISWAP V3 SWAPS (Existing table)
 CREATE TABLE IF NOT EXISTS uniswap_v3_swaps (

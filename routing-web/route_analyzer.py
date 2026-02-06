@@ -14,6 +14,13 @@ class RouteAnalyzer:
     
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
+        self.reset()
+
+    def reset(self):
+        """Reset internal accumulator state"""
+        self.stats = {}
+        self.total_tx_count = 0
+        self.total_volume = 0.0
 
     def _get_log_index(self, swap_id: str) -> int:
         """Extract log index from swap ID (format: tx_hash#log_index)"""
@@ -22,10 +29,9 @@ class RouteAnalyzer:
         except (IndexError, ValueError):
             return 0
 
-    def analyze_routes(self, swaps: List[Dict], start_tokens: List[str], end_tokens: List[str]) -> Dict:
+    def process_batch(self, swaps: List[Dict], start_tokens: List[str], end_tokens: List[str]):
         """
-        Analyze routing paths between start_tokens and end_tokens.
-        Inputs are lists (e.g. from families).
+        Process a batch of swaps and update internal stats.
         """
         # Normalize inputs
         if isinstance(start_tokens, str): start_tokens = [start_tokens]
@@ -34,18 +40,8 @@ class RouteAnalyzer:
         start_tokens = [t.upper() for t in start_tokens]
         end_tokens = [t.upper() for t in end_tokens]
         
-        # Validation: Allow at most one wildcard
-        # If '*' is present in list, treat the whole list as wildcard mode?
-        # Yes, usually wildcard implies "Any".
         start_is_wildcard = '*' in start_tokens
         end_is_wildcard = '*' in end_tokens
-        
-        if start_is_wildcard and end_is_wildcard:
-            return {
-                'routes': [],
-                'total_tx': 0,
-                'total_volume': 0
-            }
         
         # 1. Group swaps by transaction hash
         tx_swaps = defaultdict(list)
@@ -53,8 +49,6 @@ class RouteAnalyzer:
             tx_swaps[swap['tx_hash']].append(swap)
             
         # 2. Reconstruct path for each transaction
-        stats = {}
-        total_tx_count = 0
         
         for tx_hash, tx_events in tx_swaps.items():
             # Sort by log index to get correct order of swaps
@@ -113,9 +107,13 @@ class RouteAnalyzer:
             # Check if route ended at desired token(s)
             if end_is_wildcard or path[-1] in end_tokens:
                 # Calculate total volume (using first hop as proxy)
-                route_vol_usd = tx_events[0]['amountUSD']
-                
-                # Volume Fallback for low-liquidity pairs
+                try:
+                    route_vol_usd = float(tx_events[0]['amount_usd'])
+                except (KeyError, TypeError):
+                     # Fallback if key missing or None
+                     route_vol_usd = 0.0
+
+                # Volume Fallback for low-liquidity pairs or missing price data
                 if route_vol_usd < 0.01:
                     PRICES = {
                         'USDC': 1.0, 'USDT': 1.0, 'DAI': 1.0,
@@ -140,22 +138,31 @@ class RouteAnalyzer:
                 
                 path_str = ' '.join(path_parts)
                 
-                if path_str not in stats:
-                    stats[path_str] = {
+                if path_str not in self.stats:
+                    self.stats[path_str] = {
                         'tx_count': 0,
                         'volume_usd': 0.0,
                         'path': path
                     }
                 
-                stats[path_str]['tx_count'] += 1
-                stats[path_str]['volume_usd'] += route_vol_usd
-                total_tx_count += 1
+                self.stats[path_str]['tx_count'] += 1
+                self.stats[path_str]['volume_usd'] += route_vol_usd
+                self.total_tx_count += 1
+                self.total_volume += route_vol_usd
 
+    def get_results(self) -> Dict:
+        """
+        Finalize and return the analysis results.
+        """
         # Convert to list for sorting
         results = []
-        total_vol = sum(r['volume_usd'] for r in stats.values())
         
-        for path_str, data in stats.items():
+        total_vol = self.total_volume # Use aggregated total
+        if total_vol == 0:
+             # Calculate from stats just in case
+             total_vol = sum(r['volume_usd'] for r in self.stats.values())
+
+        for path_str, data in self.stats.items():
             # Calculate cumulative fee for the route
             cumulative_fee = 0.0
             path_list = data['path']
@@ -174,7 +181,7 @@ class RouteAnalyzer:
                     # Or just 0.0005?
                     # Based on previous debug, DB has strings. fallback to 0 if unknown.
                     pass
-
+            
             market_size = data['volume_usd'] * cumulative_fee
 
             results.append({
@@ -194,6 +201,14 @@ class RouteAnalyzer:
         
         return {
             'routes': results,
-            'total_tx': total_tx_count,
+            'total_tx': self.total_tx_count,
             'total_volume': total_vol
         }
+
+    def analyze_routes(self, swaps: List[Dict], start_tokens: List[str], end_tokens: List[str]) -> Dict:
+        """
+        Legacy wrapper for one-shot analysis
+        """
+        self.reset()
+        self.process_batch(swaps, start_tokens, end_tokens)
+        return self.get_results()

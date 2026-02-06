@@ -147,9 +147,42 @@ async def analyze(
             end_dt = now
             start_dt = end_dt - timedelta(days=1)
 
+        # Resolve tokens/families FIRST so we can use them in processing
+        start_tokens_list = resolve_token_input(start_token)
+        end_tokens_list = resolve_token_input(end_token)
+        
+        if not start_tokens_list: start_tokens_list = [start_token]
+        if not end_tokens_list: end_tokens_list = [end_token]
+
         fetcher = PostgresFetcher(verbose=True)
-        swaps = fetcher.fetch_swaps(start_dt, end_dt)
-        if not swaps:
+        analyzer = RouteAnalyzer(verbose=True)
+        
+        # Batched Processing Configuration
+        BATCH_DAYS = 5
+        current_chunk_start = start_dt
+        has_data = False
+        
+        while current_chunk_start < end_dt:
+            # Calculate chunk end
+            chunk_end = current_chunk_start + timedelta(days=BATCH_DAYS)
+            if chunk_end > end_dt:
+                chunk_end = end_dt
+                
+            # Fetch Batch
+            print(f"[Anaylsis] Processing batch: {current_chunk_start} -> {chunk_end}")
+            batch_swaps = fetcher.fetch_swaps(current_chunk_start, chunk_end)
+            
+            if batch_swaps:
+                has_data = True
+                analyzer.process_batch(batch_swaps, start_tokens_list, end_tokens_list)
+                
+            # Cleanup
+            batch_swaps = []
+            
+            # Move to next batch (microsecond offset to avoid overlap with <= logic)
+            current_chunk_start = chunk_end + timedelta(microseconds=1)
+            
+        if not has_data:
             # Fetch min/max from DB to show user available range
             import psycopg2
             conn = psycopg2.connect(DATA_WAREHOUSE_DB)
@@ -168,15 +201,50 @@ async def analyze(
                 "db_range": {"min": db_min, "max": db_max}
             }
 
-        # Resolve tokens/families
-        start_tokens_list = resolve_token_input(start_token)
-        end_tokens_list = resolve_token_input(end_token)
+        analysis = analyzer.get_results()
         
-        if not start_tokens_list: start_tokens_list = [start_token]
-        if not end_tokens_list: end_tokens_list = [end_token]
+        # --- Enrichment with APRs ---
+        # 1. Identify pools
+        pools_to_fetch = set()
+        for route in analysis.get('routes', []):
+            path = route.get('path_tokens', [])
+            # Path: [Token, Fee, Token, Fee, Token]
+            for i in range(0, len(path) - 2, 2):
+                t0 = path[i]
+                fee = path[i+1]
+                t1 = path[i+2]
+                pools_to_fetch.add((t0, t1, fee))
+        
+        # 2. Fetch stats
+        if pools_to_fetch:
+            aprs = fetcher.fetch_pool_stats(list(pools_to_fetch), start_dt, end_dt)
+            
+            # 3. Inject into routes
+            for route_idx, route in enumerate(analysis.get('routes', [])):
+                path = route.get('path_tokens', [])
+                new_path = []
+                for i in range(len(path)):
+                    item = path[i]
+                    if i % 2 == 1: # This is a fee node
+                        # Previous token is at i-1, next at i+1
+                        t0 = path[i-1]
+                        fee = item
+                        t1 = path[i+1]
+                        
+                        key = f"{t0}-{t1}-{fee}"
+                        apr_val = aprs.get(key)
+                        
+                        # Replace string fee with object
+                        new_path.append({
+                            'fee': fee,
+                            'apr': apr_val if apr_val is not None else 0.0,
+                            'apr_str': f"{apr_val:.1%}" if apr_val is not None else 'N/A'
+                        })
+                    else:
+                        new_path.append(item)
+                
+                analysis['routes'][route_idx]['path_tokens'] = new_path
 
-        analyzer = RouteAnalyzer(verbose=True)
-        analysis = analyzer.analyze_routes(swaps, start_tokens_list, end_tokens_list)
         return analysis
     except Exception as e:
         import traceback

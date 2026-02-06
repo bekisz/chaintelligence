@@ -44,10 +44,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const formatUSD = (amount) => {
+        const fractionDigits = amount >= 10 ? 0 : 2;
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD',
-            minimumFractionDigits: 2
+            minimumFractionDigits: fractionDigits,
+            maximumFractionDigits: fractionDigits
         }).format(amount);
     };
 
@@ -121,6 +123,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         pct: 'desc'
     };
 
+    // Event listener for display toggle
+    const toggleSwitch = document.getElementById('display-mode-toggle');
+    const toggleWrapper = document.getElementById('display-wrapper');
+
+    toggleSwitch.addEventListener('change', (e) => {
+        const isApr = e.target.checked;
+        if (toggleWrapper) {
+            toggleWrapper.classList.toggle('mode-fee', !isApr);
+            toggleWrapper.classList.toggle('mode-apr', isApr);
+        }
+        if (currentRoutes && currentRoutes.length > 0) {
+            renderRoutes(currentRoutes);
+        }
+    });
+
+    // Helper to allow clicking labels
+    window.setMode = (mode) => {
+        if (mode === 'fee') {
+            toggleSwitch.checked = false;
+        } else {
+            toggleSwitch.checked = true;
+        }
+        // Trigger change event manually
+        toggleSwitch.dispatchEvent(new Event('change'));
+    };
+
     const renderRoutes = (routes) => {
         routesBody.innerHTML = '';
         routes.forEach(route => {
@@ -139,22 +167,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const renderPath = (route) => {
         let tokens = [];
-        let fees = [];
+        let items = []; // Can be fee string or object {fee, apr, apr_str}
 
         if (route.path_tokens) {
             // New format from backend
             for (let i = 0; i < route.path_tokens.length; i++) {
                 if (i % 2 === 0) tokens.push(route.path_tokens[i]);
-                else fees.push(route.path_tokens[i]);
+                else items.push(route.path_tokens[i]);
             }
         } else {
             // Fallback: parse old string format "TokenA -- 500 --> TokenB"
             const parts = route.path.split(' ');
             for (let i = 0; i < parts.length; i++) {
                 if (i % 4 === 0) tokens.push(parts[i]);
-                else if (i % 4 === 2) fees.push(parseInt(parts[i]));
+                else if (i % 4 === 2) items.push(parseInt(parts[i]));
             }
         }
+
+        const isAprMode = document.getElementById('display-mode-toggle').checked;
 
         let html = '<div class="route-path-container">';
 
@@ -162,23 +192,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             html += `<span class="token-badge">${token}</span>`;
 
             if (idx < tokens.length - 1) {
-                const feeVal = fees[idx];
-                let feeDisplay = '?';
+                const item = items[idx];
+                let displayVal = '?';
+                let tooltip = '';
 
-                if (feeVal !== undefined && feeVal !== null) {
-                    if (typeof feeVal === 'string' && feeVal.endsWith('%')) {
-                        feeDisplay = feeVal;
+                if (item !== undefined && item !== null) {
+                    if (typeof item === 'object') {
+                        // Backend enriched object
+                        if (isAprMode) {
+                            displayVal = item.apr_str || 'N/A';
+                            // Add fee as tooltip
+                            tooltip = `Fee: ${item.fee}`;
+                        } else {
+                            displayVal = item.fee;
+                            tooltip = `APR: ${item.apr_str}`;
+                        }
+                    } else if (typeof item === 'string' && item.endsWith('%')) {
+                        displayVal = item;
                     } else {
-                        const feeNum = parseFloat(feeVal);
+                        const feeNum = parseFloat(item);
                         if (!isNaN(feeNum)) {
-                            feeDisplay = (feeNum / 10000) + '%';
+                            displayVal = (feeNum / 10000) + '%';
                         }
                     }
                 }
 
                 html += `
-                        <div class="route-arrow-wrapper">
-                            <span class="fee-pill">${feeDisplay}</span>
+                        <div class="route-arrow-wrapper" title="${tooltip}">
+                            <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
                             <svg class="route-arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path d="M5 12h14M12 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
