@@ -627,7 +627,7 @@ header h1 {
     background: var(--uniswap-input-bg);
     border: 1px solid var(--uniswap-border);
     border-radius: 20px;
-    padding: 1.25rem 1.5rem;
+    padding: 0.9rem 1.5rem;
     transition: all 0.2s;
 }
 

@@ -45,7 +45,8 @@ def sync_tvl_manual():
         'DAI': '0x6b175474e89094c44da98b954eedeac495271d0f',
         'LINK': '0x514910771af9ca656af840dff83e8264ecf986ca',
         'UNI': '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
-        'AAVE': '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9'
+        'AAVE': '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
+        'PAXG': '0x45804880de22913dafe09f4980848ece6ecbaf78'
     }
     for sym, addr in mainnet_overrides.items():
         symbol_map[sym] = addr

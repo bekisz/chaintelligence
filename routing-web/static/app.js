@@ -286,6 +286,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
 
+    document.getElementById('swap-tokens-btn').addEventListener('click', () => {
+        const temp = startTokenInput.value;
+        startTokenInput.value = endTokenInput.value;
+        endTokenInput.value = temp;
+    });
+
     analyzeBtn.addEventListener('click', performAnalysis);
 
     // Allow Enter key to trigger analysis
