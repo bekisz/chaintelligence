@@ -126,8 +126,8 @@ services:
     restart: always
     volumes:
       - ./.env:/app/.env
-      - ./routing-web:/app/routing-web
-      - ./lp-backtester:/app/lp-backtester
+      - ./api:/app/api
+      - ./web:/app/web
       - ./chain-feeder:/app/chain-feeder
     depends_on:
       postgres:

@@ -10,20 +10,20 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/cache/*
 
 # Copy requirements and install
-COPY routing-web/requirements.txt ./routing_web_requirements.txt
-RUN pip install --no-cache-dir -r routing_web_requirements.txt
+COPY api/requirements.txt ./api_requirements.txt
+RUN pip install --no-cache-dir -r api_requirements.txt
 RUN pip install --no-cache-dir fastapi uvicorn psycopg2-binary python-dotenv
 
 # Copy the application code
-COPY routing-web/ ./routing-web/
-COPY lp-backtester/ ./lp-backtester/
+COPY api/ ./api/
+COPY web/ ./web/
 COPY chain-feeder/routing/ ./chain-feeder/routing/
 
-# Set working directory to routing-web as it contains the server
-WORKDIR /app/routing-web
+# Set working directory to app root
+WORKDIR /app
 
 # Expose the portal port
 EXPOSE 8000
 
 # Run the server
-CMD ["python", "server.py"]
+CMD ["python", "api/main.py"]

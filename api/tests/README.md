@@ -34,8 +34,8 @@ pip install requests python-dotenv
 The tests use environment variables for authentication. You can either export them in your shell or create a `.env` file in the project root:
 
 ```bash
-export PORTAL_USERNAME=admi
-export PORTAL_PASSWORD=
+export PORTAL_USERNAME=admin
+export PORTAL_PASSWORD=chaintelligence
 export API_URL=http://localhost:8000
 ```
 
