@@ -171,11 +171,11 @@ def ingest_coins(positions: list):
         try:
             # Upsert Coin: Insert if new, Update image if missing
             cur.execute("""
-                INSERT INTO coin (symbol, hardness, family, image_url)
-                VALUES (%s, 0, %s, %s)
+                INSERT INTO coin (symbol, hardness, image_url)
+                VALUES (%s, 0, %s)
                 ON CONFLICT (symbol) DO UPDATE
                 SET image_url = COALESCE(coin.image_url, EXCLUDED.image_url)
-            """, (sym, sym, img))
+            """, (sym, img))
             
             if cur.statusmessage.startswith("INSERT"): inserted += 1
             else: updated += 1

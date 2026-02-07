@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS coin (
     name VARCHAR(255),
     slug VARCHAR(255),
     hardness INTEGER DEFAULT 0,
-    family VARCHAR(50),
     cmc_rank INTEGER,
     cmc_id INTEGER,
     ethereum_address VARCHAR(42),
@@ -25,7 +24,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS coin_symbol_idx ON coin (UPPER(symbol));
 
 -- 1.5 COIN FAMILY TABLE
 CREATE TABLE IF NOT EXISTS coin_family (
-    name VARCHAR(50) PRIMARY KEY
+    name VARCHAR(50) NOT NULL,
+    symbol VARCHAR(8) NOT NULL REFERENCES coin(symbol),
+    PRIMARY KEY (name, symbol)
 );
 
 -- 2. LIQUIDITY POOL TABLE
@@ -134,9 +135,6 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Truncate to 8 chars first to respect schema
   NEW.symbol = LEFT(UPPER(NEW.symbol), 8);
-  IF NEW.family IS NULL THEN
-     NEW.family = NEW.symbol;
-  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -160,47 +158,49 @@ FOR EACH ROW EXECUTE FUNCTION enforce_uppercase_pool_symbols();
 
 -- 7. INITIAL DATA
 
-INSERT INTO coin (symbol, hardness, family) VALUES
-('USDC', 1000, 'USD'),
-('USDT', 990, 'USD'),
-('USDS', 980, 'USD'),
-('DAI', 970, 'USD'),
-('USDE', 960, 'USD'),
-('GHO', 950, 'USD'),
-('EURC', 940, 'EUR'),
-('EURCV', 930, 'EUR'),
-('EURI', 920, 'EUR'),
-('EURQ', 910, 'EUR'),
-('ZCHF', 900, 'CHF'),
-('PAXG', 890, 'GOLD'),
-('XAUt', 880, 'GOLD'),
-('BTC', 870, 'BTC'),
-('WBTC', 870, 'BTC'),
-('ETH', 860, 'ETH'),
-('WETH', 860, 'ETH'),
-('stETH', 859, 'ETH'),
-('wstETH', 859, 'ETH'),
-('LINK', 850, 'LINK'),
-('UNI', 840, 'UNI'),
-('SKY', 830, 'SKY'),
-('AAVE', 820, 'AAVE'),
-('stAAVE', 800, 'AAVE'),
-('STKAAVE', 800, 'AAVE'),
-('clAAVE', 800, 'AAVE'),
-('stkGHO', 800, 'USD'),
-('sGHO', 800, 'USD'),
-('cbBTC', 800, 'BTC'),
-('RLUSD', 800, 'USD'),
-('sUSDS', 800, 'USD')
+INSERT INTO coin (symbol, hardness) VALUES
+('USDC', 1000),
+('USDT', 990),
+('USDS', 980),
+('DAI', 970),
+('USDE', 960),
+('GHO', 950),
+('EURC', 940),
+('EURCV', 930),
+('EURI', 920),
+('EURQ', 910),
+('ZCHF', 900),
+('PAXG', 890),
+('XAUt', 880),
+('BTC', 870),
+('WBTC', 870),
+('ETH', 860),
+('WETH', 860),
+('stETH', 859),
+('wstETH', 859),
+('LINK', 850),
+('UNI', 840),
+('SKY', 830),
+('AAVE', 820),
+('stAAVE', 800),
+('STKAAVE', 800),
+('clAAVE', 800),
+('stkGHO', 800),
+('sGHO', 800),
+('cbBTC', 800),
+('RLUSD', 800),
+('sUSDS', 800)
 ON CONFLICT (symbol) DO NOTHING;
 
 -- Populate coin_family with initial multi-coin families
-INSERT INTO coin_family (name)
-SELECT family 
-FROM coin 
-WHERE family IS NOT NULL 
-GROUP BY family 
-HAVING COUNT(*) > 1
+-- (Handled by a temporary array for simplicity in init_db or manual insertion)
+INSERT INTO coin_family (name, symbol) VALUES
+('USD', 'USDC'), ('USD', 'USDT'), ('USD', 'USDS'), ('USD', 'DAI'), ('USD', 'USDE'), ('USD', 'GHO'), ('USD', 'stkGHO'), ('USD', 'sGHO'), ('USD', 'RLUSD'), ('USD', 'sUSDS'),
+('EUR', 'EURC'), ('EUR', 'EURCV'), ('EUR', 'EURI'), ('EUR', 'EURQ'),
+('GOLD', 'PAXG'), ('GOLD', 'XAUt'),
+('BTC', 'BTC'), ('BTC', 'WBTC'), ('BTC', 'cbBTC'),
+('ETH', 'ETH'), ('ETH', 'WETH'), ('ETH', 'stETH'), ('ETH', 'wstETH'),
+('AAVE', 'AAVE'), ('AAVE', 'stAAVE'), ('AAVE', 'STKAAVE'), ('AAVE', 'clAAVE')
 ON CONFLICT DO NOTHING;
 
 -- 8. BACKWARD COMPATIBILITY VIEWS

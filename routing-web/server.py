@@ -109,11 +109,10 @@ def resolve_token_input(input_str: str) -> list[str]:
         cur = conn.cursor()
         
         # Check if it's a family
-        # We search case-insensitive for family name, but only if it's in the official coin_family table
+        # We search case-insensitive for family name in the official coin_family table
         cur.execute("""
-            SELECT symbol FROM coin 
-            WHERE UPPER(family) = %s 
-            AND family IN (SELECT name FROM coin_family)
+            SELECT symbol FROM coin_family
+            WHERE UPPER(name) = %s
         """, (input_str.upper(),))
         rows = cur.fetchall()
         
