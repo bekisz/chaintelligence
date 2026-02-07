@@ -59,51 +59,54 @@ def update_coin_prices():
     fetch_symbols = list(fetch_symbols_set)
     logging.info(f"Fetching prices for {len(fetch_symbols)} distinct symbols from CryptoCompare.")
     
-    # 3. Fetch prices
-    all_prices = fetch_crypto_prices(fetch_symbols)
+    # 3. Fetch prices in batches (max 50 to avoid URL length errors)
+    batch_size = 50
+    all_prices = {}
+    for i in range(0, len(fetch_symbols), batch_size):
+        batch = fetch_symbols[i:i + batch_size]
+        logging.info(f"Fetching batch {i//batch_size + 1}: {len(batch)} symbols")
+        batch_prices = fetch_crypto_prices(batch)
+        if batch_prices:
+            all_prices.update(batch_prices)
     
     if not all_prices:
         logging.error("Failed to fetch any prices from CryptoCompare.")
-        return
-
-    # 4. Update the coin table
-    conn = pg_hook.get_conn()
-    cur = conn.cursor()
-    
-    updated_count = 0
-    now = pendulum.now()
-    
-    for sym in original_symbols:
-        fetch_sym = SYMBOL_MAPPING.get(sym.upper(), sym.upper())
-        price = all_prices.get(fetch_sym)
+    else:
+        # 4. Update the coin table
+        conn = pg_hook.get_conn()
+        cur = conn.cursor()
         
-        if price is not None:
-            try:
-                cur.execute("""
-                    UPDATE coin 
-                    SET price = %s, price_timestamp = %s
-                    WHERE symbol = %s
-                """, (price, now, sym))
-                updated_count += 1
-            except Exception as e:
-                logging.error(f"Failed to update price for {sym}: {e}")
-                conn.rollback()
-        else:
-            logging.warning(f"No price found for symbol {sym} (mapped to {fetch_sym})")
+        updated_count = 0
+        now = pendulum.now()
+        
+        for sym in original_symbols:
+            fetch_sym = SYMBOL_MAPPING.get(sym.upper(), sym.upper())
+            price = all_prices.get(fetch_sym)
             
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    logging.info(f"Successfully updated {updated_count} coin prices.")
+            if price is not None:
+                try:
+                    cur.execute("""
+                        UPDATE coin 
+                        SET price = %s, price_timestamp = %s
+                        WHERE symbol = %s
+                    """, (price, now, sym))
+                    updated_count += 1
+                except Exception as e:
+                    logging.error(f"Failed to update price for {sym}: {e}")
+                    conn.rollback()
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        logging.info(f"Successfully updated {updated_count} coin prices.")
 
     # 5. History Backfill and Maintenance
     # Check for coins with no history
     missing_history = pg_hook.get_records("""
-        SELECT c.symbol 
+        SELECT c.symbol, c.cmc_rank
         FROM coin c
         LEFT JOIN coin_price_history h ON c.symbol = h.symbol
-        GROUP BY c.symbol
+        GROUP BY c.symbol, c.cmc_rank
         HAVING COUNT(h.timestamp) = 0
     """)
     
@@ -111,8 +114,19 @@ def update_coin_prices():
         logging.info(f"Coins missing history: {[r[0] for r in missing_history]}")
         for row in missing_history:
             sym = row[0]
+            rank = row[1]
             fetch_sym = SYMBOL_MAPPING.get(sym.upper(), sym.upper())
-            history = fetch_crypto_history(fetch_sym)
+            
+            # Application of User Logic:
+            # Rank <= 100: All historical information (all_data=True)
+            # Rank 100-1000: Last 2 years (limit=730)
+            if rank and rank <= 100:
+                logging.info(f"Fetching ALL history for top-ranked coin: {sym} (Rank: {rank})")
+                history = fetch_crypto_history(fetch_sym, all_data=True)
+            else:
+                logging.info(f"Fetching 2 years of history for coin: {sym} (Rank: {rank})")
+                history = fetch_crypto_history(fetch_sym, limit=730)
+                
             if history:
                 logging.info(f"Backfilling {len(history)} data points for {sym}")
                 conn = pg_hook.get_conn()

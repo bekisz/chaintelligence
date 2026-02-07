@@ -2,6 +2,8 @@
 
 A unified DeFi analytics platform providing real-time LP portfolio tracking, transaction routing analysis, and Uniswap V3 historical backtesting.
 
+[**Read the Detailed Architecture Documentation**](docs/architecture.md)
+
 ## 🚀 Quick Start (Docker Deployment)
 
 Deploy the entire stack (Postgres, Airflow, and the Portal Server) with a single command:

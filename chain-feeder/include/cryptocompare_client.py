@@ -54,7 +54,7 @@ def fetch_crypto_prices(symbols: List[str], target_currency: str = 'USD') -> Dic
         logging.error(f"Failed to fetch prices from CryptoCompare: {e}")
         return {}
 
-def fetch_crypto_history(symbol: str, target_currency: str = 'USD', limit: int = 2000) -> List[Dict]:
+def fetch_crypto_history(symbol: str, target_currency: str = 'USD', limit: int = 2000, all_data: bool = False) -> List[Dict]:
     """
     Fetch daily historical prices for a symbol from CryptoCompare.
     Returns a list of dicts with timestamp and price.
@@ -64,6 +64,7 @@ def fetch_crypto_history(symbol: str, target_currency: str = 'USD', limit: int =
         "fsym": symbol.upper(),
         "tsym": target_currency,
         "limit": limit,
+        "allData": "true" if all_data else "false",
         "api_key": CRYPTOCOMPARE_API_KEY
     }
 

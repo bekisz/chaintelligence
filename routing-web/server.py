@@ -380,6 +380,33 @@ async def price_history(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/coins", tags=["Metadata"])
+async def get_coins():
+    """Get list of active indexed coins for the backtester."""
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        
+        query = """
+        SELECT symbol, name, image_url as image, cmc_rank as market_cap_rank
+        FROM coin
+        WHERE cmc_rank IS NOT NULL
+        ORDER BY cmc_rank ASC
+        LIMIT 500;
+        """
+        cur.execute(query)
+        colnames = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
+        
+        coins = [dict(zip(colnames, row)) for row in rows]
+        
+        cur.close()
+        conn.close()
+        return coins
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # UI Routes (Excluded from Swagger schema)
 @app.get("/", include_in_schema=False)
 async def read_index():

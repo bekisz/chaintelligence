@@ -643,36 +643,23 @@ function removeStrategy(id) {
 
 async function fetchCoinList() {
     try {
-        const cached = localStorage.getItem('coingecko_top_100');
-        const timestamp = localStorage.getItem('coingecko_top_100_ts');
+        const cached = localStorage.getItem('internal_coin_list');
+        const timestamp = localStorage.getItem('internal_coin_list_ts');
         const now = Date.now();
 
-        // Load from cache if valid
+        // Load from cache if valid (24h)
         if (cached && timestamp && (now - timestamp < 86400000)) {
             allCoins = JSON.parse(cached);
         } else {
-            const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false');
-            if (!response.ok) throw new Error('Failed to fetch coin list');
+            const response = await fetch('/api/coins');
+            if (!response.ok) throw new Error('Failed to fetch internal coin list');
             allCoins = await response.json();
 
-            localStorage.setItem('coingecko_top_100', JSON.stringify(allCoins));
-            localStorage.setItem('coingecko_top_100_ts', now);
-        }
-
-        // Always check for EURC to be extra sure (handles potential cache mismatches)
-        if (!allCoins.find(c => c.id === 'euro-coin' || c.symbol === 'eurc')) {
-            const eurcResponse = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=euro-coin');
-            if (eurcResponse.ok) {
-                const eurcData = await eurcResponse.json();
-                if (eurcData.length > 0) {
-                    allCoins.push(eurcData[0]);
-                    // Update cache with EURC if we just added it
-                    localStorage.setItem('coingecko_top_100', JSON.stringify(allCoins));
-                }
-            }
+            localStorage.setItem('internal_coin_list', JSON.stringify(allCoins));
+            localStorage.setItem('internal_coin_list_ts', now);
         }
     } catch (error) {
-        console.error("Error loading coins:", error);
+        console.error("Error loading coins from logic layer:", error);
     }
 }
 
