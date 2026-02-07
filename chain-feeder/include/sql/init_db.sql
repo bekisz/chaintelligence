@@ -7,13 +7,26 @@ CREATE DATABASE chaintelligence;
 -- 1. COIN TABLE (Symbol as PK, VARCHAR(8))
 CREATE TABLE IF NOT EXISTS coin (
     symbol VARCHAR(8) PRIMARY KEY, -- Primary Key, Not Null, Unique, Max 8 chars
+    name VARCHAR(255),
+    slug VARCHAR(255),
     hardness INTEGER DEFAULT 0,
     family VARCHAR(50),
-    image_url TEXT
+    cmc_rank INTEGER,
+    cmc_id INTEGER,
+    ethereum_address VARCHAR(42),
+    first_historical_data TIMESTAMP,
+    image_url TEXT,
+    price NUMERIC,
+    price_timestamp TIMESTAMP WITH TIME ZONE
 );
 
 -- Index for case-insensitive lookup (though we force upper)
 CREATE UNIQUE INDEX IF NOT EXISTS coin_symbol_idx ON coin (UPPER(symbol));
+
+-- 1.5 COIN FAMILY TABLE
+CREATE TABLE IF NOT EXISTS coin_family (
+    name VARCHAR(50) PRIMARY KEY
+);
 
 -- 2. LIQUIDITY POOL TABLE
 CREATE TABLE IF NOT EXISTS liquidity_pool (
@@ -26,9 +39,12 @@ CREATE TABLE IF NOT EXISTS liquidity_pool (
     coin0_symbol VARCHAR(8) REFERENCES coin(symbol),
     coin1_symbol VARCHAR(8) REFERENCES coin(symbol),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    pool_address VARCHAR(42),
+    reverted BOOLEAN DEFAULT FALSE,
     UNIQUE(network, protocol, pool_name, fee_tier)
 );
 
+CREATE INDEX IF NOT EXISTS idx_lp_pool_address ON liquidity_pool(pool_address);
 CREATE INDEX IF NOT EXISTS liquidity_pool_coin0_upper_idx ON liquidity_pool (UPPER(coin0_symbol));
 CREATE INDEX IF NOT EXISTS liquidity_pool_coin1_upper_idx ON liquidity_pool (UPPER(coin1_symbol));
 
@@ -68,7 +84,6 @@ CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot (
     
     current_tick INTEGER,
     current_price NUMERIC,
-    current_price NUMERIC,
     in_range BOOLEAN
 );
 
@@ -104,6 +119,14 @@ CREATE INDEX IF NOT EXISTS idx_swaps_timestamp ON uniswap_v3_swaps(timestamp);
 CREATE INDEX IF NOT EXISTS idx_swaps_token0 ON uniswap_v3_swaps(token0_symbol);
 CREATE INDEX IF NOT EXISTS idx_swaps_token1 ON uniswap_v3_swaps(token1_symbol);
 
+-- 5.5 COIN PRICE HISTORY
+CREATE TABLE IF NOT EXISTS coin_price_history (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(8) REFERENCES coin(symbol),
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    price NUMERIC NOT NULL,
+    UNIQUE(symbol, timestamp)
+);
 
 -- 6. TRIGGERS
 CREATE OR REPLACE FUNCTION enforce_uppercase_symbols() 
@@ -163,13 +186,22 @@ INSERT INTO coin (symbol, hardness, family) VALUES
 ('AAVE', 820, 'AAVE'),
 ('stAAVE', 800, 'AAVE'),
 ('STKAAVE', 800, 'AAVE'),
-('clAAVE', 800, 'AAVE'), -- Mapped from CLAIMABLE AAVE ON STKAAVE
+('clAAVE', 800, 'AAVE'),
 ('stkGHO', 800, 'USD'),
 ('sGHO', 800, 'USD'),
 ('cbBTC', 800, 'BTC'),
 ('RLUSD', 800, 'USD'),
-('sUSDS', 800, 'USD') -- Mapped from SAVINGS USDS
+('sUSDS', 800, 'USD')
 ON CONFLICT (symbol) DO NOTHING;
+
+-- Populate coin_family with initial multi-coin families
+INSERT INTO coin_family (name)
+SELECT family 
+FROM coin 
+WHERE family IS NOT NULL 
+GROUP BY family 
+HAVING COUNT(*) > 1
+ON CONFLICT DO NOTHING;
 
 -- 8. BACKWARD COMPATIBILITY VIEWS
 -- Reconstructing the legacy view without external reward table
