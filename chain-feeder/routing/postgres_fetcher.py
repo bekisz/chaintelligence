@@ -165,9 +165,9 @@ class PostgresFetcher:
                             FROM uniswap_v3_swaps
                             WHERE timestamp >= %s AND timestamp <= %s
                             AND (
-                                (token0_symbol = %s AND token1_symbol = %s)
+                                (UPPER(token0_symbol) = %s AND UPPER(token1_symbol) = %s)
                                 OR 
-                                (token0_symbol = %s AND token1_symbol = %s)
+                                (UPPER(token0_symbol) = %s AND UPPER(token1_symbol) = %s)
                             )
                         """
                         # If we want to be strict on fee: "AND fee_tier = %s"
@@ -185,8 +185,8 @@ class PostgresFetcher:
                         raw_vol_token0 = float(swap_row[0]) if swap_row and swap_row[0] else 0
                         
                         if raw_vol_token0 > 0:
-                            # 2. Get Price
-                            cur.execute("SELECT price FROM coin_price_history WHERE symbol = %s ORDER BY timestamp DESC LIMIT 1", (t0,))
+                            # 2. Get Price (Case Insensitive)
+                            cur.execute("SELECT price FROM coin_price_history WHERE UPPER(symbol) = %s ORDER BY timestamp DESC LIMIT 1", (t0.upper(),))
                             price_row = cur.fetchone()
                             price = float(price_row[0]) if price_row and price_row[0] else 0
                             
@@ -225,4 +225,31 @@ class PostgresFetcher:
             
         except Exception as e:
             self._log(f"APR fetch failed: {e}")
+            return {}
+
+    def fetch_latest_prices(self) -> Dict[str, float]:
+        """
+        Fetch the most recent price for all tokens from coin_price_history.
+        Returns dict: { "SYMBOL": price_float }
+        """
+        try:
+            conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+            cur = conn.cursor()
+            
+            # Fetch the latest price for each symbol
+            query = """
+                SELECT DISTINCT ON (symbol) symbol, price
+                FROM coin_price_history
+                ORDER BY symbol, timestamp DESC
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            prices = {row[0].upper(): float(row[1]) for row in rows}
+            
+            cur.close()
+            conn.close()
+            return prices
+        except Exception as e:
+            self._log(f"Latest price fetch failed: {e}")
             return {}

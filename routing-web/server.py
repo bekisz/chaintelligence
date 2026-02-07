@@ -12,16 +12,20 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-load_dotenv()
-
-# Import routing logic from same directory
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+load_dotenv(os.path.join(ROOT_DIR, '.env'))
+
+# Import routing logic from chain-feeder
+CHAIN_FEEDER_ROUTING = os.path.join(ROOT_DIR, 'chain-feeder', 'routing')
+if CHAIN_FEEDER_ROUTING not in sys.path:
+    sys.path.insert(0, CHAIN_FEEDER_ROUTING)
+
 try:
     from postgres_fetcher import PostgresFetcher
     from route_analyzer import RouteAnalyzer
     from config import DATA_WAREHOUSE_DB
 except ImportError as e:
-    print(f"Error importing routing modules: {e}")
+    print(f"Error importing routing modules from {CHAIN_FEEDER_ROUTING}: {e}")
     sys.exit(1)
 
 app = FastAPI(
@@ -38,7 +42,9 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    if request.method == "OPTIONS":
+    # Exempt metadata and backtester routes from authentication
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester"]
+    if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization")
@@ -129,7 +135,7 @@ def resolve_token_input(input_str: str) -> list[str]:
         print(f"Error resolving token family: {e}")
         return [input_str]
 
-@app.get("/api/analyze", tags=["Analytics"])
+@app.get("/api/routes/analyze", tags=["Route Analytics"])
 async def analyze(
     start_token: str,
     end_token: str,
@@ -158,7 +164,9 @@ async def analyze(
         if not end_tokens_list: end_tokens_list = [end_token]
 
         fetcher = PostgresFetcher(verbose=True)
-        analyzer = RouteAnalyzer(verbose=True)
+        # Fetch prices for volume fallback
+        latest_prices = fetcher.fetch_latest_prices()
+        analyzer = RouteAnalyzer(verbose=True, prices=latest_prices)
         
         # Batched Processing Configuration
         BATCH_DAYS = 5
@@ -234,7 +242,10 @@ async def analyze(
                         fee = item
                         t1 = path[i+1]
                         
-                        key = f"{t0}-{t1}-{fee}"
+                        # Normalize for lookup (matches PostgresFetcher.fetch_pool_stats)
+                        t0_norm = t0.upper()
+                        t1_norm = t1.upper()
+                        key = f"{t0_norm}-{t1_norm}-{fee}"
                         apr_val = aprs.get(key)
                         
                         # Replace string fee with object
@@ -254,7 +265,7 @@ async def analyze(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/date-range", tags=["Analytics"])
+@app.get("/api/routes/date-range", tags=["Route Analytics"])
 async def get_date_range():
     """Get the available date range from the swap data."""
     try:
@@ -275,7 +286,7 @@ async def get_date_range():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/lp-summary", tags=["Portfolio"])
+@app.get("/api/lp/position-summary", tags=["Liquidity Pools"])
 async def lp_summary():
     """Get the latest summary of LP snapshots."""
     try:
@@ -350,7 +361,7 @@ async def lp_summary():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/price-history", tags=["Asset Prices"])
+@app.get("/api/coin/price-history", tags=["Assets"])
 async def price_history(symbol: str):
     """Get historical daily prices for a coin from Postgres."""
     try:
@@ -380,7 +391,7 @@ async def price_history(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/coins", tags=["Metadata"])
+@app.get("/api/coin/list", tags=["Assets"])
 async def get_coins():
     """Get list of active indexed coins for the backtester."""
     try:
@@ -390,9 +401,8 @@ async def get_coins():
         query = """
         SELECT symbol, name, image_url as image, cmc_rank as market_cap_rank
         FROM coin
-        WHERE cmc_rank IS NOT NULL
-        ORDER BY cmc_rank ASC
-        LIMIT 500;
+        ORDER BY cmc_rank ASC NULLS LAST
+        LIMIT 1000;
         """
         cur.execute(query)
         colnames = [desc[0] for desc in cur.description]

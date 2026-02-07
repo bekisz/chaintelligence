@@ -2,12 +2,16 @@
 
 ## Overview
 
-The schema is divided into four main tables:
+The schema is divided into eight main tables:
 
 1. **`coin`**: specific crypto asset with hardness (rank) and family. **Symbol (VARCHAR 8) is Primary Key**.
 2. **`liquidity_pool`**: Stores static information about a Liquidity Pool (e.g., "ETH / USDC").
 3. **`liquidity_pool_position`**: Stores static information about a user's position in a pool (e.g., Limits, Ticks, Token ID).
 4. **`liquidity_pool_position_snapshot`**: Stores time-series data for a position. **Assets and Rewards are flattened**.
+5. **`liquidity_pool_history`**: Aggregated daily stats for pools (Volume, TVL, Tx count).
+6. **`coin_family`**: Grouping of assets for multi-token analysis (e.g. "USD" -> USDC, USDT, DAI).
+7. **`uniswap_v3_swaps`**: High-performance index of raw on-chain swap events.
+8. **`coin_price_history`**: Time-series history of asset prices.
 
 ---
 
@@ -85,3 +89,53 @@ Stores the historical state of a position at a specific point in time. Assets an
 | `current_tick` | INTEGER | Pool tick at snapshot. |
 | `current_price` | NUMERIC | Pool price at snapshot. |
 | `in_range` | BOOLEAN | In-range status. |
+
+### 5. `liquidity_pool_history`
+
+Aggregated daily performance metrics.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `pool_id` | INT (FK) | Reference to `liquidity_pool`. |
+| `date` | DATE | Data granularity (DAILY). |
+| `volume_usd` | NUMERIC | Total swap volume in USD for that day. |
+| `tvl_usd` | NUMERIC | Total Value Locked in pool for that day. |
+| `tx_count` | INTEGER | Number of swap events. |
+
+### 6. `coin_family`
+
+Mapping for token groups.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `name` | VARCHAR(50) | Family name (e.g. "EUR"). |
+| `symbol` | VARCHAR(8) (FK) | Member token symbol. |
+
+### 7. `uniswap_v3_swaps`
+
+Raw transactional data from the blockchain.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | VARCHAR (PK) | Unique event ID from The Graph. |
+| `timestamp` | TIMESTAMP | Block time. |
+| `amount_usd` | NUMERIC | Normalized value of the swap. |
+| `token0_symbol` | VARCHAR | Denormalized symbol for fast querying. |
+| `token1_symbol` | VARCHAR | Denormalized symbol for fast querying. |
+
+### 8. `coin_price_history`
+
+Historical OHLCV-style price data.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `symbol` | VARCHAR(8) (FK) | Asset symbol. |
+| `timestamp` | TIMESTAMP | Time of price recording. |
+| `price` | NUMERIC | Asset price in USD. |
+
+---
+
+## ⚡ Automation & Views
+
+- **Triggers**: PL/pgSQL triggers (`trg_coin_upper`, `trg_pool_upper`) enforce uppercase symbols and apply truncation before every insert/update.
+- **`v_lp_snapshots_summary`**: A complex view that reconstructs a unified "UI-ready" object including images, labels, and range status, abstracting the flattened snapshot structure for the frontend.

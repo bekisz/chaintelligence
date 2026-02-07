@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         noDataMsg.classList.add('hidden');
 
         try {
-            const response = await fetch('/api/lp-summary');
+            const response = await fetch('/api/lp/position-summary');
             if (!response.ok) throw new Error('Failed to fetch LP summary');
 
             const data = await response.json();

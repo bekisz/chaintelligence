@@ -1061,8 +1061,78 @@ footer {
     opacity: 0.7;
 }
 
+/* Custom Tooltip Styling */
+.route-arrow-wrapper[data-tooltip] {
+    position: relative;
+}
+
+.route-arrow-wrapper[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+    background: var(--uniswap-card);
+    border: 1px solid var(--uniswap-border);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.route-arrow-wrapper[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-8px);
+}
+
+/* Table Text Utilities */
+.text-success {
+    color: var(--success) !important;
+}
+
+.text-muted {
+    color: var(--text-secondary) !important;
+    opacity: 0.6;
+}
+
+.font-bold {
+    font-weight: 700 !important;
+}
+
 .path-cell {
     min-width: 250px;
+    overflow: visible !important;
+}
+
+.table-container {
+    overflow: visible !important;
+}
+
+.glass {
+    overflow: visible !important;
+}
+
+.fee-pill {
+    transition: transform 0.2s, background 0.2s;
+    cursor: help;
+}
+
+.route-arrow-wrapper:hover .fee-pill {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.route-arrow-wrapper:hover .apr-pill {
+    background: rgba(16, 185, 129, 0.3);
 }
 
 /* Toggle Switch */

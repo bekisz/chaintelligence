@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS coin (
     first_historical_data TIMESTAMP,
     image_url TEXT,
     price NUMERIC,
-    price_timestamp TIMESTAMP WITH TIME ZONE
+    price_timestamp TIMESTAMP WITH TIME ZONE,
+    decimals INTEGER DEFAULT 18
 );
 
 -- Index for case-insensitive lookup (though we force upper)

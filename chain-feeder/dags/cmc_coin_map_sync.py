@@ -37,76 +37,109 @@ with DAG(
         response.raise_for_status()
         
         data = response.json()
-        coins = data.get('data', [])
-        logging.info(f"Received {len(coins)} coins from CMC")
+        all_coins = data.get('data', [])
+        logging.info(f"Received {len(all_coins)} coins from CMC")
 
+        # 1. Detailed Filtering and ID selection
+        target_ids = []
+        coin_meta_map = {} # id -> partial meta
+        
+        for coin in all_coins:
+            is_active = coin.get('is_active')
+            rank = coin.get('rank')
+            symbol = coin.get('symbol')
+            cmc_id = coin.get('id')
+            platform = coin.get('platform')
+            
+            if not is_active:
+                continue
+                
+            is_target = False
+            if platform and platform.get('slug') == 'ethereum':
+                is_target = True
+            elif symbol in ['ETH', 'BTC', 'WBTC']: # Standard large caps
+                is_target = True
+                
+            if is_target:
+                target_ids.append(str(cmc_id))
+                coin_meta_map[cmc_id] = coin
+
+        logging.info(f"Identified {len(target_ids)} active Ethereum-related coins for detailed metadata fetch")
+
+        # 2. Batch fetch detailed info (Logo, Decimals)
+        # CMC allows batching up to ~100 IDs
+        INFO_URL = "https://pro-api.coinmarketcap.com/v2/cryptocurrency/info"
+        detailed_info = {}
+        
+        for i in range(0, len(target_ids), 100):
+            batch = target_ids[i:i+100]
+            logging.info(f"Fetching metadata for batch {i//100 + 1}...")
+            res = requests.get(INFO_URL, headers=headers, params={'id': ','.join(batch)})
+            if res.status_code == 200:
+                batch_data = res.json().get('data', {})
+                detailed_info.update(batch_data)
+            else:
+                logging.error(f"Failed to fetch metadata batch: {res.text}")
+
+        # 3. Upsert to Postgres
         pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
-        
-        # Filters:
-        # 1. is_active == 1
-        # 2. rank <= 1000 (CMC gives rank as integer)
-        # 3. platform is ethereum (for tokens) or platform is None (for native BTC/ETH)
-        
         upsert_count = 0
+        
         with pg_hook.get_conn() as conn:
             with conn.cursor() as cur:
-                for coin in coins:
-                    is_active = coin.get('is_active')
-                    rank = coin.get('rank')
-                    symbol = coin.get('symbol')
-                    cmc_id = coin.get('id')
-                    name = coin.get('name')
-                    slug = coin.get('slug')
-                    first_history = coin.get('first_historical_data')
-                    platform = coin.get('platform')
+                for cmc_id_str, info in detailed_info.items():
+                    cmc_id = int(cmc_id_str)
+                    symbol = info.get('symbol', '').upper()
+                    name = info.get('name')
+                    slug = info.get('slug')
+                    logo = info.get('logo') # Image URL
+                    rank = info.get('cmc_rank')
                     
-                    # Filtering Logic
-                    if not is_active:
-                        continue
-                    if rank is None or rank > 1000:
-                        continue
-                    
+                    # Extract Ethereum details from contract_address list
                     eth_address = None
-                    if platform:
-                        # Only include if platform is Ethereum
-                        if platform.get('slug') != 'ethereum':
-                            continue
-                        eth_address = platform.get('token_address')
-                    elif symbol not in ['BTC', 'LTC', 'BCH', 'XRP', 'DOGE', 'ETH']:
-                        # If no platform, it's typically a native coin. 
-                        # We only want ETH and peers, or ETH tokens.
-                        # Since user specifically asked for "platform is ethereum", 
-                        # tokens are the primary target, but obviously we want to keep/allow ETH too.
-                        if symbol != 'ETH':
-                            continue
-
-                    if not symbol:
-                        continue
-                        
-                    symbol = symbol.upper()
+                    # We keep existing decimals if available in DB by NOT overwriting with 18 
+                    # unless we are sure. But since this is a new insert, we need a default.
+                    decimals = 18 
                     
-                    # Upsert: Insert or Update everything
-                    # We use symbol as PK. 
+                    contracts = info.get('contract_address', [])
+                    if isinstance(contracts, list):
+                        for c in contracts:
+                            plt = c.get('platform', {})
+                            if plt.get('name') == 'Ethereum' or plt.get('coin', {}).get('slug') == 'ethereum':
+                                eth_address = c.get('contract_address')
+                                break
+                    
+                    # Manual Override for known major natives/tokens
+                    if symbol == 'ETH': decimals = 18
+                    elif symbol in ['BTC', 'WBTC']: decimals = 8
+                    elif symbol in ['USDC', 'USDT', 'EURC']: decimals = 6
+                    
+                    if not symbol: continue
+
                     cur.execute("""
                         INSERT INTO coin (
                             symbol, name, slug, cmc_id, cmc_rank, 
-                            ethereum_address, first_historical_data
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            ethereum_address, image_url, decimals
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (symbol) DO UPDATE SET
                             name = EXCLUDED.name,
                             slug = EXCLUDED.slug,
                             cmc_id = EXCLUDED.cmc_id,
                             cmc_rank = EXCLUDED.cmc_rank,
                             ethereum_address = EXCLUDED.ethereum_address,
-                            first_historical_data = EXCLUDED.first_historical_data;
+                            image_url = EXCLUDED.image_url,
+                            decimals = CASE 
+                                WHEN EXCLUDED.decimals != 18 THEN EXCLUDED.decimals 
+                                ELSE coin.decimals 
+                            END;
                     """, (
                         symbol[:8], name, slug, cmc_id, rank, 
-                        eth_address, first_history
+                        eth_address, logo, decimals
                     ))
                     upsert_count += 1
                     
             conn.commit()
             
-        logging.info(f"Upserted/Updated {upsert_count} coins matching criteria into coin table")
+        logging.info(f"Successfully synced detailed metadata for {upsert_count} coins")
 
     sync_cmc_map()

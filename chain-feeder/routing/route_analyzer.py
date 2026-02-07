@@ -12,8 +12,9 @@ from collections import defaultdict
 class RouteAnalyzer:
     """Analyzes swap routes between tokens"""
     
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: bool = False, prices: Optional[Dict[str, float]] = None):
         self.verbose = verbose
+        self.prices = prices or {}
         self.reset()
 
     def reset(self):
@@ -66,28 +67,30 @@ class RouteAnalyzer:
             if start_is_wildcard:
                 # Infer start from first swap (standard wildcard logic)
                 if first_swap['amount0'] > 0:
-                    tx_start_token = first_swap['token0_symbol']
+                    tx_start_token = first_swap['token0_symbol'].upper()
                 elif first_swap['amount1'] > 0:
-                    tx_start_token = first_swap['token1_symbol']
+                    tx_start_token = first_swap['token1_symbol'].upper()
                 else:
                     continue
                     
                 # Setup path based on inferred start
-                if first_swap['token0_symbol'] == tx_start_token:
-                    current_token = first_swap['token1_symbol']
+                if first_swap['token0_symbol'].upper() == tx_start_token:
+                    current_token = first_swap['token1_symbol'].upper()
                     path = [tx_start_token, first_swap['fee_tier'], current_token]
                 else:
-                    current_token = first_swap['token0_symbol']
+                    current_token = first_swap['token0_symbol'].upper()
                     path = [tx_start_token, first_swap['fee_tier'], current_token]
             else:
                 # Check membership
-                if first_swap['token0_symbol'] in start_tokens and first_swap['amount0'] > 0:
-                    tx_start_token = first_swap['token0_symbol']
-                    current_token = first_swap['token1_symbol']
+                t0_up = first_swap['token0_symbol'].upper()
+                t1_up = first_swap['token1_symbol'].upper()
+                if t0_up in start_tokens and first_swap['amount0'] > 0:
+                    tx_start_token = t0_up
+                    current_token = t1_up
                     path = [tx_start_token, first_swap['fee_tier'], current_token]
-                elif first_swap['token1_symbol'] in start_tokens and first_swap['amount1'] > 0:
-                    tx_start_token = first_swap['token1_symbol']
-                    current_token = first_swap['token0_symbol']
+                elif t1_up in start_tokens and first_swap['amount1'] > 0:
+                    tx_start_token = t1_up
+                    current_token = t0_up
                     path = [tx_start_token, first_swap['fee_tier'], current_token]
                 else:
                     continue
@@ -95,12 +98,14 @@ class RouteAnalyzer:
             # Process subsequent swaps
             for i in range(1, len(tx_events)):
                 next_swap = tx_events[i]
-                if next_swap['token0_symbol'] == current_token and next_swap['amount0'] > 0:
-                    current_token = next_swap['token1_symbol']
+                t0_next = next_swap['token0_symbol'].upper()
+                t1_next = next_swap['token1_symbol'].upper()
+                if t0_next == current_token and next_swap['amount0'] > 0:
+                    current_token = t1_next
                     path.append(next_swap['fee_tier'])
                     path.append(current_token)
-                elif next_swap['token1_symbol'] == current_token and next_swap['amount1'] > 0:
-                    current_token = next_swap['token0_symbol']
+                elif t1_next == current_token and next_swap['amount1'] > 0:
+                    current_token = t0_next
                     path.append(next_swap['fee_tier'])
                     path.append(current_token)
             
@@ -115,17 +120,12 @@ class RouteAnalyzer:
 
                 # Volume Fallback for low-liquidity pairs or missing price data
                 if route_vol_usd < 0.01:
-                    PRICES = {
-                        'USDC': 1.0, 'USDT': 1.0, 'DAI': 1.0,
-                        'EURC': 1.05, 'EURCV': 1.05,
-                        'WETH': 2500.0, 'WBTC': 95000.0, 'GNO': 300.0,
-                    }
-                    t0_sym = first_swap['token0_symbol']
-                    t1_sym = first_swap['token1_symbol']
-                    if t0_sym in PRICES:
-                        route_vol_usd = abs(first_swap['amount0']) * PRICES[t0_sym]
-                    elif t1_sym in PRICES:
-                        route_vol_usd = abs(first_swap['amount1']) * PRICES[t1_sym]
+                    t0_sym = first_swap['token0_symbol'].upper()
+                    t1_sym = first_swap['token1_symbol'].upper()
+                    if t0_sym in self.prices:
+                        route_vol_usd = abs(first_swap['amount0']) * self.prices[t0_sym]
+                    elif t1_sym in self.prices:
+                        route_vol_usd = abs(first_swap['amount1']) * self.prices[t1_sym]
                 
                 # Aggregate immediately
                 # Format path: TokenA -- fee% --> TokenB -- fee% --> TokenC

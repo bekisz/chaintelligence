@@ -193,21 +193,31 @@ def sync_tvl_from_graph():
     conn = pg_hook.get_conn()
     cur = conn.cursor()
     
-    # 1. Build Symbol -> Address Map from swaps history
-    # This is a heuristic: we use the address seen in swaps for a given symbol.
-    logging.info("Building symbol->address map from swaps...")
+    # 1. Build Symbol -> Address Map
+    # Priority 1: coin table (Official)
+    # Priority 2: swaps history (Heuristic)
+    logging.info("Building symbol->address map...")
+    symbol_map = {}
+    
+    # Priority 2: Swaps (Heuristic)
     cur.execute("""
         SELECT DISTINCT token0_symbol, token0_address FROM uniswap_v3_swaps
         UNION 
         SELECT DISTINCT token1_symbol, token1_address FROM uniswap_v3_swaps
     """)
-    symbol_map = {}
     for row in cur.fetchall():
         sym, addr = row
         if sym and addr:
             symbol_map[sym.upper()] = addr.lower()
             if len(sym) > 8:
                 symbol_map[sym[:8].upper()] = addr.lower()
+
+    # Priority 1: Official coin table (Overwrites heuristic)
+    cur.execute("SELECT symbol, ethereum_address FROM coin WHERE ethereum_address IS NOT NULL")
+    for row in cur.fetchall():
+        sym, addr = row
+        if sym and addr:
+            symbol_map[sym.upper()] = addr.lower()
                 
     # 2. Get all pools
     cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier FROM liquidity_pool")

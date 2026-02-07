@@ -116,7 +116,7 @@ services:
       dockerfile: Dockerfile
     container_name: chaintelligence-server
     environment:
-      - DATA_WAREHOUSE_DB=dbname=chaintelligence user=airflow password=airflow host=postgres port=5432
+      - DATA_WAREHOUSE_DB=${DATA_WAREHOUSE_DB}
       - GRAPH_API_KEY=${GRAPH_API_KEY}
       - PORTAL_USERNAME=${PORTAL_USERNAME}
       - PORTAL_PASSWORD=${PORTAL_PASSWORD}
@@ -125,8 +125,10 @@ services:
       - "8000:8000"
     restart: always
     volumes:
+      - ./.env:/app/.env
       - ./routing-web:/app/routing-web
       - ./lp-backtester:/app/lp-backtester
+      - ./chain-feeder:/app/chain-feeder
     depends_on:
       postgres:
         condition: service_healthy

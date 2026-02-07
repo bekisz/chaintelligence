@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Fetch available date range from API and set defaults
     try {
-        const response = await fetch('/api/date-range');
+        const response = await fetch('/api/routes/date-range');
         const dateRange = await response.json();
 
         if (dateRange.min_date && dateRange.max_date) {
@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         noDataMsg.classList.add('hidden');
 
         try {
-            let url = `/api/analyze?start_token=${startToken}&end_token=${endToken}`;
+            let url = `/api/routes/analyze?start_token=${startToken}&end_token=${endToken}`;
             if (startDate) url += `&start_date=${startDate}`;
             if (endDate) url += `&end_date=${endDate}`;
 
@@ -152,10 +152,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const renderRoutes = (routes) => {
         routesBody.innerHTML = '';
         routes.forEach(route => {
+            // Calculate Route APR (Average of hops)
+            let totalApr = 0;
+            let hopCount = 0;
+            if (route.path_tokens) {
+                route.path_tokens.forEach((item, idx) => {
+                    if (idx % 2 === 1 && typeof item === 'object') {
+                        totalApr += (item.apr || 0);
+                        hopCount++;
+                    }
+                });
+            }
+            const avgApr = hopCount > 0 ? (totalApr / hopCount) : 0;
+            const aprClass = avgApr > 0.5 ? 'text-success font-bold' : (avgApr > 0 ? 'text-success' : 'text-muted');
+
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td class="path-cell">${renderPath(route)}</td>
                 <td>${route.count.toLocaleString()}</td>
+                <td class="${aprClass}">${avgApr > 0 ? (avgApr * 100).toFixed(1) + '%' : 'N/A'}</td>
                 <td class="font-bold">${formatUSD(route.volume)}</td>
                 <td>${formatUSD(route.market_size || 0)}</td>
                 <td>${formatUSD(route.avg_volume)}</td>
@@ -201,11 +216,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Backend enriched object
                         if (isAprMode) {
                             displayVal = item.apr_str || 'N/A';
-                            // Add fee as tooltip
-                            tooltip = `Fee: ${item.fee}`;
+                            // Swap: show fee on hover
+                            tooltip = `Tier: ${item.fee}`;
                         } else {
                             displayVal = item.fee;
-                            tooltip = `APR: ${item.apr_str}`;
+                            // Swap: show APR on hover
+                            tooltip = `APR: ${item.apr_str || 'N/A'}`;
                         }
                     } else if (typeof item === 'string' && item.endsWith('%')) {
                         displayVal = item;
@@ -218,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 html += `
-                        <div class="route-arrow-wrapper" title="${tooltip}">
+                        <div class="route-arrow-wrapper" data-tooltip="${tooltip}" title="${tooltip}">
                             <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
                             <svg class="route-arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path d="M5 12h14M12 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -259,6 +275,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (key === 'count') {
                 valA = a.count;
                 valB = b.count;
+            } else if (key === 'apr') {
+                // Calculate avg APR for sorting
+                const getAvgApr = (r) => {
+                    let t = 0, c = 0;
+                    if (r.path_tokens) {
+                        r.path_tokens.forEach((it, id) => {
+                            if (id % 2 === 1 && typeof it === 'object') { t += (it.apr || 0); c++; }
+                        });
+                    }
+                    return c > 0 ? (t / c) : 0;
+                };
+                valA = getAvgApr(a);
+                valB = getAvgApr(b);
             } else if (key === 'volume') {
                 valA = a.volume;
                 valB = b.volume;
@@ -281,6 +310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Event listeners for sorting
     document.getElementById('sort-count').addEventListener('click', () => sortRoutes('count', 'sort-count'));
+    document.getElementById('sort-apr').addEventListener('click', () => sortRoutes('apr', 'sort-apr'));
     document.getElementById('sort-vol').addEventListener('click', () => sortRoutes('volume', 'sort-vol'));
     document.getElementById('sort-mkt').addEventListener('click', () => sortRoutes('mkt', 'sort-mkt'));
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));

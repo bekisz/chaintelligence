@@ -1,7 +1,8 @@
 // Global State
 let baseSearchInput, quoteSearchInput, baseResults, quoteResults, swapBtn;
 let aprInput, startDateInput, endDateInput, addStrategyBtn, runBtn;
-let chartScaleSelect;
+let chartScaleToggle;
+let scaleToggleWrapper;
 let allCoins = [];
 let baseAsset = new Asset('eth');
 let quoteAsset = new Asset('usdc');
@@ -155,66 +156,7 @@ function getURLParams() {
     return result;
 }
 
-// Helper to downsample data to roughly daily points for main charts
-function downsampleResults(results, useHourly) {
-    if (!useHourly) return results; // Already daily
 
-    // We need to filter indices based on timestamp day changes to keep alignment
-    // Use the primary time series (hodlData) to determine indices
-    const indicesToKeep = [];
-    let lastDateStr = '';
-
-    results.hodlData.forEach((d, i) => {
-        const dateStr = new Date(d[0]).toDateString();
-        // Keep first point of each new day
-        if (dateStr !== lastDateStr) {
-            indicesToKeep.push(i);
-            lastDateStr = dateStr;
-        }
-    });
-
-    // Helper to filter array by indices
-    const filterByIndex = (arr) => (arr ? arr.filter((_, i) => indicesToKeep.includes(i)) : []);
-
-    return {
-        ...results,
-        hodlData: filterByIndex(results.hodlData),
-        lpTotalData: filterByIndex(results.lpTotalData),
-        asset1Data: filterByIndex(results.asset1Data),
-        asset2Data: filterByIndex(results.asset2Data),
-        minRangeSeries: filterByIndex(results.minRangeSeries),
-        maxRangeSeries: filterByIndex(results.maxRangeSeries),
-        minRebSeries: filterByIndex(results.minRebSeries),
-        maxRebSeries: filterByIndex(results.maxRebSeries),
-        relativeSeries: filterByIndex(results.relativeSeries),
-        // Note: singular values like 'finalValue' remain unchanged
-    };
-}
-
-function downsampleVolatility(volData, useHourly) {
-    if (!useHourly) return volData;
-
-    // Vol data is simple [time, value] arrays
-    // We can just filter each array
-    const filterSeries = (series) => {
-        const kept = [];
-        let lastDateStr = '';
-        series.forEach(d => {
-            const dateStr = new Date(d[0]).toDateString();
-            if (dateStr !== lastDateStr) {
-                kept.push(d);
-                lastDateStr = dateStr;
-            }
-        });
-        return kept;
-    };
-
-    return {
-        v7d: filterSeries(volData.v7d),
-        v30d: filterSeries(volData.v30d),
-        v90d: filterSeries(volData.v90d)
-    };
-}
 
 function updateURLParams() {
     const params = new URLSearchParams(window.location.search);
@@ -255,6 +197,7 @@ function updateURLParams() {
 // --- Initialization ---
 
 async function init() {
+    console.log("Backtester v11.0 Initializing...");
     // Global Elements
     baseSearchInput = document.getElementById('base-search');
     quoteSearchInput = document.getElementById('quote-search');
@@ -266,7 +209,8 @@ async function init() {
     endDateInput = document.getElementById('end-date');
     addStrategyBtn = document.getElementById('add-strategy-btn');
     runBtn = document.getElementById('run-btn');
-    chartScaleSelect = document.getElementById('chart-scale-select');
+    chartScaleToggle = document.getElementById('chart-scale-toggle');
+    scaleToggleWrapper = document.getElementById('scale-toggle-wrapper');
 
     // Attach Global Listeners
     if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => {
@@ -294,8 +238,27 @@ async function init() {
         addStrategyBtn.addEventListener('click', () => addStrategy());
     }
 
-    if (chartScaleSelect) {
-        chartScaleSelect.addEventListener('change', updateAllCharts);
+    if (chartScaleToggle && scaleToggleWrapper) {
+        chartScaleToggle.addEventListener('change', () => {
+            const isLog = chartScaleToggle.checked;
+            scaleToggleWrapper.classList.toggle('mode-linear', !isLog);
+            scaleToggleWrapper.classList.toggle('mode-log', isLog);
+            refreshDisplays(); // Use instant refresh instead of full re-calculate
+        });
+
+        // Add label click listeners
+        document.getElementById('label-linear')?.addEventListener('click', () => {
+            if (chartScaleToggle.checked) {
+                chartScaleToggle.checked = false;
+                chartScaleToggle.dispatchEvent(new Event('change'));
+            }
+        });
+        document.getElementById('label-log')?.addEventListener('click', () => {
+            if (!chartScaleToggle.checked) {
+                chartScaleToggle.checked = true;
+                chartScaleToggle.dispatchEvent(new Event('change'));
+            }
+        });
     }
 
     const strategiesContainer = document.getElementById('strategies-container');
@@ -643,21 +606,15 @@ function removeStrategy(id) {
 
 async function fetchCoinList() {
     try {
-        const cached = localStorage.getItem('internal_coin_list');
-        const timestamp = localStorage.getItem('internal_coin_list_ts');
-        const now = Date.now();
+        console.log("Fetching coin list from /api/coin/list...");
+        const response = await fetch('/api/coin/list');
+        if (!response.ok) throw new Error(`Failed to fetch internal coin list: ${response.status}`);
+        allCoins = await response.json();
+        console.log(`Successfully loaded ${allCoins.length} coins.`);
 
-        // Load from cache if valid (24h)
-        if (cached && timestamp && (now - timestamp < 86400000)) {
-            allCoins = JSON.parse(cached);
-        } else {
-            const response = await fetch('/api/coins');
-            if (!response.ok) throw new Error('Failed to fetch internal coin list');
-            allCoins = await response.json();
-
-            localStorage.setItem('internal_coin_list', JSON.stringify(allCoins));
-            localStorage.setItem('internal_coin_list_ts', now);
-        }
+        // Cache it for future, but we ignore cache for this specific fix
+        localStorage.setItem('internal_coin_list', JSON.stringify(allCoins));
+        localStorage.setItem('internal_coin_list_ts', Date.now());
     } catch (error) {
         console.error("Error loading coins from logic layer:", error);
     }
@@ -666,17 +623,40 @@ async function fetchCoinList() {
 function setupSearch(input, resultsContainer, setAssetCallback) {
     if (!input || !resultsContainer) return;
     input.addEventListener('input', () => {
-        const query = input.value.toLowerCase();
-        if (query.length < 2) {
+        const query = input.value.trim().toLowerCase();
+        if (query.length < 1) { // Reduced to 1 for better responsiveness
             resultsContainer.classList.add('hidden');
             return;
         }
-        const matches = allCoins.filter(c =>
-            c.symbol.toLowerCase().startsWith(query) ||
-            c.name.toLowerCase().includes(query)
-        ).slice(0, 50);
+
+        if (!allCoins || allCoins.length === 0) {
+            console.warn("Coin list empty, retrying fetch...");
+            fetchCoinList();
+            return;
+        }
+
+        const matches = allCoins.filter(c => {
+            const sym = (c.symbol || "").toLowerCase();
+            const nam = (c.name || "").toLowerCase();
+            // Match symbol starts with query OR symbol contains query OR name contains query
+            return sym.startsWith(query) || sym.includes(query) || nam.includes(query);
+        })
+            .sort((a, b) => {
+                // Sort to prioritize exact symbol matches
+                const asym = (a.symbol || "").toLowerCase();
+                const bsym = (b.symbol || "").toLowerCase();
+                if (asym === query) return -1;
+                if (bsym === query) return 1;
+                if (asym.startsWith(query) && !bsym.startsWith(query)) return -1;
+                if (!asym.startsWith(query) && bsym.startsWith(query)) return 1;
+                return 0;
+            })
+            .slice(0, 50);
+
+        console.log(`Dropdown for ${input.id}: query "${query}" -> ${matches.length} matches`);
 
         renderResults(matches, resultsContainer, (coin) => {
+            console.log(`Selected token: ${coin.symbol}`);
             input.value = coin.symbol.toUpperCase();
             resultsContainer.classList.add('hidden');
             setAssetCallback(coin);
@@ -754,14 +734,11 @@ async function updateAllCharts() {
             }
         }
 
-        const hourlyRadio = document.querySelector('input[name="resolution"][value="hourly"]');
-        const useHourly = hourlyRadio && hourlyRadio.checked;
-
         // Fetch shared price data once
         console.log(`Fetching history for: Base=${baseAsset.symbol}, Quote=${quoteAsset.symbol}`);
         await Promise.all([
-            baseAsset.fetchHistory(useHourly, startDatePoints, endDatePoints),
-            quoteAsset.fetchHistory(useHourly, startDatePoints, endDatePoints)
+            baseAsset.fetchHistory(startDatePoints, endDatePoints),
+            quoteAsset.fetchHistory(startDatePoints, endDatePoints)
         ]);
         console.log(`Fetch complete. Base data points: ${baseAsset.priceData?.length}`);
 
@@ -809,15 +786,12 @@ async function updateAllCharts() {
                 // but here we just calculate it. Wait, `ratioSeries` IS global for the run. 
                 // Plan said move it out. Let's stick to plan.)
 
-
                 const results = calculateV3Backtest(ratioSeries, minPct, maxPct, rebMinPct, rebMaxPct, baseAprPct, rebalanceMode, delayDays);
-                const displayResults = downsampleResults(results, useHourly);
 
-                s.chartInstance = renderChart(displayResults, s.canvas, s.chartInstance);
-                s.relativeChartInstance = renderRelativeChart(displayResults, s.relativeCanvas, s.relativeChartInstance);
+                s.chartInstance = renderChart(results, s.canvas, s.chartInstance);
+                s.relativeChartInstance = renderRelativeChart(results, s.relativeCanvas, s.relativeChartInstance);
 
-                const displayVol = downsampleVolatility(volatilityData, useHourly);
-                s.volatilityChartInstance = renderVolatilityChart(displayVol, s.volatilityCanvas, s.volatilityChartInstance);
+                s.volatilityChartInstance = renderVolatilityChart(volatilityData, s.volatilityCanvas, s.volatilityChartInstance);
 
                 s.histogramChartInstance = renderHistogram(results.inRangeDurations, s.histogramCanvas, s.histogramChartInstance, results.breakEvenDays, results.competitiveDays, results.averageInRangeDuration);
                 if (s.expectedDurationLabel) {
@@ -851,38 +825,12 @@ async function updateAllCharts() {
         const summarySection = document.getElementById('summary-section');
         if (summarySection) {
             if (allResults.length > 0) {
-                // Downsample for summary display
-                const allDisplayResults = allResults.map(r => ({ ...r, ...downsampleResults(r, useHourly) }));
-
-                summaryChartInstance = renderSummaryChart(allDisplayResults, document.getElementById('summaryChart'), summaryChartInstance);
-                yoySummaryChartInstance = renderYoYChart(allDisplayResults, document.getElementById('yoySummaryChart'), yoySummaryChartInstance);
-                lastCalculatedResults = allResults; // Store FULL results for Enlarge
+                lastCalculatedResults = allResults;
+                refreshDisplays();
             } else {
-                // summarySection.classList.add('hidden'); // Don't hide the section, just charts empty
                 lastCalculatedResults = [];
                 if (summaryChartInstance) summaryChartInstance.destroy();
                 if (yoySummaryChartInstance) yoySummaryChartInstance.destroy();
-            }
-        }
-
-        // If we have an enlarged chart open, re-render it to reflect potential changes (like Log Scale)
-        if (currentEnlargedState) {
-            const canvas = document.getElementById('enlargedChart');
-            if (currentEnlargedState.type === 'summary') {
-                enlargedChartInstance = renderSummaryChart(allResults, canvas, enlargedChartInstance);
-            } else if (currentEnlargedState.type === 'yoy-summary') {
-                enlargedChartInstance = renderYoYChart(allResults, canvas, enlargedChartInstance);
-            } else {
-                const strategy = strategies.find(s => s.id === currentEnlargedState.id);
-                if (strategy && strategy.lastResults) {
-                    if (currentEnlargedState.type === 'main') {
-                        enlargedChartInstance = renderChart(strategy.lastResults, canvas, enlargedChartInstance);
-                    } else if (currentEnlargedState.type === 'relative') {
-                        enlargedChartInstance = renderRelativeChart(strategy.lastResults, canvas, enlargedChartInstance);
-                    } else if (currentEnlargedState.type === 'volatility') {
-                        enlargedChartInstance = renderVolatilityChart(strategy.lastResults.volatilityData, canvas, enlargedChartInstance);
-                    }
-                }
             }
         }
 
@@ -895,6 +843,51 @@ async function updateAllCharts() {
             }
             if (s.loading) s.loading.classList.remove('active');
         });
+    }
+}
+
+/**
+ * Re-renders all existing charts with current state (e.g. Log Scale) 
+ * without re-calculating the entire backtest simulation.
+ */
+function refreshDisplays() {
+    // 1. Refresh individual strategy charts
+    strategies.forEach(s => {
+        if (s.lastResults) {
+            s.chartInstance = renderChart(s.lastResults, s.canvas, s.chartInstance);
+            s.relativeChartInstance = renderRelativeChart(s.lastResults, s.relativeCanvas, s.relativeChartInstance);
+            if (s.lastResults.volatilityData) {
+                s.volatilityChartInstance = renderVolatilityChart(s.lastResults.volatilityData, s.volatilityCanvas, s.volatilityChartInstance);
+            }
+        }
+    });
+
+    // 2. Refresh Global Summary Charts
+    if (lastCalculatedResults && lastCalculatedResults.length > 0) {
+        summaryChartInstance = renderSummaryChart(lastCalculatedResults, document.getElementById('summaryChart'), summaryChartInstance);
+        yoySummaryChartInstance = renderYoYChart(lastCalculatedResults, document.getElementById('yoySummaryChart'), yoySummaryChartInstance);
+    }
+
+    // 3. Refresh Enlarged Chart if modal is open
+    if (currentEnlargedState) {
+        const canvas = document.getElementById('enlargedChart');
+        if (!canvas) return;
+        if (currentEnlargedState.type === 'summary') {
+            enlargedChartInstance = renderSummaryChart(lastCalculatedResults, canvas, enlargedChartInstance);
+        } else if (currentEnlargedState.type === 'yoy-summary') {
+            enlargedChartInstance = renderYoYChart(lastCalculatedResults, canvas, enlargedChartInstance);
+        } else {
+            const strategy = strategies.find(s => s.id === currentEnlargedState.id);
+            if (strategy && strategy.lastResults) {
+                if (currentEnlargedState.type === 'main') {
+                    enlargedChartInstance = renderChart(strategy.lastResults, canvas, enlargedChartInstance);
+                } else if (currentEnlargedState.type === 'relative') {
+                    enlargedChartInstance = renderRelativeChart(strategy.lastResults, canvas, enlargedChartInstance);
+                } else if (currentEnlargedState.type === 'volatility') {
+                    enlargedChartInstance = renderVolatilityChart(strategy.lastResults.volatilityData, canvas, enlargedChartInstance);
+                }
+            }
+        }
     }
 }
 
@@ -1026,7 +1019,8 @@ function renderChart(results, canvas, existingInstance) {
             scales: {
                 x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 8 } },
                 y: {
-                    type: chartScaleSelect ? chartScaleSelect.value : 'linear',
+                    type: (chartScaleToggle && chartScaleToggle.checked) ? 'logarithmic' : 'linear',
+                    min: (chartScaleToggle && chartScaleToggle.checked) ? 1 : 0,
                     grid: { color: '#2d3748' },
                     ticks: { color: '#9ca3af' },
                     title: { display: true, text: 'Value (100 base)' }
@@ -1126,7 +1120,8 @@ function renderSummaryChart(allResults, canvas, existingInstance) {
             scales: {
                 x: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
                 y: {
-                    type: chartScaleSelect ? chartScaleSelect.value : 'linear',
+                    type: (chartScaleToggle && chartScaleToggle.checked) ? 'logarithmic' : 'linear',
+                    min: (chartScaleToggle && chartScaleToggle.checked) ? 1 : 0,
                     grid: { color: '#2d3748' },
                     ticks: { color: '#9ca3af' },
                     title: { display: true, text: 'Value (100 base)' }

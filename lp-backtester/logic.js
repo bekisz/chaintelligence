@@ -88,14 +88,13 @@ class Asset {
     /**
      * Fetches historical price data from our internal Postgres-backed API.
      */
-    async fetchHistory(useHourly = false, startTime = 0, endTime = Date.now()) {
+    async fetchHistory(startTime = 0, endTime = Date.now()) {
         try {
             // Fetch from our local API
-            const url = `/api/price-history?symbol=${this.symbol}`;
+            const url = `/api/coin/price-history?symbol=${this.symbol}`;
             const res = await fetch(url);
 
             if (!res.ok) {
-                // Fallback to CryptoCompare if local API fails? 
                 // No, user specifically wants Postgres.
                 throw new Error(`DB History API Error: ${res.status}`);
             }
@@ -118,8 +117,8 @@ class Asset {
     /**
      * Backward compatibility instance method (Private).
      */
-    async #getPriceHistory(useHourly, startTime, endTime) {
-        return this.fetchHistory(useHourly, startTime, endTime);
+    async #getPriceHistory(startTime, endTime) {
+        return this.fetchHistory(startTime, endTime);
     }
 }
 

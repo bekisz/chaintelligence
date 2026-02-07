@@ -79,6 +79,8 @@ The central source of truth for all indexed blockchain and off-chain data.
   - `uniswap_v3_swaps`: Historical transactional data used for volume and yield analysis.
   - `coin_price_history`: Multi-year time-series price data.
 
+**See the [Detailed Database Schema](../chain-feeder/docs/SCHEMA.md) for table definitions and relational constraints.**
+
 ### 2. ETL & Ingestion Layer (Apache Airflow)
 
 Automated pipelines (DAGs) responsible for keeping the Data Warehouse in sync with the physical world.

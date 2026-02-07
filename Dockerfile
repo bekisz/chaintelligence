@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir fastapi uvicorn psycopg2-binary python-dotenv
 # Copy the application code
 COPY routing-web/ ./routing-web/
 COPY lp-backtester/ ./lp-backtester/
+COPY chain-feeder/routing/ ./chain-feeder/routing/
 
 # Set working directory to routing-web as it contains the server
 WORKDIR /app/routing-web

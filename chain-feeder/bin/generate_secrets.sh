@@ -3,8 +3,8 @@
 # 1. Get the absolute path of the directory where this script resides
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 
-# 2. Define the path to the .env file (one level up from /bin)
-ENV_PATH="$(dirname "$SCRIPT_DIR")/.env"
+# 2. Define the path to the .env file (Two level up from /bin)
+ENV_PATH="$(dirname "$SCRIPT_DIR")/../.env"
 
 # Function to generate a random 32-byte base64 string
 generate_key() {
