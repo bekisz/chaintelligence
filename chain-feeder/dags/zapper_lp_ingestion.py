@@ -366,6 +366,7 @@ def ingest_positions(positions: list):
 def fetch_missing_ranges():
     """Fetches range data for positions missing ranges OR missing current state."""
     from include.uniswap_v4_range_fetcher import fetch_v4_position_range_data
+    from include.uniswap_v4_graph_fetcher import fetch_v4_position_range_data_from_graph
     
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     conn = pg_hook.get_conn()
@@ -392,7 +393,11 @@ def fetch_missing_ranges():
         
         data = None
         if protocol == 'Uniswap V4':
-            data = fetch_v4_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
+            # Use Graph-based fetcher for Arbitrum and Base, RPC for Ethereum
+            if network in ["Arbitrum", "Base"]:
+                data = fetch_v4_position_range_data_from_graph(label_for_fetcher, network, graph_api_key=api_key)
+            else:
+                data = fetch_v4_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
         else:
             data = fetch_position_range_data(label_for_fetcher, network, graph_api_key=api_key)
 

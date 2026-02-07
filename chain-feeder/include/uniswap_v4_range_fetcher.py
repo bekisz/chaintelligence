@@ -10,14 +10,32 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Constants
-RPC_URLS = [
-    "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de", # User Provided Valid Key
-    "https://eth.llamarpc.com",
-    "https://1rpc.io/eth", 
-    "https://cloudflare-eth.com"
-]
-POSITION_MANAGER = "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e"
+# Constants - Chain-Specific Configuration
+RPC_URLS = {
+    "Ethereum": [
+        "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de",
+        "https://eth.llamarpc.com",
+        "https://1rpc.io/eth", 
+        "https://cloudflare-eth.com"
+    ],
+    "Arbitrum": [
+        "https://arb1.arbitrum.io/rpc",
+        "https://arbitrum.llamarpc.com",
+        "https://1rpc.io/arb",
+    ],
+    "Base": [
+        "https://mainnet.base.org",
+        "https://base.llamarpc.com",
+        "https://1rpc.io/base",
+    ]
+}
+
+# Uniswap V4 Position Manager Addresses (per chain)
+POSITION_MANAGERS = {
+    "Ethereum": "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e",
+    "Arbitrum": "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e",  # Same address on Arbitrum
+    "Base": "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e",  # Same address on Base
+}
 
 # Selectors (Verified)
 SEL_GET_INFO = "0x7ba03aad" # getPoolAndPositionInfo(uint256)
@@ -34,14 +52,20 @@ KNOWN_DECIMALS = {
     "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": 18, # WETH
 }
 
-def call_rpc(method, params, id=1):
+def call_rpc(method, params, network="Ethereum", id=1):
     payload = {"jsonrpc": "2.0", "method": method, "params": params, "id": id}
     
     # Try logic: Configured RPC first, then fallbacks
     urls_to_try = []
     env_rpc = os.environ.get("RPC_URL")
     if env_rpc: urls_to_try.append(env_rpc)
-    urls_to_try.extend(RPC_URLS)
+    
+    # Add chain-specific RPCs
+    if network in RPC_URLS:
+        urls_to_try.extend(RPC_URLS[network])
+    else:
+        # Fallback to Ethereum if network not found
+        urls_to_try.extend(RPC_URLS.get("Ethereum", []))
     
     for url in urls_to_try:
         try:
@@ -77,22 +101,22 @@ def decode_string_rpc(hex_res):
         return None
 
 
-def fetch_symbol(addr):
+def fetch_symbol(addr, network="Ethereum"):
     # Handle native ETH (zero address in V4)
     if addr.lower() == "0x0000000000000000000000000000000000000000":
         return "ETH"
-    res = call_rpc("eth_call", [{"to": addr, "data": SEL_SYMBOL}, "latest"])
+    res = call_rpc("eth_call", [{"to": addr, "data": SEL_SYMBOL}, "latest"], network=network)
     if res:
         return decode_string_rpc(res)
     return "UNKNOWN"
 
-def fetch_decimals(addr):
+def fetch_decimals(addr, network="Ethereum"):
     # Handle native ETH (zero address in V4)
     if addr.lower() == "0x0000000000000000000000000000000000000000":
         return 18
     if addr.lower() in KNOWN_DECIMALS:
         return KNOWN_DECIMALS[addr.lower()]
-    res = call_rpc("eth_call", [{"to": addr, "data": SEL_DECIMALS}, "latest"])
+    res = call_rpc("eth_call", [{"to": addr, "data": SEL_DECIMALS}, "latest"], network=network)
     if res and res != "0x":
         try:
             return int(res, 16)
@@ -118,15 +142,23 @@ def tick_to_price(tick, d0, d1):
         return price * decimal_adjustment
     except: return 0
 
-def fetch_token_prices(c0, c1):
-    url = f"https://coins.llama.fi/prices/current/ethereum:{c0},ethereum:{c1}"
+def fetch_token_prices(c0, c1, network="Ethereum"):
+    # Map network names to DefiLlama chain identifiers
+    chain_map = {
+        "Ethereum": "ethereum",
+        "Arbitrum": "arbitrum",
+        "Base": "base"
+    }
+    chain_id = chain_map.get(network, "ethereum")
+    
+    url = f"https://coins.llama.fi/prices/current/{chain_id}:{c0},{chain_id}:{c1}"
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(url, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json().get("coins", {})
-            p0 = data.get(f"ethereum:{c0}", {}).get("price", 0)
-            p1 = data.get(f"ethereum:{c1}", {}).get("price", 0)
+            p0 = data.get(f"{chain_id}:{c0}", {}).get("price", 0)
+            p1 = data.get(f"{chain_id}:{c1}", {}).get("price", 0)
             return p0, p1
         else:
             logger.warning(f"V4-LLAMA: Price fetch status {resp.status_code}")
@@ -152,16 +184,21 @@ def fetch_token_prices_from_db(s0, s1):
         return 0.0, 0.0
 
 def fetch_v4_position_range_data(position_label, network, graph_api_key=None):
-    if network.lower() not in ["ethereum", "mainnet"]:
+    # Support Ethereum, Arbitrum, and Base
+    if network not in ["Ethereum", "Arbitrum", "Base"]:
+        logger.debug(f"V4: Unsupported network {network}")
         return None
         
     tid_str = extract_token_id(position_label)
     if not tid_str: return None
     tid = int(tid_str)
     
+    # Get chain-specific Position Manager address
+    position_manager = POSITION_MANAGERS.get(network, POSITION_MANAGERS["Ethereum"])
+    
     # 1. Get Pool & Position Info
     calldata = SEL_GET_INFO + format(tid, '064x')
-    res_hex = call_rpc("eth_call", [{"to": POSITION_MANAGER, "data": calldata}, "latest"])
+    res_hex = call_rpc("eth_call", [{"to": position_manager, "data": calldata}, "latest"], network=network)
     
     if not res_hex or res_hex == "0x":
         logger.warning(f"V4: Failed to get info for Token {tid}")
@@ -187,10 +224,10 @@ def fetch_v4_position_range_data(position_label, network, graph_api_key=None):
         tick_lower, tick_upper = tick_upper, tick_lower
         
     # 5. Metadata
-    d0 = fetch_decimals(c0_addr)
-    d1 = fetch_decimals(c1_addr)
-    s0 = fetch_symbol(c0_addr)
-    s1 = fetch_symbol(c1_addr)
+    d0 = fetch_decimals(c0_addr, network=network)
+    d1 = fetch_decimals(c1_addr, network=network)
+    s0 = fetch_symbol(c0_addr, network=network)
+    s1 = fetch_symbol(c1_addr, network=network)
     
     # 4. Current Tick (Uses Prices from DB)
     p0_usd, p1_usd = fetch_token_prices_from_db(s0, s1)

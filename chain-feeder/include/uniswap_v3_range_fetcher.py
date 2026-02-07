@@ -9,26 +9,22 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Uniswap V3 Subgraph IDs on The Graph Network
+# Uniswap V3 Subgraph IDs on The Graph Decentralized Network
+# These are the official deployment IDs for Uniswap V3 subgraphs
+# Source: https://thegraph.com/explorer
 UNISWAP_V3_SUBGRAPH_IDS = {
     "Ethereum": "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-    "Arbitrum": "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV", # Same ID often works on L2s via different endpoint, but checking... actually Arbitrum V3 is different.
-    # Canonical Arbitrum V3 on Graph Network: F7q3... NO, let's stick to known working ones or fallback.
-    # Using the IDs found in the JS file: Arbitrum V3 IDs were empty in JS!
-    # Let's use the explicit Decentralized ID for Ethereum, and keep hosted service as fallback for others if needed, but Gateway is best.
-    
-    # Valid Subgraph IDs (Decentralized Network)
-    "Ethereum": "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-    "Arbitrum": "H6Kuwy22UgyXQC4y89Gz28d11aQeUv6Qy7G3G6d3XW2w", # Example Arbitrum ID
-    "Polygon": "H6Kuwy22UgyXQC4y89Gz28d11aQeUv6Qy7G3G6d3XW2w", # Placeholder if needed
+    "Arbitrum": "3V7ZY6muhxaQL5qvntX1CFXJ32W7BxXZTGTwmpH5J4t3",  # Uniswap V3 Arbitrum (Official)
+    "Base": "HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1",  # Uniswap V3 Base (Official)
+    "Polygon": "3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm",  # Uniswap V3 Polygon
 }
 
-# Fallback/Legacy URLs
+# Graph Gateway URLs (Decentralized Network) - Requires API Key
 UNISWAP_V3_URLS = {
     "Ethereum": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-    "Arbitrum": "https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-arbitrum",
-    "Base": "https://api.studio.thegraph.com/query/48211/uniswap-v3-base/version/latest",
-    "Polygon": "https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon",
+    "Arbitrum": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/3V7ZY6muhxaQL5qvntX1CFXJ32W7BxXZTGTwmpH5J4t3",
+    "Base": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1",
+    "Polygon": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm",
 }
 
 POSITION_QUERY = """
@@ -166,16 +162,42 @@ def fetch_position_range_data(position_label, network, graph_api_key=None):
             logger.warning(f"Position {token_id} not found on {network}")
             return None
         
-        # Extract tick data
-        tick_lower = int(position["tickLower"]["tickIdx"])
-        tick_upper = int(position["tickUpper"]["tickIdx"])
-        current_tick = int(position["pool"]["tick"])
+        # Extract tick data with defensive checks
+        try:
+            tick_lower_obj = position.get("tickLower")
+            tick_upper_obj = position.get("tickUpper")
+            pool = position.get("pool")
+            
+            if tick_lower_obj is None or tick_upper_obj is None or not pool:
+                logger.error(f"Missing required fields in position {token_id}. tickLower: {tick_lower_obj}, tickUpper: {tick_upper_obj}, pool: {pool}")
+                return None
+            
+            # Handle both formats: object with tickIdx (Ethereum) or direct integer (Arbitrum/Base)
+            if isinstance(tick_lower_obj, dict):
+                tick_lower = int(tick_lower_obj["tickIdx"])
+            else:
+                tick_lower = int(tick_lower_obj)
+            
+            if isinstance(tick_upper_obj, dict):
+                tick_upper = int(tick_upper_obj["tickIdx"])
+            else:
+                tick_upper = int(tick_upper_obj)
+            
+            current_tick = int(pool["tick"])
+        except (KeyError, TypeError, ValueError) as e:
+            logger.error(f"Error extracting tick data for {token_id}: {e}. Position structure: {position}")
+            return None
         
         # Get token info
-        token0 = position["pool"]["token0"]
-        token1 = position["pool"]["token1"]
-        token0_decimals = int(token0["decimals"])
-        token1_decimals = int(token1["decimals"])
+        token0 = pool.get("token0")
+        token1 = pool.get("token1")
+        
+        if not token0 or not token1:
+            logger.error(f"Missing token info for {token_id}. token0: {token0}, token1: {token1}")
+            return None
+        
+        token0_decimals = int(token0.get("decimals", 18))
+        token1_decimals = int(token1.get("decimals", 18))
         
         # Convert ticks to prices
         price_lower = tick_to_price(tick_lower, token0_decimals, token1_decimals)
