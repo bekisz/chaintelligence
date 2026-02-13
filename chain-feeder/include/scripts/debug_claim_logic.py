@@ -5,7 +5,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-RPC = "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de"
+RPC = "https://rpc.ankr.com/eth/YOUR_RPC_KEY"
 TX_HASH = "0x9c05397b0635d349ec2ddad1d7404ce45eaa7d22d65e86e76369534fc61017e4"
 
 def debug_receipt():

@@ -314,7 +314,7 @@ UNISWAP_V4_GRAPHS = {
     "Base": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj",
 }
 
-GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "f4bbb084942bd73ae157159441b69afe")
+GRAPH_API_KEY = os.getenv("GRAPH_API_KEY")
 
 
 def fetch_v4_heuristic(endpoint, pool_id, origin, tick_lower, tick_upper):

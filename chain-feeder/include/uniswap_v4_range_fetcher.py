@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # Constants - Chain-Specific Configuration
 RPC_URLS = {
     "Ethereum": [
-        "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de",
+        "https://rpc.ankr.com/eth/YOUR_RPC_KEY",
         "https://eth.llamarpc.com",
         "https://1rpc.io/eth", 
         "https://cloudflare-eth.com"

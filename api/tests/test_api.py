@@ -68,6 +68,67 @@ class TestChaintelligenceAPI(unittest.TestCase):
         self.assertIn("routes", data)
         self.assertIn("total_volume", data)
 
+    def test_06_price_by_cmc_id_single(self):
+        """Test new endpoint: /api/assets/price-by-cmc-id with single ID"""
+        # Test with Bitcoin (CMC ID: 1)
+        url = f"{BASE_URL}/api/assets/price-by-cmc-id?id=1"
+        response = requests.get(url, auth=self.auth)
+        self.assertEqual(response.status_code, 200, f"Failed to fetch price by CMC ID: {response.text}")
+        data = response.json()
+        
+        # Check response structure
+        self.assertIn("data", data)
+        self.assertIn("status", data)
+        self.assertIn("timestamp", data["status"])
+        self.assertIn("error_code", data["status"])
+        self.assertEqual(data["status"]["error_code"], 0)
+        
+        # Check if data contains the requested ID
+        if len(data["data"]) > 0:
+            self.assertIn("1", data["data"])
+            coin = data["data"]["1"]
+            self.assertEqual(coin["cmc_id"], 1)
+            self.assertIn("symbol", coin)
+            self.assertIn("price", coin)
+            self.assertIn("percent_change_24h", coin)
+
+    def test_07_price_by_cmc_id_multiple(self):
+        """Test new endpoint: /api/assets/price-by-cmc-id with multiple IDs"""
+        # Test with BTC, ETH, BNB (1, 1027, 1839)
+        url = f"{BASE_URL}/api/assets/price-by-cmc-id?id=1,1027,1839"
+        response = requests.get(url, auth=self.auth)
+        self.assertEqual(response.status_code, 200, f"Failed to fetch multiple prices: {response.text}")
+        data = response.json()
+        
+        self.assertIn("data", data)
+        self.assertIn("status", data)
+        self.assertEqual(data["status"]["error_code"], 0)
+        
+        # At least some IDs should be found
+        self.assertIsInstance(data["data"], dict)
+
+    def test_08_price_by_cmc_id_invalid(self):
+        """Test new endpoint: /api/assets/price-by-cmc-id with invalid ID"""
+        url = f"{BASE_URL}/api/assets/price-by-cmc-id?id=abc"
+        response = requests.get(url, auth=self.auth)
+        self.assertEqual(response.status_code, 400, "Should reject non-integer IDs")
+        self.assertIn("Invalid CMC ID format", response.json()["detail"])
+
+    def test_09_price_by_cmc_id_too_many(self):
+        """Test new endpoint: /api/assets/price-by-cmc-id with too many IDs"""
+        # Create 101 IDs
+        ids = ",".join(str(i) for i in range(1, 102))
+        url = f"{BASE_URL}/api/assets/price-by-cmc-id?id={ids}"
+        response = requests.get(url, auth=self.auth)
+        self.assertEqual(response.status_code, 400, "Should reject more than 100 IDs")
+        self.assertIn("Too many IDs", response.json()["detail"])
+
+    def test_10_price_by_cmc_id_missing(self):
+        """Test new endpoint: /api/assets/price-by-cmc-id without ID parameter"""
+        url = f"{BASE_URL}/api/assets/price-by-cmc-id"
+        response = requests.get(url, auth=self.auth)
+        self.assertEqual(response.status_code, 422, "Should reject missing ID parameter")
+
 if __name__ == "__main__":
     print(f"Starting API Tests against {BASE_URL}...")
     unittest.main()

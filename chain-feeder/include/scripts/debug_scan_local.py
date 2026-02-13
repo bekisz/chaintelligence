@@ -16,7 +16,7 @@ V4_CORE_MANAGER = "0x000000000004444c5dc75cb358380d2e3de08a90"
 V4_MODIFY_TOPIC = "0xf208f4912782fd25c7f114ca3723a2d5dd6f3bcc3ac8db5af63baa85f711d5ec"
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
-RPC_URL = "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de"
+RPC_URL = "https://rpc.ankr.com/eth/YOUR_RPC_KEY"
 
 def fetch_tx_receipt_transfers(tx_hash, from_address, min_log_index):
     try:

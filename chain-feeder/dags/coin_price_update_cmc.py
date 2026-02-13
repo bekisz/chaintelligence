@@ -13,13 +13,12 @@ import os
 from include.coinmarketcap_client import fetch_crypto_prices, fetch_crypto_history
 
 # CMC API Configuration
-CMC_API_KEY = os.getenv('CMC_API_KEY', 'ee501995-c447-4274-96a9-cbb7bf06e6bc')
+CMC_API_KEY = os.getenv('CMC_API_KEY')
 CMC_MAP_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/map"
 CMC_INFO_URL = "https://pro-api.coinmarketcap.com/v2/cryptocurrency/info"
 
 # Assets (same as CryptoCompare DAG)
 asset_coin_prices = Asset("postgres://postgres:5432/chaintelligence/public/coin")
-asset_coin_history = Asset("postgres://postgres:5432/chaintelligence/public/coin_price_history")
 
 default_args = {
     'owner': 'airflow',
@@ -185,9 +184,19 @@ def sync_cmc_mapping():
     upsert_count = 0
     now = pendulum.now('UTC')
     
+    # Sort detailed_info by rank descending (worst rank first)
+    # This ensures that for duplicate symbols, the best rank (smallest number) is processed LAST
+    # and remains in the database due to the ON CONFLICT (symbol) clause.
+    # We use a very large rank for coins without a rank.
+    sorted_items = sorted(
+        detailed_info.items(), 
+        key=lambda x: rank_map.get(str(x[0]), 999999), 
+        reverse=True
+    )
+    
     with pg_hook.get_conn() as conn:
         with conn.cursor() as cur:
-            for cmc_id_str, info in detailed_info.items():
+            for cmc_id_str, info in sorted_items:
                 cmc_id = int(cmc_id_str)
                 symbol = info.get('symbol', '').upper()
                 name = info.get('name')
@@ -364,18 +373,6 @@ def update_tier1_prices():
     
     conn.commit()
     
-    # Daily snapshot
-    today = pendulum.now().start_of('day')
-    try:
-        cur.execute("""
-            INSERT INTO coin_price_history (symbol, timestamp, price)
-            SELECT symbol, %s, price FROM coin WHERE price IS NOT NULL
-            ON CONFLICT (symbol, timestamp) DO UPDATE SET price = EXCLUDED.price
-        """, (today,))
-        conn.commit()
-    except Exception as e:
-        logging.error(f"Failed to record daily snapshots: {e}")
-        conn.rollback()
     finally:
         cur.close()
         conn.close()
@@ -497,8 +494,10 @@ def update_tier2_prices():
                 conn.rollback()
     
     conn.commit()
-    cur.close()
-    conn.close()
+    
+    finally:
+        cur.close()
+        conn.close()
     
     logging.info(f"✅ Tier 2: Updated {updated_count}/{len(tier2_symbols)} coins")
     return {'updated': updated_count, 'tier': 2, 'total': len(tier2_symbols)}
@@ -617,8 +616,10 @@ def update_tier3_prices():
                 conn.rollback()
     
     conn.commit()
-    cur.close()
-    conn.close()
+    
+    finally:
+        cur.close()
+        conn.close()
     
     logging.info(f"✅ Tier 3: Updated {updated_count}/{len(tier3_symbols)} coins")
     return {'updated': updated_count, 'tier': 3, 'total': len(tier3_symbols)}

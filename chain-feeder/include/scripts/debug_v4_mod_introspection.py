@@ -3,7 +3,7 @@ import requests
 import os
 import json
 
-GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "f4bbb084942bd73ae157159441b69afe")
+GRAPH_API_KEY = os.getenv("GRAPH_API_KEY")
 SUBGRAPH_URL = f"https://gateway.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"
 
 def introspection_query():

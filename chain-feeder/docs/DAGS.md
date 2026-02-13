@@ -34,20 +34,32 @@ All DAGs use the `chaintelligence_db` Postgres connection and are designed to be
 
 **Schedule**: Every 15 minutes (`*/15 * * * *`)
 
+**Architecture**: 8-task DAG with visible branching logic for mapping sync and tier updates
+
 **Key Features**:
 
-- **3-Tier Price Update Strategy**:
-  - **Tier 1 (Always)**: Coins in active LP positions
-  - **Tier 2 (Conditional)**: Top 200 coins (every 30 min, configurable via `CMC_TIER2_INTERVAL_MINUTES`)
-  - **Tier 3 (Conditional)**: Rank 200-500 (hourly, configurable via `CMC_TIER3_INTERVAL_MINUTES`)
+- **Automatic Mapping Sync with Branching**:
+  - Decision task checks if mapping needs refresh (7+ days old)
+  - Branches to either sync or skip directly to price updates
+  - **Rank Extraction**: Properly extracts `rank` from `/cryptocurrency/map` endpoint (fixed bug where rank wasn't being saved)
 
-- **Auto-Mapping Sync**: Refreshes coin metadata when:
-  - Last sync > 7 days (checks `cmc_last_updated`)
-  - Missing coins from top 1000 rankings
+- **3-Tier Price Update Strategy with Check Tasks**:
+  - **Tier 1 (Active LP Coins)**: Always runs
+    - `check_tier1_needed` → `update_tier1_prices`
+    - Fetches coins from active liquidity pool positions
+  - **Tier 2 (Top 200 Coins)**: Conditional
+    - `check_tier2_needed` → `update_tier2_prices`
+    - Only runs if prices are stale (>30 min by default, configurable via `CMC_TIER2_INTERVAL_MINUTES`)
+  - **Tier 3 (Rank 200-500)**: Conditional
+    - `check_tier3_needed` → `update_tier3_prices`
+    - Only runs if prices are stale (>60 min by default, configurable via `CMC_TIER3_INTERVAL_MINUTES`)
+
+- **Parallel Execution**: All 3 tier check tasks run in parallel after mapping, each branches to its update task
 
 **Parameters**:
 
 - `force_cmc_mapping` (boolean, default: false): Force mapping sync regardless of freshness
+- `force_update_all` (boolean, default: false): Force all 3 tier updates regardless of staleness checks
 
 **Environment Variables**:
 
@@ -267,7 +279,7 @@ All DAGs use the `chaintelligence_db` Postgres connection and are designed to be
 ## DAG Scheduling Summary
 
 | DAG | Schedule | Interval | Primary Purpose |
-|-----|----------|----------|----------------|
+| --- | -------- | -------- | --------------- |
 | `coin_price_update_cmc` | `*/15 * * * *` | 15 min | Price feeds + coin metadata |
 | `zapper_lp_ingestion` | `*/30 * * * *` | 30 min | LP position tracking |
 | `the_graph_uniswap_v3_swaps` | `*/30 * * * *` | 30 min | Swap event sync |
@@ -332,7 +344,15 @@ docker exec chaintelligence-airflow-scheduler airflow tasks test <dag_id> <task_
 
 ```bash
 airflow dags trigger <dag_id>
+
+# Force CMC mapping sync
 airflow dags trigger coin_price_update_cmc --conf '{"force_cmc_mapping": true}'
+
+# Force all tier updates regardless of staleness
+airflow dags trigger coin_price_update_cmc --conf '{"force_update_all": true}'
+
+# Force both mapping and all tier updates
+airflow dags trigger coin_price_update_cmc --conf '{"force_cmc_mapping": true, "force_update_all": true}'
 ```
 
 ### View Task Instance Logs

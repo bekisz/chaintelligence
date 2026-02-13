@@ -2,7 +2,7 @@ import requests
 import json
 import logging
 
-RPC_URL = "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de"
+RPC_URL = "https://rpc.ankr.com/eth/YOUR_RPC_KEY"
 
 CANDIDATES = [
     ("Candidate V4", "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e"),

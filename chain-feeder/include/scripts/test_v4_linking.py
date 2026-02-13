@@ -5,7 +5,7 @@ Inspect Transaction Type and Verify Linking
 import requests
 import json
 
-ENDPOINT = "https://gateway.thegraph.com/api/f4bbb084942bd73ae157159441b69afe/subgraphs/id/G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"
+ENDPOINT = "https://gateway.thegraph.com/api/YOUR_API_KEY/subgraphs/id/G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"
 
 # 1. Introspect Transaction Type
 INTROSPECTION_QUERY = """

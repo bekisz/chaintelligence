@@ -45,7 +45,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/favicon.ico", "/static"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -638,6 +638,82 @@ async def get_coins():
         cur.close()
         conn.close()
         return coins
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/assets/price-by-cmc-id", tags=["Assets"])
+async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated CMC IDs (max 100)")):
+    """
+    Get coin price data by CoinMarketCap IDs.
+    
+    Similar to CMC's /v1/cryptocurrency/quotes/latest endpoint.
+    Returns price, percent changes, market cap, and metadata for the requested coins.
+    
+    Example: ?id=1,1027,825
+    """
+    try:
+        # Parse and validate IDs
+        try:
+            cmc_ids = [int(x.strip()) for x in id.split(',')]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid CMC ID format. IDs must be integers.")
+        
+        if len(cmc_ids) > 100:
+            raise HTTPException(status_code=400, detail="Too many IDs requested. Maximum is 100.")
+        
+        if len(cmc_ids) == 0:
+            raise HTTPException(status_code=400, detail="At least one CMC ID is required.")
+        
+        # Query database
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        
+        query = """
+        SELECT 
+            cmc_id, symbol, name, price, price_timestamp,
+            percent_change_1h, percent_change_24h, percent_change_7d,
+            market_cap, tvl, cmc_rank, image_url, ethereum_address
+        FROM coin
+        WHERE cmc_id = ANY(%s)
+        """
+        cur.execute(query, (cmc_ids,))
+        rows = cur.fetchall()
+        
+        # Build response keyed by CMC ID
+        data = {}
+        for row in rows:
+            cmc_id_val = row[0]
+            data[str(cmc_id_val)] = {
+                "cmc_id": cmc_id_val,
+                "symbol": row[1],
+                "name": row[2],
+                "price": float(row[3]) if row[3] is not None else None,
+                "price_timestamp": row[4].isoformat() if row[4] is not None else None,
+                "percent_change_1h": float(row[5]) if row[5] is not None else None,
+                "percent_change_24h": float(row[6]) if row[6] is not None else None,
+                "percent_change_7d": float(row[7]) if row[7] is not None else None,
+                "market_cap": float(row[8]) if row[8] is not None else None,
+                "tvl": float(row[9]) if row[9] is not None else None,
+                "cmc_rank": row[10],
+                "image_url": row[11],
+                "ethereum_address": row[12]
+            }
+        
+        cur.close()
+        conn.close()
+        
+        return {
+            "data": data,
+            "status": {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "error_code": 0,
+                "error_message": None,
+                "total_count": len(data)
+            }
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

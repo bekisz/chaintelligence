@@ -190,7 +190,7 @@ def ingest_coins(positions: list):
     conn.close()
     logging.info(f"Ingested {inserted} new coins, updated {updated} existing.")
 
-@task
+@task(outlets=[asset_coins])
 def update_prices():
     """Updates prices in 'coin' table if older than 10 minutes."""
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')

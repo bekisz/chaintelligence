@@ -27,7 +27,7 @@ TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523
 
 # RPCs
 RPC_URLS = {
-    "Ethereum": "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de",
+    "Ethereum": os.getenv("RPC_URL", "https://eth.llamarpc.com"),
     "Arbitrum": "https://arb1.arbitrum.io/rpc",
     "Base": "https://mainnet.base.org",
 }

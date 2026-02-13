@@ -5,7 +5,7 @@ import logging
 # New V3 Topic
 COLLECT_TOPIC = "0x40d0efd1a53d60ecbf40971b9daf7dc90178c3aadc7aab1765632738fa8b8f01"
 V3_MANAGER = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
-RPC_URL = "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de"
+RPC_URL = "https://rpc.ankr.com/eth/YOUR_RPC_KEY"
 
 def test():
     block = 24417817

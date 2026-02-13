@@ -3,7 +3,7 @@ import requests
 import os
 import json
 
-GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "f4bbb084942bd73ae157159441b69afe")
+GRAPH_API_KEY = os.getenv("GRAPH_API_KEY")
 # Using Arbitrum endpoint as it seems to be the most active/official V4 deployment according to file comments
 # But user position is on Ethereum? Let's try Ethereum endpoint first, even if placeholder.
 # If Ethereum fails, try Arbitrum.

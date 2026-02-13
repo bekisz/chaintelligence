@@ -1,6 +1,6 @@
 import requests
 
-RPC = "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de"
+RPC = "https://rpc.ankr.com/eth/YOUR_RPC_KEY"
 ADDRESS = "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e"
 WALLET = "0xe34eb31bfd2afea4320b1ce0d1b8ae943afac425"
 

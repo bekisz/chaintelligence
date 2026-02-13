@@ -2,7 +2,7 @@ import requests
 import sys
 import json
 
-RPC_URL = "https://rpc.ankr.com/eth/2087a416f7a49024a0de38a87ae2c088cf7aaa743e57d7c9c8c9573aed7829de" # Default Eth
+RPC_URL = "https://rpc.ankr.com/eth/YOUR_RPC_KEY" # Default Eth
 
 def inspect(tx_hash):
     payload = {"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":[tx_hash],"id":1}

@@ -6,7 +6,7 @@ import sys
 # Add parent dir to path to import fetcher if needed, or just copy constants
 sys.path.append(os.path.join(os.path.dirname(__file__), '../'))
 
-GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "f4bbb084942bd73ae157159441b69afe") # From .env
+GRAPH_API_KEY = os.getenv("GRAPH_API_KEY") # From .env
 SUBGRAPH_ID = "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
 ENDPOINT = f"https://gateway.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/{SUBGRAPH_ID}"
 
