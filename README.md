@@ -29,45 +29,52 @@ Once running, access the services:
 
 ## 🔑 Configuration & Secrets
 
-The application requires several environment variables to function. Create a `.env` file in the root directory based on the following requirements:
+The application uses a dual-environment file structure to separate public configuration from private secrets:
 
-### Portal Authentication
+1. **`.env.config`**: Contains public application settings (intervals, target addresses, database names). **This file is tracked in Git.**
+2. **`.env.secrets`**: Contains sensitive API keys and passwords. **This file is ignored by Git.**
 
-- `PORTAL_USERNAME`: The admin username for the web portal (default: `admin`).
-- `PORTAL_PASSWORD`: The admin password for the web portal.
+### Setup Instructions
 
-### DeFi API Keys
+1. **Copy the template**:
 
-- `GRAPH_API_KEY`: API key for [The Graph](https://thegraph.com/) (used for Uniswap V3 swap data).
-- `ZAPPER_AUTH_HEADER`: Base64 encoded Basic Auth header for the [Zapper API](https://zapper.xyz/developers) (e.g., `Basic <encoded_key>`).
-- `CRYPTOCOMPARE_API_KEY`: API key for [CryptoCompare](https://min-api.cryptocompare.com/) (used for historical token prices in the backtester).
+   ```bash
+   cp .env.secrets.example .env.secrets
+   ```
 
-### Monitoring Targets
+2. **Fill in the secrets** in `.env.secrets` using the sources listed below.
+3. (Optional) **Modify public config** in `.env.config`
 
-- `TARGET_ADDRESS`: A comma-separated list of Ethereum/EVM addresses to track for LP positions (e.g., `0x123...,0x456...`).
+---
 
-### Airflow Internal Secrets (Required for DAG Scheduling)
+### Where to get the Keys
 
-These keys are essential for Airflow 3.0 internal security and data encryption. **They must be identical across all Airflow services** (webserver, scheduler, dag-processor) in a single deployment.
+| Secret | Provider | Purpose |
+| :--- | :--- | :--- |
+| `GRAPH_API_KEY` | [The Graph Studio](https://thegraph.com/studio/) | Uniswap V3/V4 on-chain event data |
+| `CMC_API_KEY` | [CoinMarketCap API](https://coinmarketcap.com/api/) | Real-time prices & metadata |
+| `ZAPPER_AUTH_HEADER` | [Zapper Developer](https://zapper.xyz/developer) | LP Portfolio balances & valuations |
+| `CRYPTOCOMPARE_API_KEY` | [CryptoCompare](https://min-api.cryptocompare.com/) | Historical price fallback |
+| `RPC_URL` | [Ankr](https://www.ankr.com/) / [Alchemy](https://www.alchemy.com/) | Direct Ethereum node connectivity |
 
-- `FERNET_KEY`: Used to encrypt sensitive data (like API keys) in the Airflow metadata database.
-- `INTERNAL_API_SECRET_KEY`: A shared secret that allows internal Airflow components to communicate securely.
-- `JWT_SECRET`: Used to sign JSON Web Tokens for API authentication and session security.
-- `AIRFLOW_SECRET_KEY`: Used by the web server for session management and CSRF protection.
+### Airflow Security Keys
 
-> [!TIP]
-> **Generating New Keys**: For a new deployment, you can generate a fresh key by running:
->
-> ```bash
-> docker run --rm apache/airflow:3.0.0 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-> ```
->
-> You can reuse the same generated string for all four keys for simplicity, or generate unique ones for each.
+The following keys are required for internal Airflow 3.0 security. You can generate them by running:
 
-### Database
+```bash
+# Generate a single key suitable for all 4 slots
+openssl rand -base64 32
+```
 
-- `DATA_WAREHOUSE_DB`: Connection string for the internal Postgres database.
-  - Default: `dbname=chaintelligence user=airflow password=airflow host=postgres port=5432`
+- `INTERNAL_API_SECRET_KEY`, `FERNET_KEY`, `AIRFLOW_SECRET_KEY`, `JWT_SECRET`
+
+---
+
+### Essential Public Config (`.env.config`)
+
+- `TARGET_ADDRESS`: Comma-separated list of EVM addresses to monitor.
+- `DATA_WAREHOUSE_DB`: Connection string for the internal database.
+- `PORTAL_USERNAME`: Admin login for the portal dashboard.
 
 ---
 

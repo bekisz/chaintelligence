@@ -1,8 +1,8 @@
 from airflow import DAG
 from airflow.sdk import task, Asset
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.models.param import Param
-from airflow.utils.trigger_rule import TriggerRule
+from airflow.sdk import Param
+from airflow.task.trigger_rule import TriggerRule
 import pendulum
 from datetime import timedelta
 import logging
@@ -10,7 +10,7 @@ import requests
 import os
 
 # Import the CoinMarketCap client
-from include.coinmarketcap_client import fetch_crypto_prices, fetch_crypto_history
+from include.coinmarketcap_client import fetch_crypto_prices, fetch_crypto_history, fetch_crypto_quotes_by_id
 
 # CMC API Configuration
 CMC_API_KEY = os.getenv('CMC_API_KEY')
@@ -303,17 +303,18 @@ def check_tier1_needed(force_update: bool = False):
 
 
 @task(outlets=[asset_coin_prices])
-def update_tier1_prices():
+def update_tier1_prices(force_update: bool = False):
     """
     Tier 1: Update prices for coins in active LP positions (ALWAYS).
-    
-    These are the most critical prices as they affect live position valuations.
-    Runs on every DAG execution.
     """
     from include.coinmarketcap_client import fetch_crypto_prices
     
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     now = pendulum.now()
+    
+    # Handle Jinja template string → boolean (if passed from params)
+    if isinstance(force_update, str):
+        force_update = force_update.lower() in ('true', '1', 'yes')
     
     # Get coins from active LP positions
     tier1_query = """
@@ -328,51 +329,68 @@ def update_tier1_prices():
     tier1_rows = pg_hook.get_records(tier1_query)
     tier1_symbols = [row[0] for row in tier1_rows if row[0]]
     
-    logging.info(f"📊 Tier 1: Updating prices for {len(tier1_symbols)} active LP coins")
+    # Add force-included coins
+    import os
+    force_include = [s.strip() for s in os.getenv('CMC_TIER1_FORCE_INCLUDE_COIN_LIST', '').split(',') if s.strip()]
+    tier1_symbols = list(set(tier1_symbols + force_include))
     
-    # Map symbols and fetch prices
-    fetch_symbols = [SYMBOL_MAPPING.get(sym.upper(), sym.upper()) for sym in tier1_symbols]
-    all_metrics = fetch_crypto_prices(list(set(fetch_symbols)))
+    if not tier1_symbols:
+        logging.info("ℹ️  Tier 1: No coins to update.")
+        return {'updated': 0, 'tier': 1, 'total': 0}
+
+    logging.info(f"📊 Tier 1: Updating prices for {len(tier1_symbols)} coins")
+    
+    # Map symbols to IDs from database to use ID-based fetching
+    # We select coin.symbol too so we can map results back to our input list
+    id_mapping_query = f"""
+        SELECT symbol, cmc_id FROM coin 
+        WHERE symbol IN ({','.join(["'%s'" % s for s in tier1_symbols])})
+        AND cmc_id IS NOT NULL
+    """
+    id_rows = pg_hook.get_records(id_mapping_query)
+    id_to_symbol = {row[1]: row[0] for row in id_rows}
+    tier1_ids = list(id_to_symbol.keys())
+
+    all_metrics = fetch_crypto_quotes_by_id(tier1_ids)
     
     if not all_metrics:
-        logging.error("❌ Failed to fetch Tier 1 prices")
-        return {'updated': 0, 'tier': 1, 'error': 'API failed'}
+        raise Exception(f"❌ Failed to fetch Tier 1 prices for {len(tier1_symbols)} coins - CMC API returned no data (likely rate limited)")
     
     # Update database
     conn = pg_hook.get_conn()
     cur = conn.cursor()
-    updated_count = 0
-    
-    for sym in tier1_symbols:
-        fetch_sym = SYMBOL_MAPPING.get(sym.upper(), sym.upper())
-        metrics = all_metrics.get(fetch_sym)
+    try:
+        updated_count = 0
+        # Iterate over results from CMC (keyed by ID)
+        for cmc_id, metrics in all_metrics.items():
+            sym = id_to_symbol.get(cmc_id)
+            if not sym: continue
+            
+            if metrics.get('price') is not None:
+                try:
+                    cur.execute("""
+                        UPDATE coin 
+                        SET price = %s, price_timestamp = %s,
+                            percent_change_1h = %s, percent_change_24h = %s, percent_change_7d = %s,
+                            percent_change_30d = %s, percent_change_60d = %s, percent_change_90d = %s,
+                            market_cap = %s, market_cap_dominance = %s, fully_diluted_market_cap = %s,
+                            tvl = %s, total_supply = %s, circulating_supply = %s, max_supply = %s,
+                            cmc_last_updated = %s
+                        WHERE symbol = %s
+                    """, (
+                        metrics.get('price'), now,
+                        metrics.get('percent_change_1h'), metrics.get('percent_change_24h'), metrics.get('percent_change_7d'),
+                        metrics.get('percent_change_30d'), metrics.get('percent_change_60d'), metrics.get('percent_change_90d'),
+                        metrics.get('market_cap'), metrics.get('market_cap_dominance'), metrics.get('fully_diluted_market_cap'),
+                        metrics.get('tvl'), metrics.get('total_supply'), metrics.get('circulating_supply'), metrics.get('max_supply'),
+                        metrics.get('last_updated'), sym
+                    ))
+                    updated_count += 1
+                except Exception as e:
+                    logging.error(f"Failed to update price for {sym}: {e}")
+                    conn.rollback()
         
-        if metrics and metrics.get('price') is not None:
-            try:
-                cur.execute("""
-                    UPDATE coin 
-                    SET price = %s, price_timestamp = %s,
-                        percent_change_1h = %s, percent_change_24h = %s, percent_change_7d = %s,
-                        percent_change_30d = %s, percent_change_60d = %s, percent_change_90d = %s,
-                        market_cap = %s, market_cap_dominance = %s, fully_diluted_market_cap = %s,
-                        tvl = %s, total_supply = %s, circulating_supply = %s, max_supply = %s,
-                        cmc_last_updated = %s
-                    WHERE symbol = %s
-                """, (
-                    metrics.get('price'), now,
-                    metrics.get('percent_change_1h'), metrics.get('percent_change_24h'), metrics.get('percent_change_7d'),
-                    metrics.get('percent_change_30d'), metrics.get('percent_change_60d'), metrics.get('percent_change_90d'),
-                    metrics.get('market_cap'), metrics.get('market_cap_dominance'), metrics.get('fully_diluted_market_cap'),
-                    metrics.get('tvl'), metrics.get('total_supply'), metrics.get('circulating_supply'), metrics.get('max_supply'),
-                    metrics.get('last_updated'), sym
-                ))
-                updated_count += 1
-            except Exception as e:
-                logging.error(f"Failed to update price for {sym}: {e}")
-                conn.rollback()
-    
-    conn.commit()
-    
+        conn.commit()
     finally:
         cur.close()
         conn.close()
@@ -399,19 +417,21 @@ def check_tier2_needed(force_update: bool = False):
     if isinstance(force_update, str):
         force_update = force_update.lower() in ('true', '1', 'yes')
     
+    TIER2_MAX_RANK = int(os.getenv('CMC_TIER2_MAX_RANK', '200'))
+    
     if force_update:
-        # Get total count of top 200 coins
-        count_query = "SELECT COUNT(*) FROM coin WHERE cmc_rank IS NOT NULL AND cmc_rank <= 200"
+        # Get total count of Tier 2 coins
+        count_query = f"SELECT COUNT(*) FROM coin WHERE cmc_rank IS NOT NULL AND cmc_rank <= {TIER2_MAX_RANK}"
         count = pg_hook.get_first(count_query)[0]
-        logging.info(f"🚀 Tier 2: FORCED update for {count} top 200 coins")
+        logging.info(f"🚀 Tier 2: FORCED update for {count} top {TIER2_MAX_RANK} coins")
         return 'update_tier2_prices' if count > 0 else None
     
     TIER2_INTERVAL_MINUTES = int(os.getenv('CMC_TIER2_INTERVAL_MINUTES', '30'))
     tier2_cutoff = now.subtract(minutes=TIER2_INTERVAL_MINUTES)
     
-    tier2_query = """
+    tier2_query = f"""
         SELECT COUNT(*) FROM coin 
-        WHERE cmc_rank IS NOT NULL AND cmc_rank <= 200
+        WHERE cmc_rank IS NOT NULL AND cmc_rank <= {TIER2_MAX_RANK}
         AND (price_timestamp IS NULL OR price_timestamp < %s)
     """
     count = pg_hook.get_first(tier2_query, parameters=(tier2_cutoff,))[0]
@@ -427,80 +447,88 @@ def check_tier2_needed(force_update: bool = False):
 
 
 @task(outlets=[asset_coin_prices])
-def update_tier2_prices():
+def update_tier2_prices(force_update: bool = False):
     """
-    Tier 2: Update prices for top 200 coins (CONDITIONAL).
-    
-    Only updates if last price is older than CMC_TIER2_INTERVAL_MINUTES (default: 30 min).
+    Tier 2: Update prices for top coins (CONDITIONAL or FORCED).
     """
     import os
-    from include.coinmarketcap_client import fetch_crypto_prices
+    from include.coinmarketcap_client import fetch_crypto_quotes_by_id
     
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     now = pendulum.now()
     
+    # Handle Jinja template string → boolean
+    if isinstance(force_update, str):
+        force_update = force_update.lower() in ('true', '1', 'yes')
+    
     TIER2_INTERVAL_MINUTES = int(os.getenv('CMC_TIER2_INTERVAL_MINUTES', '30'))
-    tier2_cutoff = now.subtract(minutes=TIER2_INTERVAL_MINUTES)
+    TIER2_MAX_RANK = int(os.getenv('CMC_TIER2_MAX_RANK', '200'))
     
-    tier2_query = """
-        SELECT symbol FROM coin 
-        WHERE cmc_rank IS NOT NULL AND cmc_rank <= 200
-        AND (price_timestamp IS NULL OR price_timestamp < %s)
-    """
-    tier2_rows = pg_hook.get_records(tier2_query, parameters=(tier2_cutoff,))
-    tier2_symbols = [row[0] for row in tier2_rows if row[0]]
+    if force_update:
+        tier2_query = f"SELECT symbol, cmc_id FROM coin WHERE cmc_rank IS NOT NULL AND cmc_rank <= {TIER2_MAX_RANK}"
+        tier2_rows = pg_hook.get_records(tier2_query)
+    else:
+        tier2_cutoff = now.subtract(minutes=TIER2_INTERVAL_MINUTES)
+        tier2_query = f"""
+            SELECT symbol, cmc_id FROM coin 
+            WHERE cmc_rank IS NOT NULL AND cmc_rank <= {TIER2_MAX_RANK}
+            AND (price_timestamp IS NULL OR price_timestamp < %s)
+        """
+        tier2_rows = pg_hook.get_records(tier2_query, parameters=(tier2_cutoff,))
+
+    # Create mapping and ID list
+    id_to_symbol = {row[1]: row[0] for row in tier2_rows if row[1]}
+    tier2_ids = list(id_to_symbol.keys())
     
-    logging.info(f"📊 Tier 2: Updating prices for {len(tier2_symbols)} top 200 coins")
+    if not tier2_ids:
+        logging.info("ℹ️  Tier 2: No coins to update.")
+        return {'updated': 0, 'tier': 2, 'total': 0}
+
+    logging.info(f"📊 Tier 2: Updating prices for {len(tier2_ids)} coins")
     
-    # Map symbols and fetch prices
-    fetch_symbols = [SYMBOL_MAPPING.get(sym.upper(), sym.upper()) for sym in tier2_symbols]
-    all_metrics = fetch_crypto_prices(list(set(fetch_symbols)))
+    all_metrics = fetch_crypto_quotes_by_id(tier2_ids)
     
     if not all_metrics:
-        logging.error("❌ Failed to fetch Tier 2 prices")
-        return {'updated': 0, 'tier': 2, 'error': 'API failed'}
+        raise Exception(f"❌ Failed to fetch Tier 2 prices for {len(tier2_ids)} coins - CMC API returned no data (likely rate limited)")
     
     # Update database  
     conn = pg_hook.get_conn()
     cur = conn.cursor()
-    updated_count = 0
-    
-    for sym in tier2_symbols:
-        fetch_sym = SYMBOL_MAPPING.get(sym.upper(), sym.upper())
-        metrics = all_metrics.get(fetch_sym)
+    try:
+        updated_count = 0
+        for cmc_id, metrics in all_metrics.items():
+            sym = id_to_symbol.get(cmc_id)
+            if metrics.get('price') is not None:
+                try:
+                    cur.execute("""
+                        UPDATE coin 
+                        SET price = %s, price_timestamp = %s,
+                            percent_change_1h = %s, percent_change_24h = %s, percent_change_7d = %s,
+                            percent_change_30d = %s, percent_change_60d = %s, percent_change_90d = %s,
+                            market_cap = %s, market_cap_dominance = %s, fully_diluted_market_cap = %s,
+                            tvl = %s, total_supply = %s, circulating_supply = %s, max_supply = %s,
+                            cmc_last_updated = %s
+                        WHERE symbol = %s
+                    """, (
+                        metrics.get('price'), now,
+                        metrics.get('percent_change_1h'), metrics.get('percent_change_24h'), metrics.get('percent_change_7d'),
+                        metrics.get('percent_change_30d'), metrics.get('percent_change_60d'), metrics.get('percent_change_90d'),
+                        metrics.get('market_cap'), metrics.get('market_cap_dominance'), metrics.get('fully_diluted_market_cap'),
+                        metrics.get('tvl'), metrics.get('total_supply'), metrics.get('circulating_supply'), metrics.get('max_supply'),
+                        metrics.get('last_updated'), sym
+                    ))
+                    updated_count += 1
+                except Exception as e:
+                    logging.error(f"Failed to update price for {sym}: {e}")
+                    conn.rollback()
         
-        if metrics and metrics.get('price') is not None:
-            try:
-                cur.execute("""
-                    UPDATE coin 
-                    SET price = %s, price_timestamp = %s,
-                        percent_change_1h = %s, percent_change_24h = %s, percent_change_7d = %s,
-                        percent_change_30d = %s, percent_change_60d = %s, percent_change_90d = %s,
-                        market_cap = %s, market_cap_dominance = %s, fully_diluted_market_cap = %s,
-                        tvl = %s, total_supply = %s, circulating_supply = %s, max_supply = %s,
-                        cmc_last_updated = %s
-                    WHERE symbol = %s
-                """, (
-                    metrics.get('price'), now,
-                    metrics.get('percent_change_1h'), metrics.get('percent_change_24h'), metrics.get('percent_change_7d'),
-                    metrics.get('percent_change_30d'), metrics.get('percent_change_60d'), metrics.get('percent_change_90d'),
-                    metrics.get('market_cap'), metrics.get('market_cap_dominance'), metrics.get('fully_diluted_market_cap'),
-                    metrics.get('tvl'), metrics.get('total_supply'), metrics.get('circulating_supply'), metrics.get('max_supply'),
-                    metrics.get('last_updated'), sym
-                ))
-                updated_count += 1
-            except Exception as e:
-                logging.error(f"Failed to update price for {sym}: {e}")
-                conn.rollback()
-    
-    conn.commit()
-    
+        conn.commit()
     finally:
         cur.close()
         conn.close()
     
-    logging.info(f"✅ Tier 2: Updated {updated_count}/{len(tier2_symbols)} coins")
-    return {'updated': updated_count, 'tier': 2, 'total': len(tier2_symbols)}
+    logging.info(f"✅ Tier 2: Updated {updated_count}/{len(tier2_ids)} coins")
+    return {'updated': updated_count, 'tier': 2, 'total': len(tier2_ids)}
 
 
 @task.branch(trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
@@ -521,19 +549,34 @@ def check_tier3_needed(force_update: bool = False):
     if isinstance(force_update, str):
         force_update = force_update.lower() in ('true', '1', 'yes')
     
+    TIER2_MAX_RANK = int(os.getenv('CMC_TIER2_MAX_RANK', '200'))
+    TIER3_MAX_RANK = int(os.getenv('CMC_TIER3_MAX_RANK', '500'))
+    
     if force_update:
-        # Get total count of rank 200-500 coins
-        count_query = "SELECT COUNT(*) FROM coin WHERE cmc_rank IS NOT NULL AND cmc_rank > 200 AND cmc_rank <= 500"
+        # Get total count of Tier 3 coins
+        if TIER3_MAX_RANK == -1:
+            rank_condition = f"cmc_rank > {TIER2_MAX_RANK}"
+            desc = f"all rank > {TIER2_MAX_RANK}"
+        else:
+            rank_condition = f"cmc_rank > {TIER2_MAX_RANK} AND cmc_rank <= {TIER3_MAX_RANK}"
+            desc = f"rank {TIER2_MAX_RANK}-{TIER3_MAX_RANK}"
+            
+        count_query = f"SELECT COUNT(*) FROM coin WHERE cmc_rank IS NOT NULL AND {rank_condition}"
         count = pg_hook.get_first(count_query)[0]
-        logging.info(f"🚀 Tier 3: FORCED update for {count} rank 200-500 coins")
+        logging.info(f"🚀 Tier 3: FORCED update for {count} {desc} coins")
         return 'update_tier3_prices' if count > 0 else None
     
     TIER3_INTERVAL_MINUTES = int(os.getenv('CMC_TIER3_INTERVAL_MINUTES', '60'))
     tier3_cutoff = now.subtract(minutes=TIER3_INTERVAL_MINUTES)
     
-    tier3_query = """
+    if TIER3_MAX_RANK == -1:
+        rank_condition = f"cmc_rank > {TIER2_MAX_RANK}"
+    else:
+        rank_condition = f"cmc_rank > {TIER2_MAX_RANK} AND cmc_rank <= {TIER3_MAX_RANK}"
+
+    tier3_query = f"""
         SELECT COUNT(*) FROM coin 
-        WHERE cmc_rank IS NOT NULL AND cmc_rank > 200 AND cmc_rank <= 500
+        WHERE cmc_rank IS NOT NULL AND {rank_condition}
         AND (price_timestamp IS NULL OR price_timestamp < %s)
     """
     count = pg_hook.get_first(tier3_query, parameters=(tier3_cutoff,))[0]
@@ -549,80 +592,94 @@ def check_tier3_needed(force_update: bool = False):
 
 
 @task(outlets=[asset_coin_prices])
-def update_tier3_prices():
+def update_tier3_prices(force_update: bool = False):
     """
-    Tier 3: Update prices for rank 200-500 coins (CONDITIONAL).
-    
-    Only updates if last price is older than CMC_TIER3_INTERVAL_MINUTES (default: 60 min).
+    Tier 3: Update prices for lower ranked coins (CONDITIONAL or FORCED).
     """
     import os
-    from include.coinmarketcap_client import fetch_crypto_prices
+    from include.coinmarketcap_client import fetch_crypto_quotes_by_id
     
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     now = pendulum.now()
     
+    # Handle Jinja template string → boolean
+    if isinstance(force_update, str):
+        force_update = force_update.lower() in ('true', '1', 'yes')
+    
+    TIER2_MAX_RANK = int(os.getenv('CMC_TIER2_MAX_RANK', '200'))
+    TIER3_MAX_RANK = int(os.getenv('CMC_TIER3_MAX_RANK', '500'))
     TIER3_INTERVAL_MINUTES = int(os.getenv('CMC_TIER3_INTERVAL_MINUTES', '60'))
-    tier3_cutoff = now.subtract(minutes=TIER3_INTERVAL_MINUTES)
     
-    tier3_query = """
-        SELECT symbol FROM coin 
-        WHERE cmc_rank IS NOT NULL AND cmc_rank > 200 AND cmc_rank <= 500
-        AND (price_timestamp IS NULL OR price_timestamp < %s)
-    """
-    tier3_rows = pg_hook.get_records(tier3_query, parameters=(tier3_cutoff,))
-    tier3_symbols = [row[0] for row in tier3_rows if row[0]]
+    if TIER3_MAX_RANK == -1:
+        rank_condition = f"cmc_rank > {TIER2_MAX_RANK}"
+    else:
+        rank_condition = f"cmc_rank > {TIER2_MAX_RANK} AND cmc_rank <= {TIER3_MAX_RANK}"
+
+    if force_update:
+        tier3_query = f"SELECT symbol, cmc_id FROM coin WHERE cmc_rank IS NOT NULL AND {rank_condition}"
+        tier3_rows = pg_hook.get_records(tier3_query)
+    else:
+        tier3_cutoff = now.subtract(minutes=TIER3_INTERVAL_MINUTES)
+        tier3_query = f"""
+            SELECT symbol, cmc_id FROM coin 
+            WHERE cmc_rank IS NOT NULL AND {rank_condition}
+            AND (price_timestamp IS NULL OR price_timestamp < %s)
+        """
+        tier3_rows = pg_hook.get_records(tier3_query, parameters=(tier3_cutoff,))
+
+    # Create mapping and ID list
+    id_to_symbol = {row[1]: row[0] for row in tier3_rows if row[1]}
+    tier3_ids = list(id_to_symbol.keys())
     
-    logging.info(f"📊 Tier 3: Updating prices for {len(tier3_symbols)} rank 200-500 coins")
+    if not tier3_ids:
+        logging.info("ℹ️  Tier 3: No symbols to update.")
+        return {'updated': 0, 'tier': 3, 'total': 0}
+
+    logging.info(f"📊 Tier 3: Updating prices for {len(tier3_ids)} coins")
     
-    # Map symbols and fetch prices
-    fetch_symbols = [SYMBOL_MAPPING.get(sym.upper(), sym.upper()) for sym in tier3_symbols]
-    all_metrics = fetch_crypto_prices(list(set(fetch_symbols)))
+    all_metrics = fetch_crypto_quotes_by_id(tier3_ids)
     
     if not all_metrics:
-        logging.error("❌ Failed to fetch Tier 3 prices")
-        return {'updated': 0, 'tier': 3, 'error': 'API failed'}
+        raise Exception(f"❌ Failed to fetch Tier 3 prices for {len(tier3_ids)} coins - CMC API returned no data (likely rate limited)")
     
     # Update database
     conn = pg_hook.get_conn()
     cur = conn.cursor()
-    updated_count = 0
-    
-    for sym in tier3_symbols:
-        fetch_sym = SYMBOL_MAPPING.get(sym.upper(), sym.upper())
-        metrics = all_metrics.get(fetch_sym)
+    try:
+        updated_count = 0
+        for cmc_id, metrics in all_metrics.items():
+            sym = id_to_symbol.get(cmc_id)
+            if metrics.get('price') is not None:
+                try:
+                    cur.execute("""
+                        UPDATE coin 
+                        SET price = %s, price_timestamp = %s,
+                            percent_change_1h = %s, percent_change_24h = %s, percent_change_7d = %s,
+                            percent_change_30d = %s, percent_change_60d = %s, percent_change_90d = %s,
+                            market_cap = %s, market_cap_dominance = %s, fully_diluted_market_cap = %s,
+                            tvl = %s, total_supply = %s, circulating_supply = %s, max_supply = %s,
+                            cmc_last_updated = %s
+                        WHERE symbol = %s
+                    """, (
+                        metrics.get('price'), now,
+                        metrics.get('percent_change_1h'), metrics.get('percent_change_24h'), metrics.get('percent_change_7d'),
+                        metrics.get('percent_change_30d'), metrics.get('percent_change_60d'), metrics.get('percent_change_90d'),
+                        metrics.get('market_cap'), metrics.get('market_cap_dominance'), metrics.get('fully_diluted_market_cap'),
+                        metrics.get('tvl'), metrics.get('total_supply'), metrics.get('circulating_supply'), metrics.get('max_supply'),
+                        metrics.get('last_updated'), sym
+                    ))
+                    updated_count += 1
+                except Exception as e:
+                    logging.error(f"Failed to update price for {sym}: {e}")
+                    conn.rollback()
         
-        if metrics and metrics.get('price') is not None:
-            try:
-                cur.execute("""
-                    UPDATE coin 
-                    SET price = %s, price_timestamp = %s,
-                        percent_change_1h = %s, percent_change_24h = %s, percent_change_7d = %s,
-                        percent_change_30d = %s, percent_change_60d = %s, percent_change_90d = %s,
-                        market_cap = %s, market_cap_dominance = %s, fully_diluted_market_cap = %s,
-                        tvl = %s, total_supply = %s, circulating_supply = %s, max_supply = %s,
-                        cmc_last_updated = %s
-                    WHERE symbol = %s
-                """, (
-                    metrics.get('price'), now,
-                    metrics.get('percent_change_1h'), metrics.get('percent_change_24h'), metrics.get('percent_change_7d'),
-                    metrics.get('percent_change_30d'), metrics.get('percent_change_60d'), metrics.get('percent_change_90d'),
-                    metrics.get('market_cap'), metrics.get('market_cap_dominance'), metrics.get('fully_diluted_market_cap'),
-                    metrics.get('tvl'), metrics.get('total_supply'), metrics.get('circulating_supply'), metrics.get('max_supply'),
-                    metrics.get('last_updated'), sym
-                ))
-                updated_count += 1
-            except Exception as e:
-                logging.error(f"Failed to update price for {sym}: {e}")
-                conn.rollback()
-    
-    conn.commit()
-    
+        conn.commit()
     finally:
         cur.close()
         conn.close()
     
-    logging.info(f"✅ Tier 3: Updated {updated_count}/{len(tier3_symbols)} coins")
-    return {'updated': updated_count, 'tier': 3, 'total': len(tier3_symbols)}
+    logging.info(f"✅ Tier 3: Updated {updated_count}/{len(tier3_ids)} coins")
+    return {'updated': updated_count, 'tier': 3, 'total': len(tier3_ids)}
 
 
 with DAG(
@@ -632,6 +689,7 @@ with DAG(
     schedule='*/15 * * * *',
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
+    max_active_runs=1,
     tags=['prices', 'coinmarketcap', 'maintenance'],
     params={
         'force_cmc_mapping': Param(
@@ -687,9 +745,9 @@ with DAG(
     tier3_check = check_tier3_needed(force_update="{{ params.force_update_all }}")
     
     # Tier update tasks (only run if check decides they're needed)
-    tier1_update = update_tier1_prices()
-    tier2_update = update_tier2_prices()
-    tier3_update = update_tier3_prices()
+    tier1_update = update_tier1_prices(force_update="{{ params.force_update_all }}")
+    tier2_update = update_tier2_prices(force_update="{{ params.force_update_all }}")
+    tier3_update = update_tier3_prices(force_update="{{ params.force_update_all }}")
     
     # Set dependencies:
     #  1. Mapping check → sync or skip to tier checks

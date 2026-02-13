@@ -29,10 +29,7 @@ def is_valid_symbol(symbol: str) -> bool:
 def fetch_crypto_prices(symbols: List[str], target_currency: str = 'USD') -> Dict[str, Dict]:
     """
     Fetch current prices and metrics for a list of symbols from CoinMarketCap.
-    Returns a dict mapping symbol -> metrics dict with:
-        - price, percent_change_1h, percent_change_24h, percent_change_7d, etc.
-        - market_cap, market_cap_dominance, fully_diluted_market_cap, tvl
-        - total_supply, circulating_supply, max_supply, last_updated
+    Batches requests to avoid URL length / symbol count limits.
     """
     if not symbols:
         return {}
@@ -53,49 +50,121 @@ def fetch_crypto_prices(symbols: List[str], target_currency: str = 'USD') -> Dic
         logging.warning("No valid symbols to fetch after filtering")
         return {}
 
-    # CoinMarketCap uses comma-separated symbols
-    symbol_list = ",".join([s.upper() for s in valid_symbols])
+    all_metrics = {}
+    BATCH_SIZE = 50
     
-    url = f"{BASE_URL}/v2/cryptocurrency/quotes/latest"
-    headers = {
-        'X-CMC_PRO_API_KEY': CMC_API_KEY,
-        'Accept': 'application/json'
-    }
-    params = {
-        "symbol": symbol_list,
-        "convert": target_currency,
-        "skip_invalid": "true"  # CMC will skip unrecognized symbols instead of erroring
-    }
+    # Split into batches to avoid 400 Client Error (URI too long or too many symbols)
+    for i in range(0, len(valid_symbols), BATCH_SIZE):
+        batch = valid_symbols[i:i + BATCH_SIZE]
+        symbol_list = ",".join([s.upper() for s in batch])
+        
+        logging.info(f"📡 Fetching price batch {i//BATCH_SIZE + 1} ({len(batch)} symbols)")
+        
+        url = f"{BASE_URL}/v2/cryptocurrency/quotes/latest"
+        headers = {
+            'X-CMC_PRO_API_KEY': CMC_API_KEY,
+            'Accept': 'application/json'
+        }
+        params = {
+            "symbol": symbol_list,
+            "convert": target_currency,
+            "skip_invalid": "true"
+        }
 
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
 
-        if data.get('status', {}).get('error_code') != 0:
-            error_msg = data.get('status', {}).get('error_message', 'Unknown error')
-            logging.error(f"CoinMarketCap API Error: {error_msg}")
-            return {}
+            if data.get('status', {}).get('error_code') != 0:
+                error_msg = data.get('status', {}).get('error_message', 'Unknown error')
+                logging.error(f"CoinMarketCap API Error (Batch {i//BATCH_SIZE + 1}): {error_msg}")
+                continue
 
-        metrics = {}
-        # CMC returns data grouped by symbol, but symbols might have multiple entries (different chains)
-        # We'll take the first/primary one
-        for symbol in valid_symbols:
-            sym_upper = symbol.upper()
-            if sym_upper in data.get('data', {}):
-                # CMC can return array if symbol exists on multiple chains
-                entries = data['data'][sym_upper]
-                if isinstance(entries, list):
-                    # Take the first entry (usually the primary/most popular)
-                    entry = entries[0] if entries else None
-                else:
-                    entry = entries
+            # Process this batch
+            batch_data = data.get('data', {})
+            for symbol in batch:
+                sym_upper = symbol.upper()
+                if sym_upper in batch_data:
+                    entries = batch_data[sym_upper]
+                    entry = entries[0] if isinstance(entries, list) else entries
+                    
+                    if entry and 'quote' in entry:
+                        quote = entry['quote'].get(target_currency, {})
+                        all_metrics[symbol] = {
+                            'price': quote.get('price'),
+                            'percent_change_1h': quote.get('percent_change_1h'),
+                            'percent_change_24h': quote.get('percent_change_24h'),
+                            'percent_change_7d': quote.get('percent_change_7d'),
+                            'percent_change_30d': quote.get('percent_change_30d'),
+                            'percent_change_60d': quote.get('percent_change_60d'),
+                            'percent_change_90d': quote.get('percent_change_90d'),
+                            'market_cap': quote.get('market_cap'),
+                            'market_cap_dominance': quote.get('market_cap_dominance'),
+                            'fully_diluted_market_cap': quote.get('fully_diluted_market_cap'),
+                            'tvl': quote.get('tvl'),
+                            'last_updated': quote.get('last_updated'),
+                            'total_supply': entry.get('total_supply'),
+                            'circulating_supply': entry.get('circulating_supply'),
+                            'max_supply': entry.get('max_supply'),
+                        }
+        except Exception as e:
+            logging.error(f"Failed to fetch price batch {i//BATCH_SIZE + 1}: {e}")
+
+    return all_metrics
+
+def fetch_crypto_quotes_by_id(cmc_ids: List[int], target_currency: str = 'USD') -> Dict[int, Dict]:
+    """
+    Fetch current prices and metrics for a list of CMC IDs.
+    This is preferred over symbols as it is unambiguous and more robust.
+    Returns a dict mapping cmc_id (int) -> metrics dict.
+    """
+    if not cmc_ids:
+        return {}
+    
+    if not CMC_API_KEY:
+        logging.error("CMC_API_KEY not found in environment.")
+        return {}
+
+    all_metrics = {}
+    BATCH_SIZE = 100 # IDs are safer than symbols, we can use larger batches
+    
+    # CMC IDs are just integers, no encoding issues
+    for i in range(0, len(cmc_ids), BATCH_SIZE):
+        batch = cmc_ids[i:i + BATCH_SIZE]
+        id_list = ",".join([str(cid) for cid in batch])
+        
+        logging.info(f"📡 Fetching price batch {i//BATCH_SIZE + 1} ({len(batch)} IDs)")
+        
+        url = f"{BASE_URL}/v2/cryptocurrency/quotes/latest"
+        headers = {
+            'X-CMC_PRO_API_KEY': CMC_API_KEY,
+            'Accept': 'application/json'
+        }
+        params = {
+            "id": id_list,
+            "convert": target_currency,
+            "skip_invalid": "true"
+        }
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            if response.status_code != 200:
+                logging.error(f"CMC API Error {response.status_code}: {response.text}")
+                continue
                 
+            data = response.json()
+            if data.get('status', {}).get('error_code') != 0:
+                logging.error(f"CMC API Logic Error: {data.get('status', {}).get('error_message')}")
+                continue
+
+            # Quotes are indexed by ID string in the 'data' object
+            batch_data = data.get('data', {})
+            for cid in batch:
+                entry = batch_data.get(str(cid))
                 if entry and 'quote' in entry:
                     quote = entry['quote'].get(target_currency, {})
-                    
-                    # Extract all available metrics
-                    metrics[symbol] = {
+                    all_metrics[cid] = {
                         'price': quote.get('price'),
                         'percent_change_1h': quote.get('percent_change_1h'),
                         'percent_change_24h': quote.get('percent_change_24h'),
@@ -112,12 +181,10 @@ def fetch_crypto_prices(symbols: List[str], target_currency: str = 'USD') -> Dic
                         'circulating_supply': entry.get('circulating_supply'),
                         'max_supply': entry.get('max_supply'),
                     }
-        
-        return metrics
+        except Exception as e:
+            logging.error(f"Unexpected error in ID price batch {i//BATCH_SIZE + 1}: {e}")
 
-    except Exception as e:
-        logging.error(f"Failed to fetch prices from CoinMarketCap: {e}")
-        return {}
+    return all_metrics
 
 def fetch_crypto_history(symbol: str, target_currency: str = 'USD', days: int = 730) -> List[Dict]:
     """
