@@ -119,6 +119,131 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPositions(filtered);
     };
 
+    // Modal Elements
+    const modal = document.getElementById('history-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const modalLoader = document.getElementById('modal-loader');
+    const closeModal = document.querySelector('.close-modal');
+
+    // Close Modal Logic
+    if (closeModal) {
+        closeModal.onclick = () => {
+            modal.style.display = "none";
+        };
+    }
+
+    window.onclick = (event) => {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    };
+
+    // Global function to open history (attached to window to be accessible from inline onclick)
+    window.openHistoryModal = async (positionKey, positionLabel) => {
+        if (!modal) return;
+
+        modal.style.display = "block";
+        modalTitle.textContent = `History: ${positionLabel}`;
+        modalBody.innerHTML = '';
+        modalLoader.classList.remove('hidden');
+
+        try {
+            const response = await fetch(`/api/lp/history?position_key=${encodeURIComponent(positionKey)}`);
+            if (!response.ok) throw new Error('Failed to fetch history');
+
+            const historyData = await response.json();
+
+            if (!historyData || historyData.length === 0) {
+                modalBody.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">No history data available.</p>';
+                return;
+            }
+
+            // Helper for Explorer URLs
+            const getExplorerUrl = (network, txHash) => {
+                if (!network || !txHash) return '#';
+                switch (network) {
+                    case 'Ethereum': return `https://etherscan.io/tx/${txHash}`;
+                    case 'Arbitrum': return `https://arbiscan.io/tx/${txHash}`;
+                    case 'Base': return `https://basescan.org/tx/${txHash}`;
+                    case 'Polygon': return `https://polygonscan.com/tx/${txHash}`;
+                    case 'Optimism': return `https://optimistic.etherscan.io/tx/${txHash}`;
+                    default: return '#';
+                }
+            };
+
+            // Helper for Event Type Styling
+            const getEventStyle = (type) => {
+                if (!type) return {};
+                switch (type) {
+                    case 'create':
+                        return { label: 'Position Created', color: 'var(--success)' };
+                    case 'add_liquidity':
+                        return { label: 'Add Liquidity', color: 'var(--success)' };
+                    case 'withdraw':
+                    case 'delete':
+                        return { label: 'Withdraw', color: 'var(--danger)' };
+                    case 'collect_claim':
+                        return { label: 'Claim', color: '#3b82f6' }; // Blue
+                    default:
+                        return { label: type, color: 'var(--text-primary)' };
+                }
+            };
+
+            // Identify tokens from first row (assuming consistent pool)
+            const coin0 = historyData[0].coin0 || 'Asset 0';
+            const coin1 = historyData[0].coin1 || 'Asset 1';
+
+            // Build Table
+            let tableHtml = `
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>${coin0} Amount</th>
+                            <th>${coin1} Amount</th>
+                            <th>Tx</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            historyData.forEach(row => {
+                const date = new Date(row.timestamp).toLocaleString();
+                const style = getEventStyle(row.event_type);
+                const explorerUrl = getExplorerUrl(row.network, row.tx_hash);
+
+                tableHtml += `
+                    <tr>
+                        <td style="font-size:0.8rem; color:var(--text-secondary);">${date}</td>
+                        <td style="color:${style.color}; font-weight:600;">${style.label}</td>
+                        <td>${formatTokenAmount(row.amount0)}</td>
+                        <td>${formatTokenAmount(row.amount1)}</td>
+                        <td>
+                            <a href="${explorerUrl}" target="_blank" style="color:var(--accent); text-decoration:none;">
+                                <i class="fas fa-external-link-alt"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += `
+                    </tbody>
+                </table>
+            `;
+
+            modalBody.innerHTML = tableHtml;
+
+        } catch (error) {
+            console.error(error);
+            modalBody.innerHTML = `<p style="color:var(--danger);">Error loading history: ${error.message}</p>`;
+        } finally {
+            modalLoader.classList.add('hidden');
+        }
+    };
+
     const renderPositions = (positions) => {
         if (!positions || positions.length === 0) {
             positionsGrid.innerHTML = '<div class="no-data-msg">No positions match your filters.</div>';
@@ -139,8 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const walletAddr = pos.address || '';
             const walletDisplay = walletAddr.length > 4 ? `...${walletAddr.slice(-4)}` : walletAddr;
 
+            let displayLabel = cleanedLabel;
             if (pos.isClosed) {
-                cleanedLabel += ' <span style="color:#f87171; font-size:0.8em;">(Closed)</span>';
+                displayLabel += ' <span style="color:#f87171; font-size:0.8em;">(Closed)</span>';
             }
 
             const images = (pos.images && pos.images.length > 0) ? pos.images.slice(0, 2) : ['/static/favicon.png'];
@@ -155,18 +281,36 @@ document.addEventListener('DOMContentLoaded', () => {
             const rangeData = calculateRangeData(pos);
             const rangeHtml = createRangeIndicator(rangeData);
 
+            // Format APRs
+            const apr1d = pos.apr_1d ? (pos.apr_1d * 100).toFixed(2) + '%' : '0.00%';
+            const apr7d = pos.apr_7d ? (pos.apr_7d * 100).toFixed(2) + '%' : '0.00%';
+
+            // Determine APR Color Class
+            const getAprClass = (val) => {
+                const v = (val || 0) * 100;
+                if (v > 20) return 'apr-high';
+                if (v > 5) return 'apr-med';
+                return 'apr-low';
+            };
+
+
             row.innerHTML = `
+                <!-- Toggle Icon (Absolute Positioned) -->
+                <div class="expand-toggle">
+                    <i class="fas fa-chevron-down"></i> &#9660;
+                </div>
+
                 <div class="pos-info">
                     <div class="pos-header-with-icon">
                         <div class="pos-icons-stack">
                             ${iconsHtml}
                         </div>
                         <div class="pos-title-area">
-                            <h4>${cleanedLabel}</h4>
+                            <h4>${displayLabel}</h4>
                             <div class="pos-meta">
                                 <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
                                 ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
-                                <span class="protocol-tag">${pos.protocol}</span>
+                                <span class="protocol-tag">${pos.protocol}${pos.token_id ? `<span style="margin-left:6px; opacity:0.7; font-weight:400;">#${pos.token_id}</span>` : ''}</span>
                             </div>
                         </div>
                     </div>
@@ -178,6 +322,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="asset-item">
                             <span class="asset-sym">${asset.symbol}</span>
                             <span class="asset-amt">${formatTokenAmount(asset.balance)}</span>
+                        </div>
+                        <div class="asset-item">
+                            <span class="asset-sym">${asset.symbol}</span>
+                            <span class="asset-amt">${asset.price ? asset.price.toFixed(2) : '0.00'}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -200,7 +348,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="pos-value">
                     <span class="value-amt">${formatUSD(Number(pos.balance_usd || 0))}</span>
                 </div>
+
+                <!-- DRAWER (Hidden by default) -->
+                <div class="drawer" onclick="event.stopPropagation();">
+                    <div class="drawer-section">
+                        <div class="drawer-title">Invested Tokens</div>
+                        ${pos.assets.filter(a => a.symbol).map(asset => `
+                            <div class="drawer-item">
+                                <span class="drawer-label">${asset.symbol}</span>
+                                <div style="text-align:right">
+                                    <div class="drawer-value">${formatTokenAmount(asset.balance)}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-secondary);">$${formatUSD(asset.balanceUSD)}</div> 
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-title">Performance (APR)</div>
+                        <div class="drawer-item">
+                            <span class="drawer-label">24h APR</span>
+                            <span class="drawer-value ${getAprClass(pos.apr_1d)}">${apr1d}</span>
+                        </div>
+                        <div class="drawer-item">
+                            <span class="drawer-label">7d APR</span>
+                            <span class="drawer-value ${getAprClass(pos.apr_7d)}">${apr7d}</span>
+                        </div>
+                        
+                        <button class="history-btn" onclick="openHistoryModal('${pos.position_key}', '${cleanedLabel.replace(/'/g, "\\'") + (pos.isClosed ? ' (Closed)' : '')}')">
+                            <i class="fas fa-history"></i> View History
+                        </button>
+                    </div>
+                </div>
             `;
+
+            // Toggle Logic
+            row.addEventListener('click', (e) => {
+                // Prevent toggling if clicking links/buttons
+                if (e.target.tagName !== 'A' && e.target.tagName !== 'BUTTON' && !e.target.closest('.history-btn')) {
+                    const drawer = row.querySelector('.drawer');
+                    if (drawer) {
+                        drawer.classList.toggle('open');
+                        // Optional: Add active class to row for styling
+                        row.classList.toggle('active');
+                    }
+                }
+            });
+
             positionsGrid.appendChild(row);
         });
     };
@@ -324,7 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
         noDataMsg.classList.add('hidden');
 
         try {
-            const response = await fetch('/api/lp/position-summary');
+            const response = await fetch(`/api/lp/position-summary?t=${Date.now()}`);
             if (!response.ok) throw new Error('Failed to fetch LP summary');
 
             const data = await response.json();

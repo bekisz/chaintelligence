@@ -229,8 +229,15 @@ def fetch_v4_position_range_data(position_label, network, graph_api_key=None):
     s0 = fetch_symbol(c0_addr, network=network)
     s1 = fetch_symbol(c1_addr, network=network)
     
-    # 4. Current Tick (Uses Prices from DB)
-    p0_usd, p1_usd = fetch_token_prices_from_db(s0, s1)
+    # 4. Current Tick (Priority: DefiLlama -> DB)
+    p0_usd, p1_usd = fetch_token_prices(c0_addr, c1_addr, network=network)
+    
+    if p0_usd == 0 or p1_usd == 0:
+        logger.info(f"V4: DefiLlama price missing for {c0_addr}/{c1_addr}. Falling back to DB.")
+        p0_db, p1_db = fetch_token_prices_from_db(s0, s1)
+        if p0_usd == 0: p0_usd = p0_db
+        if p1_usd == 0: p1_usd = p1_db
+
     current_tick = 0
     
     if p0_usd > 0 and p1_usd > 0:

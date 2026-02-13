@@ -20,8 +20,7 @@
 ### V4 Support (Arbitrum & Base)
 
 - Implemented a new **Graph-based fetcher** for V4 on L2s because RPC calls were failing.
-- **Schema Discovery**: Discovered that V4 subgraphs on L2s use a different schema than V3.
-  - `Position` entity has no tick data directly.
+- **Schema Discovery**: Discovered that V4 directly.
   - **Solution**: Implemented a nested query: `Position -> Transfers -> Transaction -> ModifyLiquiditys`.
   - This successfully links the NFT Token ID to the liquidity event containing range data.
 

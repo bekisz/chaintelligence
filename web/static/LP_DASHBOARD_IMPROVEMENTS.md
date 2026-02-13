@@ -133,3 +133,19 @@ Transformed the Liquidity Dashboard (LP Positions page) from a spaced card layou
 1. **`lp.html`**: Added controls bar with filters and sort options
 2. **`style.css`**: Converted to compact table layout, added control styling
 3. **`lp.js`**: Added filtering/sorting logic and event handlers
+
+## Drawer & APR Update (2026-02-07)
+
+### Features Added
+
+- **Expandable Drawer**: Click on any position row to reveal more details.
+- **Invested Tokens**: Shows the precise token amounts and their current USD value in the drawer.
+- **Performance Metrics**:
+  - **1d APR**: Annualized return based on last 24h fee growth.
+  - **7d APR**: Annualized return based on last 7 days fee growth.
+  - Color-coded (Green > 20%, Blue > 5%, Grey < 5%).
+
+### Technical Implementation
+
+- **Frontend**: Updated `lp.js` to render hidden drawer and handle toggle. Updated `style.css` for drawer layout.
+- **Backend**: Updated `api/main.py` to fetch historical snapshots (8 days window) and calculate APRs on the fly.

@@ -1,0 +1,24 @@
+
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_event (
+    id SERIAL PRIMARY KEY,
+    position_id INTEGER REFERENCES liquidity_pool_position(id),
+    tx_hash VARCHAR(66) NOT NULL,
+    block_number INTEGER NOT NULL,
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    event_type VARCHAR(50) NOT NULL, -- create, collect_claim, delete, withdraw, add_liquidity
+    amount0 NUMERIC DEFAULT 0,
+    amount1 NUMERIC DEFAULT 0,
+    amount_usd NUMERIC DEFAULT 0,
+    
+    -- Optional extra data
+    liquidity_change NUMERIC,
+    tick_lower INTEGER,
+    tick_upper INTEGER,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(position_id, tx_hash, event_type, block_number) -- Prevent duplicate processing
+);
+
+CREATE INDEX IF NOT EXISTS idx_lp_event_pos ON liquidity_pool_position_event(position_id);
+CREATE INDEX IF NOT EXISTS idx_lp_event_type ON liquidity_pool_position_event(event_type);
+CREATE INDEX IF NOT EXISTS idx_lp_event_ts ON liquidity_pool_position_event(timestamp);

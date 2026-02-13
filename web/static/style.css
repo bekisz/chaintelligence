@@ -277,17 +277,31 @@ header h1 {
 
 /* Position Rows - Strategy Block Style */
 .position-row {
+    position: relative;
     background-color: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 16px;
     margin-bottom: 1.5rem;
-    padding: 1.5rem 2rem;
+    padding: 1.5rem 3.5rem 1.5rem 2rem;
+    /* Increased right padding for icon */
     display: grid;
     grid-template-columns: 2.5fr 1.2fr 1.2fr 1fr;
     gap: 2.5rem;
     align-items: flex-start;
     /* Better for variable content */
     transition: all 0.2s;
+}
+
+/* ... existing styles ... */
+
+/* Toggle Icon */
+.expand-toggle {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.25rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: transform 0.3s ease, color 0.3s;
 }
 
 .position-row:hover {
@@ -1212,4 +1226,197 @@ input:checked+.slider:before {
 
 input:focus+.slider {
     box-shadow: 0 0 1px var(--uniswap-pink);
+}
+
+/* Drawer styles for LP Dashboard */
+.drawer {
+    grid-column: 1 / -1;
+    background: rgba(0, 0, 0, 0.2);
+    margin: 1rem -2rem -1.5rem -2rem;
+    /* Stretch to edges */
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--border);
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+    display: none;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.drawer.open {
+    display: grid;
+}
+
+.drawer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.drawer-title {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.drawer-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.drawer-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.drawer-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: 'Space Mono', monospace;
+    /* or similar */
+}
+
+.drawer-value.apr-high {
+    color: var(--success);
+}
+
+.drawer-value.apr-med {
+    color: var(--accent);
+}
+
+.drawer-value.apr-low {
+    color: var(--text-secondary);
+}
+
+/* Hint for interactivity */
+.position-row {
+    cursor: pointer;
+}
+
+.position-row:hover {
+    background: linear-gradient(to right, var(--card-bg), rgba(59, 130, 246, 0.05));
+}
+
+
+/* Expand/Collapse Icon */
+.expand-toggle {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: transform 0.3s ease, color 0.3s;
+}
+
+.position-row:hover .expand-toggle {
+    color: var(--text-primary);
+}
+
+.position-row.active .expand-toggle {
+    transform: rotate(180deg);
+    color: var(--accent);
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    margin: 5% auto;
+    padding: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 800px;
+    position: relative;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.close-modal {
+    color: var(--text-secondary);
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.close-modal:hover,
+.close-modal:focus {
+    color: var(--text-primary);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#modal-title {
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+}
+
+.history-table-container {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table th {
+    text-align: left;
+    padding: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--card-bg);
+}
+
+.history-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.history-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.history-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    margin-top: 1rem;
+    width: 100%;
+}
+
+.history-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--text-secondary);
 }

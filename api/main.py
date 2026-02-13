@@ -290,12 +290,14 @@ async def get_date_range():
 
 @app.get("/api/lp/position-summary", tags=["Liquidity Pools"])
 async def lp_summary():
-    """Get the latest summary of LP snapshots."""
+    """Get the latest summary of LP snapshots with APR calculations."""
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         
-        query = """
+        # 1. Fetch latest state + metadata from view (or join)
+        # We still use the view for the base data, but we'll enrich it with APRs
+        query_latest = """
         SELECT 
             id, timestamp, address, protocol, network, position_label, balance_usd,
             assets, unclaimed, images, total_unclaimed_usd, position_key,
@@ -303,32 +305,71 @@ async def lp_summary():
             price_lower, price_upper, current_price, in_range, fee_tier
         FROM v_lp_snapshots_summary
         ORDER BY timestamp DESC
-        LIMIT 200
         """
-        cur.execute(query)
-        rows = cur.fetchall()
+        cur.execute(query_latest)
+        all_rows = cur.fetchall()
         
-        pos_history = {}
-        for row in rows:
+        # Group by position_key to find the LATEST row for each position
+        latest_positions = {}
+        for row in all_rows:
             key = row[11] if row[11] else f"{row[3]}-{row[5]}-{row[4]}"
-            if key not in pos_history:
-                pos_history[key] = []
-            pos_history[key].append(row)
+            if key not in latest_positions:
+                latest_positions[key] = row
+                
+        # 2. Fetch historical snapshots for APR calculation (Last 8 days)
+        # We need raw snapshot data to calculate fee growth
+        query_history = """
+        SELECT 
+            pos.position_key,
+            s.timestamp,
+            s.balance_usd,
+            s.coin0_claimable_amount,
+            s.coin1_claimable_amount,
+            s.coin0_claimed_amount,
+            s.coin1_claimed_amount,
+            p.coin0_price,
+            p.coin1_price
+        FROM liquidity_pool_position_snapshot s
+        JOIN liquidity_pool_position pos ON s.position_id = pos.id
+        JOIN liquidity_pool pool ON pos.pool_id = pool.id
+        -- Join with coins to get CURRENT price for simple USD estimation? 
+        -- Or rely on captured USD? The snapshot table lacks captured price history usually, 
+        -- so we use current price for older tokens approximation or if snapshot has it.
+        -- Actually, let's just fetch amounts and use CURRENT price to value them for consistency.
+        JOIN coin c0 ON pool.coin0_symbol = c0.symbol
+        JOIN coin c1 ON pool.coin1_symbol = c1.symbol
+        CROSS JOIN LATERAL (SELECT c0.price as coin0_price, c1.price as coin1_price) p
+        WHERE s.timestamp > NOW() - INTERVAL '8 days'
+        ORDER BY s.timestamp DESC
+        """
+        cur.execute(query_history)
+        history_rows = cur.fetchall()
+        
+        # Organize history by position_key
+        # structure: history[key] = [{ts, bal, c0_rew, c1_rew, p0, p1}, ...]
+        history = {}
+        for r in history_rows:
+            pkey = r[0]
+            if pkey not in history: history[pkey] = []
+            history[pkey].append({
+                'ts': r[1],
+                'bal_usd': float(r[2]) if r[2] else 0,
+                'rew0': float(r[3]) if r[3] else 0,
+                'rew1': float(r[4]) if r[4] else 0,
+                'claimed0': float(r[5]) if r[5] else 0,
+                'claimed1': float(r[6]) if r[6] else 0,
+                'p0': float(r[7]) if r[7] else 0,
+                'p1': float(r[8]) if r[8] else 0
+            })
 
         results = []
-        for key, snapshots in pos_history.items():
-            latest = snapshots[0]
+        for key, latest in latest_positions.items():
+            # ... (Existing extraction code)
             assets = latest[7] if latest[7] else []
             unclaimed = latest[8] if latest[8] else []
             
-            delta_usd = 0
-            if len(snapshots) > 1:
-                previous = snapshots[1]
-                prev_unclaimed_usd = float(previous[10]) if previous[10] else 0
-                latest_unclaimed_usd = float(latest[10]) if latest[10] else 0
-                delta_usd = latest_unclaimed_usd - prev_unclaimed_usd
-
-            results.append({
+            # Extract standard fields
+            res_obj = {
                 "id": latest[0],
                 "timestamp": latest[1].isoformat(),
                 "address": latest[2],
@@ -340,8 +381,8 @@ async def lp_summary():
                 "assets": assets,
                 "unclaimed": unclaimed,
                 "total_unclaimed_usd": float(latest[10]) if latest[10] else 0,
-                "reward_delta_usd": delta_usd,
                 "images": latest[9],
+                "token_id": latest[12],
                 # Range data (indices 12-20)
                 "range_data": {
                     "token_id": latest[12],
@@ -353,13 +394,195 @@ async def lp_summary():
                     "current_price": float(latest[18]) if latest[18] else None,
                     "in_range": latest[19],
                     "fee_tier": latest[20]
-                } if latest[12] else None  # Only include if token_id exists
-            })
+                } if latest[12] else None
+            }
+            
+            # --- APR Calculation ---
+            # Algorithm: 
+            # 1. Get snapshots for this position
+            # 2. Find snapshot ~24h ago and ~7d ago
+            # 3. Calculate Fee Growth USD
+            # 4. APR = (Growth / Principal) * (365/days)
+            
+            snaps = history.get(key, [])
+            # Sort by desc timestamp (newest first)
+            snaps.sort(key=lambda x: x['ts'], reverse=True)
+            
+            current_snap = snaps[0] if snaps else None
+            
+            def calculate_apr(days_lookback):
+                if not current_snap: return 0.0
+                if current_snap['bal_usd'] == 0: return 0.0
+                
+                target_date = datetime.now(current_snap['ts'].tzinfo) - timedelta(days=days_lookback)
+                
+                # Find closest snapshot
+                prev_snap = None
+                for s in snaps:
+                    if s['ts'] <= target_date:
+                        prev_snap = s
+                        break
+                
+                if not prev_snap: return 0.0
+                
+                # Calculate Delta Time (in days)
+                delta_days = (current_snap['ts'] - prev_snap['ts']).total_seconds() / 86400
+                if delta_days < 0.5: return 0.0 # Too short
+                
+                # Calculate Fee Growth in Tokens (Unclaimed + Claimed)
+                curr_fees0 = current_snap['rew0'] + current_snap['claimed0']
+                curr_fees1 = current_snap['rew1'] + current_snap['claimed1']
+                prev_fees0 = prev_snap['rew0'] + prev_snap['claimed0']
+                prev_fees1 = prev_snap['rew1'] + prev_snap['claimed1']
+                
+                d_r0 = curr_fees0 - prev_fees0
+                d_r1 = curr_fees1 - prev_fees1
+                
+                # If negative, ignore (this should be rare now with claimed amounts tracked)
+                if d_r0 < 0: d_r0 = 0
+                if d_r1 < 0: d_r1 = 0
+                
+                # Value in USD using CURRENT prices
+                growth_usd = (d_r0 * current_snap['p0']) + (d_r1 * current_snap['p1'])
+                
+                # APR
+                # extrapolated_year = growth_usd * (365 / delta_days)
+                # apr = (extrapolated_year / current_snap['bal_usd'])
+                if current_snap['bal_usd'] > 0:
+                    apr = (growth_usd / current_snap['bal_usd']) * (365.0 / delta_days)
+                    return apr
+                return 0.0
+
+            if current_snap:
+                # Calculate total unclaimed USD for main display if view provided 0
+                # Using latest amounts * current prices
+                calc_unclaimed_usd = (current_snap['rew0'] * current_snap['p0']) + (current_snap['rew1'] * current_snap['p1'])
+                res_obj['total_unclaimed_usd'] = calc_unclaimed_usd
+                
+                # Enrich Assets USD value (since view returns 0)
+                # Parse assets JSON if string or list
+                # assets structure: [{'symbol': 'ETH', 'balance': 1.2, 'balanceUSD': 0}, ...]
+                import json
+                if isinstance(assets, str):
+                    assets = json.loads(assets)
+                
+                # We assume order matches coin0/coin1 from history calculation
+                # But safer to match by symbol if possible, or assume 0=coin0, 1=coin1 from view construction
+                # View construct: coin0, coin1.
+                if len(assets) >= 2:
+                    assets[0]['balanceUSD'] = float(assets[0]['balance']) * current_snap['p0']
+                    assets[0]['price'] = float(current_snap['p0'])
+                    assets[1]['balanceUSD'] = float(assets[1]['balance']) * current_snap['p1']
+                    assets[1]['price'] = float(current_snap['p1'])
+                    res_obj['assets'] = assets
+
+                # Calculate Deltas for "Accrued" label (since last snapshot? Or 24h?)
+                # Existing logic used last snapshot delta. Let's keep that or standardize to 24h?
+                # User wants "1d APR". The "accrued" label usually implied "since last check".
+                # Let's add explicit APR fields.
+                res_obj['apr_1d'] = calculate_apr(1)
+                res_obj['apr_7d'] = calculate_apr(7)
+                
+            else:
+                res_obj['apr_1d'] = 0
+                res_obj['apr_7d'] = 0
+                
+                # No snapshot history - fetch prices directly from coin table
+                import json
+                if isinstance(assets, str):
+                    assets = json.loads(assets)
+                
+                if len(assets) >= 2:
+                    # Fetch current prices for these symbols
+                    cur.execute("SELECT symbol, price FROM coin WHERE symbol IN (%s, %s)", 
+                               (assets[0]['symbol'], assets[1]['symbol']))
+                    price_rows = cur.fetchall()
+                    price_map = {row[0]: float(row[1]) if row[1] else 0.0 for row in price_rows}
+                    
+                    assets[0]['price'] = price_map.get(assets[0]['symbol'], 0.0)
+                    assets[0]['balanceUSD'] = float(assets[0]['balance']) * assets[0]['price']
+                    assets[1]['price'] = price_map.get(assets[1]['symbol'], 0.0)
+                    assets[1]['balanceUSD'] = float(assets[1]['balance']) * assets[1]['price']
+                    res_obj['assets'] = assets
+
+            results.append(res_obj)
             
         results.sort(key=lambda x: x["balance_usd"], reverse=True)
         cur.close()
         conn.close()
         return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/api/lp/history", tags=["Liquidity Pools"])
+async def lp_history(position_key: str):
+    """Get historical events for a specific LP position."""
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+
+        # Fetch events for the specific position key
+        query = """
+        SELECT 
+            e.timestamp,
+            e.event_type,
+            e.amount0,
+            e.amount1,
+            e.tx_hash,
+            pool.coin0_symbol,
+            pool.coin1_symbol,
+            pool.network
+        FROM liquidity_pool_position_event e
+        JOIN liquidity_pool_position pos ON e.position_id = pos.id
+        JOIN liquidity_pool pool ON pos.pool_id = pool.id
+        WHERE (pos.position_key = %s OR pos.id::text = %s)
+          AND e.event_type IN ('create', 'add_liquidity', 'withdraw', 'delete', 'collect_claim')
+        ORDER BY e.timestamp DESC
+        """
+        
+        cur.execute(query, (position_key, position_key))
+        rows = cur.fetchall()
+
+        raw_history = []
+        tx_groups = {}
+        
+        for r in rows:
+            event = {
+                "timestamp": r[0].isoformat(),
+                "event_type": r[1],
+                "amount0": float(r[2]) if r[2] else 0.0,
+                "amount1": float(r[3]) if r[3] else 0.0,
+                "tx_hash": r[4],
+                "coin0": r[5],
+                "coin1": r[6],
+                "network": r[7]
+            }
+            raw_history.append(event)
+            
+            if event['tx_hash'] not in tx_groups:
+                tx_groups[event['tx_hash']] = []
+            tx_groups[event['tx_hash']].append(event)
+
+        history = []
+        for e in raw_history:
+            # 1. If Add Liquidity AND sibling Create exists -> Skip (merged into Create)
+            if e['event_type'] == 'add_liquidity':
+                siblings = tx_groups[e['tx_hash']]
+                if any(s['event_type'] == 'create' for s in siblings):
+                    continue
+
+            # 2. If Create AND sibling Add Liquidity exists -> Merge amounts
+            if e['event_type'] == 'create':
+                siblings = tx_groups[e['tx_hash']]
+                add_ev = next((s for s in siblings if s['event_type'] == 'add_liquidity'), None)
+                if add_ev:
+                    e['amount0'] = add_ev['amount0']
+                    e['amount1'] = add_ev['amount1']
+            
+            history.append(e)
+
+        cur.close()
+        conn.close()
+        return history
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

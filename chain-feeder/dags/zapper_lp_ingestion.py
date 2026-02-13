@@ -499,6 +499,29 @@ def ingest_snapshots(positions: list):
     conn.close()
 
 
+@task
+def update_claims_batch(network, protocol):
+    """Updates claims for specific network/protocol batch."""
+    import sys
+    import logging
+    # Ensure dags folder is in path for module import if needed
+    if "/opt/airflow/dags" not in sys.path:
+        sys.path.append("/opt/airflow/dags")
+    
+    try:
+        import backfill_claims_rpc
+        # Reload module to ensure latest code if cached (important for long-lived workers)
+        import importlib
+        importlib.reload(backfill_claims_rpc)
+        
+        # Override depth to ensure we catch historical claims (default 2M)
+        depth = int(os.getenv("CLAIM_SCAN_DEPTH", 2000000))
+        backfill_claims_rpc.run_claims_scan(network, protocol, scan_depth_override=depth)
+    except ImportError:
+        logging.error("Could not import backfill_claims_rpc module.")
+        raise
+
+
 with DAG(
     'zapper_lp_ingestion',
     default_args=default_args,
@@ -506,6 +529,7 @@ with DAG(
     schedule='*/15 * * * *',
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
+    max_active_runs=1,
     tags=['defi', 'zapper', 'normalized'],
 ) as dag:
 
@@ -518,7 +542,33 @@ with DAG(
     t_ranges = fetch_missing_ranges() # Independent of current batch's content, checks DB
     t_snap = ingest_snapshots(raw_data)
     
+    
+    # 7. Update Claims via RPC (Parallel Batches)
+    # Define explicitly known batches to enable parallelism
+    BATCHES = [
+        ("Ethereum", "Uniswap V3"),
+        ("Ethereum", "Uniswap V4"),
+        ("Arbitrum", "Uniswap V3"),
+        ("Base", "Uniswap V3"),
+        ("Optimism", "Uniswap V3"), 
+        ("Polygon", "Uniswap V3")
+    ]
+    
+    # Filter skipped networks (e.g. SKIP_CLAIM_NETWORKS="Arbitrum,Optimism")
+    import os
+    skip_nets = [n.strip() for n in os.getenv("SKIP_CLAIM_NETWORKS", "").split(",") if n.strip()]
+    
+    t_claim_tasks = []
+    for net, proto in BATCHES:
+        if net in skip_nets:
+            continue
+            
+        # Use task_id that is unique and clean
+        tid = f"claims_{net.lower()}_{proto.lower().replace(' ', '_')}"
+        t = update_claims_batch.override(task_id=tid)(net, proto)
+        t_claim_tasks.append(t)
+    
     # Dependencies
     raw_data >> t_coins >> t_prices >> t_pools >> t_positions
     t_positions >> t_ranges
-    t_positions >> t_snap
+    t_positions >> t_snap >> t_claim_tasks

@@ -265,7 +265,9 @@ SELECT
     pos.price_upper,
     s.current_price,
     s.in_range,
-    pool.fee_tier
+    pool.fee_tier,
+    s.coin0_claimed_amount,
+    s.coin1_claimed_amount
 FROM liquidity_pool_position_snapshot s
 JOIN liquidity_pool_position pos ON s.position_id = pos.id
 JOIN liquidity_pool pool ON pos.pool_id = pool.id;

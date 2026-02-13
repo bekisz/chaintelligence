@@ -1,7 +1,7 @@
 x-airflow-common: &airflow-common
   image: apache/airflow:3.1.6
   environment: &airflow-common-env
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests}
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests web3}
     PYTHONPATH: "/opt/airflow:/opt/airflow/dags:${PYTHONPATH:-}"
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -13,6 +13,9 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
     AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
     CRYPTOCOMPARE_API_KEY: ${CRYPTOCOMPARE_API_KEY}
+    CMC_API_KEY: ${CMC_API_KEY}
+    CMC_TIER2_INTERVAL_MINUTES: ${CMC_TIER2_INTERVAL_MINUTES}
+    CMC_TIER3_INTERVAL_MINUTES: ${CMC_TIER3_INTERVAL_MINUTES}
 
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.providers.fab.auth_manager.api.auth.backend.session'
     AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
@@ -29,6 +32,8 @@ x-airflow-common: &airflow-common
     DATA_WAREHOUSE_DB: ${DATA_WAREHOUSE_DB}
     AIRFLOW_CONN_CHAINTELLIGENCE_DB: postgresql://airflow:airflow@postgres:5432/chaintelligence
     TARGET_ADDRESS: ${TARGET_ADDRESS}
+    SKIP_CLAIM_NETWORKS: ${SKIP_CLAIM_NETWORKS:-}
+    CLAIM_SCAN_DEPTH: ${CLAIM_SCAN_DEPTH:-2000000}
 
   volumes:
     - ./chain-feeder/dags:/opt/airflow/dags
