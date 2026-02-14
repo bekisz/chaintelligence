@@ -185,8 +185,13 @@ class PostgresFetcher:
                         raw_vol_token0 = float(swap_row[0]) if swap_row and swap_row[0] else 0
                         
                         if raw_vol_token0 > 0:
-                            # 2. Get Price (Case Insensitive)
-                            cur.execute("SELECT price FROM coin_price_history WHERE UPPER(symbol) = %s ORDER BY timestamp DESC LIMIT 1", (t0.upper(),))
+                            # 2. Get Price (Case Insensitive) - Join with coin for address lookup
+                            cur.execute("""
+                                SELECT h.price FROM coin_price_history h
+                                JOIN coin c ON h.address = c.ethereum_address
+                                WHERE UPPER(c.symbol) = %s 
+                                ORDER BY h.timestamp DESC LIMIT 1
+                            """, (t0.upper(),))
                             price_row = cur.fetchone()
                             price = float(price_row[0]) if price_row and price_row[0] else 0
                             
@@ -236,11 +241,12 @@ class PostgresFetcher:
             conn = psycopg2.connect(DATA_WAREHOUSE_DB)
             cur = conn.cursor()
             
-            # Fetch the latest price for each symbol
+            # Fetch the latest price for each symbol by joining with coin
             query = """
-                SELECT DISTINCT ON (symbol) symbol, price
-                FROM coin_price_history
-                ORDER BY symbol, timestamp DESC
+                SELECT DISTINCT ON (c.symbol) c.symbol, h.price
+                FROM coin_price_history h
+                JOIN coin c ON h.address = c.ethereum_address
+                ORDER BY c.symbol, h.timestamp DESC
             """
             cur.execute(query)
             rows = cur.fetchall()

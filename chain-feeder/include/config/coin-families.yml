@@ -1,0 +1,16 @@
+coin-families:
+  - name: ETH
+    coin-list:
+      - ETH
+      - STETH
+      - WETH
+    regexp-rule: ".*ETH$"
+    
+  - name: Tier1
+    sql-rule: "cmc_rank < 100"
+    include-coin:
+      - PENDLE
+
+  - name: Stablecoins
+    sql-rule: "symbol IN ('USDC', 'USDT', 'DAI')"
+    regexp-rule: ".*USD.*"

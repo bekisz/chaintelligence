@@ -4,13 +4,19 @@ import base64
 import secrets
 import psycopg2
 from datetime import datetime, timedelta
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from typing import Optional, List, Dict
+import requests
+from fastapi import FastAPI, HTTPException, Query, Request, Response, Body
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
+
+# Airflow API Configuration
+AIRFLOW_API_URL = os.getenv("AIRFLOW_API_URL", "http://airflow-webserver:8080/api/v2")
+AIRFLOW_USER = os.getenv("AIRFLOW_USER", "airflow")
+AIRFLOW_PASS = os.getenv("AIRFLOW_PASS", "airflow")
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 WEB_DIR = os.path.join(ROOT_DIR, 'web')
@@ -102,6 +108,10 @@ class AnalysisRequest(BaseModel):
     days: Optional[float] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+class HistoryFeederRequest(BaseModel):
+    force_update: bool = False
+    coin_symbols: List[str] = []
 
 def resolve_token_input(input_str: str) -> list[str]:
     """
@@ -593,11 +603,13 @@ async def price_history(symbol: str):
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         
-        # We allow matching on symbol case-insensitively
+        # We join with coin table because history is now linked via address
         query = """
-        SELECT timestamp, price FROM coin_price_history
-        WHERE UPPER(symbol) = %s
-        ORDER BY timestamp ASC
+        SELECT h.timestamp, h.price 
+        FROM coin_price_history h
+        JOIN coin c ON h.address = c.ethereum_address
+        WHERE UPPER(c.symbol) = %s
+        ORDER BY h.timestamp ASC
         """
         cur.execute(query, (symbol.upper(),))
         rows = cur.fetchall()
@@ -615,6 +627,129 @@ async def price_history(symbol: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/coin/dag/coin-history-feeder")
+async def trigger_history_feeder(payload: HistoryFeederRequest):
+    """
+    Trigger the coin_price_history_feeder DAG in Airflow.
+    Handles Airflow 3 JWT-based authentication.
+    """
+    import requests
+    from anyio import to_thread
+    from datetime import datetime
+    
+    dag_id = "coin_price_history_feeder"
+    
+    # Airflow 3 Auth: Get JWT Token
+    # The token endpoint is usually at /auth/token
+    base_airflow_url = AIRFLOW_API_URL.split("/api/v2")[0]
+    token_url = f"{base_airflow_url}/auth/token"
+    
+    try:
+        # 1. Fetch Token
+        token_response = await to_thread.run_sync(
+            lambda: requests.post(
+                token_url,
+                json={"username": AIRFLOW_USER, "password": AIRFLOW_PASS},
+                timeout=5.0
+            )
+        )
+        if token_response.status_code != 201:
+            raise HTTPException(
+                status_code=502, 
+                detail=f"Failed to authenticate with Airflow at {token_url}: {token_response.status_code} - {token_response.text}"
+            )
+        
+        token = token_response.json().get("access_token")
+        
+        # 2. Trigger DAG with Bearer Token
+        dag_run_url = f"{AIRFLOW_API_URL}/dags/{dag_id}/dagRuns"
+        dag_conf = {
+            "force_update": payload.force_update,
+            "coin_symbols": payload.coin_symbols
+        }
+        
+        # Airflow 3 requires logical_date in the payload
+        payload_data = {
+            "conf": dag_conf,
+            "logical_date": datetime.utcnow().isoformat() + "Z"
+        }
+        
+        response = await to_thread.run_sync(
+            lambda: requests.post(
+                dag_run_url,
+                json=payload_data,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+        )
+        
+        if response.status_code >= 400:
+            logging_err = f"Airflow API error: {response.status_code} - {response.text}"
+            print(logging_err)
+            raise HTTPException(status_code=502, detail=logging_err)
+            
+        data = response.json()
+        return {
+            "message": f"Successfully triggered {dag_id}",
+            "dag_run_id": data.get("dag_run_id"),
+            "state": data.get("state"),
+            "conf": dag_conf
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Error communicating with Airflow: {exc}")
+
+@app.get("/api/coin/dag/status/{dag_id}/{dag_run_id}")
+async def get_dag_run_status(dag_id: str, dag_run_id: str):
+    """
+    Check the status of a specific Airflow DAG run.
+    """
+    import requests
+    from anyio import to_thread
+    
+    base_airflow_url = AIRFLOW_API_URL.split("/api/v2")[0]
+    token_url = f"{base_airflow_url}/auth/token"
+    
+    try:
+        # 1. Fetch Token
+        token_response = await to_thread.run_sync(
+            lambda: requests.post(
+                token_url,
+                json={"username": AIRFLOW_USER, "password": AIRFLOW_PASS},
+                timeout=5.0
+            )
+        )
+        if token_response.status_code != 201:
+            raise HTTPException(status_code=502, detail="Failed to authenticate with Airflow")
+        
+        token = token_response.json().get("access_token")
+        
+        # 2. Query Status
+        url = f"{AIRFLOW_API_URL}/dags/{dag_id}/dagRuns/{dag_run_id}"
+        
+        response = await to_thread.run_sync(
+            lambda: requests.get(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+        )
+        
+        if response.status_code >= 400:
+            return {"status_code": response.status_code, "detail": response.text}
+            
+        data = response.json()
+        return {
+            "dag_id": data.get("dag_id"),
+            "dag_run_id": data.get("dag_run_id"),
+            "state": data.get("state"),
+            "logical_date": data.get("logical_date"),
+            "start_date": data.get("start_date"),
+            "end_date": data.get("end_date")
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Error communicating with Airflow: {exc}")
 
 @app.get("/api/coin/list", tags=["Assets"])
 async def get_coins():

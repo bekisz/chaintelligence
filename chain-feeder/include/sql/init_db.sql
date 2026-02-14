@@ -12,13 +12,26 @@ CREATE TABLE IF NOT EXISTS coin (
     hardness INTEGER DEFAULT 0,
     cmc_rank INTEGER,
     cmc_id INTEGER,
-    ethereum_address VARCHAR(42),
+    ethereum_address VARCHAR(42) NOT NULL UNIQUE, -- Contract address as unique key
     first_historical_data TIMESTAMP,
     image_url TEXT,
     price NUMERIC,
     price_timestamp TIMESTAMP WITH TIME ZONE,
     decimals INTEGER DEFAULT 18
 );
+
+-- Trigger to lowercase ethereum_address
+CREATE OR REPLACE FUNCTION lowercase_ethereum_address() 
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.ethereum_address = LOWER(NEW.ethereum_address);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_coin_address_lower
+BEFORE INSERT OR UPDATE ON coin
+FOR EACH ROW EXECUTE FUNCTION lowercase_ethereum_address();
 
 -- Index for case-insensitive lookup (though we force upper)
 CREATE UNIQUE INDEX IF NOT EXISTS coin_symbol_idx ON coin (UPPER(symbol));
@@ -124,10 +137,11 @@ CREATE INDEX IF NOT EXISTS idx_swaps_token1 ON uniswap_v3_swaps(token1_symbol);
 -- 5.5 COIN PRICE HISTORY
 CREATE TABLE IF NOT EXISTS coin_price_history (
     id SERIAL PRIMARY KEY,
-    symbol VARCHAR(8) REFERENCES coin(symbol),
+    address VARCHAR(42) NOT NULL REFERENCES coin(ethereum_address),
+    symbol VARCHAR(8) NOT NULL,
     timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
     price NUMERIC NOT NULL,
-    UNIQUE(symbol, timestamp)
+    UNIQUE(address, timestamp)
 );
 
 -- 6. TRIGGERS
@@ -159,39 +173,22 @@ FOR EACH ROW EXECUTE FUNCTION enforce_uppercase_pool_symbols();
 
 -- 7. INITIAL DATA
 
-INSERT INTO coin (symbol, hardness) VALUES
-('USDC', 1000),
-('USDT', 990),
-('USDS', 980),
-('DAI', 970),
-('USDE', 960),
-('GHO', 950),
-('EURC', 940),
-('EURCV', 930),
-('EURI', 920),
-('EURQ', 910),
-('ZCHF', 900),
-('PAXG', 890),
-('XAUt', 880),
-('BTC', 870),
-('WBTC', 870),
-('ETH', 860),
-('WETH', 860),
-('stETH', 859),
-('wstETH', 859),
-('LINK', 850),
-('UNI', 840),
-('SKY', 830),
-('AAVE', 820),
-('stAAVE', 800),
-('STKAAVE', 800),
-('clAAVE', 800),
-('stkGHO', 800),
-('sGHO', 800),
-('cbBTC', 800),
-('RLUSD', 800),
-('sUSDS', 800)
-ON CONFLICT (symbol) DO NOTHING;
+INSERT INTO coin (symbol, hardness, ethereum_address) VALUES
+('ETH', 860, '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
+('WETH', 860, '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'),
+('USDC', 1000, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'),
+('USDT', 990, '0xdac17f958d2ee523a2206206994597c13d831ec7'),
+('DAI', 970, '0x6b175474e89094c44da98b954eedeac495271d0f'),
+('WBTC', 870, '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599'),
+('EURC', 940, '0x1abaea1f7c830f0654c721306e53a20516147924'),
+('LINK', 850, '0x514910771af9ca656af840dff83e8264ecf986ca'),
+('UNI', 840, '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984'),
+('AAVE', 820, '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9'),
+('USDS', 980, '0xd75003661288c1c39062eb185cd27962b9a78572'),
+('GHO', 950, '0x40d1640030509618f3a3848bdf581d58023c721c'),
+('EURI', 920, '0xf23351d4289cf30113a34a81b7e42be005232ba3'),
+('STKAAVE', 800, '0x4da27a545c0c5b758a6ba100e3a078a959074b1e')
+ON CONFLICT (symbol) DO UPDATE SET ethereum_address = EXCLUDED.ethereum_address;
 
 -- Populate coin_family with initial multi-coin families
 -- (Handled by a temporary array for simplicity in init_db or manual insertion)
