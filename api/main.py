@@ -3,7 +3,7 @@ import os
 import base64
 import secrets
 import psycopg2
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
 import requests
 from fastapi import FastAPI, HTTPException, Query, Request, Response, Body
@@ -11,6 +11,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
+from anyio import to_thread
 from dotenv import load_dotenv
 
 # Airflow API Configuration
@@ -27,6 +28,13 @@ load_dotenv(os.path.join(ROOT_DIR, '.env'))
 CHAIN_FEEDER_ROUTING = os.path.join(ROOT_DIR, 'chain-feeder', 'routing')
 if CHAIN_FEEDER_ROUTING not in sys.path:
     sys.path.insert(0, CHAIN_FEEDER_ROUTING)
+
+# Import graph discovery client
+GRAPH_CLIENT_DIR = os.path.join(ROOT_DIR, 'chain-feeder')
+if GRAPH_CLIENT_DIR not in sys.path:
+    sys.path.insert(0, GRAPH_CLIENT_DIR)
+if os.path.join(GRAPH_CLIENT_DIR, 'include') not in sys.path:
+    sys.path.insert(0, os.path.join(GRAPH_CLIENT_DIR, 'include'))
 
 try:
     from postgres_fetcher import PostgresFetcher
@@ -51,7 +59,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/favicon.ico", "/static"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -210,7 +218,13 @@ async def analyze(
             import psycopg2
             conn = psycopg2.connect(DATA_WAREHOUSE_DB)
             cur = conn.cursor()
-            cur.execute("SELECT MIN(timestamp), MAX(timestamp) FROM uniswap_v3_swaps")
+            cur.execute("""
+                SELECT MIN(timestamp), MAX(timestamp) FROM (
+                    SELECT timestamp FROM uniswap_v3_swaps
+                    UNION ALL
+                    SELECT timestamp FROM uniswap_v4_swaps
+                ) as all_swaps
+            """)
             row = cur.fetchone()
             db_min = row[0].isoformat() if row[0] else None
             db_max = row[1].isoformat() if row[1] else None
@@ -239,37 +253,49 @@ async def analyze(
                 pools_to_fetch.add((t0, t1, fee))
         
         # 2. Fetch stats
+        aprs = {}
         if pools_to_fetch:
-            aprs = fetcher.fetch_pool_stats(list(pools_to_fetch), start_dt, end_dt)
+            try:
+                aprs = fetcher.fetch_pool_stats(list(pools_to_fetch), start_dt, end_dt, prices=latest_prices)
+            except Exception as e:
+                print(f"Error fetching pool stats: {e}")
             
-            # 3. Inject into routes
-            for route_idx, route in enumerate(analysis.get('routes', [])):
-                path = route.get('path_tokens', [])
-                new_path = []
-                for i in range(len(path)):
-                    item = path[i]
-                    if i % 2 == 1: # This is a fee node
-                        # Previous token is at i-1, next at i+1
-                        t0 = path[i-1]
-                        fee = item
-                        t1 = path[i+1]
-                        
-                        # Normalize for lookup (matches PostgresFetcher.fetch_pool_stats)
-                        t0_norm = t0.upper()
-                        t1_norm = t1.upper()
-                        key = f"{t0_norm}-{t1_norm}-{fee}"
-                        apr_val = aprs.get(key)
-                        
-                        # Replace string fee with object
-                        new_path.append({
-                            'fee': fee,
-                            'apr': apr_val if apr_val is not None else 0.0,
-                            'apr_str': f"{apr_val:.1%}" if apr_val is not None else 'N/A'
-                        })
-                    else:
-                        new_path.append(item)
-                
-                analysis['routes'][route_idx]['path_tokens'] = new_path
+        # 3. Inject into routes
+        for route_idx, route in enumerate(analysis.get('routes', [])):
+            path = route.get('path_tokens', [])
+            new_path = []
+            for i in range(len(path)):
+                item = path[i]
+                if i % 2 == 1: # This is a fee node
+                    # Previous token is at i-1, next at i+1
+                    t0 = path[i-1]
+                    fee = item
+                    t1 = path[i+1]
+                    
+                    key = f"{t0}-{t1}-{fee}"
+                    apr_val = aprs.get(key)
+                    
+                    # Also try reversed key just in case
+                    if apr_val is None:
+                        apr_val = aprs.get(f"{t1}-{t0}-{fee}")
+                    
+                    # Replace string fee with object
+                    new_path.append({
+                        'fee': fee,
+                        'apr': apr_val if apr_val is not None else 0.0,
+                        'apr_str': f"{apr_val:.2%}" if apr_val is not None else "N/A"
+                    })
+                else:
+                    new_path.append(item)
+            
+            # Calculate a combined APR for the route
+            # For multi-hop, we use the average of leg APRs as a proxy
+            leg_aprs = [p['apr'] for p in new_path if isinstance(p, dict) and 'apr' in p and p['apr'] > 0]
+            route_apr = sum(leg_aprs) / len(leg_aprs) if leg_aprs else 0.0
+            
+            analysis['routes'][route_idx]['path_tokens'] = new_path
+            analysis['routes'][route_idx]['apr'] = route_apr
+            analysis['routes'][route_idx]['apr_str'] = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
 
         return analysis
     except Exception as e:
@@ -283,7 +309,13 @@ async def get_date_range():
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
-        cur.execute("SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM uniswap_v3_swaps")
+        cur.execute("""
+            SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM (
+                SELECT timestamp FROM uniswap_v3_swaps
+                UNION ALL
+                SELECT timestamp FROM uniswap_v4_swaps
+            ) as all_swaps
+        """)
         row = cur.fetchone()
         cur.close()
         conn.close()
@@ -305,18 +337,36 @@ async def lp_summary():
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         
+        # Get target addresses from env (only show user's own positions)
+        target_addresses_raw = os.getenv("TARGET_ADDRESS", "")
+        target_addresses = [a.strip().lower() for a in target_addresses_raw.split(',') if a.strip()]
+        
         # 1. Fetch latest state + metadata from view (or join)
         # We still use the view for the base data, but we'll enrich it with APRs
-        query_latest = """
-        SELECT 
-            id, timestamp, address, protocol, network, position_label, balance_usd,
-            assets, unclaimed, images, total_unclaimed_usd, position_key,
-            token_id, tick_lower, tick_upper, current_tick,
-            price_lower, price_upper, current_price, in_range, fee_tier
-        FROM v_lp_snapshots_summary
-        ORDER BY timestamp DESC
-        """
-        cur.execute(query_latest)
+        if target_addresses:
+            addr_placeholders = ','.join(['%s'] * len(target_addresses))
+            query_latest = f"""
+            SELECT 
+                id, timestamp, address, protocol, network, position_label, balance_usd,
+                assets, unclaimed, images, total_unclaimed_usd, position_key,
+                token_id, tick_lower, tick_upper, current_tick,
+                price_lower, price_upper, current_price, in_range, fee_tier, pool_id
+            FROM v_lp_snapshots_summary
+            WHERE LOWER(address) IN ({addr_placeholders})
+            ORDER BY timestamp DESC
+            """
+            cur.execute(query_latest, target_addresses)
+        else:
+            query_latest = """
+            SELECT 
+                id, timestamp, address, protocol, network, position_label, balance_usd,
+                assets, unclaimed, images, total_unclaimed_usd, position_key,
+                token_id, tick_lower, tick_upper, current_tick,
+                price_lower, price_upper, current_price, in_range, fee_tier, pool_id
+            FROM v_lp_snapshots_summary
+            ORDER BY timestamp DESC
+            """
+            cur.execute(query_latest)
         all_rows = cur.fetchall()
         
         # Group by position_key to find the LATEST row for each position
@@ -374,7 +424,6 @@ async def lp_summary():
 
         results = []
         for key, latest in latest_positions.items():
-            # ... (Existing extraction code)
             assets = latest[7] if latest[7] else []
             unclaimed = latest[8] if latest[8] else []
             
@@ -393,6 +442,7 @@ async def lp_summary():
                 "total_unclaimed_usd": float(latest[10]) if latest[10] else 0,
                 "images": latest[9],
                 "token_id": latest[12],
+                "pool_id": latest[21],
                 # Range data (indices 12-20)
                 "range_data": {
                     "token_id": latest[12],
@@ -671,7 +721,7 @@ async def trigger_history_feeder(payload: HistoryFeederRequest):
         # Airflow 3 requires logical_date in the payload
         payload_data = {
             "conf": dag_conf,
-            "logical_date": datetime.utcnow().isoformat() + "Z"
+            "run_after": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         }
         
         response = await to_thread.run_sync(
@@ -777,7 +827,188 @@ async def get_coins():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/assets/price-by-cmc-id", tags=["Assets"])
+@app.get("/api/pools", tags=["Liquidity Pools"])
+async def list_pools():
+    """List all available liquidity pools with latest stats."""
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        
+        query = """
+        SELECT 
+            p.id, p.network, p.protocol, p.pool_name, p.fee_tier, p.pool_address,
+            h.tvl_usd, h.volume_usd, h.tx_count, p.coin0_symbol, p.coin1_symbol
+        FROM liquidity_pool p
+        LEFT JOIN (
+            SELECT DISTINCT ON (pool_id) pool_id, tvl_usd, volume_usd, tx_count
+            FROM liquidity_pool_history
+            ORDER BY pool_id, date DESC
+        ) h ON p.id = h.pool_id
+        WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
+        ORDER BY h.tvl_usd DESC NULLS LAST
+        """
+        cur.execute(query)
+        rows = cur.fetchall()
+        
+        pools = []
+        for r in rows:
+            pools.append({
+                "id": r[0],
+                "network": r[1],
+                "protocol": r[2],
+                "pool_name": r[3],
+                "fee_tier": r[4],
+                "pool_address": r[5],
+                "tvl_usd": float(r[6]) if r[6] else 0.0,
+                "volume_24h": float(r[7]) if r[7] else 0.0,
+                "tx_count": r[8] if r[8] else 0,
+                "tokens": [r[9], r[10]]
+            })
+            
+        cur.close()
+        conn.close()
+        return pools
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/pools/{pool_id}/leaderboard", tags=["Liquidity Pools"])
+async def pool_leaderboard(pool_id: int):
+    """Get the top LP providers for a specific pool."""
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        
+        # Robust query: Join on pool_id directly, fallback to snapshot balance if exists
+        query = """
+        SELECT 
+            pos.wallet_address,
+            COALESCE(SUM(s.balance_usd), 0) as total_balance_usd,
+            COUNT(pos.id) as position_count,
+            MAX(COALESCE(s.timestamp, pos.created_at)) as last_activity,
+            COALESCE(SUM(s.coin0_amount), 0) as total_coin0,
+            COALESCE(SUM(s.coin1_amount), 0) as total_coin1
+        FROM liquidity_pool_position pos
+        LEFT JOIN (
+            SELECT DISTINCT ON (position_id) position_id, balance_usd, coin0_amount, coin1_amount, timestamp
+            FROM liquidity_pool_position_snapshot
+            ORDER BY position_id, timestamp DESC
+        ) s ON pos.id = s.position_id
+        WHERE pos.pool_id = %s
+        GROUP BY pos.wallet_address
+        ORDER BY total_balance_usd DESC, position_count DESC
+        """
+        cur.execute(query, (pool_id,))
+        rows = cur.fetchall()
+        
+        # Calculate total pool balance for percentages (only count positive ones to avoid skewed shares)
+        total_pos_usd = sum(float(r[1]) for r in rows if float(r[1]) > 0)
+        
+        leaderboard = []
+        for r in rows:
+            bal_usd = float(r[1]) if r[1] else 0.0
+            if bal_usd <= 0: continue # Skip negative or empty balances for the leaderboard
+            
+            # share is relative to the total tracked POSITIVE liquidity
+            share = (bal_usd / total_pos_usd * 100) if total_pos_usd > 0 else 0.0
+            
+            leaderboard.append({
+                "wallet_address": r[0],
+                "balance_usd": bal_usd,
+                "position_count": r[2],
+                "last_activity": r[3].isoformat() if r[3] else None,
+                "share_percent": share,
+                "assets": [
+                    {"amount": float(r[4]) if r[4] else 0.0},
+                    {"amount": float(r[5]) if r[5] else 0.0}
+                ]
+            })
+            
+        cur.close()
+        conn.close()
+        return leaderboard
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/pools/{pool_id}/sync", tags=["Liquidity Pools"])
+async def sync_pool(pool_id: int):
+    """Trigger manual discovery and indexing for a specific pool."""
+    try:
+        from graph_discovery_client import fetch_positions_by_pool, resolve_pool_address
+        
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        
+        # 1. Get pool details
+        cur.execute("SELECT network, pool_address, protocol, coin0_symbol, coin1_symbol, fee_tier FROM liquidity_pool WHERE id = %s", (pool_id,))
+        pool_res = cur.fetchone()
+        if not pool_res:
+            raise HTTPException(status_code=404, detail="Pool not found")
+        
+        network, pool_address, protocol, c0, c1, fee = pool_res
+        
+        # 2. Attempt to resolve address if missing
+        if not pool_address:
+            print(f"Pool address missing for ID {pool_id}. Attempting to resolve...")
+            # Fetch token addresses
+            cur.execute("SELECT symbol, ethereum_address FROM coin WHERE symbol IN (%s, %s)", (c0, c1))
+            coin_rows = cur.fetchall()
+            coin_map = {row[0]: row[1] for row in coin_rows}
+            
+            if c0 in coin_map and c1 in coin_map:
+                resolved_addr = await to_thread.run_sync(
+                    lambda: resolve_pool_address(
+                        coin_map[c0], coin_map[c1], fee, 
+                        network=network, protocol=protocol
+                    )
+                )
+                if resolved_addr:
+                    print(f"Resolved address for pool {pool_id}: {resolved_addr}")
+                    cur.execute("UPDATE liquidity_pool SET pool_address = %s WHERE id = %s", (resolved_addr, pool_id))
+                    conn.commit()
+                    pool_address = resolved_addr
+                else:
+                    raise HTTPException(status_code=400, detail=f"Could not resolve pool address on The Graph for {c0}-{c1} {fee}")
+            else:
+                raise HTTPException(status_code=400, detail=f"Token addresses missing in database for {c0} or {c1}")
+
+        if not pool_address:
+            raise HTTPException(status_code=400, detail="Pool address unknown for this entry")
+            
+        # 3. Fetch from Graph
+        positions = await to_thread.run_sync(
+            lambda: fetch_positions_by_pool(pool_address, network=network, protocol=protocol)
+        )
+        
+        if not positions:
+            return {"status": "success", "message": "Sync completed. No new positions found on Graph.", "count": 0}
+            
+        # 4. Trigger ingestion logic (standalone helpers)
+        try:
+            from graph_ingestion_helpers import (
+                ingest_coins_data, ingest_pools_data, ingest_pool_stats,
+                ingest_positions_data, ingest_snapshots_data
+            )
+            
+            # Use same connection to ensure consistency
+            ingest_coins_data(conn, positions)
+            ingest_pools_data(conn, positions)
+            ingest_pool_stats(conn, positions)
+            ingest_positions_data(conn, positions)
+            ingest_snapshots_data(conn, positions)
+            
+        except Exception as ingest_err:
+            print(f"Ingestion error: {ingest_err}")
+            # We still return success if discovery worked but ingestion was partial
+            
+        cur.close()
+        conn.close()
+        return {
+            "status": "success", 
+            "message": f"Successfully discovered and indexed {len(positions)} positions.",
+            "count": len(positions)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated CMC IDs (max 100)")):
     """
     Get coin price data by CoinMarketCap IDs.
@@ -841,7 +1072,7 @@ async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated 
         return {
             "data": data,
             "status": {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                 "error_code": 0,
                 "error_message": None,
                 "total_count": len(data)
@@ -865,6 +1096,10 @@ async def read_routing():
 @app.get("/lp", include_in_schema=False)
 async def read_lp():
     return FileResponse(os.path.join(STATIC_DIR, 'lp.html'))
+
+@app.get("/pool", include_in_schema=False)
+async def read_pool():
+    return FileResponse(os.path.join(STATIC_DIR, 'pool.html'))
 
 @app.get("/docs", include_in_schema=False)
 async def custom_docs():

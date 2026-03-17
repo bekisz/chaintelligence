@@ -76,10 +76,10 @@ class RouteAnalyzer:
                 # Setup path based on inferred start
                 if first_swap['token0_symbol'].upper() == tx_start_token:
                     current_token = first_swap['token1_symbol'].upper()
-                    path = [tx_start_token, first_swap['fee_tier'], current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
                 else:
                     current_token = first_swap['token0_symbol'].upper()
-                    path = [tx_start_token, first_swap['fee_tier'], current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
             else:
                 # Check membership
                 t0_up = first_swap['token0_symbol'].upper()
@@ -87,11 +87,11 @@ class RouteAnalyzer:
                 if t0_up in start_tokens and first_swap['amount0'] > 0:
                     tx_start_token = t0_up
                     current_token = t1_up
-                    path = [tx_start_token, first_swap['fee_tier'], current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
                 elif t1_up in start_tokens and first_swap['amount1'] > 0:
                     tx_start_token = t1_up
                     current_token = t0_up
-                    path = [tx_start_token, first_swap['fee_tier'], current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
                 else:
                     continue
             
@@ -102,18 +102,18 @@ class RouteAnalyzer:
                 t1_next = next_swap['token1_symbol'].upper()
                 if t0_next == current_token and next_swap['amount0'] > 0:
                     current_token = t1_next
-                    path.append(next_swap['fee_tier'])
+                    path.append(f"{next_swap['fee_tier']}|{next_swap.get('protocol', 'v3')}")
                     path.append(current_token)
                 elif t1_next == current_token and next_swap['amount1'] > 0:
                     current_token = t0_next
-                    path.append(next_swap['fee_tier'])
+                    path.append(f"{next_swap['fee_tier']}|{next_swap.get('protocol', 'v3')}")
                     path.append(current_token)
             
             # Check if route ended at desired token(s)
             if end_is_wildcard or path[-1] in end_tokens:
                 # Calculate total volume (using first hop as proxy)
                 try:
-                    route_vol_usd = float(tx_events[0]['amount_usd'])
+                    route_vol_usd = float(tx_events[0].get('amountUSD', tx_events[0].get('amount_usd', 0.0)) or 0.0)
                 except (KeyError, TypeError):
                      # Fallback if key missing or None
                      route_vol_usd = 0.0
@@ -122,18 +122,28 @@ class RouteAnalyzer:
                 if route_vol_usd < 0.01:
                     t0_sym = first_swap['token0_symbol'].upper()
                     t1_sym = first_swap['token1_symbol'].upper()
-                    if t0_sym in self.prices:
-                        route_vol_usd = abs(first_swap['amount0']) * self.prices[t0_sym]
-                    elif t1_sym in self.prices:
-                        route_vol_usd = abs(first_swap['amount1']) * self.prices[t1_sym]
+                    
+                    p0 = self.prices.get(t0_sym)
+                    p1 = self.prices.get(t1_sym)
+                    
+                    # Stablecoin heuristics if price missing
+                    if p0 is None and any(x in t0_sym for x in ['USD', 'EUR']): p0 = 1.0
+                    if p1 is None and any(x in t1_sym for x in ['USD', 'EUR']): p1 = 1.0
+                    
+                    if p0 is not None:
+                        route_vol_usd = abs(first_swap['amount0']) * p0
+                    elif p1 is not None:
+                        route_vol_usd = abs(first_swap['amount1']) * p1
                 
                 # Aggregate immediately
-                # Format path: TokenA -- fee% --> TokenB -- fee% --> TokenC
+                # Format path: TokenA -- fee%|protocol --> TokenB -- fee%|protocol --> TokenC
                 path_parts = []
                 for i in range(len(path)):
                     if i % 2 == 0:
                         path_parts.append(path[i])
                     else:
+                        # Remove protocol suffix for pretty string formatting if needed, but we keep it
+                        # to aggregate v3 and v4 separately
                         path_parts.append(f"-- {path[i]} -->")
                 
                 path_str = ' '.join(path_parts)

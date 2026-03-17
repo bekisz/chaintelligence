@@ -10,7 +10,7 @@ load_dotenv()
 import psycopg2
 
 # Database Configuration (needed early for token loading)
-DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=localhost port=5432')
+DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=localhost port=5433')
 
 def load_tokens_from_db():
     """
@@ -64,7 +64,7 @@ GRAPH_API_KEY = os.getenv('GRAPH_API_KEY', '')
 
 if GRAPH_API_KEY:
     # Use authenticated endpoint with higher rate limits (100k queries/month free)
-    UNISWAP_V3_SUBGRAPH_URL = f'https://gateway.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV'
+    UNISWAP_V3_SUBGRAPH_URL = f'https://gateway-arbitrum.network.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV'
 else:
     # Use public endpoint (limited rate, may not work without API key)
     # To get a free API key (100k queries/month), visit: https://thegraph.com/studio/
@@ -83,4 +83,4 @@ TOKEN_ADDRESSES = [token['address'].lower() for token in TOKENS.values()]
 ADDRESS_TO_SYMBOL = {token['address'].lower(): symbol for symbol, token in TOKENS.items()}
 
 # Postgres Configuration
-DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=localhost port=5432')
+DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=localhost port=5433')

@@ -35,19 +35,37 @@ class PostgresFetcher:
             cur = conn.cursor()
             
             query = """
-            SELECT 
-                id, 
-                timestamp, 
-                tx_hash, 
-                token0_address, 
-                token1_address, 
-                token0_symbol, 
-                token1_symbol, 
-                amount0, 
-                amount1, 
-                amount_usd, 
-                fee_tier
-            FROM uniswap_v3_swaps
+            SELECT * FROM (
+                SELECT 
+                    id, 
+                    timestamp, 
+                    tx_hash, 
+                    token0_address, 
+                    token1_address, 
+                    token0_symbol, 
+                    token1_symbol, 
+                    amount0, 
+                    amount1, 
+                    amount_usd, 
+                    fee_tier,
+                    'v3' as protocol
+                FROM uniswap_v3_swaps
+                UNION ALL
+                SELECT 
+                    id, 
+                    timestamp, 
+                    tx_hash, 
+                    token0_address, 
+                    token1_address, 
+                    token0_symbol, 
+                    token1_symbol, 
+                    amount0, 
+                    amount1, 
+                    amount_usd, 
+                    fee_tier,
+                    'v4' as protocol
+                FROM uniswap_v4_swaps
+            ) as all_swaps
             WHERE timestamp >= %s AND timestamp <= %s
             """
             params = [start_date, end_date]
@@ -76,7 +94,8 @@ class PostgresFetcher:
                     'amount0': float(row[7]),
                     'amount1': float(row[8]),
                     'amountUSD': float(row[9]),
-                    'fee_tier': row[10]
+                    'fee_tier': row[10],
+                    'protocol': row[11]
                 })
             
             cur.close()
@@ -89,7 +108,7 @@ class PostgresFetcher:
             self._log(f"Database query failed: {e}")
             raise
 
-    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime) -> Dict[str, float]:
+    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         """
         Fetch stats (APR) for a list of pools [(t0, t1, fee), ...] within date range.
         Returns dict: { "T0-T1-FEE": apr_float }
@@ -103,127 +122,171 @@ class PostgresFetcher:
             
             results = {}
             
-            # We must process one by one or build a complex WHERE clause. 
-            # Given we have ~200 routes max, but many duplicates, unique pools likely < 50.
-            # Let's iterate.
-            
             # Helper to normalize fee string to bips or whatever DB uses
-            # DB uses strings like '100', '500', '3000', '10000'
-            # Input fee is like '0.05%'
             def normalize_fee(f):
-                if f == '0.01%': return '100'
-                if f == '0.05%': return '500'
-                if f == '0.3%': return '3000'
-                if f == '1.0%': return '10000'
-                # fallback for raw values
-                return f.replace('%', '')
+                f_str = str(f).split('|')[0].replace('%', '').strip()
+                # Standard Uniswap V3 mappings
+                fee_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
+                if f_str in fee_map: return fee_map[f_str]
+                
+                try:
+                    val = float(f_str)
+                    # If it's a small number, it's likely a percentage (e.g. 0.0075 or 0.3)
+                    # We want to return it as "points per million" (traditional bips * 100)
+                    if val > 0 and val < 5: 
+                        return str(int(val * 10000))
+                    # Otherwise it's already in bips/ppm
+                    return str(int(val))
+                except:
+                    return f_str
 
             for p in pools:
                 t0, t1, fee = p
-                t0, t1 = t0.upper(), t1.upper()
+                t0_sym, t1_sym = t0.upper(), t1.upper()
+                
+                # Normalize fee to multiple possible formats found in DB
+                f_clean = str(fee).split('|')[0].replace('%', '').strip()
                 fee_db = normalize_fee(fee)
                 
-                # Fetch aggregated stats
-                # We need to match (coin0, coin1) OR (coin1, coin0)
-                query = """
+                # Variants to try in DB: bips (e.g. '500'), percentage (e.g. '0.05%'), raw (e.g. '0.05')
+                fee_variants = [fee_db, f_clean]
+                try:
+                    # add percentage if not present (f_clean might be '500' or '0.05')
+                    if fee_db.isdigit():
+                        val = float(fee_db) / 10000.0
+                        fee_variants.append(f"{val:g}%")
+                        fee_variants.append(f"{val:g}") # e.g. '0.05'
+                except: pass
+                # Remove duplicates and empty
+                fee_variants = list(set([v for v in fee_variants if v]))
+                
+                protocol_filter = ""
+                if '|v4' in str(fee).lower():
+                    protocol_filter = " AND p.protocol = 'Uniswap V4'"
+                elif '|v3' in str(fee).lower():
+                    protocol_filter = " AND p.protocol = 'Uniswap V3'"
+                
+                # 1. Fetch aggregated stats for the window
+                # Use ABS to handle potentially negative TVL/Volume from sync issues
+                query = f"""
                 SELECT 
-                    SUM(h.volume_usd),
-                    AVG(h.tvl_usd)
+                    SUM(ABS(h.volume_usd)),
+                    AVG(ABS(h.tvl_usd))
                 FROM liquidity_pool_history h
                 JOIN liquidity_pool p ON h.pool_id = p.id
                 WHERE 
                     h.date >= %s::date AND h.date <= %s::date
-                    AND p.fee_tier = %s
+                    AND p.fee_tier = ANY(%s)
+                    {protocol_filter}
                     AND (
-                        (p.coin0_symbol = %s AND p.coin1_symbol = %s)
+                        (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
                         OR 
-                        (p.coin0_symbol = %s AND p.coin1_symbol = %s)
+                        (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
                     )
                 """
                 
-                cur.execute(query, (start_date, end_date, fee_db, t0, t1, t1, t0))
+                cur.execute(query, (start_date, end_date, fee_variants, t0_sym, t1_sym, t1_sym, t0_sym))
                 row = cur.fetchone()
                 
                 total_vol = float(row[0]) if row and row[0] else 0
                 avg_tvl = float(row[1]) if row and row[1] else 0
 
-                # Fallback: If volume is 0, try raw swaps
+                # 2. TVL Fallback: If no TVL in window, try to get the latest known TVL for this pool
+                if avg_tvl == 0:
+                    cur.execute(f"""
+                        SELECT h.tvl_usd, h.date
+                        FROM liquidity_pool_history h
+                        JOIN liquidity_pool p ON h.pool_id = p.id
+                        WHERE p.fee_tier = ANY(%s)
+                        {protocol_filter}
+                        AND h.tvl_usd != 0
+                        AND (
+                            (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
+                            OR 
+                            (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
+                        )
+                        ORDER BY h.date DESC LIMIT 1
+                    """, (fee_variants, t0_sym, t1_sym, t1_sym, t0_sym))
+                    tvl_row = cur.fetchone()
+                    if tvl_row and tvl_row[0] is not None:
+                        avg_tvl = abs(float(tvl_row[0]))
+
+                # 3. Volume Fallback: If no volume in history table, check raw swaps
                 if total_vol == 0 and avg_tvl > 0:
                     try:
-                        # 1. Get raw token volume
-                        # Determine fee_tier string for swaps table (e.g. '0.05%')
-                        # Input 'fee' might be '500' or '0.05%'
-                        fee_tier_str = fee if '%' in fee else f"{float(fee)/10000:.2f}%".replace("0.", "0.0") # Approximating, safer to rely on passed fee if it had %
-                        # Actually the input 'p' tuple usually comes from 'route.path_tokens' which has '0.05%' style strings.
-                        # But just in case, let's try to match what's in DB.
+                        # Ensure fee format matches swaps table (only the percentage part)
+                        fee_pct = str(fee).split('|')[0]
+                        fee_map_rev = {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}
+                        fee_tier_pct = fee_pct if '%' in fee_pct else fee_map_rev.get(fee_db, fee_pct)
+                        fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
                         
-                        # Simplified: Just query by tokens and ignore fee if specific string match is hard, 
-                        # OR better: assume input 'fee' is correct format if it has %
-                        
-                        swap_query = """
-                            SELECT SUM(ABS(amount0))
-                            FROM uniswap_v3_swaps
+                        swap_query = f"""
+                            SELECT token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1)) FROM (
+                                SELECT amount_usd, amount0, amount1, timestamp, token0_symbol, token1_symbol, fee_tier, 'Uniswap V3' as protocol FROM uniswap_v3_swaps
+                                UNION ALL
+                                SELECT amount_usd, amount0, amount1, timestamp, token0_symbol, token1_symbol, fee_tier, 'Uniswap V4' as protocol FROM uniswap_v4_swaps
+                            ) as all_swaps
                             WHERE timestamp >= %s AND timestamp <= %s
+                            {("AND protocol = 'Uniswap V3'" if '|v3' in str(fee).lower() else "AND protocol = 'Uniswap V4'") if ('|v3' in str(fee).lower() or '|v4' in str(fee).lower()) else ""}
                             AND (
                                 (UPPER(token0_symbol) = %s AND UPPER(token1_symbol) = %s)
                                 OR 
                                 (UPPER(token0_symbol) = %s AND UPPER(token1_symbol) = %s)
                             )
                         """
-                        # If we want to be strict on fee: "AND fee_tier = %s"
-                        # But let's check if we can skip fee filter for safety or if we need it. 
-                        # Multi-fee pools exist. We should try to use it.
-                        if '%' in fee:
-                             swap_query += " AND fee_tier = %s"
-                             cur.execute(swap_query, (start_date, end_date, t0, t1, t1, t0, fee))
-                        else:
-                             # If fee is '500', difficult to map back exactly without knowing convention. 
-                             # Let's Skip fee filter if we can't easily match, or assume standard mapping
-                             cur.execute(swap_query, (start_date, end_date, t0, t1, t1, t0))
-
-                        swap_row = cur.fetchone()
-                        raw_vol_token0 = float(swap_row[0]) if swap_row and swap_row[0] else 0
+                        params = [start_date, end_date, t0_sym, t1_sym, t1_sym, t0_sym]
                         
-                        if raw_vol_token0 > 0:
-                            # 2. Get Price (Case Insensitive) - Join with coin for address lookup
-                            cur.execute("""
-                                SELECT h.price FROM coin_price_history h
-                                JOIN coin c ON h.address = c.ethereum_address
-                                WHERE UPPER(c.symbol) = %s 
-                                ORDER BY h.timestamp DESC LIMIT 1
-                            """, (t0.upper(),))
-                            price_row = cur.fetchone()
-                            price = float(price_row[0]) if price_row and price_row[0] else 0
-                            
-                            if price > 0:
-                                total_vol = raw_vol_token0 * price
-                                # self._log(f"Fallback calculated volume for {t0}-{t1}: ${total_vol:,.2f}")
+                        # Handle both formats in DB ('500' and '0.05%')
+                        swap_query += " AND (fee_tier = %s OR fee_tier = %s) GROUP BY token0_symbol, token1_symbol"
+                        params.extend([fee_tier_pct, fee_tier_bips])
+                        cur.execute(swap_query, tuple(params))
+
+                        total_fallback_vol = 0
+                        for sw_row in cur.fetchall():
+                            t0_row_sym = sw_row[0]
+                            t1_row_sym = sw_row[1]
+                            usd_sum = float(sw_row[2]) if sw_row[2] else 0
+                            amt0_sum = float(sw_row[3]) if sw_row[3] else 0
+                            amt1_sum = float(sw_row[4]) if sw_row[4] else 0
+                            if usd_sum > 0:
+                                total_fallback_vol += usd_sum
+                            elif prices is not None:
+                                p0 = prices.get(t0_row_sym)
+                                p1 = prices.get(t1_row_sym)
+                                if not p0:
+                                     sym = t0_row_sym.upper()
+                                     if any(x in sym for x in ['USD', 'EUR', 'DAI', 'USDC', 'USDT', 'EURC']): p0 = 1.0
+                                if not p1:
+                                     sym = t1_row_sym.upper()
+                                     if any(x in sym for x in ['USD', 'EUR', 'DAI', 'USDC', 'USDT', 'EURC']): p1 = 1.0
+                                p0 = p0 or 0
+                                p1 = p1 or 0
+                                total_fallback_vol += (amt0_sum * p0 + amt1_sum * p1) / 2.0
+                                
+                        total_vol = total_fallback_vol
                     except Exception as e:
                         self._log(f"Fallback volume calc failed: {e}")
 
+                # 4. Final APR Calculation
                 apr = None
-                if avg_tvl > 0:
-                    # Calculate Fee earned
+                if avg_tvl > 1.0: # Minimum TVL to calculate APR
                     try:
                         fee_rate = float(fee_db) / 1000000.0 
-                    except:
-                        fee_rate = 0
+                        fees_earned = total_vol * fee_rate
                         
-                    fees_earned = total_vol * fee_rate
-                    
-                    # Annualize
-                    days = (end_date - start_date).days
-                    if days < 1: days = 1
-                    
-                    apr = (fees_earned / avg_tvl) * (365.0 / days)
+                        days = (end_date - start_date).days
+                        if days < 1: days = 1
+                        
+                        apr = (fees_earned / avg_tvl) * (365.0 / days)
+                    except:
+                        pass
                 
                 if apr is not None:
                     key = f"{t0}-{t1}-{fee}"
                     results[key] = apr
-                    # Also store reverse key just in case
                     key_rev = f"{t1}-{t0}-{fee}"
                     results[key_rev] = apr
-                
+            
             cur.close()
             conn.close()
             return results
@@ -251,7 +314,7 @@ class PostgresFetcher:
             cur.execute(query)
             rows = cur.fetchall()
             
-            prices = {row[0].upper(): float(row[1]) for row in rows}
+            prices = {row[0].upper(): float(row[1]) for row in rows if row[1] is not None}
             
             cur.close()
             conn.close()

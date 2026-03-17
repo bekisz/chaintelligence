@@ -2,7 +2,7 @@ import os
 import requests
 import logging
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -206,7 +206,7 @@ def fetch_crypto_history(symbol: str, target_currency: str = 'USD', days: int = 
     }
     
     # Calculate date range
-    end_time = datetime.now()
+    end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=days)
     
     params = {

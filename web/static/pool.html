@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaintelligence | Pool Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png?v=brain">
+    <link rel="stylesheet" href="/static/style.css?v=100.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .pool-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .pool-sidebar {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+
+        .pool-list-container {
+            max-height: 60vh;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+
+        .pool-item {
+            padding: 1rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .pool-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .pool-item.active {
+            background: rgba(255, 0, 122, 0.1);
+            border-color: var(--uniswap-pink);
+        }
+
+        .pool-item h4 {
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .pool-item-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .leaderboard-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2rem;
+        }
+
+        .leaderboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pool-title-large {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .pool-stats-row {
+            display: flex;
+            gap: 2rem;
+            margin-top: 0.5rem;
+        }
+
+        .pool-stat-box {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pool-stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .pool-stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 0.5rem;
+        }
+
+        .leaderboard-table th {
+            text-align: left;
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .leaderboard-row {
+            background: var(--item-bg);
+            transition: transform 0.2s;
+        }
+
+        .leaderboard-row:hover {
+            transform: scale(1.01);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .leaderboard-row td {
+            padding: 1.25rem 1rem;
+        }
+
+        .leaderboard-row td:first-child {
+            border-top-left-radius: 12px;
+            border-bottom-left-radius: 12px;
+        }
+
+        .leaderboard-row td:last-child {
+            border-top-right-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+
+        .rank-cell {
+            font-weight: 700;
+            color: var(--text-secondary);
+            width: 50px;
+        }
+
+        .wallet-cell {
+            font-family: monospace;
+            color: var(--accent);
+        }
+
+        .share-bar-container {
+            width: 100px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-top: 4px;
+        }
+
+        .share-bar {
+            height: 100%;
+            background: var(--uniswap-pink);
+            border-radius: 3px;
+        }
+
+        .wallet-tag-pill {
+            font-size: 0.7rem;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 0.5rem;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+        }
+
+        .cluster-tag {
+            font-size: 0.7rem;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 0.5rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/pool" class="nav-link">Pool Explorer</a>
+                <a href="/backtester" class="nav-link">Backtest</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/docs" class="nav-link">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <main>
+            <div class="pool-layout">
+                <aside class="pool-sidebar">
+                    <h3 style="margin-bottom: 1rem;">Active Pools</h3>
+                    <input type="text" id="pool-search" placeholder="Search tokens..." class="token-input" style="width: 100%; margin-bottom: 1rem; border-radius: 12px; padding: 0.6rem 1rem; font-size: 0.9rem;">
+                    
+                    <div id="pool-list" class="pool-list-container">
+                        <div class="spinner"></div>
+                    </div>
+                </aside>
+
+                <section class="pool-main">
+                    <div id="pool-detail" class="leaderboard-container">
+                        <div style="text-align: center; color: var(--text-secondary); padding: 4rem;">
+                            <i class="fas fa-water" style="font-size: 3rem; margin-bottom: 1rem; display: block; opacity: 0.3;"></i>
+                            <p>Select a pool from the sidebar to view detailed LP analytics and provider rankings.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/nav.js"></script>
+    <script src="/static/pool.js?v=101.0"></script>
+</body>
+
+</html>

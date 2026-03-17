@@ -129,6 +129,36 @@ class TestChaintelligenceAPI(unittest.TestCase):
         response = requests.get(url, auth=self.auth)
         self.assertEqual(response.status_code, 422, "Should reject missing ID parameter")
 
+    def test_11_list_pools(self):
+        """Test new endpoint: /api/pools"""
+        url = f"{BASE_URL}/api/pools"
+        response = requests.get(url, auth=self.auth)
+        self.assertEqual(response.status_code, 200, f"Failed to list pools: {response.text}")
+        data = response.json()
+        self.assertIsInstance(data, list)
+        if len(data) > 0:
+            self.assertIn("id", data[0])
+            self.assertIn("pool_name", data[0])
+            self.assertIn("tvl_usd", data[0])
+
+    def test_12_pool_leaderboard(self):
+        """Test new endpoint: /api/pools/{id}/leaderboard"""
+        # First get a valid pool ID
+        list_url = f"{BASE_URL}/api/pools"
+        list_res = requests.get(list_url, auth=self.auth)
+        pools = list_res.json()
+        
+        if len(pools) > 0:
+            pool_id = pools[0]["id"]
+            url = f"{BASE_URL}/api/pools/{pool_id}/leaderboard"
+            response = requests.get(url, auth=self.auth)
+            self.assertEqual(response.status_code, 200, f"Failed to fetch leaderboard: {response.text}")
+            data = response.json()
+            self.assertIsInstance(data, list)
+            if len(data) > 0:
+                self.assertIn("wallet_address", data[0])
+                self.assertIn("share_percent", data[0])
+
 if __name__ == "__main__":
     print(f"Starting API Tests against {BASE_URL}...")
     unittest.main()

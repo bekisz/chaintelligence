@@ -49,8 +49,8 @@ def force_sync_tvl():
     cur.execute("""
         SELECT DISTINCT p.id, p.coin0_symbol, p.coin1_symbol, p.fee_tier 
         FROM liquidity_pool p
-        JOIN liquidity_pool_history h ON p.id = h.pool_id
-        WHERE h.tvl_usd = 0
+        LEFT JOIN liquidity_pool_history h ON p.id = h.pool_id
+        WHERE h.tvl_usd = 0 OR h.tvl_usd IS NULL OR h.pool_id IS NULL
     """)
     pools = cur.fetchall()
     print(f"Found {len(pools)} pools with missing TVL data.")

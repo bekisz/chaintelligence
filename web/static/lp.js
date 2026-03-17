@@ -377,6 +377,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="history-btn" onclick="openHistoryModal('${pos.position_key}', '${cleanedLabel.replace(/'/g, "\\'") + (pos.isClosed ? ' (Closed)' : '')}')">
                             <i class="fas fa-history"></i> View History
                         </button>
+
+                        <a href="/pool?id=${pos.pool_id}" class="history-btn" style="text-decoration:none; margin-top:0.5rem; display:block; text-align:center;">
+                            <i class="fas fa-chart-line"></i> Pool Analytics
+                        </a>
                     </div>
                 </div>
             `;
@@ -547,7 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .filter(p => p.assets && p.assets.length >= 2) // Filter: Must have at least 2 assets (LP)
                     .map(p => {
                         const pTs = new Date(p.timestamp).getTime();
-                        p.isClosed = (maxTs - pTs) > (2 * 60 * 60 * 1000);
+                        p.isClosed = (maxTs - pTs) > (48 * 60 * 60 * 1000); // 48h threshold
                         return p;
                     });
             } else {

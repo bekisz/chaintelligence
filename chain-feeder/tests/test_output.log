@@ -1,0 +1,65 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- /Users/szablocsbeki/git/chaintelligence/chain-feeder/tests/venv/bin/python3.14
+cachedir: .pytest_cache
+rootdir: /Users/szablocsbeki/git/chaintelligence/chain-feeder/tests
+collecting ... collected 1 item
+
+test_dags.py::test_cmc_mapping 
+🏗️  Starting test environment...
+Command failed: docker compose -f docker-compose.test.yaml up -d
+STDOUT: 
+STDERR: time="2026-02-16T13:45:15+01:00" level=warning msg="No services to build"
+ Network tests_default Creating 
+ Network tests_default Created 
+ Volume tests_postgres-test-db-volume Creating 
+ Volume tests_postgres-test-db-volume Created 
+ Container postgres-test Creating 
+ Container postgres-test Created 
+ Container airflow-init-test Creating 
+ Container airflow-init-test Created 
+ Container airflow-dag-processor-test Creating 
+ Container airflow-scheduler-test Creating 
+ Container airflow-webserver-test Creating 
+ Container airflow-scheduler-test Created 
+ Container airflow-webserver-test Created 
+ Container airflow-dag-processor-test Created 
+ Container postgres-test Starting 
+ Container postgres-test Started 
+ Container airflow-init-test Starting 
+ Container airflow-init-test Started 
+ Container airflow-init-test Waiting 
+ Container airflow-init-test Waiting 
+ Container airflow-init-test Waiting 
+Error response from daemon: No such container: 93a54fb54338f60b90ef5fd3e76ff7b79d993c8c95be2c5e01e8416c1f77a4e6
+
+ERROR
+
+==================================== ERRORS ====================================
+______________________ ERROR at setup of test_cmc_mapping ______________________
+
+    @pytest.fixture(scope="function")
+    def docker_env():
+        """Fixture to manage Docker environment for each test."""
+        print("\n🏗️  Starting test environment...")
+        run_command(f"docker compose -f {DOCKER_COMPOSE_FILE} down -v", check=False)
+>       run_command(f"docker compose -f {DOCKER_COMPOSE_FILE} up -d")
+
+test_dags.py:30: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test_dags.py:22: in run_command
+    result.check_returncode()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = CompletedProcess(args='docker compose -f docker-compose.test.yaml up -d', returncode=1, stdout='', stderr='time="2026-...g \nError response from daemon: No such container: 93a54fb54338f60b90ef5fd3e76ff7b79d993c8c95be2c5e01e8416c1f77a4e6\n')
+
+    def check_returncode(self):
+        """Raise CalledProcessError if the exit code is non-zero."""
+        if self.returncode:
+>           raise CalledProcessError(self.returncode, self.args, self.stdout,
+                                     self.stderr)
+E           subprocess.CalledProcessError: Command 'docker compose -f docker-compose.test.yaml up -d' returned non-zero exit status 1.
+
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py:508: CalledProcessError
+=========================== short test summary info ============================
+ERROR test_dags.py::test_cmc_mapping - subprocess.CalledProcessError: Command...
+============================== 1 error in 53.02s ===============================

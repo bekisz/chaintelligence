@@ -2,9 +2,9 @@
 import psycopg2
 import os
 
-# DB_CONN = os.getenv("DATA_WAREHOUSE_DB", "postgres://airflow:airflow@localhost:5432/chaintelligence")
+# DB_CONN = os.getenv("DATA_WAREHOUSE_DB", "postgres://airflow:airflow@localhost:5433/chaintelligence")
 # Hardcoding for local execution since environment variable might be different or missing in shell
-DB_CONN = "postgres://airflow:airflow@localhost:5432/chaintelligence"
+DB_CONN = "postgres://airflow:airflow@localhost:5433/chaintelligence"
 
 def check_claims():
     try:

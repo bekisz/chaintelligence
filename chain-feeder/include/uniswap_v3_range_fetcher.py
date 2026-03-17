@@ -21,10 +21,10 @@ UNISWAP_V3_SUBGRAPH_IDS = {
 
 # Graph Gateway URLs (Decentralized Network) - Requires API Key
 UNISWAP_V3_URLS = {
-    "Ethereum": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-    "Arbitrum": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/3V7ZY6muhxaQL5qvntX1CFXJ32W7BxXZTGTwmpH5J4t3",
-    "Base": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1",
-    "Polygon": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm",
+    "Ethereum": "https://gateway-arbitrum.network.thegraph.com/api/{api_key}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
+    "Arbitrum": "https://gateway-arbitrum.network.thegraph.com/api/{api_key}/subgraphs/id/3V7ZY6muhxaQL5qvntX1CFXJ32W7BxXZTGTwmpH5J4t3",
+    "Base": "https://gateway-arbitrum.network.thegraph.com/api/{api_key}/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1",
+    "Polygon": "https://gateway-arbitrum.network.thegraph.com/api/{api_key}/subgraphs/id/3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm",
 }
 
 POSITION_QUERY = """
@@ -125,6 +125,9 @@ def fetch_position_range_data(position_label, network, graph_api_key=None):
         return None
     
     # Determine Endpoint
+    if not graph_api_key:
+        graph_api_key = os.getenv("GRAPH_API_KEY")
+
     endpoint = None
     if graph_api_key and network in UNISWAP_V3_URLS:
         # Inject API key into URL template

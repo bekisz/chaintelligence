@@ -18,9 +18,9 @@ UNISWAP_V4_SUBGRAPH_IDS = {
 
 # Graph Gateway URLs (Decentralized Network) - Requires API Key
 UNISWAP_V4_URLS = {
-    "Ethereum": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-    "Arbitrum": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r",
-    "Base": "https://gateway.thegraph.com/api/{api_key}/subgraphs/id/Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj",
+    "Ethereum": "https://gateway-arbitrum.network.thegraph.com/api/{api_key}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
+    "Arbitrum": "https://gateway-arbitrum.network.thegraph.com/api/{api_key}/subgraphs/id/G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r",
+    "Base": "https://gateway-arbitrum.network.thegraph.com/api/{api_key}/subgraphs/id/Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj",
 }
 
 POSITION_QUERY = """
@@ -105,6 +105,9 @@ def fetch_v4_position_range_data_from_graph(position_label, network, graph_api_k
     logger.info(f"Fetching V4 position {token_id} on {network} from The Graph")
     
     # Determine Endpoint
+    if not graph_api_key:
+        graph_api_key = os.getenv("GRAPH_API_KEY")
+
     endpoint = None
     if graph_api_key and network in UNISWAP_V4_URLS:
         endpoint = UNISWAP_V4_URLS[network].format(api_key=graph_api_key)

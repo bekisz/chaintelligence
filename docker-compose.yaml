@@ -1,28 +1,30 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.1.6
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
   env_file:
     - .env.config
     - .env.secrets
   environment: &airflow-common-env
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-psycopg2-binary requests web3}
     PYTHONPATH: "/opt/airflow:/opt/airflow/dags:${PYTHONPATH:-}"
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    PYTHONWARNINGS: "ignore::DeprecationWarning,ignore:ASGI app factory:UserWarning"
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution/'
 
-    AIRFLOW__API__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.providers.fab.auth_manager.api.auth.backend.session'
+    AIRFLOW__FAB__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.providers.fab.auth_manager.api.auth.backend.session'
     AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
     AIRFLOW__SIMPLE_AUTH_MANAGER__USERS: 'airflow:airflow'
 
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 10
     AIRFLOW__CORE__INTERNAL_API_URL: 'http://airflow-webserver:8080'
-    AIRFLOW__WEBSERVER__RATELIMIT_STORAGE_URI: "memory://"
-    AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: True
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: True
-    AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8081
+    AIRFLOW__FAB__ENABLE_PROXY_FIX: True
+    AIRFLOW__API__EXPOSE_CONFIG: True
+    AIRFLOW__API__BASE_URL: http://localhost:8081
     AIRFLOW_CONN_CHAINTELLIGENCE_DB: postgresql://airflow:airflow@postgres:5432/chaintelligence
+    RPC_LOG_BATCH_SIZE: 500
 
   volumes:
     - ./chain-feeder/dags:/opt/airflow/dags
@@ -36,16 +38,16 @@ x-airflow-common: &airflow-common
 
 services:
   postgres:
-    image: postgres:13
+    image: postgres:17
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
-      - ./chain-feeder/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+      - ./chain-feeder/include/sql/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: [ "CMD", "pg_isready", "-U", "airflow" ]
       interval: 5s

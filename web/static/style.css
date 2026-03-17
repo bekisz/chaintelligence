@@ -1420,3 +1420,52 @@ input:focus+.slider {
     background: rgba(255, 255, 255, 0.1);
     border-color: var(--text-secondary);
 }
+
+/* Wallet Copy Feature */
+.wallet-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+    width: fit-content;
+}
+
+.wallet-container:hover {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.wallet-address {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+}
+
+.copy-addr-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.1);
+}
+
+.copy-addr-btn {
+    background: none;
+    border: none;
+    color: var(--uniswap-pink);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-addr-btn i {
+    font-size: 1.1rem;
+    font-weight: 700;
+}

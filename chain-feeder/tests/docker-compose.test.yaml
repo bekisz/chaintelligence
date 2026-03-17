@@ -1,0 +1,118 @@
+x-airflow-test-common: &airflow-test-common
+  build:
+    context: ../../
+    dockerfile: Dockerfile.airflow
+  env_file:
+    - ../../.env.config
+    - ../../.env.secrets
+  environment: &airflow-test-common-env
+    PYTHONPATH: "/opt/airflow:/opt/airflow/dags:${PYTHONPATH:-}"
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-test/airflow
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    PYTHONWARNINGS: "ignore::DeprecationWarning,ignore:ASGI app factory:UserWarning"
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver-test:8080/execution/'
+    AIRFLOW__FAB__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.providers.fab.auth_manager.api.auth.backend.session'
+    AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
+    AIRFLOW__SIMPLE_AUTH_MANAGER__USERS: 'airflow:airflow'
+    AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 10
+    AIRFLOW__CORE__INTERNAL_API_URL: 'http://airflow-webserver-test:8080'
+    AIRFLOW__FAB__ENABLE_PROXY_FIX: True
+    AIRFLOW__API__EXPOSE_CONFIG: True
+    AIRFLOW__API__BASE_URL: http://localhost:8085
+    AIRFLOW_CONN_CHAINTELLIGENCE_DB: postgresql://airflow:airflow@postgres-test:5432/chaintelligence
+    # Test specific settings
+    CMC_TIER2_INTERVAL_MINUTES: 0 # Fast updates for testing
+    CMC_TIER3_INTERVAL_MINUTES: 0
+
+  volumes:
+    - ../dags:/opt/airflow/dags
+    - ../include:/opt/airflow/include
+    - ../logs:/opt/airflow/logs
+    - ../plugins:/opt/airflow/plugins
+  user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+  depends_on: &airflow-test-common-depends-on
+    postgres-test:
+      condition: service_started
+
+services:
+  postgres-test:
+    image: postgres:17
+    container_name: postgres-test
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-test-db-volume:/var/lib/postgresql/data
+      # We init chaintelligence_test DB manually or via init script
+      - ../include/sql/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-h", "localhost", "-U", "airflow" ]
+      interval: 5s
+      retries: 10
+      start_period: 60s
+    restart: always
+
+  airflow-init-test:
+    <<: *airflow-test-common
+    container_name: airflow-init-test
+    command: version
+    environment:
+      <<: *airflow-test-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+    depends_on:
+      postgres-test:
+        condition: service_started
+
+  airflow-webserver-test:
+    <<: *airflow-test-common
+    container_name: airflow-webserver-test
+    command: api-server
+    environment:
+      <<: *airflow-test-common-env
+    ports:
+      - "8085:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    depends_on:
+      <<: *airflow-test-common-depends-on
+      airflow-init-test:
+        condition: service_completed_successfully
+
+  airflow-scheduler-test:
+    <<: *airflow-test-common
+    container_name: airflow-scheduler-test
+    command: scheduler
+    environment:
+      <<: *airflow-test-common-env
+    restart: always
+    depends_on:
+      <<: *airflow-test-common-depends-on
+      airflow-init-test:
+        condition: service_completed_successfully
+
+  airflow-dag-processor-test:
+    <<: *airflow-test-common
+    container_name: airflow-dag-processor-test
+    command: dag-processor
+    environment:
+      <<: *airflow-test-common-env
+    restart: always
+    depends_on:
+      <<: *airflow-test-common-depends-on
+      airflow-init-test:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-test-db-volume:

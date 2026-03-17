@@ -2,7 +2,7 @@ from airflow import DAG
 from airflow.sdk import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pendulum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 # Configuration
@@ -48,6 +48,7 @@ def normalize_fee_tier(fee_str):
     mapping = {
         '0.01%': '100',
         '0.05%': '500',
+        '0.08%': '800',
         '0.3%': '3000',
         '1.0%': '10000'
     }
@@ -156,6 +157,7 @@ def build_daily_history():
         p.fee_tier = CASE 
             WHEN s.fee_tier = '0.01%' THEN '100'
             WHEN s.fee_tier = '0.05%' THEN '500'
+            WHEN s.fee_tier = '0.08%' THEN '800'
             WHEN s.fee_tier = '0.3%' THEN '3000'
             WHEN s.fee_tier = '1.0%' THEN '10000'
             ELSE s.fee_tier 
@@ -199,28 +201,31 @@ def sync_tvl_from_graph():
     logging.info("Building symbol->address map...")
     symbol_map = {}
     
-    # Priority 2: Swaps (Heuristic)
-    cur.execute("""
-        SELECT DISTINCT token0_symbol, token0_address FROM uniswap_v3_swaps
-        UNION 
-        SELECT DISTINCT token1_symbol, token1_address FROM uniswap_v3_swaps
-    """)
-    for row in cur.fetchall():
-        sym, addr = row
-        if sym and addr:
-            symbol_map[sym.upper()] = addr.lower()
-            if len(sym) > 8:
-                symbol_map[sym[:8].upper()] = addr.lower()
-
-    # Priority 1: Official coin table (Overwrites heuristic)
+    # Priority 2: Official coin table (Fallback)
     cur.execute("SELECT symbol, ethereum_address FROM coin WHERE ethereum_address IS NOT NULL")
     for row in cur.fetchall():
         sym, addr = row
         if sym and addr:
             symbol_map[sym.upper()] = addr.lower()
+            
+    # Priority 1: Swaps (Heuristic)
+    # Order by swap frequency ASC so the most frequent address overwrites the lesser ones
+    cur.execute("""
+        SELECT sym, addr, SUM(c) as total_c FROM (
+            SELECT token0_symbol as sym, token0_address as addr, count(*) as c FROM uniswap_v3_swaps GROUP BY 1, 2
+            UNION ALL 
+            SELECT token1_symbol as sym, token1_address as addr, count(*) as c FROM uniswap_v3_swaps GROUP BY 1, 2
+        ) t GROUP BY 1, 2 ORDER BY total_c ASC
+    """)
+    for row in cur.fetchall():
+        sym, addr, count = row
+        if sym and addr:
+            symbol_map[sym.upper()] = addr.lower()
+            if len(sym) > 8:
+                symbol_map[sym[:8].upper()] = addr.lower()
                 
     # 2. Get all pools
-    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier FROM liquidity_pool")
+    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier FROM liquidity_pool WHERE protocol = 'Uniswap V3'")
     pools = cur.fetchall()
     
     for pool in pools:
@@ -240,7 +245,7 @@ def sync_tvl_from_graph():
            continue
            
         # Fetch last 90 days
-        start_date = datetime.now() - timedelta(days=90)
+        start_date = datetime.now(timezone.utc) - timedelta(days=90)
         
         try:
             data = fetcher.fetch_pool_daily_data(addr0, addr1, fee_bips, start_date)

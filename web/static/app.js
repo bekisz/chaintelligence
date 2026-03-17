@@ -166,11 +166,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const avgApr = hopCount > 0 ? (totalApr / hopCount) : 0;
             const aprClass = avgApr > 0.5 ? 'text-success font-bold' : (avgApr > 0 ? 'text-success' : 'text-muted');
 
+            // Use backend pre-calculated string if available, otherwise format locally
+            const aprDisplay = route.apr_str || (hopCount > 0 ? (avgApr * 100).toFixed(1) + '%' : 'N/A');
+
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td class="path-cell">${renderPath(route)}</td>
                 <td>${route.count.toLocaleString()}</td>
-                <td class="${aprClass}">${avgApr > 0 ? (avgApr * 100).toFixed(1) + '%' : 'N/A'}</td>
+                <td class="${aprClass}">${aprDisplay}</td>
                 <td class="font-bold">${formatUSD(route.volume)}</td>
                 <td>${formatUSD(route.market_size || 0)}</td>
                 <td>${formatUSD(route.avg_volume)}</td>
@@ -214,13 +217,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (item !== undefined && item !== null) {
                     if (typeof item === 'object') {
                         // Backend enriched object
+                        let cleanFee = item.fee || '';
+                        let protocol = '';
+                        if (cleanFee.includes('|')) {
+                            const parts = cleanFee.split('|');
+                            cleanFee = parts[0];
+                            protocol = parts[1] ? ` (${parts[1].toUpperCase()})` : '';
+                        }
+                        const feeDisplay = `${cleanFee}${protocol}`;
+
                         if (isAprMode) {
-                            displayVal = item.apr_str || 'N/A';
-                            // Swap: show fee on hover
-                            tooltip = `Tier: ${item.fee}`;
+                            if (item.apr !== undefined && item.apr !== null && item.apr > 0) {
+                                // For very small APRs, show more precision
+                                const aprVal = item.apr * 100;
+                                displayVal = aprVal < 0.1 ? aprVal.toFixed(3) + '%' : aprVal.toFixed(1) + '%';
+                                tooltip = `APR: ${item.apr_str} (Tier: ${feeDisplay})`;
+                            } else {
+                                displayVal = feeDisplay + '*';
+                                tooltip = `Fee Tier: ${feeDisplay} (Yield unknown or <0.001%)`;
+                            }
                         } else {
-                            displayVal = item.fee;
-                            // Swap: show APR on hover
+                            displayVal = feeDisplay;
                             tooltip = `APR: ${item.apr_str || 'N/A'}`;
                         }
                     } else if (typeof item === 'string' && item.endsWith('%')) {

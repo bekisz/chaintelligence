@@ -17,7 +17,21 @@ CREATE TABLE IF NOT EXISTS coin (
     image_url TEXT,
     price NUMERIC,
     price_timestamp TIMESTAMP WITH TIME ZONE,
-    decimals INTEGER DEFAULT 18
+    decimals INTEGER DEFAULT 18,
+    percent_change_1h NUMERIC,
+    percent_change_24h NUMERIC,
+    percent_change_7d NUMERIC,
+    percent_change_30d NUMERIC,
+    percent_change_60d NUMERIC,
+    percent_change_90d NUMERIC,
+    market_cap NUMERIC,
+    market_cap_dominance NUMERIC,
+    fully_diluted_market_cap NUMERIC,
+    tvl NUMERIC,
+    total_supply NUMERIC,
+    circulating_supply NUMERIC,
+    max_supply NUMERIC,
+    cmc_last_updated TIMESTAMP WITH TIME ZONE
 );
 
 -- Trigger to lowercase ethereum_address
@@ -134,6 +148,25 @@ CREATE INDEX IF NOT EXISTS idx_swaps_timestamp ON uniswap_v3_swaps(timestamp);
 CREATE INDEX IF NOT EXISTS idx_swaps_token0 ON uniswap_v3_swaps(token0_symbol);
 CREATE INDEX IF NOT EXISTS idx_swaps_token1 ON uniswap_v3_swaps(token1_symbol);
 
+-- 5.1 UNISWAP V4 SWAPS
+CREATE TABLE IF NOT EXISTS uniswap_v4_swaps (
+    id VARCHAR(255) PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL,
+    tx_hash VARCHAR(66) NOT NULL,
+    token0_address VARCHAR(42) NOT NULL,
+    token1_address VARCHAR(42) NOT NULL,
+    token0_symbol VARCHAR(100),
+    token1_symbol VARCHAR(100),
+    amount0 NUMERIC,
+    amount1 NUMERIC,
+    amount_usd NUMERIC,
+    fee_tier VARCHAR(20)
+);
+
+CREATE INDEX IF NOT EXISTS idx_v4_swaps_timestamp ON uniswap_v4_swaps(timestamp);
+CREATE INDEX IF NOT EXISTS idx_v4_swaps_token0 ON uniswap_v4_swaps(token0_symbol);
+CREATE INDEX IF NOT EXISTS idx_v4_swaps_token1 ON uniswap_v4_swaps(token1_symbol);
+
 -- 5.5 COIN PRICE HISTORY
 CREATE TABLE IF NOT EXISTS coin_price_history (
     id SERIAL PRIMARY KEY,
@@ -143,6 +176,28 @@ CREATE TABLE IF NOT EXISTS coin_price_history (
     price NUMERIC NOT NULL,
     UNIQUE(address, timestamp)
 );
+
+-- 5.6 LIQUIDITY POOL POSITION EVENTS
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_event ( 
+    id SERIAL PRIMARY KEY, 
+    position_id INTEGER REFERENCES liquidity_pool_position(id), 
+    tx_hash VARCHAR(66) NOT NULL, 
+    block_number INTEGER NOT NULL, 
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL, 
+    event_type VARCHAR(50) NOT NULL, 
+    amount0 NUMERIC DEFAULT 0, 
+    amount1 NUMERIC DEFAULT 0, 
+    amount_usd NUMERIC DEFAULT 0, 
+    liquidity_change NUMERIC, 
+    tick_lower INTEGER, 
+    tick_upper INTEGER, 
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+    UNIQUE(position_id, tx_hash, event_type) 
+); 
+CREATE INDEX IF NOT EXISTS idx_lp_event_pos ON liquidity_pool_position_event(position_id); 
+CREATE INDEX IF NOT EXISTS idx_lp_event_type ON liquidity_pool_position_event(event_type); 
+CREATE INDEX IF NOT EXISTS idx_lp_event_ts ON liquidity_pool_position_event(timestamp);
+
 
 -- 6. TRIGGERS
 CREATE OR REPLACE FUNCTION enforce_uppercase_symbols() 
@@ -187,18 +242,38 @@ INSERT INTO coin (symbol, hardness, ethereum_address) VALUES
 ('USDS', 980, '0xd75003661288c1c39062eb185cd27962b9a78572'),
 ('GHO', 950, '0x40d1640030509618f3a3848bdf581d58023c721c'),
 ('EURI', 920, '0xf23351d4289cf30113a34a81b7e42be005232ba3'),
-('STKAAVE', 800, '0x4da27a545c0c5b758a6ba100e3a078a959074b1e')
+('STKAAVE', 800, '0x4da27a545c0c5b758a6ba100e3a078a959074b1e'),
+('RETH', 860, '0xae78736cd615f374d3085123a210448e74fc6393'),
+('STETH', 860, '0xae7ab96520de3a18e5e111b5eaab095312d7fe84'),
+('WSTETH', 860, '0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0'),
+('SOL', 700, '0xdummy_sol'),
+('MSOL', 700, '0xdummy_msol'),
+('PENDLE', 600, '0x808507121b80c0546a1d48931130635e169fa121'),
+('USDE', 980, '0x4c9edd5852cd14fe7183fdb42c274d2808b04a55'),
+('STKGHO', 950, '0xdummy_stkgho'),
+('SGHO', 950, '0xdummy_sgho'),
+('RLUSD', 980, '0xdummy_rlusd'),
+('SUSDS', 980, '0xdummy_susds'),
+('EURCV', 940, '0xdummy_eurcv'),
+('EURQ', 940, '0xdummy_eurq'),
+('PAXG', 850, '0x45804880bdc05151523316d3a01ff660eacc9292'),
+('XAUT', 850, '0x68749665e53399066df52a092dd62128b1bf1e6f'),
+('BTC', 900, '0xdummy_btc'),
+('CBBTC', 900, '0xcbb7c919d3639a04f981e285d03837da2ee418d1'),
+('STAAVE', 800, '0xdummy_staave'),
+('CLAAVE', 800, '0xdummy_claave'),
+('MIM', 970, '0x99d1ed205117f739c49110052e42337777777777')
 ON CONFLICT (symbol) DO UPDATE SET ethereum_address = EXCLUDED.ethereum_address;
 
 -- Populate coin_family with initial multi-coin families
 -- (Handled by a temporary array for simplicity in init_db or manual insertion)
 INSERT INTO coin_family (name, symbol) VALUES
-('USD', 'USDC'), ('USD', 'USDT'), ('USD', 'USDS'), ('USD', 'DAI'), ('USD', 'USDE'), ('USD', 'GHO'), ('USD', 'stkGHO'), ('USD', 'sGHO'), ('USD', 'RLUSD'), ('USD', 'sUSDS'),
+('USD', 'USDC'), ('USD', 'USDT'), ('USD', 'USDS'), ('USD', 'DAI'), ('USD', 'USDE'), ('USD', 'GHO'), ('USD', 'STKGHO'), ('USD', 'SGHO'), ('USD', 'RLUSD'), ('USD', 'SUSDS'),
 ('EUR', 'EURC'), ('EUR', 'EURCV'), ('EUR', 'EURI'), ('EUR', 'EURQ'),
-('GOLD', 'PAXG'), ('GOLD', 'XAUt'),
-('BTC', 'BTC'), ('BTC', 'WBTC'), ('BTC', 'cbBTC'),
-('ETH', 'ETH'), ('ETH', 'WETH'), ('ETH', 'stETH'), ('ETH', 'wstETH'),
-('AAVE', 'AAVE'), ('AAVE', 'stAAVE'), ('AAVE', 'STKAAVE'), ('AAVE', 'clAAVE')
+('GOLD', 'PAXG'), ('GOLD', 'XAUT'),
+('BTC', 'BTC'), ('BTC', 'WBTC'), ('BTC', 'CBBTC'),
+('ETH', 'ETH'), ('ETH', 'WETH'), ('ETH', 'STETH'), ('ETH', 'WSTETH'),
+('AAVE', 'AAVE'), ('AAVE', 'STAAVE'), ('AAVE', 'STKAAVE'), ('AAVE', 'CLAAVE')
 ON CONFLICT DO NOTHING;
 
 -- 8. BACKWARD COMPATIBILITY VIEWS

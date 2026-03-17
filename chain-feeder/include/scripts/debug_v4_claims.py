@@ -1,8 +1,9 @@
+import os
 import requests
 
-RPC = "https://rpc.ankr.com/eth/YOUR_RPC_KEY"
+RPC = os.getenv("RPC_URL", "https://rpc.ankr.com/eth/YOUR_RPC_KEY")
 ADDRESS = "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e"
-WALLET = "0xe34eb31bfd2afea4320b1ce0d1b8ae943afac425"
+WALLET = os.getenv("TARGET_ADDRESS", "").split(',')[0]
 
 # Scan last 500k blocks (approx 2 months)
 # User claims happened in Jan 2026.

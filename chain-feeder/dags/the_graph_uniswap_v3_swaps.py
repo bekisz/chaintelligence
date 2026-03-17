@@ -53,12 +53,11 @@ def fetch_and_store_swaps():
     
     logging.info(f"Fetching swaps from {start_date} to {end_date}")
     
-    # We use the existing fetcher and storage logic which works with psycopg2
-    # but the DAG wrapper is now clean Airflow 3 Task SDK style
-    swaps = fetcher.fetch_swaps(start_date, end_date, on_batch_callback=storage.save_swaps)
+    # Set collect_results=False to avoid OOM for large backfills (only return count)
+    count = fetcher.fetch_swaps(start_date, end_date, on_batch_callback=storage.save_swaps, collect_results=False)
     
-    logging.info(f"Fetch complete. Total unique swaps processed: {len(swaps)}")
-    return f"Successfully synchronized {len(swaps)} swaps."
+    logging.info(f"Fetch complete. Total unique swaps processed: {count}")
+    return f"Successfully synchronized {count} swaps."
 
 with DAG(
     'the_graph_uniswap_v3_swaps',
