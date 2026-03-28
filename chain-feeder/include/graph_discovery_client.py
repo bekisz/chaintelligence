@@ -134,6 +134,90 @@ query GetPoolLPs($pool: String!) {
 }
 """
 
+# Query to find all modifications for a specific pool and tick range (to catch non-NFT-transfer removals)
+POOL_RANGE_MODS_QUERY = """
+query GetRangeMods($pool: String!, $tickLower: Int!, $tickUpper: Int!) {
+  modifyLiquidities(where: { 
+    pool: $pool, 
+    tickLower: $tickLower, 
+    tickUpper: $tickUpper 
+  }, first: 1000, orderBy: timestamp, orderDirection: desc) {
+    amount
+    timestamp
+    origin
+  }
+}
+"""
+
+def verify_v4_position_rpc(token_id, network="Ethereum"):
+    """
+    Calls getPoolAndPositionInfo on the PositionManager to get LIVE data.
+    Returns (liquidity, owner, pool_key_dict, tick_range_dict) if valid, else (0, None, None, None).
+    """
+    pm_address = "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e"
+    # Selector for getPoolAndPositionInfo(uint256)
+    selector = "0x7ba03aad"
+    calldata = selector + format(int(token_id), '064x')
+    
+    payload = {"jsonrpc": "2.0", "method": "eth_call", "params": [{"to": pm_address, "data": calldata}, "latest"], "id": 1}
+    
+    # Try each RPC in the pool
+    env_rpcs = os.getenv(f"RPC_URL_{network.upper()}")
+    if not env_rpcs: env_rpcs = os.getenv("RPC_URL")
+    
+    rpc_pool = []
+    if env_rpcs:
+        rpc_pool = [r.strip() for r in env_rpcs.split(",") if r.strip()]
+    
+    if not rpc_pool:
+        rpc_pool = ["https://eth.llamarpc.com"] if network == "Ethereum" else ["https://arbitrum.llamarpc.com"]
+
+    for rpc_url in rpc_pool:
+        try:
+            resp = requests.post(rpc_url, json=payload, timeout=5)
+            if resp.status_code != 200: continue
+            
+            data = resp.json()
+            res = data.get("result")
+            if not res or res == "0x" or len(res) < 384:
+                continue
+                
+            raw = res[2:]
+            words = [raw[i:i+64] for i in range(0, len(raw), 64)]
+            
+            # Word 5: packed as [Pool ID (20b)] [TickLower (3b)] [TickUpper (3b)] [Liquidity (6b)]
+            w5 = words[5]
+            tl_hex = w5[40:46]
+            tu_hex = w5[46:52]
+            liq_hex = w5[52:64]
+            
+            def parse_i24(h):
+                v = int(h, 16)
+                return v - 0x1000000 if v >= 0x800000 else v
+            
+            tl = parse_i24(tl_hex)
+            tu = parse_i24(tu_hex)
+            liq = int(liq_hex, 16)
+            
+            # Second call for ownerOf to be certain of current controller
+            owner_payload = {"jsonrpc": "2.0", "method": "eth_call", "params": [{"to": pm_address, "data": "0x6352211e" + format(int(token_id), '064x')}, "latest"], "id": 2}
+            owner_resp = requests.post(rpc_url, json=owner_payload, timeout=5).json()
+            owner = "0x" + owner_resp.get("result", "")[-40:]
+            
+            pool_key = {
+                "token0": "0x" + words[0][-40:],
+                "token1": "0x" + words[1][-40:],
+                "fee": int(words[2], 16),
+                "tickSpacing": int(words[3], 16),
+                "hooks": "0x" + words[4][-40:]
+            }
+            
+            return liq, owner, pool_key, {"tick_lower": tl, "tick_upper": tu}
+        except:
+            continue
+            
+    return 0, None, None, None
+
 def fetch_graph_positions(wallet_addresses: Any, networks: List[str] = None, graph_api_key: str = None) -> List[Dict[str, Any]]:
     """
     Finds all Uniswap V3 positions for a list of wallets across multiple networks using The Graph.
@@ -283,82 +367,46 @@ def fetch_graph_positions(wallet_addresses: Any, networks: List[str] = None, gra
                         transfers = pos.get("transfers", [])
                         if not transfers: continue
                         
-                        total_liquidity = 0
-                        pool_info = None
-                        target_tick_lower = None
-                        target_tick_upper = None
-                        
-                        # Flatten all modifyLiquiditys from all transactions
-                        all_mods = []
+                        # 1. Collect all tokenIds seen in this wallet's transfer history
+                        unique_token_ids = set()
                         for t in transfers:
-                            tx = t.get("transaction", {})
-                            all_mods.extend(tx.get("modifyLiquiditys", []))
-                            
-                        # Find the first valid modification to establish Pool/Ticks
-                        for mod in all_mods:
-                            if not pool_info and mod.get("pool"):
-                                pool_info = mod.get("pool")
-                                target_tick_lower = int(mod.get("tickLower", 0))
-                                target_tick_upper = int(mod.get("tickUpper", 0))
-                            
-                            # Sum liquidity if ticks match the position's ticks
-                            # Note: A transaction could hypothetically modify other positions in same pool
-                            # But V4 subgraph structure makes it hard to distinguish without more info.
-                            # Assuming broad match for now as typical user behavior is 1 position per pool per tx.
-                            if pool_info and mod.get("pool") and mod.get("pool", {}).get("id") == pool_info.get("id"):
-                                # Verify ticks match (Position is defined by Ticks in V4 mostly)
-                                m_tl = int(mod.get("tickLower", 0))
-                                m_tu = int(mod.get("tickUpper", 0))
-                                if m_tl == target_tick_lower and m_tu == target_tick_upper:
-                                    amount_str = mod.get("amount", "0")
-                                    # Convert to signed int (though amount is usually positive for add?)
-                                    # Wait, `amount` in ModifyLiquidity is `int256`.
-                                    # Mint = positive, Burn = negative.
-                                    try:
-                                        total_liquidity += int(amount_str)
-                                    except:
-                                        pass
-
-                        if not pool_info: continue
-
-                        t0 = pool_info.get("token0", {})
-                        t1 = pool_info.get("token1", {})
-                        token0_symbol = t0.get("symbol", "UNKNOWN")
-                        token1_symbol = t1.get("symbol", "UNKNOWN")
-                        token_id = pos.get("tokenId")
-
-                        normalized_pos = {
-                            "protocol": "Uniswap V4", 
-                            "network": network,
-                            "address": wallet_lower,
-                            "position_label": f"{token0_symbol} / {token1_symbol} (Token ID: {token_id})",
-                            "pool_address": pool_info.get("id", f"v4-{token0_symbol}-{token1_symbol}"), 
-                            "fee_tier": pool_info.get("feeTier"),
-                            "tick_lower": target_tick_lower,
-                            "tick_upper": target_tick_upper,
-                            "current_tick": int(pool_info.get("tick", 0)),
-                            "liquidity": str(total_liquidity), 
-                            "assets": [
-                                {
-                                    "symbol": token0_symbol,
-                                    "address": t0.get("id"),
-                                    "decimals": int(t0.get("decimals", 18)),
-                                    "balance": 0,
-                                },
-                                {
-                                    "symbol": token1_symbol,
-                                    "address": t1.get("id"),
-                                    "decimals": int(t1.get("decimals", 18)),
-                                    "balance": 0,
+                            tid = t.get("tokenId")
+                            if tid: unique_token_ids.add(tid)
+                        
+                        # 2. Verify each Token ID via RPC (State checking)
+                        for tid in unique_token_ids:
+                            try:
+                                liq, owner, pkey, trange = verify_v4_position_rpc(tid, network=network)
+                                
+                                # Skip if closed or owned by someone else now
+                                if liq <= 1000000 or (owner and owner.lower() != wallet_lower):
+                                    continue
+                                
+                                # Fetch token details from RPC data
+                                t0_addr = pkey["token0"]
+                                t1_addr = pkey["token1"]
+                                pool_addr = f"v4-{t0_addr}-{t1_addr}"
+                                
+                                normalized_pos = {
+                                    "protocol": "Uniswap V4", 
+                                    "network": network,
+                                    "address": wallet_lower,
+                                    "position_label": f"V4 Position (Token ID: {tid})",
+                                    "pool_address": pool_addr, 
+                                    "fee_tier": pkey["fee"],
+                                    "tick_lower": trange["tick_lower"],
+                                    "tick_upper": trange["tick_upper"],
+                                    "current_tick": 0, 
+                                    "liquidity": str(liq),
+                                    "assets": [
+                                        {"symbol": "UNK", "address": t0_addr, "decimals": 18, "balance": 0},
+                                        {"symbol": "UNK", "address": t1_addr, "decimals": 18, "balance": 0}
+                                    ],
+                                    "position_key": f"uniswapv4-{network}-{tid}",
+                                    "balance_usd": 0
                                 }
-                            ],
-                            "unclaimed": [],
-                            "balance_usd": 0,
-                            "position_key": f"uniswapv4-{network}-{token_id}",
-                            "images": []
-                        }
-                        all_positions.append(normalized_pos)
-
+                                all_positions.append(normalized_pos)
+                            except: continue
                 except Exception as e:
                     logger.error(f"Failed V4 scan on {network}: {e}")
 
@@ -439,70 +487,40 @@ def fetch_positions_by_pool(pool_address: str, network: str = "Ethereum", protoc
             pool_data = data.get("data", {}).get("pool", {})
             if not pool_data: return []
             
-            t0 = pool_data.get("token0", {})
-            t1 = pool_data.get("token1", {})
-            token0_symbol = t0.get("symbol", "UNKNOWN")
-            token1_symbol = t1.get("symbol", "UNKNOWN")
-            current_tick = int(pool_data.get("tick", 0))
-            fee_tier = pool_data.get("feeTier")
-            pool_tvl = float(pool_data.get("totalValueLockedUSD", 0))
-            pool_vol = float(pool_data.get("volumeUSD", 0))
-            
-            # Sort events by timestamp ASC to aggregate correctly
+            # For a pool scan, we look at all recent modifications to find potential candidates
+            # but we ALWAYS verify current state via RPC to avoid SUM-errors or double-counting.
             mods = pool_data.get("modifyLiquiditys", [])
-            mods.sort(key=lambda x: int(x.get('timestamp', 0)))
+            potential_tids = set()
+            for m in mods:
+                transfers = m.get("transaction", {}).get("transfers", [])
+                for t in transfers:
+                    if t.get("tokenId"): potential_tids.add(t.get("tokenId"))
             
-            pos_aggregator = {} # token_id -> data
-            
-            for mod in mods:
-                transfers = mod.get("transaction", {}).get("transfers", [])
-                token_id = None
-                owner = mod.get("origin") or mod.get("sender")
-                
-                if transfers:
-                    token_id = transfers[0].get("tokenId")
-                    owner = transfers[-1].get("to") or owner
-
-                if not token_id:
-                    token_id = f"mod-{mod.get('transaction', {}).get('id')[:10]}"
-
-                amount = int(mod.get("amount", 0))
-                
-                if token_id not in pos_aggregator:
-                    pos_aggregator[token_id] = {
-                        "liquidity": 0,
-                        "owner": owner,
-                        "tick_lower": int(mod.get("tickLower", 0)),
-                        "tick_upper": int(mod.get("tickUpper", 0))
+            for tid in potential_tids:
+                try:
+                    liq, owner, pkey, trange = verify_v4_position_rpc(tid, network=network)
+                    if liq <= 1000000: continue # Inactive or Dust
+                    
+                    normalized_pos = {
+                        "protocol": "Uniswap V4",
+                        "network": network,
+                        "address": owner.lower() if owner else "unknown",
+                        "position_label": f"V4 Position (Token ID: {tid})",
+                        "pool_address": pool_address.lower(),
+                        "fee_tier": pkey["fee"],
+                        "tick_lower": trange["tick_lower"],
+                        "tick_upper": trange["tick_upper"],
+                        "current_tick": int(pool_data.get("tick", 0)),
+                        "liquidity": str(liq),
+                        "assets": [
+                            {"symbol": "UNK", "address": pkey["token0"], "decimals": 18, "balance": 0},
+                            {"symbol": "UNK", "address": pkey["token1"], "decimals": 18, "balance": 0}
+                        ],
+                        "position_key": f"uniswapv4-{network}-{tid}",
+                        "balance_usd": 0
                     }
-                
-                pos_aggregator[token_id]["liquidity"] += amount
-
-            for token_id, agg_data in pos_aggregator.items():
-                # Clamp to 0 and ignore inactive positions
-                if agg_data["liquidity"] <= 0: continue
-                
-                normalized_pos = {
-                    "protocol": "Uniswap V4",
-                    "network": network,
-                    "address": agg_data["owner"].lower(),
-                    "position_label": f"{token0_symbol} / {token1_symbol} (Token ID: {token_id})",
-                    "pool_address": pool_address.lower(),
-                    "fee_tier": fee_tier,
-                    "tick_lower": agg_data["tick_lower"],
-                    "tick_upper": agg_data["tick_upper"],
-                    "current_tick": current_tick,
-                    "liquidity": str(agg_data["liquidity"]),
-                    "pool_tvl": pool_tvl,
-                    "pool_vol": pool_vol,
-                    "assets": [
-                        {"symbol": token0_symbol, "address": t0.get("id"), "decimals": int(t0.get("decimals", 18)), "balance": 0},
-                        {"symbol": token1_symbol, "address": t1.get("id"), "decimals": int(t1.get("decimals", 18)), "balance": 0}
-                    ],
-                    "position_key": f"uniswapv4-{network}-{token_id}",
-                    "balance_usd": 0
-                }
-                all_positions.append(normalized_pos)
+                    all_positions.append(normalized_pos)
+                except: continue
                 
         return all_positions
     except Exception as e:
