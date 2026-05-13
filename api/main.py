@@ -39,6 +39,7 @@ if os.path.join(GRAPH_CLIENT_DIR, 'include') not in sys.path:
 try:
     from postgres_fetcher import PostgresFetcher
     from route_analyzer import RouteAnalyzer
+    from shortcut_finder import ShortcutFinder
     from config import DATA_WAREHOUSE_DB
 except ImportError as e:
     print(f"Error importing routing modules from {CHAIN_FEEDER_ROUTING}: {e}")
@@ -59,7 +60,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -1084,6 +1085,75 @@ async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated 
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/sps/find", tags=["SPS"])
+async def sps_find(
+    start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
+    families: Optional[str] = Query(None, description="Comma-separated family names (e.g. USD,EUR,ETH). Empty = all correlated."),
+    cross_family: bool = Query(False, description="Include cross-family analysis (e.g. USD×EUR)"),
+    min_volume: float = Query(10000, description="Minimum divertable volume (USD)"),
+    tvl_targets: Optional[str] = Query(None, description="Comma-separated TVL targets for APR projection (e.g. 100000,500000,1000000)"),
+):
+    """Find stable-pair shortcut opportunities.
+
+    Scans multi-hop routes between correlated token families and identifies
+    where volume flows through volatile intermediaries like WETH. Returns
+    ranked opportunities with projected revenue and APR.
+    """
+    try:
+        from datetime import datetime as dt
+
+        start_dt = dt.strptime(start_date, '%Y-%m-%d')
+        end_dt = dt.strptime(end_date, '%Y-%m-%d')
+
+        if start_dt >= end_dt:
+            raise HTTPException(status_code=400, detail="start_date must be before end_date")
+
+        family_list = None
+        if families:
+            family_list = [f.strip() for f in families.split(',') if f.strip()]
+
+        tvl_list = [100_000, 500_000, 1_000_000]
+        if tvl_targets:
+            try:
+                tvl_list = [float(t.strip()) for t in tvl_targets.split(',') if t.strip()]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid tvl_targets format")
+
+        def run_finder():
+            finder = ShortcutFinder(
+                families=family_list,
+                cross_family=cross_family,
+                min_volume=min_volume,
+                tvl_targets=tvl_list,
+                verbose=False,
+            )
+            opportunities = finder.find(start_dt, end_dt)
+            period_days = (end_dt - start_dt).total_seconds() / 86400
+            return finder.to_json(opportunities, period_days), period_days
+
+        results, period_days = await to_thread.run_sync(run_finder)
+
+        return {
+            'period': {
+                'start': start_date,
+                'end': end_date,
+                'days': period_days,
+            },
+            'config': {
+                'families': family_list,
+                'cross_family': cross_family,
+                'min_volume': min_volume,
+                'tvl_targets': tvl_list,
+            },
+            'opportunities': results,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # UI Routes (Excluded from Swagger schema)
 @app.get("/", include_in_schema=False)
 async def read_index():
@@ -1100,6 +1170,10 @@ async def read_lp():
 @app.get("/pool", include_in_schema=False)
 async def read_pool():
     return FileResponse(os.path.join(STATIC_DIR, 'pool.html'))
+
+@app.get("/sps", include_in_schema=False)
+async def read_sps():
+    return FileResponse(os.path.join(STATIC_DIR, 'sps.html'))
 
 @app.get("/docs", include_in_schema=False)
 async def custom_docs():

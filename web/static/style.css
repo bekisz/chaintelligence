@@ -1469,3 +1469,397 @@ input:focus+.slider {
     font-size: 1.1rem;
     font-weight: 700;
 }
+
+/* ======================================
+   SPS — Stable-Pair Shortcuts Page
+   ====================================== */
+
+.sps-hero {
+    text-align: center;
+    padding: 3rem 1rem 1.5rem;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.sps-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--uniswap-pink), #a78bfa, #60a5fa);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.75rem;
+}
+
+.sps-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.sps-subtitle strong {
+    color: var(--text-primary);
+}
+
+.sps-controls-container {
+    max-width: 520px;
+}
+
+.sps-form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.sps-form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.sps-input-full {
+    flex: 1;
+}
+
+.sps-input-half {
+    flex: 1;
+}
+
+.sps-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.sps-options-row {
+    padding: 0.25rem 0;
+}
+
+.sps-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+
+.sps-checkbox-label:hover {
+    color: var(--text-primary);
+}
+
+.sps-checkbox-label input[type="checkbox"] {
+    accent-color: var(--uniswap-pink);
+    width: 16px;
+    height: 16px;
+}
+
+.sps-summary-cards {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 900px) {
+    .sps-summary-cards {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.sps-loader-detail {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+/* SPS Opportunity Cards */
+.sps-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sps-card:hover {
+    border-color: rgba(255, 0, 122, 0.3);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.sps-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+}
+
+.sps-card-header:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.sps-card-header.expanded .expand-toggle {
+    transform: rotate(180deg);
+}
+
+.sps-card-rank {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--uniswap-pink);
+    min-width: 40px;
+    text-align: center;
+}
+
+.sps-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.sps-card-title h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.sps-badge {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.sps-badge-new {
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.sps-badge-exists {
+    color: var(--accent);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.sps-family-tag {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.1);
+}
+
+.sps-family-tag.cross {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.sps-card-headline-stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-left: auto;
+    padding-right: 2rem;
+}
+
+.sps-headline-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+}
+
+.sps-headline-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sps-headline-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Card Body */
+.sps-card-body {
+    padding: 0 1.5rem 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.sps-section {
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.sps-section:last-child {
+    border-bottom: none;
+}
+
+.sps-section h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+}
+
+.sps-dominant-route {
+    padding: 0.5rem 0;
+}
+
+/* Fee Comparison */
+.sps-fee-comparison {
+    padding: 1.25rem 0;
+}
+
+.sps-fee-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.sps-fee-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    min-width: 140px;
+}
+
+.sps-fee-current {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.sps-fee-proposed {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.sps-fee-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.sps-fee-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sps-fee-arrow {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.sps-fee-saving {
+    font-size: 0.85rem;
+    color: var(--success);
+    font-weight: 600;
+    margin-left: auto;
+}
+
+/* Volume Stats */
+.sps-volume-stats {
+    display: flex;
+    gap: 2rem;
+}
+
+.sps-mini-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.sps-mini-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.sps-mini-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sps-direct-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* Projection Table */
+.sps-projection-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sps-projection-table th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.5rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.sps-projection-table td {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.sps-projection-table em {
+    font-style: normal;
+    color: var(--accent);
+    font-size: 0.75rem;
+}
+
+/* Other Routes */
+.sps-other-routes {
+    padding: 1rem 0 0;
+}
+
+.sps-other-routes h4 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.sps-other-route-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 0;
+    gap: 1rem;
+}
+
+.sps-route-mini {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sps-route-mini .route-path-container {
+    transform: scale(0.85);
+    transform-origin: left center;
+}
+
+.sps-route-stats {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}

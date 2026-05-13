@@ -1,23 +1,84 @@
 coin-families:
   - name: ETH
+    correlated: true
     coin-list:
       - ETH
-      - STETH
-      - rETH
       - WETH
-    regexp-rule: ".*ETH$"
+      - BETH
+      - WBETH
+      - STETH
+      - WSTETH
+      - RETH
+      - RSETH
+      - METH
+      - LSETH
+      - EZETH
+      - ETHX
+      - TETH
+      - ETH+
+      - OETH
+      - SWETH
+      - AGETH
+      - VBETH
+      - ROCK.RETH
+      - ANKRETH
+      - NETH
+      - ETHA
+      - YNETHX
+      - CRVSTETH
+      - ETH0
+      - ATETH
+      - CBETH
+      - GTETH
+      - EZETH   
+  - name: USD
+    correlated: true
+    coin-list:
+      - USDC
+      - USDT
+      - DAI
+      - USDS
+      - USDE
+      - GHO
+      - RLUSD
+      - SUSDS
+    regexp-rule: ".*USD.*"
+
+  - name: EUR
+    correlated: true
+    coin-list:
+      - EURC
+      - EURI
+      - EURCV
+      - EURQ
+
+  - name: GOLD
+    correlated: true
+    coin-list:
+      - PAXG
+      - XAUT
+
+  - name: BTC
+    correlated: true
+    coin-list:
+      - BTC
+      - WBTC
+      - CBBTC
 
   - name: SOL
+    correlated: true
     coin-list:
       - SOL
       - mSOL
 
+  - name: AAVE
+    correlated: true
+    coin-list:
+      - AAVE
+      - STKAAVE
+
   - name: Tier1
+    correlated: false
     sql-rule: "cmc_rank < 100"
     include-coin:
       - PENDLE
-
-  - name: Stablecoins
-    sql-rule: "symbol IN ('GHO', 'DAI', 'MIM')"
-    regexp-rule: ".*USD.*"
-    

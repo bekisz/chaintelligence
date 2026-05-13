@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaintelligence | Stable-Pair Shortcuts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png?v=brain">
+    <link rel="stylesheet" href="/static/style.css?v=20.0">
+</head>
+
+<body>
+    <!-- Unified Uniswap-Style Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/pool" class="nav-link">Pool Explorer</a>
+                <a href="/backtester" class="nav-link">Backtest</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/sps" class="nav-link">SPS</a>
+                <a href="/docs" class="nav-link">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <main>
+            <!-- Hero Section -->
+            <div class="sps-hero">
+                <h1 class="sps-title">Stable-Pair Shortcuts</h1>
+                <p class="sps-subtitle">
+                    Find where high-volume swaps between correlated tokens route through volatile intermediaries like WETH.
+                    A direct pool can <strong>undercut</strong> multi-hop fees while remaining <strong>lucrative</strong> for LPs.
+                </p>
+            </div>
+
+            <!-- Controls Card -->
+            <div class="swap-container sps-controls-container">
+                <div class="swap-card">
+                    <div class="swap-header">
+                        <h2>Find Opportunities</h2>
+                    </div>
+
+                    <div class="sps-form-grid">
+                        <div class="sps-form-row">
+                            <div class="input-group date-input">
+                                <label>Start Date</label>
+                                <input type="date" id="sps-start-date">
+                            </div>
+                            <div class="input-group date-input">
+                                <label>End Date</label>
+                                <input type="date" id="sps-end-date">
+                            </div>
+                        </div>
+
+                        <div class="sps-form-row">
+                            <div class="token-input sps-input-full">
+                                <label>Families <span class="sps-hint">(comma-separated, leave empty for all)</span></label>
+                                <input type="text" id="sps-families" placeholder="e.g. USD, EUR, ETH">
+                            </div>
+                        </div>
+
+                        <div class="sps-options-row">
+                            <label class="sps-checkbox-label">
+                                <input type="checkbox" id="sps-cross-family">
+                                <span>Cross-family analysis</span>
+                                <span class="sps-hint">(e.g. USDC↔EURC)</span>
+                            </label>
+                        </div>
+
+                        <div class="sps-form-row">
+                            <div class="token-input sps-input-half">
+                                <label>Min Volume (USD)</label>
+                                <input type="number" id="sps-min-volume" value="10000" min="0" step="1000">
+                            </div>
+                            <div class="token-input sps-input-half">
+                                <label>TVL Targets (USD)</label>
+                                <input type="text" id="sps-tvl-targets" placeholder="100000, 500000, 1000000" value="100000, 500000, 1000000">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="sps-analyze-btn" class="primary-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="margin-right: 8px;">
+                            <circle cx="11" cy="11" r="8" stroke-width="2"/>
+                            <path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        Find Shortcuts
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <section id="sps-results" class="hidden">
+                <!-- Summary Cards -->
+                <div class="summary-cards sps-summary-cards">
+                    <div class="card glass">
+                        <h3>Opportunities</h3>
+                        <p id="sps-stat-count" class="stat">--</p>
+                    </div>
+                    <div class="card glass">
+                        <h3>Total Divertable Volume</h3>
+                        <p id="sps-stat-volume" class="stat">--</p>
+                    </div>
+                    <div class="card glass">
+                        <h3>Total Transactions</h3>
+                        <p id="sps-stat-txns" class="stat">--</p>
+                    </div>
+                    <div class="card glass">
+                        <h3>Avg Daily Revenue (@ $100K TVL)</h3>
+                        <p id="sps-stat-revenue" class="stat">--</p>
+                    </div>
+                </div>
+
+                <!-- Opportunities List -->
+                <div id="sps-opportunities"></div>
+            </section>
+
+            <!-- Loader -->
+            <div id="sps-loader" class="loader-container hidden">
+                <div class="spinner"></div>
+                <p>Scanning routes across token families...</p>
+                <p class="sps-loader-detail">This may take a minute for large date ranges</p>
+            </div>
+
+            <!-- No Data -->
+            <div id="sps-no-data" class="no-data-msg hidden">
+                <p>No shortcut opportunities found for the given parameters.</p>
+            </div>
+        </main>
+
+        <footer></footer>
+    </div>
+
+    <script src="/static/nav.js"></script>
+    <script src="/static/sps.js?v=2.0"></script>
+</body>
+
+</html>
