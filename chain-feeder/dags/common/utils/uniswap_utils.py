@@ -97,6 +97,12 @@ class UniswapV3Fetcher:
                 t0_addr = token0.get('id', '').lower()
                 t1_addr = token1.get('id', '').lower()
                 
+                fee_tier_val = to_int((swap.get('pool') or {}).get('feeTier'))
+                if fee_tier_val & 0x800000:
+                    fee_tier_str = "Dynamic"
+                else:
+                    fee_tier_str = f"{to_float(fee_tier_val) / 10000}%"
+                
                 normalized = {
                     'id': swap.get('id', 'unknown'),
                     'timestamp': to_int(swap.get('timestamp')),
@@ -108,7 +114,7 @@ class UniswapV3Fetcher:
                     'amount0': to_float(swap.get('amount0')),
                     'amount1': to_float(swap.get('amount1')),
                     'amountUSD': to_float(swap.get('amountUSD')),
-                    'fee_tier': f"{to_float((swap.get('pool') or {}).get('feeTier')) / 10000}%"
+                    'fee_tier': fee_tier_str
                 }
                 batch_swaps.append(normalized)
                 last_timestamp = normalized['timestamp']
@@ -219,6 +225,74 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
                 else:
                     raise
         return None
+
+    def fetch_pool_daily_data(self, token0_addr: str, token1_addr: str, fee_tier_bips: int, start_date: datetime) -> List[Dict]:
+        """
+        Fetches daily pool data for a specific pool defined by token pair and fee tier.
+        For Uniswap V4, there can be multiple pools with the same fee tier (due to spacing/hooks),
+        so we query totalValueLockedUSD and select the pool with the highest absolute TVL.
+        """
+        start_ts = int(start_date.timestamp())
+        t0, t1 = sorted([token0_addr.lower(), token1_addr.lower()])
+        
+        query = f"""
+        {{
+          pools(where: {{
+            token0: "{t0}", 
+            token1: "{t1}", 
+            feeTier: "{fee_tier_bips}"
+          }}) {{
+            id
+            totalValueLockedUSD
+            poolDayData(
+                where: {{ date_gte: {start_ts} }}
+                orderBy: date
+                orderDirection: asc
+            ) {{
+              date
+              tvlUSD
+              volumeUSD
+              txCount
+            }}
+          }}
+        }}
+        """
+        
+        result = self._execute_query(query)
+        if not result or 'data' not in result:
+            return []
+            
+        pools = result['data'].get('pools', [])
+        if not pools:
+            return []
+            
+        # Select pool with highest absolute totalValueLockedUSD
+        valid_pools = []
+        for p in pools:
+            try:
+                tvl = abs(float(p.get('totalValueLockedUSD') or 0))
+            except ValueError:
+                tvl = 0.0
+            valid_pools.append((tvl, p))
+            
+        if not valid_pools:
+            return []
+            
+        valid_pools.sort(key=lambda x: x[0], reverse=True)
+        pool_data = valid_pools[0][1]
+        
+        day_datas = pool_data.get('poolDayData', [])
+        
+        normalized_data = []
+        for d in day_datas:
+             normalized_data.append({
+                 'date': datetime.fromtimestamp(int(d['date']), timezone.utc).date(),
+                 'tvl_usd': float(d.get('tvlUSD', 0) or 0),
+                 'volume_usd': float(d.get('volumeUSD', 0) or 0),
+                 'tx_count': int(d.get('txCount', 0) or 0),
+             })
+             
+        return normalized_data
 
 class PostgresStorage:
     def __init__(self):

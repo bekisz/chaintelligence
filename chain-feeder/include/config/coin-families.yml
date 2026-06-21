@@ -42,6 +42,9 @@ coin-families:
       - GHO
       - RLUSD
       - SUSDS
+      - CRVUSD
+      - sCRVUSD
+      - sUSDe
     regexp-rule: ".*USD.*"
 
   - name: EUR
@@ -64,6 +67,10 @@ coin-families:
       - BTC
       - WBTC
       - CBBTC
+      - tBTC
+      - FBTC
+      - LBTC
+      - kBTC
 
   - name: SOL
     correlated: true
@@ -81,4 +88,5 @@ coin-families:
     correlated: false
     sql-rule: "cmc_rank < 100"
     include-coin:
-      - PENDLE
+      - PENDLE 
+      - ENA

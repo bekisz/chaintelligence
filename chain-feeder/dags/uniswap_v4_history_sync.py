@@ -240,9 +240,15 @@ def sync_tvl_from_graph():
             continue
             
         try:
-           fee_bips = int(fee)
+            if fee == 'Dynamic':
+                fee_bips = 8388608
+            elif fee.isdigit():
+                fee_bips = int(fee)
+            else:
+                fee_clean = fee.replace('%', '').strip()
+                fee_bips = int(round(float(fee_clean) * 10000))
         except:
-           continue
+            continue
            
         # Fetch last 90 days
         start_date = datetime.now(timezone.utc) - timedelta(days=90)

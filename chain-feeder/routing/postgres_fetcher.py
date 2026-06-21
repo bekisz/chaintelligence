@@ -125,6 +125,8 @@ class PostgresFetcher:
             # Helper to normalize fee string to bips or whatever DB uses
             def normalize_fee(f):
                 f_str = str(f).split('|')[0].replace('%', '').strip()
+                if f_str == 'Dynamic':
+                    return '3000'
                 # Standard Uniswap V3 mappings
                 fee_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
                 if f_str in fee_map: return fee_map[f_str]
@@ -145,11 +147,12 @@ class PostgresFetcher:
                 t0_sym, t1_sym = t0.upper(), t1.upper()
                 
                 # Normalize fee to multiple possible formats found in DB
-                f_clean = str(fee).split('|')[0].replace('%', '').strip()
+                fee_raw = str(fee).split('|')[0].strip()
+                f_clean = fee_raw.replace('%', '').strip()
                 fee_db = normalize_fee(fee)
                 
                 # Variants to try in DB: bips (e.g. '500'), percentage (e.g. '0.05%'), raw (e.g. '0.05')
-                fee_variants = [fee_db, f_clean]
+                fee_variants = [fee_db, f_clean, fee_raw]
                 try:
                     # add percentage if not present (f_clean might be '500' or '0.05')
                     if fee_db.isdigit():

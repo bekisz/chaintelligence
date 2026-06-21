@@ -262,7 +262,8 @@ INSERT INTO coin (symbol, hardness, ethereum_address) VALUES
 ('CBBTC', 900, '0xcbb7c919d3639a04f981e285d03837da2ee418d1'),
 ('STAAVE', 800, '0xdummy_staave'),
 ('CLAAVE', 800, '0xdummy_claave'),
-('MIM', 970, '0x99d1ed205117f739c49110052e42337777777777')
+('MIM', 970, '0x99d1ed205117f739c49110052e42337777777777'),
+('ENA', 500, '0x57e114b691db790c35207b2e685d4a43181e6061')
 ON CONFLICT (symbol) DO UPDATE SET ethereum_address = EXCLUDED.ethereum_address;
 
 -- Populate coin_family with initial multi-coin families

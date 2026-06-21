@@ -58,15 +58,19 @@ def identify_coins_to_sync(target_symbols: list = None) -> List[Dict]:
     
     resolved_symbols = []
     
-    if target_symbols and len(target_symbols) > 0:
-        logging.info(f"Target symbols/families provided: {target_symbols}. Resolving...")
-        
-        # Parse inputs
-        if isinstance(target_symbols, str):
+    # Parse inputs (handling string template fallback rendering)
+    if isinstance(target_symbols, str):
+        target_symbols = target_symbols.strip()
+        if target_symbols in ('', '[]', 'None'):
+            target_symbols = None
+        else:
             try:
                 target_symbols = json.loads(target_symbols.replace("'", '"'))
             except Exception:
                 target_symbols = [s.strip() for s in target_symbols.split(',')]
+    
+    if target_symbols and len(target_symbols) > 0:
+        logging.info(f"Target symbols/families provided: {target_symbols}. Resolving...")
         
         if not isinstance(target_symbols, list):
             target_symbols = [target_symbols]
@@ -146,7 +150,7 @@ def fetch_and_store_history(coin_list: List[Dict], force_update: bool = False):
                 address, 
                 start_timestamp=current_start_ts, 
                 end_timestamp=current_end_ts,
-                points=1000
+                points=500
             )
             
             if not history:

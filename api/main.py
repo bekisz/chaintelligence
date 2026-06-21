@@ -60,7 +60,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -172,7 +172,13 @@ async def analyze(
             start_dt = end_dt - timedelta(days=days)
         elif start_date:
             start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00')) if end_date else now
+            if end_date:
+                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                # If it's a date-only input (midnight), extend to the end of that day
+                if end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
+                    end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            else:
+                end_dt = now
         else:
             end_dt = now
             start_dt = end_dt - timedelta(days=1)
@@ -351,7 +357,7 @@ async def lp_summary():
                 id, timestamp, address, protocol, network, position_label, balance_usd,
                 assets, unclaimed, images, total_unclaimed_usd, position_key,
                 token_id, tick_lower, tick_upper, current_tick,
-                price_lower, price_upper, current_price, in_range, fee_tier, pool_id
+                price_lower, price_upper, current_price, in_range, fee_tier, NULL as pool_id
             FROM v_lp_snapshots_summary
             WHERE LOWER(address) IN ({addr_placeholders})
             ORDER BY timestamp DESC
@@ -363,7 +369,7 @@ async def lp_summary():
                 id, timestamp, address, protocol, network, position_label, balance_usd,
                 assets, unclaimed, images, total_unclaimed_usd, position_key,
                 token_id, tick_lower, tick_upper, current_tick,
-                price_lower, price_upper, current_price, in_range, fee_tier, pool_id
+                price_lower, price_upper, current_price, in_range, fee_tier, NULL as pool_id
             FROM v_lp_snapshots_summary
             ORDER BY timestamp DESC
             """

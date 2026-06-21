@@ -7,12 +7,12 @@ _logger = logging.getLogger(__name__)
 
 BASE_URL = "https://coins.llama.fi"
 
-def fetch_historical_prices(address: str, chain: str = "ethereum", start_timestamp: Optional[int] = None, end_timestamp: Optional[int] = None, points: int = 1000) -> List[Dict]:
+def fetch_historical_prices(address: str, chain: str = "ethereum", start_timestamp: Optional[int] = None, end_timestamp: Optional[int] = None, points: int = 500) -> List[Dict]:
     """
     Fetch historical prices from DeFi Llama for a specific token address.
     
     The 'span' parameter determines the number of daily points to retrieve.
-    By default we fetch up to 1000 points (~2.7 years).
+    By default we fetch up to 500 points (~1.3 years).
     """
     coin_key = f"{chain}:{address.lower()}"
     url = f"{BASE_URL}/chart/{coin_key}"
