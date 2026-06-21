@@ -374,10 +374,23 @@ async def lp_summary():
             ORDER BY timestamp DESC
             """
             cur.execute(query_latest)
-        all_rows = cur.fetchall()
-        
-        # Group by position_key to find the LATEST row for each position
-        latest_positions = {}
+            all_rows = cur.fetchall()
+            # Fallback if the view returns no rows (e.g., empty DB)
+            if not all_rows:
+                cur.execute("""
+                    SELECT
+                        pos.id, pos.timestamp, pos.address, pos.protocol, pos.network, pos.position_label,
+                        pos.balance_usd, pos.assets, pos.unclaimed, pos.images, pos.total_unclaimed_usd,
+                        pos.position_key, pos.token_id, lp.tick_lower, lp.tick_upper, lp.current_tick,
+                        lp.price_lower, lp.price_upper, lp.current_price, lp.in_range, lp.fee_tier,
+                        lp.id AS pool_id
+                    FROM liquidity_pool_position pos
+                    JOIN liquidity_pool lp ON pos.pool_id = lp.id
+                    ORDER BY pos.timestamp DESC LIMIT 100
+                """)
+                all_rows = cur.fetchall()
+
+            latest_positions = {}
         for row in all_rows:
             key = row[11] if row[11] else f"{row[3]}-{row[5]}-{row[4]}"
             if key not in latest_positions:
