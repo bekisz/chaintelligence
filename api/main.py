@@ -834,8 +834,7 @@ async def get_coins():
         query = """
         SELECT symbol, name, image_url as image, cmc_rank as market_cap_rank
         FROM coin
-        ORDER BY cmc_rank ASC NULLS LAST
-        LIMIT 1000;
+        ORDER BY cmc_rank ASC NULLS LAST;
         """
         cur.execute(query)
         colnames = [desc[0] for desc in cur.description]

@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
 
+    let tokenImageMap = {};
+
     // Fetch available date range from API and set defaults
     try {
         const response = await fetch('/api/routes/date-range');
@@ -41,6 +43,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Fallback: just set end date to today
         const today = new Date().toISOString().split('T')[0];
         endDateInput.value = today;
+    }
+
+    // Fetch official token logos from backend
+    try {
+        const response = await fetch('/api/coin/list');
+        const coins = await response.json();
+        coins.forEach(coin => {
+            if (coin.symbol && coin.image) {
+                tokenImageMap[coin.symbol.toUpperCase()] = coin.image;
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching token images:', error);
     }
 
     const formatUSD = (amount) => {
@@ -189,7 +204,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const tokenIconHtml = (symbol, size = 16) => {
-        const url = tokenIconUrl(symbol);
+        let uppercaseSymbol = symbol.toUpperCase();
+        
+        // Map wrapped / pegged assets to native counterparts for logo purposes
+        const logoMappings = {
+            'WETH': 'ETH',
+            'WBTC': 'BTC',
+            'CBBTC': 'BTC',
+            'TBTC': 'BTC',
+            'KBTC': 'BTC',
+            'LBTC': 'BTC',
+            'FBTC': 'BTC'
+        };
+        if (logoMappings[uppercaseSymbol]) {
+            uppercaseSymbol = logoMappings[uppercaseSymbol];
+        }
+
+        let url = tokenImageMap[uppercaseSymbol];
+        if (!url) {
+            url = tokenIconUrl(uppercaseSymbol);
+        }
         return `<img src="${url}" width="${size}" height="${size}" onerror="this.src='/static/favicon.png'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;">`;
     };
 
