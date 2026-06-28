@@ -389,6 +389,9 @@ async def lp_summary():
                     ORDER BY pos.timestamp DESC LIMIT 100
                 """)
                 all_rows = cur.fetchall()
+                # After attempting the fallback, if there are still no rows we return a helpful message
+                if not all_rows:
+                    return JSONResponse(status_code=200, content={"detail": "No liquidity‑pool positions found in the database."})
 
             latest_positions = {}
         for row in all_rows:

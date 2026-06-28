@@ -72,7 +72,7 @@ class CoinFamilyResolver:
                     f"Using coin-list only ({len(symbols)} tokens)."
                 )
 
-        return {s.upper() for s in symbols if s}
+        return {s.upper()[:8] for s in symbols if s}
 
     def resolve_target_symbols(self, targets: List[str]) -> List[str]:
         """
@@ -88,7 +88,7 @@ class CoinFamilyResolver:
                 family_name = target[:-2]
                 resolved_symbols.update(self.resolve_family(family_name))
             else:
-                resolved_symbols.add(target.upper())
+                resolved_symbols.add(target.upper()[:8])
         
         return sorted(list(resolved_symbols))
 

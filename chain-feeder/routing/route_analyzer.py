@@ -179,18 +179,34 @@ class RouteAnalyzer:
             # Path format: [Token, Fee, Token, Fee, Token]
             # Fees are at odd indices: 1, 3, 5...
             for i in range(1, len(path_list), 2):
-                fee_val = path_list[i]
-                if isinstance(fee_val, str) and fee_val.endswith('%'):
-                    try:
-                        # '0.05%' -> 0.0005
-                        cumulative_fee += float(fee_val.strip('%')) / 100.0
-                    except ValueError:
-                        pass
-                elif isinstance(fee_val, (int, float)):
-                    # Assume raw partial (e.g. 500 for 0.05%) -> 500/10000/100 ? 
-                    # Or just 0.0005?
-                    # Based on previous debug, DB has strings. fallback to 0 if unknown.
-                    pass
+                fee_node = path_list[i]
+                if isinstance(fee_node, str):
+                    # fee_node is formatted as "fee_tier|protocol" (e.g. "0.05%|v3", "500|v3", "Dynamic|v4")
+                    fee_val = fee_node.split('|')[0].strip()
+                    if fee_val.lower() == 'dynamic':
+                        cumulative_fee += 0.0002  # 0.02% conservative estimate for dynamic-fee pools
+                    elif fee_val.endswith('%'):
+                        try:
+                            cumulative_fee += float(fee_val.strip('%')) / 100.0
+                        except ValueError:
+                            pass
+                    else:
+                        try:
+                            val = float(fee_val)
+                            if val > 5:
+                                # Stored as basis points (e.g. 500 or 3000)
+                                cumulative_fee += val / 1_000_000.0
+                            else:
+                                # Stored as raw percentage
+                                cumulative_fee += val / 100.0
+                        except ValueError:
+                            pass
+                elif isinstance(fee_node, (int, float)):
+                    # Fallback in case raw numbers are passed
+                    if fee_node > 5:
+                        cumulative_fee += fee_node / 1_000_000.0
+                    else:
+                        cumulative_fee += fee_node / 100.0
             
             market_size = data['volume_usd'] * cumulative_fee
 

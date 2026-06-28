@@ -126,13 +126,17 @@ class PostgresFetcher:
             def normalize_fee(f):
                 f_str = str(f).split('|')[0].replace('%', '').strip()
                 if f_str == 'Dynamic':
-                    return '3000'
+                    return 'Dynamic'
                 # Standard Uniswap V3 mappings
                 fee_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
                 if f_str in fee_map: return fee_map[f_str]
                 
                 try:
                     val = float(f_str)
+                    # Detect raw 0x800000 dynamic fee flag (838.8608% = 8388608/10000)
+                    # and any absurdly high fee (>100%) — these are dynamic-fee pools
+                    if val > 100:
+                        return 'Dynamic'
                     # If it's a small number, it's likely a percentage (e.g. 0.0075 or 0.3)
                     # We want to return it as "points per million" (traditional bips * 100)
                     if val > 0 and val < 5: 
@@ -219,9 +223,14 @@ class PostgresFetcher:
                     try:
                         # Ensure fee format matches swaps table (only the percentage part)
                         fee_pct = str(fee).split('|')[0]
-                        fee_map_rev = {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}
-                        fee_tier_pct = fee_pct if '%' in fee_pct else fee_map_rev.get(fee_db, fee_pct)
-                        fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
+                        if fee_db == 'Dynamic':
+                            # Dynamic-fee pools: match the literal 'Dynamic' string in swaps table
+                            fee_tier_pct = 'Dynamic'
+                            fee_tier_bips = 'Dynamic'
+                        else:
+                            fee_map_rev = {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}
+                            fee_tier_pct = fee_pct if '%' in fee_pct else fee_map_rev.get(fee_db, fee_pct)
+                            fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
                         
                         swap_query = f"""
                             SELECT token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1)) FROM (
@@ -274,7 +283,12 @@ class PostgresFetcher:
                 apr = None
                 if avg_tvl > 1.0: # Minimum TVL to calculate APR
                     try:
-                        fee_rate = float(fee_db) / 1000000.0 
+                        if fee_db == 'Dynamic':
+                            # Dynamic-fee pools (Uniswap V4 hooks): use conservative
+                            # effective rate. Typical range for major pairs: 0.015%-0.025%.
+                            fee_rate = 0.0002  # 2 bps (0.02%)
+                        else:
+                            fee_rate = float(fee_db) / 1000000.0
                         fees_earned = total_vol * fee_rate
                         
                         days = (end_date - start_date).days

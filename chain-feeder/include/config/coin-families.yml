@@ -30,7 +30,13 @@ coin-families:
       - ATETH
       - CBETH
       - GTETH
-      - EZETH   
+      - EZETH
+      - AETHWETH
+      - weETH
+      - ETHFI
+      - EETH
+      - sFRXETH
+      - USDT0
   - name: USD
     correlated: true
     coin-list:
@@ -38,13 +44,38 @@ coin-families:
       - USDT
       - DAI
       - USDS
+      - sUSDS
+      - USD1
+      - BUIDL
+      - sGHO
+      - USDf
+      - USD0
+      - TUSD
       - USDE
       - GHO
+      - YLDS
       - RLUSD
       - SUSDS
+      - FDUSD
       - CRVUSD
       - sCRVUSD
       - sUSDe
+      - BUSD
+      - AUSD
+      - FRAX
+      - FLEXUSD
+      - FRXUSD
+      - NUSD
+      - GUSD
+      - USDP
+      - BOLD
+      - USDCV
+      - MUSD
+      - PYUSD
+      - syrupUSDC
+      - AETHUSDT
+      - AETHUSDC
+      - DOLA
     regexp-rule: ".*USD.*"
 
   - name: EUR
@@ -54,13 +85,14 @@ coin-families:
       - EURI
       - EURCV
       - EURQ
-
-  - name: GOLD
-    correlated: true
-    coin-list:
-      - PAXG
-      - XAUT
-
+      - EURR
+      - CEUR
+      - DEURO
+      - EEUR
+      - EURA
+      - EUROP
+      - WERC
+      - REUR
   - name: BTC
     correlated: true
     coin-list:
@@ -71,7 +103,70 @@ coin-families:
       - FBTC
       - LBTC
       - kBTC
+  - name: GOLD
+    correlated: true
+    coin-list:
+      - PAXG
+      - XAUT
+      - GSX
+      - GLDX
+      - IAUon
+      - XAUM
+      - XAUT0
 
+
+
+  - name: SILVER
+    correlated: true
+    coin-list:
+      - SLVon
+      - SLVx
+      - SLV
+  
+  - name: STOCK
+    correlated: false
+    coin-list:
+      - SPYon
+      - SPYx
+      - QQQx
+      - INTLCx
+      - TSLAx
+      - HOODx
+      - GOOGLx
+      - NVDAx
+      - CRCLx
+      - AAPLx
+      - MSFTx
+      - METAx
+      - VTx
+      - COINx
+      - KOx
+      - IEMGx
+      - MAx
+      - AZNx
+      - PFEx
+      - PGx 
+      - Vx 
+      - NLRx 
+      - JNJx
+      - CRCLon
+      - NVDAOn
+      - QQQon
+      - HIMSon
+      - INTCon
+      - TSLon
+      - IEFAon
+      - SPCXon
+      - TSMon
+      - IEMGon
+      - AMDon
+      - AAPLon
+      - AMZon
+      - METAon
+      - IWNon
+      - ASMLon
+      - BMNRon 
+  
   - name: SOL
     correlated: true
     coin-list:
