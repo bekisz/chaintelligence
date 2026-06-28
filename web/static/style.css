@@ -1038,11 +1038,14 @@ footer {
 .token-badge {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
-    padding: 2px 8px;
+    padding: 3px 8px;
     border-radius: 6px;
     font-weight: 600;
     font-size: 0.9rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .route-arrow-wrapper {

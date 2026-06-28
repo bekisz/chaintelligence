@@ -183,6 +183,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
+    const tokenIconUrl = (symbol) => {
+        const s = symbol.toLowerCase();
+        return `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${s}.png`;
+    };
+
+    const tokenIconHtml = (symbol, size = 16) => {
+        const url = tokenIconUrl(symbol);
+        return `<img src="${url}" width="${size}" height="${size}" onerror="this.src='/static/favicon.png'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;">`;
+    };
+
     const renderPath = (route) => {
         let tokens = [];
         let items = []; // Can be fee string or object {fee, apr, apr_str}
@@ -207,7 +217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let html = '<div class="route-path-container">';
 
         tokens.forEach((token, idx) => {
-            html += `<span class="token-badge">${token}</span>`;
+            html += `<span class="token-badge">${tokenIconHtml(token)} ${token}</span>`;
 
             if (idx < tokens.length - 1) {
                 const item = items[idx];
