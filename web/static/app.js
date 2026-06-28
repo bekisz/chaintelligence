@@ -87,14 +87,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const minAprInput = document.getElementById('min-apr-filter');
         const minMktInput = document.getElementById('min-mkt-filter');
+        const minTxsInput = document.getElementById('min-txs-filter');
+        const acyclicCheckbox = document.getElementById('acyclic-filter');
 
         const minAprVal = minAprInput ? parseFloat(minAprInput.value) || 0 : 0;
         const minMktVal = minMktInput ? parseFloat(minMktInput.value) || 0 : 0;
+        const minTxsVal = minTxsInput ? parseInt(minTxsInput.value) || 0 : 0;
+        const acyclicOnly = acyclicCheckbox ? acyclicCheckbox.checked : false;
 
         const filtered = currentRoutes.filter(route => {
+            // Min APR filter
             const avgAprPct = getRouteAvgApr(route) * 100;
+            if (avgAprPct < minAprVal) return false;
+
+            // Min Market Size filter
             const marketSize = route.market_size || 0;
-            return avgAprPct >= minAprVal && marketSize >= minMktVal;
+            if (marketSize < minMktVal) return false;
+
+            // Min TXs filter
+            const txCount = route.count || 0;
+            if (txCount < minTxsVal) return false;
+
+            // Acyclic filter
+            if (acyclicOnly) {
+                let tokens = [];
+                if (route.path_tokens) {
+                    for (let i = 0; i < route.path_tokens.length; i++) {
+                        if (i % 2 === 0) tokens.push(route.path_tokens[i]);
+                    }
+                } else {
+                    const parts = route.path.split(' ');
+                    for (let i = 0; i < parts.length; i++) {
+                        if (i % 4 === 0) tokens.push(parts[i]);
+                    }
+                }
+                const isAcyclic = new Set(tokens).size === tokens.length;
+                if (!isAcyclic) return false;
+            }
+
+            return true;
         });
 
         renderRoutes(filtered);
@@ -492,7 +523,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Input listeners for real-time filtering
-    ['min-apr-filter', 'min-mkt-filter'].forEach(id => {
+    ['min-apr-filter', 'min-mkt-filter', 'min-txs-filter'].forEach(id => {
         const input = document.getElementById(id);
         if (input) {
             input.addEventListener('input', () => {
@@ -500,4 +531,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
     });
+
+    const acyclicCheckbox = document.getElementById('acyclic-filter');
+    if (acyclicCheckbox) {
+        acyclicCheckbox.addEventListener('change', () => {
+            filterAndRenderRoutes();
+        });
+    }
 });

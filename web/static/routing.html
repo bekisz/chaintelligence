@@ -109,7 +109,7 @@
                             <span class="toggle-label" id="label-apr" onclick="setMode('apr')">Avg APR</span>
                         </div>
 
-                        <!-- Real-time Filter inputs for APR and Market Size -->
+                        <!-- Real-time Filter inputs for APR, Market Size, TXs and Acyclicity -->
                         <div class="filter-controls-wrapper">
                             <div class="filter-input-group">
                                 <label for="min-apr-filter">Min APR %</label>
@@ -118,6 +118,15 @@
                             <div class="filter-input-group">
                                 <label for="min-mkt-filter">Min Market Size $</label>
                                 <input type="number" id="min-mkt-filter" placeholder="e.g. 100" min="0" step="10">
+                            </div>
+                            <div class="filter-input-group">
+                                <label for="min-txs-filter">Min TXs</label>
+                                <input type="number" id="min-txs-filter" placeholder="e.g. 10" min="0" step="5">
+                            </div>
+                            <div class="filter-input-group" style="margin-left: 4px;">
+                                <label class="checkbox-label" style="text-transform: uppercase; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;">
+                                    <input type="checkbox" id="acyclic-filter"> Acyclic Only
+                                </label>
                             </div>
                         </div>
 
