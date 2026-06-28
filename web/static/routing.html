@@ -112,6 +112,14 @@
                         <!-- Real-time Filter inputs for APR, Market Size, TXs and Acyclicity -->
                         <div class="filter-controls-wrapper">
                             <div class="filter-input-group">
+                                <label for="network-filter">Network</label>
+                                <select id="network-filter" class="filter-select">
+                                    <option value="all">All</option>
+                                    <option value="Ethereum">Ethereum</option>
+                                    <option value="Arbitrum">Arbitrum</option>
+                                </select>
+                            </div>
+                            <div class="filter-input-group">
                                 <label for="min-apr-filter">Min APR %</label>
                                 <input type="number" id="min-apr-filter" placeholder="e.g. 5" min="0" step="0.1">
                             </div>
@@ -138,6 +146,7 @@
                                 <span>Columns</span>
                             </button>
                             <div id="column-selector-dropdown" class="column-dropdown hidden">
+                                <label class="checkbox-label"><input type="checkbox" data-col="network" checked> Network</label>
                                 <label class="checkbox-label"><input type="checkbox" data-col="tx-count" checked> TXs</label>
                                 <label class="checkbox-label"><input type="checkbox" data-col="apr" checked> APR</label>
                                 <label class="checkbox-label"><input type="checkbox" data-col="volume" checked> Volume</label>
@@ -152,6 +161,7 @@
                             <thead>
                                 <tr>
                                     <th>Route Path</th>
+                                    <th class="col-network">Network</th>
                                     <th id="sort-count" class="sortable col-tx-count">TXs <span>↕</span></th>
                                     <th id="sort-apr" class="sortable col-apr">APR <span>↕</span></th>
                                     <th id="sort-vol" class="sortable col-volume">Volume <span>↕</span></th>

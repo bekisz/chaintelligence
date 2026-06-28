@@ -48,7 +48,8 @@ class PostgresFetcher:
                     amount1, 
                     amount_usd, 
                     fee_tier,
-                    'v3' as protocol
+                    'v3' as protocol,
+                    network
                 FROM uniswap_v3_swaps
                 UNION ALL
                 SELECT 
@@ -63,7 +64,8 @@ class PostgresFetcher:
                     amount1, 
                     amount_usd, 
                     fee_tier,
-                    'v4' as protocol
+                    'v4' as protocol,
+                    network
                 FROM uniswap_v4_swaps
             ) as all_swaps
             WHERE timestamp >= %s AND timestamp <= %s
@@ -95,7 +97,8 @@ class PostgresFetcher:
                     'amount1': float(row[8]),
                     'amountUSD': float(row[9]),
                     'fee_tier': row[10],
-                    'protocol': row[11]
+                    'protocol': row[11],
+                    'network': row[12]
                 })
             
             cur.close()
@@ -167,6 +170,11 @@ class PostgresFetcher:
                 # Remove duplicates and empty
                 fee_variants = list(set([v for v in fee_variants if v]))
                 
+                network = "Ethereum"
+                parts = str(fee).split('|')
+                if len(parts) >= 3:
+                    network = parts[2].strip()
+
                 protocol_filter = ""
                 if '|v4' in str(fee).lower():
                     protocol_filter = " AND p.protocol = 'Uniswap V4'"
@@ -184,6 +192,7 @@ class PostgresFetcher:
                 WHERE 
                     h.date >= %s::date AND h.date <= %s::date
                     AND p.fee_tier = ANY(%s)
+                    AND p.network = %s
                     {protocol_filter}
                     AND (
                         (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
@@ -192,7 +201,7 @@ class PostgresFetcher:
                     )
                 """
                 
-                cur.execute(query, (start_date, end_date, fee_variants, t0_sym, t1_sym, t1_sym, t0_sym))
+                cur.execute(query, (start_date, end_date, fee_variants, network, t0_sym, t1_sym, t1_sym, t0_sym))
                 row = cur.fetchone()
                 
                 total_vol = float(row[0]) if row and row[0] else 0
@@ -205,6 +214,7 @@ class PostgresFetcher:
                         FROM liquidity_pool_history h
                         JOIN liquidity_pool p ON h.pool_id = p.id
                         WHERE p.fee_tier = ANY(%s)
+                        AND p.network = %s
                         {protocol_filter}
                         AND h.tvl_usd != 0
                         AND (
@@ -213,7 +223,7 @@ class PostgresFetcher:
                             (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
                         )
                         ORDER BY h.date DESC LIMIT 1
-                    """, (fee_variants, t0_sym, t1_sym, t1_sym, t0_sym))
+                    """, (fee_variants, network, t0_sym, t1_sym, t1_sym, t0_sym))
                     tvl_row = cur.fetchone()
                     if tvl_row and tvl_row[0] is not None:
                         avg_tvl = abs(float(tvl_row[0]))

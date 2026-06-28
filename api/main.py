@@ -300,9 +300,19 @@ async def analyze(
             leg_aprs = [p['apr'] for p in new_path if isinstance(p, dict) and 'apr' in p and p['apr'] > 0]
             route_apr = sum(leg_aprs) / len(leg_aprs) if leg_aprs else 0.0
             
+            # Determine route-level network from path fee node
+            route_network = "Ethereum"
+            for p in new_path:
+                if isinstance(p, dict) and 'fee' in p:
+                    fee_parts = p['fee'].split('|')
+                    if len(fee_parts) >= 3:
+                        route_network = fee_parts[2]
+                        break
+            
             analysis['routes'][route_idx]['path_tokens'] = new_path
             analysis['routes'][route_idx]['apr'] = route_apr
             analysis['routes'][route_idx]['apr_str'] = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
+            analysis['routes'][route_idx]['network'] = route_network
 
         return analysis
     except Exception as e:

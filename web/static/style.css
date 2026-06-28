@@ -2011,3 +2011,30 @@ input:focus+.slider {
     border-color: var(--uniswap-pink);
     background: rgba(255, 255, 255, 0.08);
 }
+
+.filter-input-group select.filter-select {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--uniswap-border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    width: 105px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-input-group select.filter-select option {
+    background: #191B1F;
+    color: var(--text-primary);
+}
+
+.filter-input-group select.filter-select:hover {
+    border-color: #565A69;
+}
+
+.filter-input-group select.filter-select:focus {
+    border-color: var(--uniswap-pink);
+    background: rgba(255, 255, 255, 0.08);
+}

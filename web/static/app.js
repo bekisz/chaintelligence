@@ -89,13 +89,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const minMktInput = document.getElementById('min-mkt-filter');
         const minTxsInput = document.getElementById('min-txs-filter');
         const acyclicCheckbox = document.getElementById('acyclic-filter');
+        const networkFilter = document.getElementById('network-filter');
 
         const minAprVal = minAprInput ? parseFloat(minAprInput.value) || 0 : 0;
         const minMktVal = minMktInput ? parseFloat(minMktInput.value) || 0 : 0;
         const minTxsVal = minTxsInput ? parseInt(minTxsInput.value) || 0 : 0;
         const acyclicOnly = acyclicCheckbox ? acyclicCheckbox.checked : false;
+        const selectedNetwork = networkFilter ? networkFilter.value : 'all';
 
         const filtered = currentRoutes.filter(route => {
+            // Network filter
+            if (selectedNetwork !== 'all' && (route.network || 'Ethereum') !== selectedNetwork) {
+                return false;
+            }
             // Min APR filter
             const avgAprPct = getRouteAvgApr(route) * 100;
             if (avgAprPct < minAprVal) return false;
@@ -247,9 +253,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Use backend pre-calculated string if available, otherwise format locally
             const aprDisplay = route.apr_str || (hopCount > 0 ? (avgApr * 100).toFixed(1) + '%' : 'N/A');
 
+            const networkVal = route.network || 'Ethereum';
+            const networkClass = networkVal.toLowerCase();
+
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td class="path-cell">${renderPath(route)}</td>
+                <td class="col-network"><span class="badge ${networkClass}">${networkVal}</span></td>
                 <td class="col-tx-count">${route.count.toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
                 <td class="col-volume font-bold">${formatUSD(route.volume)}</td>
@@ -535,6 +545,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const acyclicCheckbox = document.getElementById('acyclic-filter');
     if (acyclicCheckbox) {
         acyclicCheckbox.addEventListener('change', () => {
+            filterAndRenderRoutes();
+        });
+    }
+
+    const networkFilterSelect = document.getElementById('network-filter');
+    if (networkFilterSelect) {
+        networkFilterSelect.addEventListener('change', () => {
             filterAndRenderRoutes();
         });
     }

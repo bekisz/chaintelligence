@@ -76,10 +76,10 @@ class RouteAnalyzer:
                 # Setup path based on inferred start
                 if first_swap['token0_symbol'].upper() == tx_start_token:
                     current_token = first_swap['token1_symbol'].upper()
-                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}|{first_swap.get('network', 'Ethereum')}", current_token]
                 else:
                     current_token = first_swap['token0_symbol'].upper()
-                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}|{first_swap.get('network', 'Ethereum')}", current_token]
             else:
                 # Check membership
                 t0_up = first_swap['token0_symbol'].upper()
@@ -87,11 +87,11 @@ class RouteAnalyzer:
                 if t0_up in start_tokens and first_swap['amount0'] > 0:
                     tx_start_token = t0_up
                     current_token = t1_up
-                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}|{first_swap.get('network', 'Ethereum')}", current_token]
                 elif t1_up in start_tokens and first_swap['amount1'] > 0:
                     tx_start_token = t1_up
                     current_token = t0_up
-                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}", current_token]
+                    path = [tx_start_token, f"{first_swap['fee_tier']}|{first_swap.get('protocol', 'v3')}|{first_swap.get('network', 'Ethereum')}", current_token]
                 else:
                     continue
             
@@ -102,11 +102,11 @@ class RouteAnalyzer:
                 t1_next = next_swap['token1_symbol'].upper()
                 if t0_next == current_token and next_swap['amount0'] > 0:
                     current_token = t1_next
-                    path.append(f"{next_swap['fee_tier']}|{next_swap.get('protocol', 'v3')}")
+                    path.append(f"{next_swap['fee_tier']}|{next_swap.get('protocol', 'v3')}|{next_swap.get('network', 'Ethereum')}")
                     path.append(current_token)
                 elif t1_next == current_token and next_swap['amount1'] > 0:
                     current_token = t0_next
-                    path.append(f"{next_swap['fee_tier']}|{next_swap.get('protocol', 'v3')}")
+                    path.append(f"{next_swap['fee_tier']}|{next_swap.get('protocol', 'v3')}|{next_swap.get('network', 'Ethereum')}")
                     path.append(current_token)
             
             # Check if route ended at desired token(s)

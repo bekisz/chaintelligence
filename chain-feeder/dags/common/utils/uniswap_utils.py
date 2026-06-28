@@ -15,9 +15,27 @@ from .config import (
 )
 
 class UniswapV3Fetcher:
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: bool = False, network: str = "Ethereum"):
         self.verbose = verbose
+        self.network = network
         self.session = requests.Session()
+
+        # Build network-aware V3 and V4 URLs
+        import os
+        GRAPH_API_KEY = os.getenv('GRAPH_API_KEY', '')
+        if self.network == "Arbitrum":
+            v3_subgraph_id = "3V7ZY6muhxaQL5qvntX1CFXJ32W7BxXZTGTwmpH5J4t3"
+            v4_subgraph_id = "G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"
+        else: # Ethereum
+            v3_subgraph_id = "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
+            v4_subgraph_id = "DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G"
+
+        if not GRAPH_API_KEY or GRAPH_API_KEY == 'YOUR_GRAPH_API_KEY':
+            self.subgraph_url = f'https://gateway-arbitrum.network.thegraph.com/api/[api-key]/subgraphs/id/{v3_subgraph_id}'
+            self.subgraph_v4_url = f'https://gateway-arbitrum.network.thegraph.com/api/[api-key]/subgraphs/id/{v4_subgraph_id}'
+        else:
+            self.subgraph_url = f'https://gateway-arbitrum.network.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/{v3_subgraph_id}'
+            self.subgraph_v4_url = f'https://gateway-arbitrum.network.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/{v4_subgraph_id}'
     
     def _log(self, message: str):
         if self.verbose:
@@ -55,7 +73,7 @@ class UniswapV3Fetcher:
         for attempt in range(MAX_RETRIES):
             try:
                 response = self.session.post(
-                    UNISWAP_V3_SUBGRAPH_URL,
+                    self.subgraph_url,
                     json={'query': query},
                     timeout=REQUEST_TIMEOUT
                 )
@@ -208,7 +226,7 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
         for attempt in range(MAX_RETRIES):
             try:
                 response = self.session.post(
-                    UNISWAP_V4_SUBGRAPH_URL,
+                    self.subgraph_v4_url,
                     json={'query': query},
                     timeout=REQUEST_TIMEOUT
                 )
@@ -298,7 +316,7 @@ class PostgresStorage:
     def __init__(self):
         self.conn_str = DATA_WAREHOUSE_DB
     
-    def save_swaps(self, swaps: List[Dict]):
+    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum"):
         if not swaps:
             return
         
@@ -307,8 +325,8 @@ class PostgresStorage:
                 insert_query = """
                 INSERT INTO uniswap_v3_swaps (
                     id, timestamp, tx_hash, token0_address, token1_address, 
-                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO NOTHING;
                 """
                 data = [
@@ -323,27 +341,28 @@ class PostgresStorage:
                         s['amount0'],
                         s['amount1'],
                         s['amountUSD'],
-                        s['fee_tier']
+                        s['fee_tier'],
+                        network
                     ) for s in swaps
                 ]
                 cur.executemany(insert_query, data)
             conn.commit()
 
-    def get_last_swap_timestamp(self) -> Optional[int]:
+    def get_last_swap_timestamp(self, network: str = "Ethereum") -> Optional[int]:
         """
         Get the timestamp of the latest swap stored in the database.
         Returns None if the table is empty.
         """
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT MAX(timestamp) FROM uniswap_v3_swaps")
+                cur.execute("SELECT MAX(timestamp) FROM uniswap_v3_swaps WHERE network = %s", (network,))
                 res = cur.fetchone()
                 if res and res[0]:
                     return int(res[0].timestamp())
         return None
 
 class PostgresStorageV4(PostgresStorage):
-    def save_swaps(self, swaps: List[Dict]):
+    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum"):
         if not swaps:
             return
         
@@ -352,8 +371,8 @@ class PostgresStorageV4(PostgresStorage):
                 insert_query = """
                 INSERT INTO uniswap_v4_swaps (
                     id, timestamp, tx_hash, token0_address, token1_address, 
-                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO NOTHING;
                 """
                 data = [
@@ -368,20 +387,21 @@ class PostgresStorageV4(PostgresStorage):
                         s['amount0'],
                         s['amount1'],
                         s['amountUSD'],
-                        s['fee_tier']
+                        s['fee_tier'],
+                        network
                     ) for s in swaps
                 ]
                 cur.executemany(insert_query, data)
             conn.commit()
 
-    def get_last_swap_timestamp(self) -> Optional[int]:
+    def get_last_swap_timestamp(self, network: str = "Ethereum") -> Optional[int]:
         """
         Get the timestamp of the latest swap stored in the database.
         Returns None if the table is empty.
         """
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT MAX(timestamp) FROM uniswap_v4_swaps")
+                cur.execute("SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s", (network,))
                 res = cur.fetchone()
                 if res and res[0]:
                     return int(res[0].timestamp())
