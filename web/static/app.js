@@ -68,6 +68,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         }).format(amount);
     };
 
+    const getRouteAvgApr = (route) => {
+        let totalApr = 0;
+        let hopCount = 0;
+        if (route.path_tokens) {
+            route.path_tokens.forEach((item, idx) => {
+                if (idx % 2 === 1 && typeof item === 'object') {
+                    totalApr += (item.apr || 0);
+                    hopCount++;
+                }
+            });
+        }
+        return hopCount > 0 ? (totalApr / hopCount) : 0;
+    };
+
+    const filterAndRenderRoutes = () => {
+        if (!currentRoutes) return;
+
+        const minAprInput = document.getElementById('min-apr-filter');
+        const minMktInput = document.getElementById('min-mkt-filter');
+
+        const minAprVal = minAprInput ? parseFloat(minAprInput.value) || 0 : 0;
+        const minMktVal = minMktInput ? parseFloat(minMktInput.value) || 0 : 0;
+
+        const filtered = currentRoutes.filter(route => {
+            const avgAprPct = getRouteAvgApr(route) * 100;
+            const marketSize = route.market_size || 0;
+            return avgAprPct >= minAprVal && marketSize >= minMktVal;
+        });
+
+        renderRoutes(filtered);
+    };
+
     const performAnalysis = async () => {
         const startToken = startTokenInput.value.trim().toUpperCase();
         const endToken = endTokenInput.value.trim().toUpperCase();
@@ -117,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             totalTxEl.textContent = data.total_tx.toLocaleString();
 
             currentRoutes = data.routes;
-            renderRoutes(currentRoutes);
+            filterAndRenderRoutes();
 
             // Show results
             resultsSection.classList.remove('hidden');
@@ -149,7 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             toggleWrapper.classList.toggle('mode-apr', isApr);
         }
         if (currentRoutes && currentRoutes.length > 0) {
-            renderRoutes(currentRoutes);
+            filterAndRenderRoutes();
         }
     });
 
@@ -389,7 +421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return dir === 'asc' ? valA - valB : valB - valA;
         });
 
-        renderRoutes(currentRoutes);
+        filterAndRenderRoutes();
     };
 
     const updateColumnVisibility = () => {
@@ -458,4 +490,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
     }
+
+    // Input listeners for real-time filtering
+    ['min-apr-filter', 'min-mkt-filter'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                filterAndRenderRoutes();
+            });
+        }
+    });
 });

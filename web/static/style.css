@@ -1967,3 +1967,47 @@ input:focus+.slider {
     width: 100%;
     -webkit-overflow-scrolling: touch; /* smooth momentum scrolling on iOS */
 }
+
+/* Filter controls */
+.filter-controls-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 0 16px;
+}
+
+.filter-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-input-group label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.filter-input-group input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--uniswap-border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    width: 85px;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.filter-input-group input:hover {
+    border-color: #565A69;
+}
+
+.filter-input-group input:focus {
+    border-color: var(--uniswap-pink);
+    background: rgba(255, 255, 255, 0.08);
+}
