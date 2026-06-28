@@ -860,6 +860,31 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     box-shadow: none;
 }
 
+.secondary-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--uniswap-border);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.secondary-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--text-secondary);
+}
+
+.secondary-btn:active {
+    transform: scale(0.97);
+}
+
 /* Update navigation for Uniswap style */
 .main-nav {
     background: transparent;
@@ -915,10 +940,10 @@ table thead {
 }
 
 table th {
-    padding: 1rem 1.5rem;
+    padding: 10px 12px;
     text-align: left;
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -945,9 +970,10 @@ table th span {
 }
 
 table td {
-    padding: 1.25rem 1.5rem;
+    padding: 8px 12px;
     border-top: 1px solid var(--uniswap-border);
     color: var(--text-primary);
+    font-size: 0.85rem;
 }
 
 table tbody tr:hover {
@@ -1031,21 +1057,22 @@ footer {
 .route-path-container {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    gap: 4px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
 }
 
 .token-badge {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
-    padding: 3px 8px;
+    padding: 1px 5px;
     border-radius: 6px;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 
 .route-arrow-wrapper {
@@ -1053,14 +1080,14 @@ footer {
     flex-direction: column;
     align-items: center;
     position: relative;
-    padding: 0 4px;
+    padding: 0 1px;
 }
 
 .fee-pill {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: var(--text-secondary);
     background: rgba(0, 0, 0, 0.3);
-    padding: 1px 4px;
+    padding: 0px 3px;
     border-radius: 4px;
     margin-bottom: -2px;
     z-index: 1;
@@ -1072,8 +1099,8 @@ footer {
 }
 
 .route-arrow-svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     color: var(--text-secondary);
     opacity: 0.7;
 }
@@ -1875,4 +1902,60 @@ input:focus+.slider {
     font-size: 0.8rem;
     color: var(--text-secondary);
     white-space: nowrap;
+}
+
+/* Route Analysis Table Controls & Column Visibility Settings */
+.table-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.column-selector-container {
+    position: relative;
+}
+
+.column-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background: var(--uniswap-input-bg);
+    border: 1px solid var(--uniswap-border);
+    border-radius: 12px;
+    padding: 12px;
+    min-width: 160px;
+    box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+}
+
+.column-dropdown.hidden {
+    display: none !important;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+
+.checkbox-label:hover {
+    color: var(--text-primary);
+}
+
+.checkbox-label input {
+    cursor: pointer;
+}
+
+.hidden-column {
+    display: none !important;
 }

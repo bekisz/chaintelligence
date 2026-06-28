@@ -98,25 +98,44 @@
                     </div>
                 </div>
 
-                <div class="table-container glass">
-                    <div class="display-toggle-wrapper mode-fee" id="display-wrapper">
-                        <span class="toggle-label" id="label-fee" onclick="setMode('fee')">Fee Tier</span>
-                        <label class="switch">
-                            <input type="checkbox" id="display-mode-toggle">
-                            <span class="slider"></span>
-                        </label>
-                        <span class="toggle-label" id="label-apr" onclick="setMode('apr')">Avg APR</span>
+                <div class="table-container glass" style="padding: 16px;">
+                    <div class="table-controls">
+                        <div class="display-toggle-wrapper mode-fee" id="display-wrapper">
+                            <span class="toggle-label" id="label-fee" onclick="setMode('fee')">Fee Tier</span>
+                            <label class="switch">
+                                <input type="checkbox" id="display-mode-toggle">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label" id="label-apr" onclick="setMode('apr')">Avg APR</span>
+                        </div>
+
+                        <div class="column-selector-container">
+                            <button id="column-selector-btn" class="secondary-btn flex-center">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle;">
+                                    <path d="M12 5v14M5 12h14"/>
+                                </svg>
+                                <span>Columns</span>
+                            </button>
+                            <div id="column-selector-dropdown" class="column-dropdown hidden">
+                                <label class="checkbox-label"><input type="checkbox" data-col="tx-count" checked> TX Count</label>
+                                <label class="checkbox-label"><input type="checkbox" data-col="apr" checked> APR</label>
+                                <label class="checkbox-label"><input type="checkbox" data-col="volume" checked> Volume</label>
+                                <label class="checkbox-label"><input type="checkbox" data-col="market-size" checked> Market Size</label>
+                                <label class="checkbox-label"><input type="checkbox" data-col="avg-volume" checked> Avg Volume</label>
+                                <label class="checkbox-label"><input type="checkbox" data-col="pct-volume" checked> % Volume</label>
+                            </div>
+                        </div>
                     </div>
                     <table>
                         <thead>
                             <tr>
                                 <th>Route Path</th>
-                                <th id="sort-count" class="sortable">TX Count <span>↕</span></th>
-                                <th id="sort-apr" class="sortable">APR <span>↕</span></th>
-                                <th id="sort-vol" class="sortable">Volume <span>↕</span></th>
-                                <th id="sort-mkt" class="sortable">Market Size <span>↕</span></th>
-                                <th id="sort-avg" class="sortable">Avg Volume <span>↕</span></th>
-                                <th id="sort-pct" class="sortable">% Volume <span>↕</span></th>
+                                <th id="sort-count" class="sortable col-tx-count">TX Count <span>↕</span></th>
+                                <th id="sort-apr" class="sortable col-apr">APR <span>↕</span></th>
+                                <th id="sort-vol" class="sortable col-volume">Volume <span>↕</span></th>
+                                <th id="sort-mkt" class="sortable col-market-size">Market Size <span>↕</span></th>
+                                <th id="sort-avg" class="sortable col-avg-volume">Avg Volume <span>↕</span></th>
+                                <th id="sort-pct" class="sortable col-pct-volume">% Volume <span>↕</span></th>
                             </tr>
                         </thead>
                         <tbody id="routes-body">

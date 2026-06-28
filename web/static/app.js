@@ -187,15 +187,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td class="path-cell">${renderPath(route)}</td>
-                <td>${route.count.toLocaleString()}</td>
-                <td class="${aprClass}">${aprDisplay}</td>
-                <td class="font-bold">${formatUSD(route.volume)}</td>
-                <td>${formatUSD(route.market_size || 0)}</td>
-                <td>${formatUSD(route.avg_volume)}</td>
-                <td class="accent-text">${route.pct_volume.toFixed(1)}%</td>
+                <td class="col-tx-count">${route.count.toLocaleString()}</td>
+                <td class="col-apr ${aprClass}">${aprDisplay}</td>
+                <td class="col-volume font-bold">${formatUSD(route.volume)}</td>
+                <td class="col-market-size">${formatUSD(route.market_size || 0)}</td>
+                <td class="col-avg-volume">${formatUSD(route.avg_volume)}</td>
+                <td class="col-pct-volume accent-text">${route.pct_volume.toFixed(1)}%</td>
             `;
             routesBody.appendChild(row);
         });
+        updateColumnVisibility();
     };
 
     const tokenIconUrl = (symbol) => {
@@ -391,6 +392,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderRoutes(currentRoutes);
     };
 
+    const updateColumnVisibility = () => {
+        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            const colClass = `col-${cb.dataset.col}`;
+            const isVisible = cb.checked;
+            
+            // Toggle visibility for headers and cells
+            document.querySelectorAll(`.${colClass}`).forEach(el => {
+                if (isVisible) {
+                    el.classList.remove('hidden-column');
+                } else {
+                    el.classList.add('hidden-column');
+                }
+            });
+        });
+    };
+
     // Event listeners for sorting
     document.getElementById('sort-count').addEventListener('click', () => sortRoutes('count', 'sort-count'));
     document.getElementById('sort-apr').addEventListener('click', () => sortRoutes('apr', 'sort-apr'));
@@ -415,4 +433,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     });
+
+    // Column selector UI controls
+    const colBtn = document.getElementById('column-selector-btn');
+    const colDropdown = document.getElementById('column-selector-dropdown');
+
+    if (colBtn && colDropdown) {
+        colBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            colDropdown.classList.toggle('hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!colDropdown.contains(e.target) && e.target !== colBtn) {
+                colDropdown.classList.add('hidden');
+            }
+        });
+
+        // Toggle columns on checkbox change
+        colDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                updateColumnVisibility();
+            });
+        });
+    }
 });
