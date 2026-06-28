@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             displayVal = dispFee;
                         }
 
-                        tooltip = `Uniswap ${protocolVer.toUpperCase()} (${cleanFee}) | APR: ${item.apr_str || 'N/A'}`;
+                        tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolVer.toUpperCase()}`;
                         protocolClass = protocolVer; // 'v3' or 'v4'
                     } else if (typeof item === 'string') {
                         let cleanFee = item;
@@ -307,18 +307,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else {
                             displayVal = cleanFee;
                         }
-                        tooltip = `Uniswap ${protocolClass.toUpperCase()} (${cleanFee})`;
+                        tooltip = `APR: N/A\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolClass.toUpperCase()}`;
                     } else {
                         const feeNum = parseFloat(item);
                         if (!isNaN(feeNum)) {
                             displayVal = (feeNum / 10000) + '%';
                         }
-                        tooltip = `Fee: ${displayVal}`;
+                        tooltip = `APR: N/A\nTier: ${displayVal}\nProtocol: Unknown`;
                     }
                 }
 
                 html += `
-                        <div class="route-arrow-wrapper ${protocolClass}" data-tooltip="${tooltip}" title="${tooltip}">
+                        <div class="route-arrow-wrapper ${protocolClass}" data-tooltip="${tooltip}">
                             <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
                             <svg class="route-arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path d="M5 12h14M12 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
