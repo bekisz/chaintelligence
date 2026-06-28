@@ -1078,6 +1078,16 @@ footer {
     opacity: 0.7;
 }
 
+.route-arrow-wrapper.v3 .route-arrow-svg {
+    color: #ff007a;
+    opacity: 0.95;
+}
+
+.route-arrow-wrapper.v4 .route-arrow-svg {
+    color: #9860f3;
+    opacity: 0.95;
+}
+
 /* Custom Tooltip Styling */
 .route-arrow-wrapper[data-tooltip] {
     position: relative;

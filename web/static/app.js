@@ -257,45 +257,67 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const item = items[idx];
                 let displayVal = '?';
                 let tooltip = '';
+                let protocolClass = '';
 
                 if (item !== undefined && item !== null) {
                     if (typeof item === 'object') {
                         // Backend enriched object
                         let cleanFee = item.fee || '';
-                        let protocol = '';
+                        let protocolVer = ''; // 'v3' or 'v4'
                         if (cleanFee.includes('|')) {
                             const parts = cleanFee.split('|');
                             cleanFee = parts[0];
-                            protocol = parts[1] ? ` (${parts[1].toUpperCase()})` : '';
+                            if (parts[1]) {
+                                protocolVer = parts[1].toLowerCase(); // 'v3' or 'v4'
+                            }
                         }
-                        const feeDisplay = `${cleanFee}${protocol}`;
+
+                        // Normalize Dynamic to dyn
+                        let dispFee = cleanFee;
+                        if (cleanFee.toLowerCase() === 'dynamic') {
+                            dispFee = 'dyn';
+                        }
 
                         if (isAprMode) {
                             if (item.apr !== undefined && item.apr !== null && item.apr > 0) {
                                 // For very small APRs, show more precision
                                 const aprVal = item.apr * 100;
                                 displayVal = aprVal < 0.1 ? aprVal.toFixed(3) + '%' : aprVal.toFixed(1) + '%';
-                                tooltip = `APR: ${item.apr_str} (Tier: ${feeDisplay})`;
                             } else {
-                                displayVal = feeDisplay + '*';
-                                tooltip = `Fee Tier: ${feeDisplay} (Yield unknown or <0.001%)`;
+                                displayVal = dispFee + '*';
                             }
                         } else {
-                            displayVal = feeDisplay;
-                            tooltip = `APR: ${item.apr_str || 'N/A'}`;
+                            displayVal = dispFee;
                         }
-                    } else if (typeof item === 'string' && item.endsWith('%')) {
-                        displayVal = item;
+
+                        tooltip = `Uniswap ${protocolVer.toUpperCase()} (${cleanFee}) | APR: ${item.apr_str || 'N/A'}`;
+                        protocolClass = protocolVer; // 'v3' or 'v4'
+                    } else if (typeof item === 'string') {
+                        let cleanFee = item;
+                        if (cleanFee.includes('|')) {
+                            const parts = cleanFee.split('|');
+                            cleanFee = parts[0];
+                            if (parts[1]) {
+                                protocolClass = parts[1].toLowerCase();
+                            }
+                        }
+                        if (cleanFee.toLowerCase() === 'dynamic') {
+                            displayVal = 'dyn';
+                        } else {
+                            displayVal = cleanFee;
+                        }
+                        tooltip = `Uniswap ${protocolClass.toUpperCase()} (${cleanFee})`;
                     } else {
                         const feeNum = parseFloat(item);
                         if (!isNaN(feeNum)) {
                             displayVal = (feeNum / 10000) + '%';
                         }
+                        tooltip = `Fee: ${displayVal}`;
                     }
                 }
 
                 html += `
-                        <div class="route-arrow-wrapper" data-tooltip="${tooltip}" title="${tooltip}">
+                        <div class="route-arrow-wrapper ${protocolClass}" data-tooltip="${tooltip}" title="${tooltip}">
                             <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
                             <svg class="route-arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path d="M5 12h14M12 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
