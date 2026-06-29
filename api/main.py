@@ -296,14 +296,20 @@ async def analyze(
                     new_path.append(item)
             
             # Calculate a combined APR for the route
-            # For multi-hop, we use the average of leg APRs as a proxy
-            leg_aprs = [p['apr'] for p in new_path if isinstance(p, dict) and 'apr' in p and p['apr'] > 0]
-            route_apr = sum(leg_aprs) / len(leg_aprs) if leg_aprs else 0.0
+            # If there is more than one pool involved, it's a composite route, and APR is not valid.
+            pool_nodes = [p for p in new_path if isinstance(p, dict)]
+            if len(pool_nodes) > 1:
+                route_apr = 0.0
+                apr_str = "-"
+            else:
+                leg_aprs = [p['apr'] for p in pool_nodes if 'apr' in p]
+                route_apr = leg_aprs[0] if leg_aprs else 0.0
+                apr_str = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
             
             # Determine route-level network from path fee node
             route_network = "Ethereum"
-            for p in new_path:
-                if isinstance(p, dict) and 'fee' in p:
+            for p in pool_nodes:
+                if 'fee' in p:
                     fee_parts = p['fee'].split('|')
                     if len(fee_parts) >= 3:
                         route_network = fee_parts[2]
@@ -311,7 +317,7 @@ async def analyze(
             
             analysis['routes'][route_idx]['path_tokens'] = new_path
             analysis['routes'][route_idx]['apr'] = route_apr
-            analysis['routes'][route_idx]['apr_str'] = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
+            analysis['routes'][route_idx]['apr_str'] = apr_str
             analysis['routes'][route_idx]['network'] = route_network
 
         return analysis

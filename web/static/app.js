@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         }
-        return hopCount > 0 ? (totalApr / hopCount) : 0;
+        return hopCount === 1 ? totalApr : 0;
     };
 
     const filterAndRenderRoutes = () => {
@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const renderRoutes = (routes) => {
         routesBody.innerHTML = '';
         routes.forEach(route => {
-            // Calculate Route APR (Average of hops)
+            // Calculate Route APR (only valid for single-hop)
             let totalApr = 0;
             let hopCount = 0;
             if (route.path_tokens) {
@@ -247,11 +247,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
             }
-            const avgApr = hopCount > 0 ? (totalApr / hopCount) : 0;
-            const aprClass = avgApr > 0.5 ? 'text-success font-bold' : (avgApr > 0 ? 'text-success' : 'text-muted');
+            const avgApr = hopCount === 1 ? totalApr : 0;
+            const aprClass = hopCount > 1 ? 'text-muted' : (avgApr > 0.5 ? 'text-success font-bold' : (avgApr > 0 ? 'text-success' : 'text-muted'));
 
             // Use backend pre-calculated string if available, otherwise format locally
-            const aprDisplay = route.apr_str || (hopCount > 0 ? (avgApr * 100).toFixed(1) + '%' : 'N/A');
+            const aprDisplay = hopCount > 1 ? '-' : (route.apr_str || (hopCount === 1 ? (avgApr * 100).toFixed(1) + '%' : 'N/A'));
 
             const networkVal = route.network || 'Ethereum';
             const networkClass = networkVal.toLowerCase();
@@ -278,26 +278,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const tokenIconHtml = (symbol, size = 16) => {
-        let uppercaseSymbol = symbol.toUpperCase();
+        const uppercaseSymbol = symbol.toUpperCase();
         
-        // Map wrapped / pegged assets to native counterparts for logo purposes
-        const logoMappings = {
-            'WETH': 'ETH',
-            'WBTC': 'BTC',
-            'CBBTC': 'BTC',
-            'TBTC': 'BTC',
-            'KBTC': 'BTC',
-            'LBTC': 'BTC',
-            'FBTC': 'BTC'
-        };
-        if (logoMappings[uppercaseSymbol]) {
-            uppercaseSymbol = logoMappings[uppercaseSymbol];
-        }
-
+        // 1. Try to get the specific icon directly from the CoinGecko loaded map
         let url = tokenImageMap[uppercaseSymbol];
+        
         if (!url) {
-            url = tokenIconUrl(uppercaseSymbol);
+            // 2. Map wrapped / pegged assets to native counterparts as a fallback
+            const logoMappings = {
+                'WETH': 'ETH',
+                'WBTC': 'BTC',
+                'CBBTC': 'BTC',
+                'TBTC': 'BTC',
+                'KBTC': 'BTC',
+                'LBTC': 'BTC',
+                'FBTC': 'BTC'
+            };
+            
+            let mappedSymbol = uppercaseSymbol;
+            if (logoMappings[uppercaseSymbol]) {
+                mappedSymbol = logoMappings[uppercaseSymbol];
+            }
+            
+            // 3. Try mapped symbol from map, or use default CDN fallback
+            url = tokenImageMap[mappedSymbol] || tokenIconUrl(mappedSymbol);
         }
+        
         return `<img src="${url}" width="${size}" height="${size}" onerror="this.src='/static/favicon.png'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;">`;
     };
 
@@ -338,16 +344,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Backend enriched object
                         let cleanFee = item.fee || '';
                         let protocolVer = ''; // 'v3' or 'v4'
+                        let networkName = '';
                         if (cleanFee.includes('|')) {
                             const parts = cleanFee.split('|');
                             cleanFee = parts[0];
                             if (parts[1]) {
                                 protocolVer = parts[1].toLowerCase(); // 'v3' or 'v4'
                             }
+                            if (parts[2]) {
+                                networkName = parts[2].trim();
+                            }
                         }
 
-                        // Normalize Dynamic to dyn
+                        // Normalize Dynamic to dyn, and convert basis points to percentages
                         let dispFee = cleanFee;
+                        const parsedFee = parseFloat(cleanFee);
+                        if (!isNaN(parsedFee) && parsedFee >= 5) {
+                            dispFee = (parsedFee / 10000) + '%';
+                            cleanFee = dispFee;
+                        }
                         if (cleanFee.toLowerCase() === 'dynamic') {
                             dispFee = 'dyn';
                         }
@@ -364,23 +379,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                             displayVal = dispFee;
                         }
 
-                        tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolVer.toUpperCase()}`;
+                        tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolVer.toUpperCase()}\nNetwork: ${networkName || 'Ethereum'}`;
                         protocolClass = protocolVer; // 'v3' or 'v4'
                     } else if (typeof item === 'string') {
                         let cleanFee = item;
+                        let networkName = '';
                         if (cleanFee.includes('|')) {
                             const parts = cleanFee.split('|');
                             cleanFee = parts[0];
                             if (parts[1]) {
                                 protocolClass = parts[1].toLowerCase();
                             }
+                            if (parts[2]) {
+                                networkName = parts[2].trim();
+                            }
+                        }
+                        let dispFee = cleanFee;
+                        const parsedFee = parseFloat(cleanFee);
+                        if (!isNaN(parsedFee) && parsedFee >= 5) {
+                            dispFee = (parsedFee / 10000) + '%';
+                            cleanFee = dispFee;
                         }
                         if (cleanFee.toLowerCase() === 'dynamic') {
                             displayVal = 'dyn';
                         } else {
-                            displayVal = cleanFee;
+                            displayVal = dispFee;
                         }
-                        tooltip = `APR: N/A\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolClass.toUpperCase()}`;
+                        tooltip = `APR: N/A\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolClass.toUpperCase()}\nNetwork: ${networkName || 'Ethereum'}`;
                     } else {
                         const feeNum = parseFloat(item);
                         if (!isNaN(feeNum)) {
@@ -433,18 +458,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 valA = a.count;
                 valB = b.count;
             } else if (key === 'apr') {
-                // Calculate avg APR for sorting
-                const getAvgApr = (r) => {
-                    let t = 0, c = 0;
-                    if (r.path_tokens) {
-                        r.path_tokens.forEach((it, id) => {
-                            if (id % 2 === 1 && typeof it === 'object') { t += (it.apr || 0); c++; }
-                        });
-                    }
-                    return c > 0 ? (t / c) : 0;
-                };
-                valA = getAvgApr(a);
-                valB = getAvgApr(b);
+                valA = getRouteAvgApr(a);
+                valB = getRouteAvgApr(b);
             } else if (key === 'volume') {
                 valA = a.volume;
                 valB = b.volume;

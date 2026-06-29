@@ -1,7 +1,7 @@
 from airflow import DAG
 from airflow.sdk import task, Asset
 import pendulum
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 # Use standardized imports from reorganized structure
@@ -20,44 +20,7 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-@task(outlets=[uniswap_v3_swaps_asset])
-def fetch_and_store_swaps():
-    """
-    Fetch Uniswap V3 swaps incrementally for all tracked tokens.
-    Uses PostgresHook to find the last sync point.
-    """
-    fetcher = UniswapV3Fetcher(verbose=True)
-    storage = PostgresStorage() # Still uses internal config but we can bridge it
-    
-    # Use PostgresHook to get the last sync timestamp
-    pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
-    
-    try:
-        last_ts_query = "SELECT MAX(timestamp) FROM uniswap_v3_swaps"
-        res = pg_hook.get_first(last_ts_query)
-        last_ts = res[0].timestamp() if res and res[0] else None
-    except Exception as e:
-        logging.warning(f"Could not fetch last timestamp (might be empty): {e}")
-        last_ts = None
 
-    if last_ts:
-        # Incremental: Start from 1 second after the last record
-        start_date = pendulum.from_timestamp(last_ts + 1)
-        logging.info(f"Incremental run: Last record at {pendulum.from_timestamp(last_ts)}. Fetching new swaps...")
-    else:
-        # Backfill: Start from 90 days ago
-        start_date = pendulum.now().subtract(days=90)
-        logging.info("Database is empty. Starting 90-day backfill...")
-        
-    end_date = pendulum.now()
-    
-    logging.info(f"Fetching swaps from {start_date} to {end_date}")
-    
-    # Set collect_results=False to avoid OOM for large backfills (only return count)
-    count = fetcher.fetch_swaps(start_date, end_date, on_batch_callback=storage.save_swaps, collect_results=False)
-    
-    logging.info(f"Fetch complete. Total unique swaps processed: {count}")
-    return f"Successfully synchronized {count} swaps."
 
 with DAG(
     'the_graph_uniswap_v3_swaps',
@@ -69,4 +32,77 @@ with DAG(
     tags=['uniswap', 'swaps', 'defi'],
 ) as dag:
 
-    fetch_task = fetch_and_store_swaps()
+    @task(outlets=[uniswap_v3_swaps_asset])
+    def fetch_and_store_ethereum_swaps(**context):
+        """Fetch Uniswap V3 swaps for Ethereum network."""
+        import pendulum as _pendulum
+        conf = {}
+        if context.get('dag_run') and context['dag_run'].conf:
+            conf = context['dag_run'].conf
+
+        backfill_days = conf.get('backfill_days', {})
+        days = backfill_days.get('Ethereum', 30)
+        force_backfill = 'backfill_days' in conf  # explicit conf always overrides DB checkpoint
+        network = 'Ethereum'
+
+        pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+        last_ts_row = pg_hook.get_first(
+            "SELECT MAX(timestamp) FROM uniswap_v3_swaps WHERE network = %s",
+            parameters=(network,)
+        )
+        last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
+
+        end_date = datetime.now(timezone.utc)
+        if last_ts is not None and not force_backfill:
+            # last_ts is a datetime from Postgres; make it timezone-aware if needed
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=timezone.utc)
+            start_date = last_ts
+        else:
+            start_date = end_date - timedelta(days=days)
+
+        logging.info(f"Fetching {network} swaps from {start_date} to {end_date}")
+        fetcher = UniswapV3Fetcher(network=network)
+        swaps = fetcher.fetch_swaps(start_date=start_date, end_date=end_date)
+        logging.info(f"Fetched {len(swaps)} swaps for {network}")
+        storage = PostgresStorage()
+        storage.save_swaps(swaps, network=network)
+        logging.info(f"Saved {len(swaps)} swaps for {network}")
+
+    @task(outlets=[uniswap_v3_swaps_asset])
+    def fetch_and_store_arbitrum_swaps(**context):
+        """Fetch Uniswap V3 swaps for Arbitrum network."""
+        conf = {}
+        if context.get('dag_run') and context['dag_run'].conf:
+            conf = context['dag_run'].conf
+
+        backfill_days = conf.get('backfill_days', {})
+        days = backfill_days.get('Arbitrum', 7)
+        force_backfill = 'backfill_days' in conf  # explicit conf always overrides DB checkpoint
+        network = 'Arbitrum'
+
+        pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+        last_ts_row = pg_hook.get_first(
+            "SELECT MAX(timestamp) FROM uniswap_v3_swaps WHERE network = %s",
+            parameters=(network,)
+        )
+        last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
+
+        end_date = datetime.now(timezone.utc)
+        if last_ts is not None and not force_backfill:
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=timezone.utc)
+            start_date = last_ts
+        else:
+            start_date = end_date - timedelta(days=days)
+
+        logging.info(f"Fetching {network} swaps from {start_date} to {end_date}")
+        fetcher = UniswapV3Fetcher(network=network)
+        swaps = fetcher.fetch_swaps(start_date=start_date, end_date=end_date)
+        logging.info(f"Fetched {len(swaps)} swaps for {network}")
+        storage = PostgresStorage()
+        storage.save_swaps(swaps, network=network)
+        logging.info(f"Saved {len(swaps)} swaps for {network}")
+
+    ethereum_task = fetch_and_store_ethereum_swaps()
+    arbitrum_task = fetch_and_store_arbitrum_swaps()

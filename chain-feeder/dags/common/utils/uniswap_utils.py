@@ -14,6 +14,25 @@ from .config import (
     DATA_WAREHOUSE_DB
 )
 
+# Arbitrum token addresses — verified against live V3 and V4 subgraph data
+ARBITRUM_TOKEN_ADDRESSES = {
+    # Native ETH (used as address 0x000… in V4)
+    'ETH':  '0x0000000000000000000000000000000000000000',
+    # Bridged USDC (used in V3)
+    'USDC.e': '0xff970a61a04b1ca14834a43f5de4533ebddb5cc8',
+    # Native USDC (used in V4)
+    'USDC': '0xaf88d065e77c8cc2239327c5edb3a432268e5831',
+    # Wrapped ETH token (used in V3)
+    'WETH': '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
+    'USDT': '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
+    'WBTC': '0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f',
+    'DAI':  '0xda10009c55681e77d502082691d29f8fb095569f',
+    'LINK': '0xf97f4df75117a78c1a5a0dbb814af92458539fb4',
+    'GMX':  '0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a',
+    'AAVE': '0xba5ddd1f9d7f570dc94a51479a000e3bce967196',
+    'ZRO':  '0x6985884c4392d348587b19cb9eaaf157f13271cd',
+}
+
 class UniswapV3Fetcher:
     def __init__(self, verbose: bool = False, network: str = "Ethereum"):
         self.verbose = verbose
@@ -24,8 +43,8 @@ class UniswapV3Fetcher:
         import os
         GRAPH_API_KEY = os.getenv('GRAPH_API_KEY', '')
         if self.network == "Arbitrum":
-            v3_subgraph_id = "3V7ZY6muhxaQL5qvntX1CFXJ32W7BxXZTGTwmpH5J4t3"
-            v4_subgraph_id = "G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"
+            v3_subgraph_id = "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM"  # Uniswap V3 Arbitrum swaps (verified)
+            v4_subgraph_id = "G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"  # Uniswap V4 Arbitrum swaps
         else: # Ethereum
             v3_subgraph_id = "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
             v4_subgraph_id = "DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G"
@@ -41,18 +60,21 @@ class UniswapV3Fetcher:
         if self.verbose:
             print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {message}")
     
-    def _build_swap_query(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_values: List[str]) -> str:
+    def _build_swap_query(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_values: List[str], last_id: str = "") -> str:
         addr_list = str(filter_values).replace("'", '"')
+        # Use id_gt cursor within the same timestamp window to handle high-density blocks
+        id_filter = f'id_gt: "{last_id}"' if last_id else ''
         query = f"""
         {{
           swaps(
             first: {MAX_RESULTS_PER_QUERY}
-            orderBy: timestamp
+            orderBy: id
             orderDirection: asc
             where: {{
               timestamp_gte: {start_timestamp}
               timestamp_lte: {end_timestamp}
               {filter_field}: {addr_list}
+              {id_filter}
             }}
           ) {{
             id
@@ -94,18 +116,25 @@ class UniswapV3Fetcher:
     def _fetch_swaps_with_filter(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_addresses: List[str], on_batch_callback: Optional[callable] = None, collect_results: bool = True) -> List:
         found_results = []
         current_start_time = start_timestamp
+        last_id = ""  # cursor for id_gt pagination within a dense timestamp window
+
+        if self.network == "Arbitrum":
+            addr_to_sym = {addr.lower(): sym for sym, addr in ARBITRUM_TOKEN_ADDRESSES.items()}
+        else:
+            addr_to_sym = ADDRESS_TO_SYMBOL
+
         while True:
-            query = self._build_swap_query(current_start_time, end_timestamp, filter_field, filter_addresses)
+            query = self._build_swap_query(current_start_time, end_timestamp, filter_field, filter_addresses, last_id)
             result = self._execute_query(query)
             if not result or 'data' not in result:
                 break
             swaps = result['data'].get('swaps', [])
             if not swaps:
                 break
-            
+
             to_float = lambda x: float(x) if x is not None else 0.0
             to_int = lambda x: int(x) if x is not None else 0
-            
+
             batch_swaps = []
             last_timestamp = 0
             for swap in swaps:
@@ -114,21 +143,21 @@ class UniswapV3Fetcher:
                 transaction = swap.get('transaction') or {}
                 t0_addr = token0.get('id', '').lower()
                 t1_addr = token1.get('id', '').lower()
-                
+
                 fee_tier_val = to_int((swap.get('pool') or {}).get('feeTier'))
                 if fee_tier_val & 0x800000:
                     fee_tier_str = "Dynamic"
                 else:
                     fee_tier_str = f"{to_float(fee_tier_val) / 10000}%"
-                
+
                 normalized = {
                     'id': swap.get('id', 'unknown'),
                     'timestamp': to_int(swap.get('timestamp')),
                     'tx_hash': transaction.get('id', 'unknown'),
                     'token0_address': t0_addr,
                     'token1_address': t1_addr,
-                    'token0_symbol': ADDRESS_TO_SYMBOL.get(t0_addr, token0.get('symbol') or 'UNKNOWN'),
-                    'token1_symbol': ADDRESS_TO_SYMBOL.get(t1_addr, token1.get('symbol') or 'UNKNOWN'),
+                    'token0_symbol': addr_to_sym.get(t0_addr, token0.get('symbol') or 'UNKNOWN').upper(),
+                    'token1_symbol': addr_to_sym.get(t1_addr, token1.get('symbol') or 'UNKNOWN').upper(),
                     'amount0': to_float(swap.get('amount0')),
                     'amount1': to_float(swap.get('amount1')),
                     'amountUSD': to_float(swap.get('amountUSD')),
@@ -136,27 +165,42 @@ class UniswapV3Fetcher:
                 }
                 batch_swaps.append(normalized)
                 last_timestamp = normalized['timestamp']
-            
+
             if collect_results:
                 found_results.extend(batch_swaps)
             else:
                 found_results.extend([s['id'] for s in batch_swaps])
 
             self._log(f"Fetched {len(batch_swaps)} swaps from {filter_field} (Total: {len(found_results)})")
-            
+
             if on_batch_callback:
                 on_batch_callback(batch_swaps)
-            
+
             if len(swaps) < MAX_RESULTS_PER_QUERY:
+                # All swaps in this time window fetched
                 break
-            current_start_time = last_timestamp + 1 if last_timestamp == current_start_time else last_timestamp
+
+            # Still more swaps to fetch — advance cursor
+            # Use id_gt to page within the same timestamp if dense, else advance timestamp
+            last_id = swaps[-1]['id']
+            # If the last batch's max timestamp advanced, reset id cursor to avoid skipping
+            if last_timestamp > current_start_time:
+                current_start_time = last_timestamp
+                last_id = ""
+
         return found_results
 
     def fetch_swaps(self, start_date: datetime, end_date: datetime, on_batch_callback: Optional[callable] = None, collect_results: bool = True):
         start_ts = int(start_date.timestamp())
         end_ts = int(end_date.timestamp())
-        swaps_token0 = self._fetch_swaps_with_filter(start_ts, end_ts, "token0_in", TOKEN_ADDRESSES, on_batch_callback, collect_results=collect_results)
-        swaps_token1 = self._fetch_swaps_with_filter(start_ts, end_ts, "token1_in", TOKEN_ADDRESSES, on_batch_callback, collect_results=collect_results)
+        
+        if self.network == "Arbitrum":
+            addresses = [addr.lower() for addr in ARBITRUM_TOKEN_ADDRESSES.values()]
+        else:
+            addresses = TOKEN_ADDRESSES
+            
+        swaps_token0 = self._fetch_swaps_with_filter(start_ts, end_ts, "token0_in", addresses, on_batch_callback, collect_results=collect_results)
+        swaps_token1 = self._fetch_swaps_with_filter(start_ts, end_ts, "token1_in", addresses, on_batch_callback, collect_results=collect_results)
         
         if collect_results:
             unique = {s['id']: s for s in swaps_token0 + swaps_token1}
