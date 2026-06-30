@@ -1912,10 +1912,19 @@ input:focus+.slider {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.table-controls .display-toggle-wrapper {
+    padding: 0;
+    border: none;
+    order: 1;
 }
 
 .column-selector-container {
     position: relative;
+    order: 2;
 }
 
 .column-dropdown {
@@ -1972,8 +1981,12 @@ input:focus+.slider {
 .filter-controls-wrapper {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin: 0 16px;
+    gap: 12px;
+    margin: 0;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    order: 3;
+    justify-content: flex-start;
 }
 
 .filter-input-group {

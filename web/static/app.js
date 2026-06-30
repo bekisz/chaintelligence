@@ -3,8 +3,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const startTokenInput = document.getElementById('start-token');
     const endTokenInput = document.getElementById('end-token');
     const resultsSection = document.getElementById('results-section');
-    const totalVolumeEl = document.getElementById('total-volume');
-    const totalTxEl = document.getElementById('total-tx');
     const routesBody = document.getElementById('routes-body');
     const loader = document.getElementById('loader');
     const noDataMsg = document.getElementById('no-data');
@@ -182,9 +180,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Update stats
-            totalVolumeEl.textContent = formatUSD(data.total_volume);
-            totalTxEl.textContent = data.total_tx.toLocaleString();
-
             currentRoutes = data.routes;
             filterAndRenderRoutes();
 

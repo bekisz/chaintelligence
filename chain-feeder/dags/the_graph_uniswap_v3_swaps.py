@@ -63,11 +63,18 @@ with DAG(
 
         logging.info(f"Fetching {network} swaps from {start_date} to {end_date}")
         fetcher = UniswapV3Fetcher(network=network)
-        swaps = fetcher.fetch_swaps(start_date=start_date, end_date=end_date)
-        logging.info(f"Fetched {len(swaps)} swaps for {network}")
         storage = PostgresStorage()
-        storage.save_swaps(swaps, network=network)
-        logging.info(f"Saved {len(swaps)} swaps for {network}")
+        
+        def save_batch(batch):
+            storage.save_swaps(batch, network=network)
+            
+        num_swaps = fetcher.fetch_swaps(
+            start_date=start_date, 
+            end_date=end_date, 
+            on_batch_callback=save_batch, 
+            collect_results=False
+        )
+        logging.info(f"Fetched and saved {num_swaps} unique swaps for {network}")
 
     @task(outlets=[uniswap_v3_swaps_asset])
     def fetch_and_store_arbitrum_swaps(**context):
@@ -98,11 +105,18 @@ with DAG(
 
         logging.info(f"Fetching {network} swaps from {start_date} to {end_date}")
         fetcher = UniswapV3Fetcher(network=network)
-        swaps = fetcher.fetch_swaps(start_date=start_date, end_date=end_date)
-        logging.info(f"Fetched {len(swaps)} swaps for {network}")
         storage = PostgresStorage()
-        storage.save_swaps(swaps, network=network)
-        logging.info(f"Saved {len(swaps)} swaps for {network}")
+        
+        def save_batch(batch):
+            storage.save_swaps(batch, network=network)
+            
+        num_swaps = fetcher.fetch_swaps(
+            start_date=start_date, 
+            end_date=end_date, 
+            on_batch_callback=save_batch, 
+            collect_results=False
+        )
+        logging.info(f"Fetched and saved {num_swaps} unique swaps for {network}")
 
     ethereum_task = fetch_and_store_ethereum_swaps()
     arbitrum_task = fetch_and_store_arbitrum_swaps()

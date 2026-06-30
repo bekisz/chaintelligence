@@ -87,17 +87,6 @@
             </div>
 
             <section id="results-section" class="results-container hidden">
-                <div class="summary-cards">
-                    <div class="card glass">
-                        <h3>Total Volume</h3>
-                        <p id="total-volume" class="stat">--</p>
-                    </div>
-                    <div class="card glass">
-                        <h3>Total TXs</h3>
-                        <p id="total-tx" class="stat">--</p>
-                    </div>
-                </div>
-
                 <div class="table-container glass" style="padding: 16px;">
                     <div class="table-controls">
                         <div class="display-toggle-wrapper mode-fee" id="display-wrapper">
@@ -132,8 +121,8 @@
                                 <input type="number" id="min-txs-filter" placeholder="e.g. 10" min="0" step="5">
                             </div>
                             <div class="filter-input-group" style="margin-left: 4px;">
-                                <label class="checkbox-label" style="text-transform: uppercase; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;">
-                                    <input type="checkbox" id="acyclic-filter"> Acyclic Only
+                                <label class="checkbox-label" style="text-transform: uppercase; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; gap: 2px;">
+                                    Acyclic Only <input type="checkbox" id="acyclic-filter" checked>
                                 </label>
                             </div>
                         </div>
@@ -151,8 +140,8 @@
                                 <label class="checkbox-label"><input type="checkbox" data-col="apr" checked> APR</label>
                                 <label class="checkbox-label"><input type="checkbox" data-col="volume" checked> Volume</label>
                                 <label class="checkbox-label"><input type="checkbox" data-col="market-size" checked> Market Size</label>
-                                <label class="checkbox-label"><input type="checkbox" data-col="avg-volume" checked> Avg Volume</label>
-                                <label class="checkbox-label"><input type="checkbox" data-col="pct-volume" checked> % Volume</label>
+                                <label class="checkbox-label"><input type="checkbox" data-col="avg-volume"> Avg Volume</label>
+                                <label class="checkbox-label"><input type="checkbox" data-col="pct-volume"> % Volume</label>
                             </div>
                         </div>
                     </div>

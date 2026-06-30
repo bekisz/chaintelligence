@@ -60,21 +60,18 @@ class UniswapV3Fetcher:
         if self.verbose:
             print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {message}")
     
-    def _build_swap_query(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_values: List[str], last_id: str = "") -> str:
+    def _build_swap_query(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_values: List[str]) -> str:
         addr_list = str(filter_values).replace("'", '"')
-        # Use id_gt cursor within the same timestamp window to handle high-density blocks
-        id_filter = f'id_gt: "{last_id}"' if last_id else ''
         query = f"""
         {{
           swaps(
             first: {MAX_RESULTS_PER_QUERY}
-            orderBy: id
+            orderBy: timestamp
             orderDirection: asc
             where: {{
               timestamp_gte: {start_timestamp}
               timestamp_lte: {end_timestamp}
               {filter_field}: {addr_list}
-              {id_filter}
             }}
           ) {{
             id
@@ -115,8 +112,8 @@ class UniswapV3Fetcher:
     
     def _fetch_swaps_with_filter(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_addresses: List[str], on_batch_callback: Optional[callable] = None, collect_results: bool = True) -> List:
         found_results = []
+        seen_ids = set()
         current_start_time = start_timestamp
-        last_id = ""  # cursor for id_gt pagination within a dense timestamp window
 
         if self.network == "Arbitrum":
             addr_to_sym = {addr.lower(): sym for sym, addr in ARBITRUM_TOKEN_ADDRESSES.items()}
@@ -124,7 +121,7 @@ class UniswapV3Fetcher:
             addr_to_sym = ADDRESS_TO_SYMBOL
 
         while True:
-            query = self._build_swap_query(current_start_time, end_timestamp, filter_field, filter_addresses, last_id)
+            query = self._build_swap_query(current_start_time, end_timestamp, filter_field, filter_addresses)
             result = self._execute_query(query)
             if not result or 'data' not in result:
                 break
@@ -138,6 +135,11 @@ class UniswapV3Fetcher:
             batch_swaps = []
             last_timestamp = 0
             for swap in swaps:
+                swap_id = swap.get('id', 'unknown')
+                if swap_id in seen_ids:
+                    continue
+                seen_ids.add(swap_id)
+
                 token0 = swap.get('token0') or {}
                 token1 = swap.get('token1') or {}
                 transaction = swap.get('transaction') or {}
@@ -151,7 +153,7 @@ class UniswapV3Fetcher:
                     fee_tier_str = f"{to_float(fee_tier_val) / 10000}%"
 
                 normalized = {
-                    'id': swap.get('id', 'unknown'),
+                    'id': swap_id,
                     'timestamp': to_int(swap.get('timestamp')),
                     'tx_hash': transaction.get('id', 'unknown'),
                     'token0_address': t0_addr,
@@ -164,29 +166,28 @@ class UniswapV3Fetcher:
                     'fee_tier': fee_tier_str
                 }
                 batch_swaps.append(normalized)
-                last_timestamp = normalized['timestamp']
+            
+            # The last element's timestamp in the original batch
+            last_timestamp = to_int(swaps[-1].get('timestamp'))
 
             if collect_results:
                 found_results.extend(batch_swaps)
             else:
                 found_results.extend([s['id'] for s in batch_swaps])
 
-            self._log(f"Fetched {len(batch_swaps)} swaps from {filter_field} (Total: {len(found_results)})")
+            self._log(f"Fetched {len(batch_swaps)} new swaps from {filter_field} (Total: {len(found_results)})")
 
-            if on_batch_callback:
+            if on_batch_callback and batch_swaps:
                 on_batch_callback(batch_swaps)
 
             if len(swaps) < MAX_RESULTS_PER_QUERY:
-                # All swaps in this time window fetched
                 break
-
-            # Still more swaps to fetch — advance cursor
-            # Use id_gt to page within the same timestamp if dense, else advance timestamp
-            last_id = swaps[-1]['id']
-            # If the last batch's max timestamp advanced, reset id cursor to avoid skipping
-            if last_timestamp > current_start_time:
+            
+            # Advance to the last timestamp. If we got stuck (e.g. >1000 swaps exactly on this second), push forward by 1s
+            if last_timestamp == current_start_time:
+                current_start_time += 1
+            else:
                 current_start_time = last_timestamp
-                last_id = ""
 
         return found_results
 
