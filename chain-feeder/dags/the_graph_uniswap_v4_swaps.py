@@ -104,5 +104,81 @@ with DAG(
         )
         logging.info(f"{network} V4 fetch complete. Processed {count} unique swaps.")
 
+    @task(outlets=[uniswap_v4_swaps_asset])
+    def fetch_and_store_base_swaps(**context):
+        """Fetch Uniswap V4 swaps for Base network."""
+        conf = {}
+        if context.get('dag_run') and context['dag_run'].conf:
+            conf = context['dag_run'].conf
+
+        backfill_days = conf.get('backfill_days', {})
+        days = backfill_days.get('Base', 7)
+        force_backfill = 'backfill_days' in conf
+        network = 'Base'
+
+        pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+        last_ts_row = pg_hook.get_first(
+            "SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s",
+            parameters=(network,)
+        )
+        last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
+
+        end_date = datetime.now(timezone.utc)
+        if last_ts is not None and not force_backfill:
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=timezone.utc)
+            start_date = last_ts
+        else:
+            start_date = end_date - timedelta(days=days)
+
+        logging.info(f"Fetching {network} V4 swaps from {start_date} to {end_date}")
+        fetcher = UniswapV4Fetcher(network=network, verbose=True)
+        storage = PostgresStorageV4()
+        count = fetcher.fetch_swaps(
+            start_date, end_date,
+            on_batch_callback=lambda s, net=network: storage.save_swaps(s, network=net),
+            collect_results=False
+        )
+        logging.info(f"{network} V4 fetch complete. Processed {count} unique swaps.")
+
+    @task(outlets=[uniswap_v4_swaps_asset])
+    def fetch_and_store_bnb_swaps(**context):
+        """Fetch Uniswap V4 swaps for BNB network."""
+        conf = {}
+        if context.get('dag_run') and context['dag_run'].conf:
+            conf = context['dag_run'].conf
+
+        backfill_days = conf.get('backfill_days', {})
+        days = backfill_days.get('BNB', 7)
+        force_backfill = 'backfill_days' in conf
+        network = 'BNB'
+
+        pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+        last_ts_row = pg_hook.get_first(
+            "SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s",
+            parameters=(network,)
+        )
+        last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
+
+        end_date = datetime.now(timezone.utc)
+        if last_ts is not None and not force_backfill:
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=timezone.utc)
+            start_date = last_ts
+        else:
+            start_date = end_date - timedelta(days=days)
+
+        logging.info(f"Fetching {network} V4 swaps from {start_date} to {end_date}")
+        fetcher = UniswapV4Fetcher(network=network, verbose=True)
+        storage = PostgresStorageV4()
+        count = fetcher.fetch_swaps(
+            start_date, end_date,
+            on_batch_callback=lambda s, net=network: storage.save_swaps(s, network=net),
+            collect_results=False
+        )
+        logging.info(f"{network} V4 fetch complete. Processed {count} unique swaps.")
+
     ethereum_task = fetch_and_store_ethereum_swaps()
     arbitrum_task = fetch_and_store_arbitrum_swaps()
+    base_task = fetch_and_store_base_swaps()
+    bnb_task = fetch_and_store_bnb_swaps()

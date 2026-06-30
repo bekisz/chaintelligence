@@ -196,10 +196,19 @@ async def analyze(
         analyzer = RouteAnalyzer(verbose=True, prices=latest_prices)
         
         # Batched Processing Configuration
-        BATCH_DAYS = 5
+        BATCH_DAYS = 1
         current_chunk_start = start_dt
         has_data = False
         
+        # Build token_filter to prevent fetching millions of irrelevant rows
+        token_filter = []
+        if "*" not in start_tokens_list:
+            token_filter.extend(start_tokens_list)
+        if "*" not in end_tokens_list:
+            token_filter.extend(end_tokens_list)
+        if not token_filter:
+            token_filter = None # Fallback if both are wildcards (should not happen from UI)
+            
         while current_chunk_start < end_dt:
             # Calculate chunk end
             chunk_end = current_chunk_start + timedelta(days=BATCH_DAYS)
@@ -208,7 +217,7 @@ async def analyze(
                 
             # Fetch Batch
             print(f"[Anaylsis] Processing batch: {current_chunk_start} -> {chunk_end}")
-            batch_swaps = fetcher.fetch_swaps(current_chunk_start, chunk_end)
+            batch_swaps = fetcher.fetch_swaps(current_chunk_start, chunk_end, token_filter=token_filter)
             
             if batch_swaps:
                 has_data = True

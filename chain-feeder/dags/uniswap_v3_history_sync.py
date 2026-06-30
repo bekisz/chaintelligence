@@ -75,7 +75,7 @@ def sync_pools_from_swaps():
     logging.info("Scanning swaps table for new pools...")
     
     cur.execute("""
-        SELECT DISTINCT token0_symbol, token1_symbol, fee_tier 
+        SELECT DISTINCT network, token0_symbol, token1_symbol, fee_tier 
         FROM uniswap_v3_swaps
     """)
     rows = cur.fetchall()
@@ -84,7 +84,7 @@ def sync_pools_from_swaps():
     skipped_pools = 0
     
     for r in rows:
-        s0, s1, fee = r
+        network, s0, s1, fee = r
         if not s0 or not s1: continue
         
         # Check if coins exist (handle potential formatting diffs by normalizing check)
@@ -109,9 +109,9 @@ def sync_pools_from_swaps():
         try:
             cur.execute("""
                 INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_symbol, coin1_symbol, fee_tier)
-                VALUES ('Ethereum', 'Uniswap V3', %s, %s, %s, %s)
+                VALUES (%s, 'Uniswap V3', %s, %s, %s, %s)
                 ON CONFLICT (network, protocol, pool_name, fee_tier) DO NOTHING
-            """, (pool_name, c0, c1, fee_bips))
+            """, (network, pool_name, c0, c1, fee_bips))
             
             if cur.statusmessage.startswith("INSERT 0 1"):
                 new_pools += 1
@@ -153,7 +153,7 @@ def build_daily_history():
         SUM(s.amount_usd) as volume_usd
     FROM uniswap_v3_swaps s
     JOIN liquidity_pool p ON 
-        p.network = 'Ethereum' AND p.protocol = 'Uniswap V3' AND
+        p.network = s.network AND p.protocol = 'Uniswap V3' AND
         p.fee_tier = CASE 
             WHEN s.fee_tier = '0.01%' THEN '100'
             WHEN s.fee_tier = '0.05%' THEN '500'
@@ -198,45 +198,57 @@ def sync_tvl_from_graph():
     # 1. Build Symbol -> Address Map
     # Priority 1: coin table (Official)
     # Priority 2: swaps history (Heuristic)
-    logging.info("Building symbol->address map...")
-    symbol_map = {}
+    from collections import defaultdict
     
-    # Priority 2: Official coin table (Fallback)
+    # 1. Build Symbol -> Address Map by Network
+    logging.info("Building symbol->address map by network...")
+    symbol_map = defaultdict(dict)
+    
+    # Priority 2: Official coin table (Fallback for Ethereum)
     cur.execute("SELECT symbol, ethereum_address FROM coin WHERE ethereum_address IS NOT NULL")
     for row in cur.fetchall():
         sym, addr = row
         if sym and addr:
-            symbol_map[sym.upper()] = addr.lower()
+            symbol_map["Ethereum"][sym.upper()] = addr.lower()
             
-    # Priority 1: Swaps (Heuristic)
-    # Order by swap frequency ASC so the most frequent address overwrites the lesser ones
+    # Priority 1: Swaps (Heuristic per Network)
+    # Order by swap frequency ASC so the most frequent address per network wins
     cur.execute("""
-        SELECT sym, addr, SUM(c) as total_c FROM (
-            SELECT token0_symbol as sym, token0_address as addr, count(*) as c FROM uniswap_v3_swaps GROUP BY 1, 2
+        SELECT network, sym, addr, SUM(c) as total_c FROM (
+            SELECT network, token0_symbol as sym, token0_address as addr, count(*) as c FROM uniswap_v3_swaps GROUP BY 1, 2, 3
             UNION ALL 
-            SELECT token1_symbol as sym, token1_address as addr, count(*) as c FROM uniswap_v3_swaps GROUP BY 1, 2
-        ) t GROUP BY 1, 2 ORDER BY total_c ASC
+            SELECT network, token1_symbol as sym, token1_address as addr, count(*) as c FROM uniswap_v3_swaps GROUP BY 1, 2, 3
+        ) t GROUP BY 1, 2, 3 ORDER BY total_c ASC
     """)
     for row in cur.fetchall():
-        sym, addr, count = row
+        network, sym, addr, count = row
         if sym and addr:
-            symbol_map[sym.upper()] = addr.lower()
+            symbol_map[network][sym.upper()] = addr.lower()
             if len(sym) > 8:
-                symbol_map[sym[:8].upper()] = addr.lower()
+                symbol_map[network][sym[:8].upper()] = addr.lower()
                 
     # 2. Get all pools
-    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier FROM liquidity_pool WHERE protocol = 'Uniswap V3'")
+    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier, network FROM liquidity_pool WHERE protocol = 'Uniswap V3'")
     pools = cur.fetchall()
     
+    # Keep network-specific fetcher instances
+    fetchers = {
+        "Ethereum": UniswapV3Fetcher(verbose=True, network="Ethereum"),
+        "Arbitrum": UniswapV3Fetcher(verbose=True, network="Arbitrum"),
+        "Base": UniswapV3Fetcher(verbose=True, network="Base"),
+        "BNB": UniswapV3Fetcher(verbose=True, network="BNB")
+    }
+    
     for pool in pools:
-        pool_id, c0, c1, fee = pool
+        pool_id, c0, c1, fee, network = pool
         if not fee: continue
         
-        addr0 = symbol_map.get(c0.upper())
-        addr1 = symbol_map.get(c1.upper())
+        net_symbol_map = symbol_map[network]
+        addr0 = net_symbol_map.get(c0.upper())
+        addr1 = net_symbol_map.get(c1.upper())
         
         if not addr0 or not addr1:
-            logging.warning(f"Skipping pool {pool_id} ({c0}-{c1}): Address not found for symbols.")
+            logging.warning(f"Skipping pool {pool_id} ({c0}-{c1}) on {network}: Address not found for symbols.")
             continue
             
         try:
@@ -247,10 +259,11 @@ def sync_tvl_from_graph():
         # Fetch last 90 days
         start_date = datetime.now(timezone.utc) - timedelta(days=90)
         
+        fetcher = fetchers.get(network, fetchers["Ethereum"])
         try:
             data = fetcher.fetch_pool_daily_data(addr0, addr1, fee_bips, start_date)
         except Exception as e:
-            logging.error(f"Error fetching Graph data for pool {c0}-{c1}: {e}")
+            logging.error(f"Error fetching Graph data for pool {c0}-{c1} on {network}: {e}")
             continue
         
         if not data:

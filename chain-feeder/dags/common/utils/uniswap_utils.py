@@ -33,6 +33,22 @@ ARBITRUM_TOKEN_ADDRESSES = {
     'ZRO':  '0x6985884c4392d348587b19cb9eaaf157f13271cd',
 }
 
+# Base token addresses
+BASE_TOKEN_ADDRESSES = {
+    'ETH':   '0x0000000000000000000000000000000000000000',
+    'WETH':  '0x4200000000000000000000000000000000000006',
+    'USDC':  '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    'USDbC': '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA',
+    'cbBTC': '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf',
+}
+
+# BNB token addresses
+BNB_TOKEN_ADDRESSES = {
+    'WBNB':  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
+    'USDC':  '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+    'USDT':  '0x55d398326f99059ff775485246999027b3197955',
+}
+
 class UniswapV3Fetcher:
     def __init__(self, verbose: bool = False, network: str = "Ethereum"):
         self.verbose = verbose
@@ -45,6 +61,12 @@ class UniswapV3Fetcher:
         if self.network == "Arbitrum":
             v3_subgraph_id = "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM"  # Uniswap V3 Arbitrum swaps (verified)
             v4_subgraph_id = "G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"  # Uniswap V4 Arbitrum swaps
+        elif self.network == "Base":
+            v3_subgraph_id = "43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG"
+            v4_subgraph_id = "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS" # Placeholder if V4 is not available
+        elif self.network == "BNB":
+            v3_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV"
+            v4_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV" # Placeholder
         else: # Ethereum
             v3_subgraph_id = "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV"
             v4_subgraph_id = "DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G"
@@ -117,6 +139,10 @@ class UniswapV3Fetcher:
 
         if self.network == "Arbitrum":
             addr_to_sym = {addr.lower(): sym for sym, addr in ARBITRUM_TOKEN_ADDRESSES.items()}
+        elif self.network == "Base":
+            addr_to_sym = {addr.lower(): sym for sym, addr in BASE_TOKEN_ADDRESSES.items()}
+        elif self.network == "BNB":
+            addr_to_sym = {addr.lower(): sym for sym, addr in BNB_TOKEN_ADDRESSES.items()}
         else:
             addr_to_sym = ADDRESS_TO_SYMBOL
 
@@ -197,6 +223,10 @@ class UniswapV3Fetcher:
         
         if self.network == "Arbitrum":
             addresses = [addr.lower() for addr in ARBITRUM_TOKEN_ADDRESSES.values()]
+        elif self.network == "Base":
+            addresses = [addr.lower() for addr in BASE_TOKEN_ADDRESSES.values()]
+        elif self.network == "BNB":
+            addresses = [addr.lower() for addr in BNB_TOKEN_ADDRESSES.values()]
         else:
             addresses = TOKEN_ADDRESSES
             
