@@ -464,7 +464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (networkLower.includes('eth')) {
                             pChain = 'eth';
                         } else if (networkLower.includes('arbitrum')) {
-                            pChain = 'arbitrum';
+                            pChain = 'arb';
                         } else if (networkLower.includes('base')) {
                             pChain = 'base';
                         }
