@@ -336,6 +336,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isAprMode = document.getElementById('display-mode-toggle').checked;
 
+        const parseProtocol = (feeString) => {
+            let cleanFee = feeString || '';
+            let protocolName = 'Uniswap';
+            let protocolClass = 'v3';
+            let networkName = '';
+
+            if (feeString && feeString.includes('|')) {
+                const parts = feeString.split('|');
+                cleanFee = parts[0];
+                if (parts[1]) {
+                    protocolName = parts[1];
+                    const rawProto = parts[1].toLowerCase();
+                    if (rawProto === 'uniswap v3' || rawProto === 'v3') {
+                        protocolClass = 'v3';
+                    } else if (rawProto === 'uniswap v4' || rawProto === 'v4') {
+                        protocolClass = 'v4';
+                    } else {
+                        protocolClass = rawProto.replace(/\s+/g, '-');
+                    }
+                }
+                if (parts[2]) {
+                    networkName = parts[2].trim();
+                }
+            }
+            return { cleanFee, protocolName, protocolClass, networkName };
+        };
+
         let html = '<div class="route-path-container">';
 
         tokens.forEach((token, idx) => {
@@ -350,21 +377,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (item !== undefined && item !== null) {
                     if (typeof item === 'object') {
                         // Backend enriched object
-                        let cleanFee = item.fee || '';
-                        let protocolName = 'Uniswap';
-                        let networkName = '';
-                        protocolClass = 'v3';
-                        if (cleanFee.includes('|')) {
-                            const parts = cleanFee.split('|');
-                            cleanFee = parts[0];
-                            if (parts[1]) {
-                                protocolName = parts[1];
-                                protocolClass = parts[1].toLowerCase().replace(/\s+/g, '-');
-                            }
-                            if (parts[2]) {
-                                networkName = parts[2].trim();
-                            }
-                        }
+                        const parsed = parseProtocol(item.fee);
+                        let cleanFee = parsed.cleanFee;
+                        let protocolName = parsed.protocolName;
+                        let networkName = parsed.networkName;
+                        protocolClass = parsed.protocolClass;
 
                         // Normalize Dynamic to dyn, and convert basis points to percentages
                         let dispFee = cleanFee;
@@ -391,21 +408,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                         tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: ${protocolName}\nNetwork: ${networkName || 'Ethereum'}`;
                     } else if (typeof item === 'string') {
-                        let cleanFee = item;
-                        let networkName = '';
-                        let protocolName = 'Uniswap';
-                        protocolClass = 'v3';
-                        if (cleanFee.includes('|')) {
-                            const parts = cleanFee.split('|');
-                            cleanFee = parts[0];
-                            if (parts[1]) {
-                                protocolName = parts[1];
-                                protocolClass = parts[1].toLowerCase().replace(/\s+/g, '-');
-                            }
-                            if (parts[2]) {
-                                networkName = parts[2].trim();
-                            }
-                        }
+                        const parsed = parseProtocol(item);
+                        let cleanFee = parsed.cleanFee;
+                        let protocolName = parsed.protocolName;
+                        let networkName = parsed.networkName;
+                        protocolClass = parsed.protocolClass;
+
                         let dispFee = cleanFee;
                         const parsedFee = parseFloat(cleanFee);
                         if (!isNaN(parsedFee) && parsedFee >= 5) {
