@@ -180,6 +180,8 @@ async def analyze(
                     end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             else:
                 end_dt = now
+            if (end_dt - start_dt).days > 7:
+                start_dt = end_dt - timedelta(days=7)
         else:
             end_dt = now
             start_dt = end_dt - timedelta(days=1)
@@ -196,11 +198,6 @@ async def analyze(
         latest_prices = fetcher.fetch_latest_prices()
         analyzer = RouteAnalyzer(verbose=True, prices=latest_prices)
         
-        # Batched Processing Configuration
-        BATCH_DAYS = 1
-        current_chunk_start = start_dt
-        has_data = False
-        
         # Build token_filter to prevent fetching millions of irrelevant rows
         token_filter = []
         if "*" not in start_tokens_list:
@@ -208,27 +205,27 @@ async def analyze(
         if "*" not in end_tokens_list:
             token_filter.extend(end_tokens_list)
         if not token_filter:
-            token_filter = None # Fallback if both are wildcards (should not happen from UI)
+            token_filter = None # Fallback if both are wildcards
             
+        current_chunk_start = start_dt
+        has_data = False
+        
         while current_chunk_start < end_dt:
-            # Calculate chunk end
-            chunk_end = current_chunk_start + timedelta(days=BATCH_DAYS)
-            if chunk_end > end_dt:
-                chunk_end = end_dt
-                
-            # Fetch Batch
-            print(f"[Anaylsis] Processing batch: {current_chunk_start} -> {chunk_end}")
-            batch_swaps = fetcher.fetch_swaps(current_chunk_start, chunk_end, token_filter=token_filter, network=network)
+            current_chunk_end = min(current_chunk_start + timedelta(days=1), end_dt)
+            print(f"[Anaylsis] Processing batch: {current_chunk_start} -> {current_chunk_end}")
+            
+            batch_swaps = fetcher.fetch_swaps(current_chunk_start, current_chunk_end, token_filter=token_filter, network=network)
             
             if batch_swaps:
                 has_data = True
                 analyzer.process_batch(batch_swaps, start_tokens_list, end_tokens_list)
                 
-            # Cleanup
+            # Free up memory to prevent OOM
             batch_swaps = []
+            import gc
+            gc.collect()
             
-            # Move to next batch (microsecond offset to avoid overlap with <= logic)
-            current_chunk_start = chunk_end + timedelta(microseconds=1)
+            current_chunk_start = current_chunk_end
             
         if not has_data:
             # Fetch min/max from DB to show user available range

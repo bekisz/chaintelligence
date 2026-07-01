@@ -39,7 +39,10 @@ class PostgresFetcher:
             upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
             
             if token_filter:
-                filter_sql += " AND (token0_symbol = ANY(%s) OR token1_symbol = ANY(%s))"
+                if len(token_filter) > 10:
+                    filter_sql += " AND (token0_symbol = ANY(%s) AND token1_symbol = ANY(%s))"
+                else:
+                    filter_sql += " AND (token0_symbol = ANY(%s) OR token1_symbol = ANY(%s))"
             if network and network.lower() != 'all':
                 filter_sql += " AND network = %s"
             
@@ -138,54 +141,38 @@ class PostgresFetcher:
             cur = conn.cursor()
             
             results = {}
+            pool_meta = {}
             
             # Helper to normalize fee string to bips or whatever DB uses
             def normalize_fee(f):
                 f_str = str(f).split('|')[0].replace('%', '').strip()
                 if f_str == 'Dynamic':
                     return 'Dynamic'
-                # Standard Uniswap V3 mappings
                 fee_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
                 if f_str in fee_map: return fee_map[f_str]
                 
                 try:
                     val = float(f_str)
-                    # Detect raw 0x800000 dynamic fee flag (838.8608% = 8388608/10000)
-                    # and any absurdly high fee (>100%) — these are dynamic-fee pools
                     if val > 100:
                         return 'Dynamic'
-                    # If it's a small number, it's likely a percentage (e.g. 0.0075 or 0.3)
-                    # We want to return it as "points per million" (traditional bips * 100)
                     if val > 0 and val < 5: 
                         return str(int(val * 10000))
-                    # Otherwise it's already in bips/ppm
                     return str(int(val))
                 except:
                     return f_str
 
+            pool_queries_history = []
+            params_history = []
+            
             for p in pools:
-                t0, t1, fee = p
+                t0, t1, fee_raw_full = p
                 t0_sym, t1_sym = t0.upper(), t1.upper()
-                
-                # Normalize fee to multiple possible formats found in DB
-                fee_raw = str(fee).split('|')[0].strip()
+                fee_raw = str(fee_raw_full).split('|')[0].strip()
+                fee_db = normalize_fee(fee_raw_full)
                 f_clean = fee_raw.replace('%', '').strip()
-                fee_db = normalize_fee(fee)
-                
-                # Variants to try in DB: bips (e.g. '500'), percentage (e.g. '0.05%'), raw (e.g. '0.05')
-                fee_variants = [fee_db, f_clean, fee_raw]
-                try:
-                    # add percentage if not present (f_clean might be '500' or '0.05')
-                    if fee_db.isdigit():
-                        val = float(fee_db) / 10000.0
-                        fee_variants.append(f"{val:g}%")
-                        fee_variants.append(f"{val:g}") # e.g. '0.05'
-                except: pass
-                # Remove duplicates and empty
-                fee_variants = list(set([v for v in fee_variants if v]))
                 
                 network = "Ethereum"
-                parts = str(fee).split('|')
+                parts = str(fee_raw_full).split('|')
                 if len(parts) >= 3:
                     network = parts[2].strip()
 
@@ -197,152 +184,128 @@ class PostgresFetcher:
                     elif proto_raw.lower() in ('v4', 'uniswap v4'):
                         protocol = 'Uniswap V4'
                     else:
-                        protocol = proto_raw # e.g. PancakeSwap V3
+                        protocol = proto_raw
                 
-                protocol_filter = f" AND p.protocol = '{protocol}'"
+                fee_variants = [fee_db, f_clean, fee_raw]
+                try:
+                    if fee_db.isdigit():
+                        val = float(fee_db) / 10000.0
+                        fee_variants.append(f"{val:g}%")
+                        fee_variants.append(f"{val:g}")
+                except: pass
+                fee_variants = list(set([v for v in fee_variants if v]))
                 
-                # 1. Fetch aggregated stats for the window
-                # Use ABS to handle potentially negative TVL/Volume from sync issues
-                query = f"""
-                SELECT 
-                    SUM(ABS(h.volume_usd)),
-                    AVG(ABS(h.tvl_usd))
+                key = f"{t0}-{t1}-{fee_raw_full}"
+                pool_meta[key] = {
+                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_db': fee_db, 'network': network, 
+                    'protocol': protocol, 'fee_variants': fee_variants, 'fee_raw_full': fee_raw_full
+                }
+                
+                pool_queries_history.append("""
+                SELECT %s, SUM(ABS(h.volume_usd)), AVG(ABS(h.tvl_usd))
                 FROM liquidity_pool_history h
                 JOIN liquidity_pool p ON h.pool_id = p.id
-                WHERE 
-                    h.date >= %s::date AND h.date <= %s::date
-                    AND p.fee_tier = ANY(%s)
-                    AND p.network = %s
-                    {protocol_filter}
-                    AND (
-                        (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
-                        OR 
-                        (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
-                    )
-                """
+                WHERE h.date >= %s::date AND h.date <= %s::date
+                AND p.fee_tier = ANY(%s) AND p.network = %s AND p.protocol = %s
+                AND ((UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s) OR (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s))
+                """)
+                params_history.extend([key, start_date, end_date, fee_variants, network, protocol, t0_sym, t1_sym, t1_sym, t0_sym])
                 
-                cur.execute(query, (start_date, end_date, fee_variants, network, t0_sym, t1_sym, t1_sym, t0_sym))
-                row = cur.fetchone()
-                
-                total_vol = float(row[0]) if row and row[0] else 0
-                avg_tvl = float(row[1]) if row and row[1] else 0
-
-                # 2. TVL Fallback: If no TVL in window, try to get the latest known TVL for this pool
-                if avg_tvl == 0:
-                    cur.execute(f"""
-                        SELECT h.tvl_usd, h.date
-                        FROM liquidity_pool_history h
-                        JOIN liquidity_pool p ON h.pool_id = p.id
-                        WHERE p.fee_tier = ANY(%s)
-                        AND p.network = %s
-                        {protocol_filter}
-                        AND h.tvl_usd != 0
-                        AND (
-                            (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
-                            OR 
-                            (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
-                        )
-                        ORDER BY h.date DESC LIMIT 1
-                    """, (fee_variants, network, t0_sym, t1_sym, t1_sym, t0_sym))
-                    tvl_row = cur.fetchone()
-                    if tvl_row and tvl_row[0] is not None:
-                        avg_tvl = abs(float(tvl_row[0]))
-
-                # 3. Volume Fallback: If no volume in history table, check raw swaps
-                if total_vol == 0:
-                    try:
-                        # Ensure fee format matches swaps table (only the percentage part)
-                        fee_pct = str(fee).split('|')[0]
-                        if fee_db == 'Dynamic':
-                            # Dynamic-fee pools: match the literal 'Dynamic' string in swaps table
-                            fee_tier_pct = 'Dynamic'
-                            fee_tier_bips = 'Dynamic'
-                        else:
-                            fee_map_rev = {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}
-                            fee_tier_pct = fee_pct if '%' in fee_pct else fee_map_rev.get(fee_db, fee_pct)
-                            fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
-                        
-                        target_table = "uniswap_v4_swaps" if '|v4' in str(fee).lower() else "uniswap_v3_swaps"
-                        swap_query = f"""
-                            SELECT token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1))
-                            FROM {target_table}
-                            WHERE timestamp >= %s AND timestamp <= %s
-                            AND network = %s
-                            AND protocol = %s
-                            AND (
-                                (token0_symbol = %s AND token1_symbol = %s)
-                                OR 
-                                (token0_symbol = %s AND token1_symbol = %s)
-                            )
-                        """
-                        params = [start_date, end_date, network, protocol, t0_sym.upper(), t1_sym.upper(), t1_sym.upper(), t0_sym.upper()]
-                        
-                        # Handle both formats in DB ('500' and '0.05%')
-                        swap_query += " AND (fee_tier = %s OR fee_tier = %s) GROUP BY token0_symbol, token1_symbol"
-                        params.extend([fee_tier_pct, fee_tier_bips])
-                        cur.execute(swap_query, tuple(params))
-
-                        total_fallback_vol = 0
-                        for sw_row in cur.fetchall():
-                            t0_row_sym = sw_row[0]
-                            t1_row_sym = sw_row[1]
-                            usd_sum = float(sw_row[2]) if sw_row[2] else 0
-                            amt0_sum = float(sw_row[3]) if sw_row[3] else 0
-                            amt1_sum = float(sw_row[4]) if sw_row[4] else 0
-                            if usd_sum > 0:
-                                total_fallback_vol += usd_sum
-                            elif prices is not None:
-                                p0 = prices.get(t0_row_sym)
-                                p1 = prices.get(t1_row_sym)
-                                if not p0:
-                                     sym = t0_row_sym.upper()
-                                     if any(x in sym for x in ['USD', 'EUR', 'DAI', 'USDC', 'USDT', 'EURC']): p0 = 1.0
-                                if not p1:
-                                     sym = t1_row_sym.upper()
-                                     if any(x in sym for x in ['USD', 'EUR', 'DAI', 'USDC', 'USDT', 'EURC']): p1 = 1.0
-                                p0 = p0 or 0
-                                p1 = p1 or 0
-                                total_fallback_vol += (amt0_sum * p0 + amt1_sum * p1) / 2.0
-                                
-                        total_vol = total_fallback_vol
-                    except Exception as e:
-                        self._log(f"Fallback volume calc failed: {e}")
-
-                # 4. Final APR Calculation
-                if avg_tvl <= 1.0 and total_vol > 0.0:
-                    stable_symbols = {'USD', 'USDT', 'USDC', 'DAI', 'EUR', 'EURC', 'BUSD', 'PYUSD', 'USDS', 'USD1'}
-                    if t0_sym.upper() in stable_symbols and t1_sym.upper() in stable_symbols:
-                        avg_tvl = max(total_vol * 0.5, 1000000.0)
-                    else:
-                        avg_tvl = max(total_vol * 1.2, 200000.0)
-
-                apr = None
-                if avg_tvl > 1.0: # Minimum TVL to calculate APR
-                    try:
-                        if fee_db == 'Dynamic':
-                            # Dynamic-fee pools (Uniswap V4 hooks): use conservative
-                            # effective rate. Typical range for major pairs: 0.015%-0.025%.
-                            fee_rate = 0.0002  # 2 bps (0.02%)
-                        else:
-                            if '%' in fee_db:
-                                fee_rate = float(fee_db.replace('%', '').strip()) / 100.0
-                            else:
-                                fee_rate = float(fee_db) / 1000000.0
-                        fees_earned = total_vol * fee_rate
-                        
-                        days = (end_date - start_date).days
-                        if days < 1: days = 1
-                        
-                        apr = (fees_earned / avg_tvl) * (365.0 / days)
-                    except:
-                        pass
-                
-                if apr is not None:
-                    key = f"{t0}-{t1}-{fee}"
-                    results[key] = apr
-                    key_rev = f"{t1}-{t0}-{fee}"
-                    results[key_rev] = apr
+            # Execute history
+            if pool_queries_history:
+                cur.execute(" UNION ALL ".join(pool_queries_history), tuple(params_history))
+                for row in cur.fetchall():
+                    k = row[0]
+                    pool_meta[k]['total_vol'] = float(row[1] or 0)
+                    pool_meta[k]['avg_tvl'] = float(row[2] or 0)
             
+            # 2. TVL Fallback
+            pool_queries_tvl = []
+            params_tvl = []
+            for k, meta in pool_meta.items():
+                if meta.get('avg_tvl', 0) == 0:
+                    pool_queries_tvl.append("""
+                    SELECT %s, h.tvl_usd
+                    FROM liquidity_pool_history h
+                    JOIN liquidity_pool p ON h.pool_id = p.id
+                    WHERE p.fee_tier = ANY(%s) AND p.network = %s AND p.protocol = %s AND h.tvl_usd != 0
+                    AND ((UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s) OR (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s))
+                    ORDER BY h.date DESC LIMIT 1
+                    """)
+                    params_tvl.extend([k, meta['fee_variants'], meta['network'], meta['protocol'], meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym']])
+            if pool_queries_tvl:
+                # Need to wrap queries in parens for UNION ALL when using ORDER BY and LIMIT
+                wrapped_queries = ["(" + q + ")" for q in pool_queries_tvl]
+                cur.execute(" UNION ALL ".join(wrapped_queries), tuple(params_tvl))
+                for row in cur.fetchall():
+                    k = row[0]
+                    pool_meta[k]['avg_tvl'] = abs(float(row[1] or 0))
+                    
+            # 3. Volume Fallback
+            pool_queries_swaps = []
+            params_swaps = []
+            for k, meta in pool_meta.items():
+                if meta.get('total_vol', 0) == 0:
+                    fee_pct = str(meta['fee_raw_full']).split('|')[0]
+                    fee_db = meta['fee_db']
+                    if fee_db == 'Dynamic':
+                        fee_tier_pct, fee_tier_bips = 'Dynamic', 'Dynamic'
+                    else:
+                        fee_tier_pct = fee_pct if '%' in fee_pct else {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}.get(fee_db, fee_pct)
+                        fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
+                    
+                    target_table = "uniswap_v4_swaps" if '|v4' in str(meta['fee_raw_full']).lower() else "uniswap_v3_swaps"
+                    pool_queries_swaps.append(f"""
+                    SELECT %s, token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1))
+                    FROM {target_table}
+                    WHERE timestamp >= %s AND timestamp <= %s AND network = %s AND protocol = %s
+                    AND ((token0_symbol = %s AND token1_symbol = %s) OR (token0_symbol = %s AND token1_symbol = %s))
+                    AND (fee_tier = %s OR fee_tier = %s)
+                    GROUP BY token0_symbol, token1_symbol
+                    """)
+                    params_swaps.extend([k, start_date, end_date, meta['network'], meta['protocol'], meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_tier_pct, fee_tier_bips])
+                    
+            if pool_queries_swaps:
+                cur.execute(" UNION ALL ".join(pool_queries_swaps), tuple(params_swaps))
+                for row in cur.fetchall():
+                    k = row[0]
+                    usd_sum = float(row[3] or 0)
+                    if usd_sum > 0:
+                        pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + usd_sum
+                    elif prices is not None:
+                        p0 = prices.get(row[1]) or (1.0 if any(x in row[1].upper() for x in ['USD','EUR']) else 0)
+                        p1 = prices.get(row[2]) or (1.0 if any(x in row[2].upper() for x in ['USD','EUR']) else 0)
+                        pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + (float(row[4] or 0)*p0 + float(row[5] or 0)*p1)/2.0
+
+            # Calculate APR
+            for k, meta in pool_meta.items():
+                avg_tvl = meta.get('avg_tvl', 0)
+                total_vol = meta.get('total_vol', 0)
+                t0_sym, t1_sym = meta['t0_sym'], meta['t1_sym']
+                
+                if avg_tvl <= 1.0 and total_vol > 0.0:
+                    stable_symbols = {'USD', 'USDT', 'USDC', 'DAI', 'EUR', 'EURC', 'BUSD', 'PYUSD', 'USDS'}
+                    if t0_sym in stable_symbols and t1_sym in stable_symbols: avg_tvl = max(total_vol * 0.5, 1000000.0)
+                    else: avg_tvl = max(total_vol * 1.2, 200000.0)
+                    
+                apr = None
+                if avg_tvl > 1.0:
+                    try:
+                        fee_db = meta['fee_db']
+                        if fee_db == 'Dynamic': fee_rate = 0.0002
+                        elif '%' in fee_db: fee_rate = float(fee_db.replace('%', '').strip()) / 100.0
+                        else: fee_rate = float(fee_db) / 1000000.0
+                        
+                        fees_earned = total_vol * fee_rate
+                        days = max(1, (end_date - start_date).days)
+                        apr = (fees_earned / avg_tvl) * (365.0 / days)
+                    except: pass
+                    
+                if apr is not None:
+                    results[k] = apr
+                    t0, t1, f = k.split('-')
+                    results[f"{t1}-{t0}-{f}"] = apr
+                    
             cur.close()
             conn.close()
             return results
