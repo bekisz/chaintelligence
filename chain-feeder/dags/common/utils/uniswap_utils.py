@@ -60,7 +60,7 @@ class UniswapV3Fetcher:
         import os
         GRAPH_API_KEY = os.getenv('GRAPH_API_KEY', '')
         if self.network == "BNB" and self.protocol == "PancakeSwap V3":
-            v3_subgraph_id = "78EUqzJmEVJsAKvWghn7qotf9LVGqcTQxJhT5z84ZmgJ"
+            v3_subgraph_id = "ChmxqA9bX71cB2cQTRRULbWUBKoMRk7oh3JnpZShDQ2V"
             v4_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV" # Placeholder
         elif self.network == "Arbitrum":
             v3_subgraph_id = "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM"  # Uniswap V3 Arbitrum swaps (verified)
@@ -88,6 +88,39 @@ class UniswapV3Fetcher:
     
     def _build_swap_query(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_values: List[str]) -> str:
         addr_list = str(filter_values).replace("'", '"')
+        if self.protocol == "PancakeSwap V3":
+            messari_field = "tokenIn_in" if filter_field == "token0_in" else "tokenOut_in"
+            query = f"""
+            {{
+              swaps(
+                first: {MAX_RESULTS_PER_QUERY}
+                orderBy: timestamp
+                orderDirection: asc
+                where: {{
+                  timestamp_gte: {start_timestamp}
+                  timestamp_lte: {end_timestamp}
+                  {messari_field}: {addr_list}
+                }}
+              ) {{
+                id
+                hash
+                timestamp
+                tokenIn {{ id symbol }}
+                tokenOut {{ id symbol }}
+                amountIn
+                amountOut
+                amountInUSD
+                pool {{
+                  id
+                  name
+                  inputTokens {{ id symbol }}
+                  fees {{ feePercentage }}
+                }}
+              }}
+            }}
+            """
+            return query
+
         query = f"""
         {{
           swaps(
@@ -170,31 +203,78 @@ class UniswapV3Fetcher:
                     continue
                 seen_ids.add(swap_id)
 
-                token0 = swap.get('token0') or {}
-                token1 = swap.get('token1') or {}
-                transaction = swap.get('transaction') or {}
-                t0_addr = token0.get('id', '').lower()
-                t1_addr = token1.get('id', '').lower()
+                if self.protocol == "PancakeSwap V3":
+                    token0 = swap.get('tokenIn') or {}
+                    token1 = swap.get('tokenOut') or {}
+                    tx_hash = swap.get('hash', 'unknown')
+                    t0_addr = token0.get('id', '').lower()
+                    t1_addr = token1.get('id', '').lower()
+                    
+                    pool = swap.get('pool') or {}
+                    pool_name = pool.get('name', '')
+                    fee_tier_str = "0.25%"
+                    import re
+                    match = re.search(r'(\d+(?:\.\d+)?%)', pool_name)
+                    if match:
+                        fee_tier_str = match.group(1)
+                    else:
+                        fees_list = pool.get('fees', [])
+                        if fees_list:
+                            try:
+                                fee_pct = float(fees_list[-1].get('feePercentage', 0))
+                                fee_tier_str = f"{fee_pct:g}%"
+                            except: pass
+                    
+                    pool_tokens = pool.get('inputTokens', [])
+                    if len(pool_tokens) >= 2:
+                        p0_addr = pool_tokens[0].get('id', '').lower()
+                        p1_addr = pool_tokens[1].get('id', '').lower()
+                    else:
+                        p0_addr = t0_addr
+                        p1_addr = t1_addr
 
-                fee_tier_val = to_int((swap.get('pool') or {}).get('feeTier'))
-                if fee_tier_val & 0x800000:
-                    fee_tier_str = "Dynamic"
+                    amount_in_val = to_float(swap.get('amountIn'))
+                    amount_out_val = to_float(swap.get('amountOut'))
+
+                    normalized = {
+                        'id': swap_id,
+                        'timestamp': to_int(swap.get('timestamp')),
+                        'tx_hash': tx_hash,
+                        'token0_address': p0_addr,
+                        'token1_address': p1_addr,
+                        'token0_symbol': addr_to_sym.get(p0_addr, pool_tokens[0].get('symbol') if len(pool_tokens) >= 1 else 'UNKNOWN').upper(),
+                        'token1_symbol': addr_to_sym.get(p1_addr, pool_tokens[1].get('symbol') if len(pool_tokens) >= 2 else 'UNKNOWN').upper(),
+                        'amount0': amount_in_val if t0_addr == p0_addr else -amount_out_val,
+                        'amount1': amount_out_val if t1_addr == p1_addr else -amount_in_val,
+                        'amountUSD': to_float(swap.get('amountInUSD')),
+                        'fee_tier': fee_tier_str
+                    }
                 else:
-                    fee_tier_str = f"{to_float(fee_tier_val) / 10000}%"
+                    token0 = swap.get('token0') or {}
+                    token1 = swap.get('token1') or {}
+                    transaction = swap.get('transaction') or {}
+                    t0_addr = token0.get('id', '').lower()
+                    t1_addr = token1.get('id', '').lower()
 
-                normalized = {
-                    'id': swap_id,
-                    'timestamp': to_int(swap.get('timestamp')),
-                    'tx_hash': transaction.get('id', 'unknown'),
-                    'token0_address': t0_addr,
-                    'token1_address': t1_addr,
-                    'token0_symbol': addr_to_sym.get(t0_addr, token0.get('symbol') or 'UNKNOWN').upper(),
-                    'token1_symbol': addr_to_sym.get(t1_addr, token1.get('symbol') or 'UNKNOWN').upper(),
-                    'amount0': to_float(swap.get('amount0')),
-                    'amount1': to_float(swap.get('amount1')),
-                    'amountUSD': to_float(swap.get('amountUSD')),
-                    'fee_tier': fee_tier_str
-                }
+                    fee_tier_val = to_int((swap.get('pool') or {}).get('feeTier'))
+                    if fee_tier_val & 0x800000:
+                        fee_tier_str = "Dynamic"
+                    else:
+                        fee_tier_str = f"{to_float(fee_tier_val) / 10000}%"
+
+                    normalized = {
+                        'id': swap_id,
+                        'timestamp': to_int(swap.get('timestamp')),
+                        'tx_hash': transaction.get('id', 'unknown'),
+                        'token0_address': t0_addr,
+                        'token1_address': t1_addr,
+                        'token0_symbol': addr_to_sym.get(t0_addr, token0.get('symbol') or 'UNKNOWN').upper(),
+                        'token1_symbol': addr_to_sym.get(t1_addr, token1.get('symbol') or 'UNKNOWN').upper(),
+                        'amount0': to_float(swap.get('amount0')),
+                        'amount1': to_float(swap.get('amount1')),
+                        'amountUSD': to_float(swap.get('amountUSD')),
+                        'fee_tier': fee_tier_str
+                    }
                 batch_swaps.append(normalized)
             
             # The last element's timestamp in the original batch
@@ -251,10 +331,50 @@ class UniswapV3Fetcher:
         This queries the 'pools' entity first to find the ID, then 'poolDayDatas'.
         """
         start_ts = int(start_date.timestamp())
-        
-        # Ensure consistent token ordering for graph query
         t0, t1 = sorted([token0_addr.lower(), token1_addr.lower()])
         
+        if self.protocol == "PancakeSwap V3":
+            query = f"""
+            {{
+              liquidityPools(where: {{
+                inputTokens_contains: ["{t0}", "{t1}"]
+              }}) {{
+                id
+                dailySnapshots(
+                    where: {{ timestamp_gte: {start_ts} }}
+                    orderBy: timestamp
+                    orderDirection: asc
+                ) {{
+                  timestamp
+                  totalValueLockedUSD
+                  dailyVolumeUSD
+                  dailySwapCount
+                }}
+              }}
+            }}
+            """
+            result = self._execute_query(query)
+            if not result or 'data' not in result:
+                return []
+                
+            pools = result['data'].get('liquidityPools', [])
+            if not pools:
+                return []
+                
+            pool_data = pools[0]
+            day_datas = pool_data.get('dailySnapshots', [])
+            
+            normalized_data = []
+            for d in day_datas:
+                 normalized_data.append({
+                     'date': datetime.fromtimestamp(int(d['timestamp']), timezone.utc).date(),
+                     'tvl_usd': float(d.get('totalValueLockedUSD', 0) or 0),
+                     'volume_usd': float(d.get('dailyVolumeUSD', 0) or 0),
+                     'tx_count': int(d.get('dailySwapCount', 0) or 0),
+                 })
+                 
+            return normalized_data
+
         query = f"""
         {{
           pools(where: {{
