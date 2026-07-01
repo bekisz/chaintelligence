@@ -276,6 +276,107 @@ async def analyze(
                 aprs = fetcher.fetch_pool_stats(list(pools_to_fetch), start_dt, end_dt, prices=latest_prices)
             except Exception as e:
                 print(f"Error fetching pool stats: {e}")
+
+        # 2b. Compute pool addresses deterministically using Create2/Keccak-256
+        pool_addresses = {}
+        if pools_to_fetch:
+            token_symbols = set()
+            for (t0, t1, fee) in pools_to_fetch:
+                token_symbols.add(t0.upper())
+                token_symbols.add(t1.upper())
+                
+            token_addresses = {}
+            if token_symbols:
+                try:
+                    import psycopg2
+                    conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+                    cur = conn.cursor()
+                    cur.execute("SELECT UPPER(symbol), ethereum_address FROM coin WHERE UPPER(symbol) = ANY(%s)", (list(token_symbols),))
+                    token_addresses = {row[0]: row[1] for row in cur.fetchall() if row[1]}
+                    cur.close()
+                    conn.close()
+                except Exception as e:
+                    print(f"Error fetching token addresses: {e}")
+            
+            try:
+                from Crypto.Hash import keccak
+                for (t0, t1, fee) in pools_to_fetch:
+                    t0_sym, t1_sym = t0.upper(), t1.upper()
+                    addr0 = token_addresses.get(t0_sym)
+                    addr1 = token_addresses.get(t1_sym)
+                    if not addr0 or not addr1:
+                        continue
+                        
+                    fee_raw = str(fee).split('|')[0].strip()
+                    f_clean = fee_raw.replace('%', '').strip()
+                    
+                    network = "Ethereum"
+                    parts = str(fee).split('|')
+                    if len(parts) >= 3:
+                        network = parts[2].strip()
+                        
+                    protocol = "Uniswap V3"
+                    if len(parts) >= 2:
+                        proto_raw = parts[1].strip()
+                        if proto_raw.lower() in ('v3', 'uniswap v3', 'uniswap-v3'):
+                            protocol = 'Uniswap V3'
+                        elif proto_raw.lower() in ('v4', 'uniswap v4', 'uniswap-v4'):
+                            protocol = 'Uniswap V4'
+                        else:
+                            protocol = proto_raw
+                            
+                    try:
+                        fee_map = {'0.01': 100, '0.05': 500, '0.08': 800, '0.3': 3000, '1.0': 10000}
+                        if f_clean in fee_map:
+                            fee_val = fee_map[f_clean]
+                        else:
+                            fee_val = int(float(f_clean) * 10000)
+                    except:
+                        continue
+                        
+                    # Sort token addresses numerically
+                    t0_hex = addr0.lower()
+                    t1_hex = addr1.lower()
+                    tokens = sorted([t0_hex, t1_hex])
+                    t0_bytes = bytes.fromhex(tokens[0][2:])
+                    t1_bytes = bytes.fromhex(tokens[1][2:])
+                    
+                    if protocol == 'Uniswap V4':
+                        # Uniswap V4 Pool ID derivation:
+                        # keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks))
+                        tick_spacing = 10 if fee_val <= 500 else 60
+                        payload = (
+                            b'\x00'*12 + t0_bytes +
+                            b'\x00'*12 + t1_bytes +
+                            b'\x00'*29 + fee_val.to_bytes(3, 'big') +
+                            b'\x00'*29 + tick_spacing.to_bytes(3, 'big') +
+                            b'\x00'*32 # Hooks address is 0x0000... padded to 32 bytes
+                        )
+                        pool_addr = '0x' + keccak.new(digest_bits=256, data=payload).hexdigest()
+                    else:
+                        # V3 style Create2 address derivation
+                        if 'pancake' in protocol.lower():
+                            factory_hex = '0x0BFbCF9fa4f9c56B0F40a671aD40E0805a091865'
+                            init_hash_hex = '0x6ce830a39d5eec7b40dd975613997c275be31f5a9f38f450f37db204c34479e0'
+                        else:
+                            factory_hex = '0x1F98431c8aD98523631AE4a59f267346ea31F984'
+                            init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
+                            
+                        payload = (
+                            b'\x00'*12 + t0_bytes +
+                            b'\x00'*12 + t1_bytes +
+                            b'\x00'*29 + fee_val.to_bytes(3, 'big')
+                        )
+                        salt = keccak.new(digest_bits=256, data=payload).digest()
+                        factory = bytes.fromhex(factory_hex[2:])
+                        init_hash = bytes.fromhex(init_hash_hex[2:])
+                        
+                        create2_input = b'\xff' + factory + salt + init_hash
+                        pool_addr = '0x' + keccak.new(digest_bits=256, data=create2_input).digest()[-20:].hex()
+                        
+                    pool_addresses[f"{t0}-{t1}-{fee}"] = pool_addr
+            except Exception as e:
+                print(f"Error computing pool addresses dynamically: {e}")
             
         # 3. Inject into routes
         for route_idx, route in enumerate(analysis.get('routes', [])):
@@ -296,11 +397,14 @@ async def analyze(
                     if apr_val is None:
                         apr_val = aprs.get(f"{t1}-{t0}-{fee}")
                     
+                    pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1}-{t0}-{fee}")
+                    
                     # Replace string fee with object
                     new_path.append({
                         'fee': fee,
                         'apr': apr_val if apr_val is not None else 0.0,
-                        'apr_str': f"{apr_val:.2%}" if apr_val is not None else "N/A"
+                        'apr_str': f"{apr_val:.2%}" if apr_val is not None else "N/A",
+                        'pool_address': pool_addr
                     })
                 else:
                     new_path.append(item)

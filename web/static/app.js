@@ -435,13 +435,57 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
+                let linkHtmlStart = '';
+                let linkHtmlEnd = '';
+                if (item && typeof item === 'object' && item.pool_address) {
+                    let href = '';
+                    const pool_addr = item.pool_address.toLowerCase();
+                    const parsed = parseProtocol(item.fee);
+                    const protocolNameLower = parsed.protocolName.toLowerCase();
+                    const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
+                    
+                    let uniNetwork = 'ethereum';
+                    if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
+                        uniNetwork = 'bnb';
+                    } else if (networkLower.includes('arbitrum')) {
+                        uniNetwork = 'arbitrum';
+                    } else if (networkLower.includes('optimism')) {
+                        uniNetwork = 'optimism';
+                    } else if (networkLower.includes('polygon')) {
+                        uniNetwork = 'polygon';
+                    } else if (networkLower.includes('base')) {
+                        uniNetwork = 'base';
+                    }
+                    
+                    if (protocolNameLower.includes('pancake')) {
+                        let pChain = 'bsc';
+                        if (networkLower.includes('eth')) {
+                            pChain = 'eth';
+                        } else if (networkLower.includes('arbitrum')) {
+                            pChain = 'arbitrum';
+                        } else if (networkLower.includes('base')) {
+                            pChain = 'base';
+                        }
+                        href = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
+                    } else {
+                        href = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
+                    }
+                    
+                    if (href) {
+                        linkHtmlStart = `<a href="${href}" target="_blank" class="route-pool-link" style="text-decoration: none; color: inherit;">`;
+                        linkHtmlEnd = `</a>`;
+                    }
+                }
+
                 html += `
+                        ${linkHtmlStart}
                         <div class="route-arrow-wrapper ${protocolClass}" data-tooltip="${tooltip}">
                             <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
                             <svg class="route-arrow-svg" viewBox="0 0 48 24" fill="none" stroke="currentColor">
                                 <path d="M5 12h38M36 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </div>
+                        ${linkHtmlEnd}
                     `;
             }
         });
