@@ -249,7 +249,7 @@ class PostgresFetcher:
                         avg_tvl = abs(float(tvl_row[0]))
 
                 # 3. Volume Fallback: If no volume in history table, check raw swaps
-                if total_vol == 0 and avg_tvl > 0:
+                if total_vol == 0:
                     try:
                         # Ensure fee format matches swaps table (only the percentage part)
                         fee_pct = str(fee).split('|')[0]
