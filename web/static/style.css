@@ -1140,6 +1140,11 @@ footer {
     transition: transform 0.2s ease, background 0.2s ease;
 }
 
+.route-arrow-wrapper.clickable-route-segment:hover .external-link-icon {
+    opacity: 1 !important;
+    transform: translate(0.5px, -0.5px);
+}
+
 /* Custom Tooltip Styling */
 .route-arrow-wrapper[data-tooltip] {
     position: relative;

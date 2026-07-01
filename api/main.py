@@ -287,51 +287,98 @@ async def analyze(
                 
             token_addresses = {}
             if token_symbols:
-                try:
-                    import psycopg2
-                    conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-                    cur = conn.cursor()
-                    
-                    target_network = network or "Ethereum"
-                    
-                    # 1. Fetch addresses from V3 swaps table for this specific network
-                    cur.execute("""
-                        SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v3_swaps
-                        WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
-                        UNION
-                        SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v3_swaps
-                        WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
-                    """, (target_network, list(token_symbols), target_network, list(token_symbols)))
-                    for row in cur.fetchall():
-                        if row[1]:
-                            token_addresses[row[0]] = row[1]
-                            
-                    # 2. Fetch from V4 swaps table for any missing symbols
-                    missing_tokens = [sym for sym in token_symbols if sym not in token_addresses]
-                    if missing_tokens:
+                # Core verified on-chain token addresses by network to ensure correct Create2 calculations
+                NETWORK_TOKEN_MAPS = {
+                    "Ethereum": {
+                        "USDC": "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eB48",
+                        "USDT": "0xdAC17F958D2ee523a2206206994597c13d831ec7",
+                        "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+                        "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+                        "ETH":  "0x0000000000000000000000000000000000000000",
+                    },
+                    "BNB": {
+                        "WBNB": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                        "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+                        "USDT": "0x55d398326f99059ff775485246999027b3197955",
+                        "BTCB": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+                        "ETH":  "0x0000000000000000000000000000000000000000",
+                    },
+                    "Arbitrum": {
+                        "ETH":    "0x0000000000000000000000000000000000000000",
+                        "USDC.e": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+                        "USDC":   "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+                        "WETH":   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+                        "USDT":   "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+                        "WBTC":   "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+                        "DAI":    "0xda10009c55681e77d502082691d29f8fb095569f",
+                        "LINK":   "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
+                        "GMX":    "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+                        "AAVE":   "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
+                        "ZRO":    "0x6985884c4392d348587b19cb9eaaf157f13271cd",
+                    },
+                    "Base": {
+                        "ETH":    "0x0000000000000000000000000000000000000000",
+                        "WETH":   "0x4200000000000000000000000000000000000006",
+                        "USDC":   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "USDbC":  "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+                        "cbBTC":  "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+                    }
+                }
+                
+                target_network = network or "Ethereum"
+                net_map = NETWORK_TOKEN_MAPS.get(target_network, {})
+                
+                # Pre-populate symbols we have in core mapping
+                for sym in token_symbols:
+                    if sym in net_map:
+                        token_addresses[sym] = net_map[sym]
+                        
+                # Database lookup only for any remaining missing symbols (e.g. custom test tokens)
+                missing_symbols = [sym for sym in token_symbols if sym not in token_addresses]
+                if missing_symbols:
+                    try:
+                        import psycopg2
+                        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+                        cur = conn.cursor()
+                        
+                        # 1. Fetch addresses from V3 swaps table for this specific network
                         cur.execute("""
-                            SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v4_swaps
+                            SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v3_swaps
                             WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
                             UNION
-                            SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v4_swaps
+                            SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v3_swaps
                             WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
-                        """, (target_network, missing_tokens, target_network, missing_tokens))
+                        """, (target_network, missing_symbols, target_network, missing_symbols))
                         for row in cur.fetchall():
                             if row[1]:
                                 token_addresses[row[0]] = row[1]
                                 
-                    # 3. Fallback to general coin table for any remaining ones
-                    still_missing = [sym for sym in token_symbols if sym not in token_addresses]
-                    if still_missing:
-                        cur.execute("SELECT UPPER(symbol), ethereum_address FROM coin WHERE UPPER(symbol) = ANY(%s)", (still_missing,))
-                        for row in cur.fetchall():
-                            if row[1]:
-                                token_addresses[row[0]] = row[1]
-                                
-                    cur.close()
-                    conn.close()
-                except Exception as e:
-                    print(f"Error fetching token addresses for network {network}: {e}")
+                        # 2. Fetch from V4 swaps table for any missing symbols
+                        missing_tokens_v4 = [sym for sym in missing_symbols if sym not in token_addresses]
+                        if missing_tokens_v4:
+                            cur.execute("""
+                                SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v4_swaps
+                                WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
+                                UNION
+                                SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v4_swaps
+                                WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
+                            """, (target_network, missing_tokens_v4, target_network, missing_tokens_v4))
+                            for row in cur.fetchall():
+                                if row[1]:
+                                    token_addresses[row[0]] = row[1]
+                                    
+                        # 3. Fallback to general coin table for any remaining ones
+                        still_missing = [sym for sym in missing_symbols if sym not in token_addresses]
+                        if still_missing:
+                            cur.execute("SELECT UPPER(symbol), ethereum_address FROM coin WHERE UPPER(symbol) = ANY(%s)", (still_missing,))
+                            for row in cur.fetchall():
+                                if row[1]:
+                                    token_addresses[row[0]] = row[1]
+                                    
+                        cur.close()
+                        conn.close()
+                    except Exception as e:
+                        print(f"Error fetching token addresses for network {network}: {e}")
             
             try:
                 from Crypto.Hash import keccak
@@ -391,8 +438,9 @@ async def analyze(
                     else:
                         # V3 style Create2 address derivation
                         if 'pancake' in protocol.lower():
-                            factory_hex = '0x0BFbCF9fa4f9c56B0F40a671aD40E0805a091865'
-                            init_hash_hex = '0x6ce830a39d5eec7b40dd975613997c275be31f5a9f38f450f37db204c34479e0'
+                            # PancakeSwap V3 uses a separate Pool Deployer for CREATE2 (not the Factory)
+                            factory_hex = '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9'
+                            init_hash_hex = '0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2'
                         else:
                             factory_hex = '0x1F98431c8aD98523631AE4a59f267346ea31F984'
                             init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
