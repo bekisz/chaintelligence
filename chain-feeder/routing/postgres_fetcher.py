@@ -24,60 +24,75 @@ class PostgresFetcher:
         if self.verbose:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] [DB] {message}")
     
-    def fetch_swaps(self, start_date: datetime, end_date: datetime, token_filter: Optional[List[str]] = None) -> List[Dict]:
+    def fetch_swaps(self, start_date: datetime, end_date: datetime, token_filter: Optional[List[str]] = None, network: Optional[str] = None) -> List[Dict]:
         """
         Fetch all swap events for tracked tokens within the date range from Postgres
         """
-        self._log(f"Fetching swaps from {start_date} to {end_date}")
+        self._log(f"Fetching swaps from {start_date} to {end_date} (network={network})")
         
         try:
             conn = psycopg2.connect(DATA_WAREHOUSE_DB)
             cur = conn.cursor()
             
-            query = """
-            SELECT * FROM (
-                SELECT 
-                    id, 
-                    timestamp, 
-                    tx_hash, 
-                    token0_address, 
-                    token1_address, 
-                    token0_symbol, 
-                    token1_symbol, 
-                    amount0, 
-                    amount1, 
-                    amount_usd, 
-                    fee_tier,
-                    'v3' as protocol,
-                    network
-                FROM uniswap_v3_swaps
-                UNION ALL
-                SELECT 
-                    id, 
-                    timestamp, 
-                    tx_hash, 
-                    token0_address, 
-                    token1_address, 
-                    token0_symbol, 
-                    token1_symbol, 
-                    amount0, 
-                    amount1, 
-                    amount_usd, 
-                    fee_tier,
-                    'v4' as protocol,
-                    network
-                FROM uniswap_v4_swaps
-            ) as all_swaps
-            WHERE timestamp >= %s AND timestamp <= %s
-            """
-            params = [start_date, end_date]
+            filter_sql = ""
+            params = []
+            upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
             
             if token_filter:
-                upper_symbols = [symbol.upper() for symbol in token_filter]
-                query += " AND (token0_symbol = ANY(%s) OR token1_symbol = ANY(%s))"
-                params.extend([upper_symbols, upper_symbols])
+                filter_sql += " AND (token0_symbol = ANY(%s) OR token1_symbol = ANY(%s))"
+            if network and network.lower() != 'all':
+                filter_sql += " AND network = %s"
             
-            query += " ORDER BY timestamp ASC"
+            # Branch 1 (V3) parameters
+            params.extend([start_date, end_date])
+            if token_filter:
+                params.extend([upper_symbols, upper_symbols])
+            if network and network.lower() != 'all':
+                params.append(network)
+                
+            # Branch 2 (V4) parameters
+            params.extend([start_date, end_date])
+            if token_filter:
+                params.extend([upper_symbols, upper_symbols])
+            if network and network.lower() != 'all':
+                params.append(network)
+                
+            query = f"""
+            SELECT 
+                id, 
+                timestamp, 
+                tx_hash, 
+                token0_address, 
+                token1_address, 
+                token0_symbol, 
+                token1_symbol, 
+                amount0, 
+                amount1, 
+                amount_usd, 
+                fee_tier,
+                protocol,
+                network
+            FROM uniswap_v3_swaps
+            WHERE timestamp >= %s AND timestamp <= %s AND amount_usd >= 10.0 {filter_sql}
+            UNION ALL
+            SELECT 
+                id, 
+                timestamp, 
+                tx_hash, 
+                token0_address, 
+                token1_address, 
+                token0_symbol, 
+                token1_symbol, 
+                amount0, 
+                amount1, 
+                amount_usd, 
+                fee_tier,
+                protocol,
+                network
+            FROM uniswap_v4_swaps
+            WHERE timestamp >= %s AND timestamp <= %s AND amount_usd >= 10.0 {filter_sql}
+            ORDER BY timestamp ASC
+            """
             
             cur.execute(query, params)
             rows = cur.fetchall()
@@ -174,11 +189,17 @@ class PostgresFetcher:
                 if len(parts) >= 3:
                     network = parts[2].strip()
 
-                protocol_filter = ""
-                if '|v4' in str(fee).lower():
-                    protocol_filter = " AND p.protocol = 'Uniswap V4'"
-                elif '|v3' in str(fee).lower():
-                    protocol_filter = " AND p.protocol = 'Uniswap V3'"
+                protocol = "Uniswap V3"
+                if len(parts) >= 2:
+                    proto_raw = parts[1].strip()
+                    if proto_raw.lower() in ('v3', 'uniswap v3'):
+                        protocol = 'Uniswap V3'
+                    elif proto_raw.lower() in ('v4', 'uniswap v4'):
+                        protocol = 'Uniswap V4'
+                    else:
+                        protocol = proto_raw # e.g. PancakeSwap V3
+                
+                protocol_filter = f" AND p.protocol = '{protocol}'"
                 
                 # 1. Fetch aggregated stats for the window
                 # Use ABS to handle potentially negative TVL/Volume from sync issues
@@ -241,21 +262,20 @@ class PostgresFetcher:
                             fee_tier_pct = fee_pct if '%' in fee_pct else fee_map_rev.get(fee_db, fee_pct)
                             fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
                         
+                        target_table = "uniswap_v4_swaps" if '|v4' in str(fee).lower() else "uniswap_v3_swaps"
                         swap_query = f"""
-                            SELECT token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1)) FROM (
-                                SELECT amount_usd, amount0, amount1, timestamp, token0_symbol, token1_symbol, fee_tier, 'Uniswap V3' as protocol FROM uniswap_v3_swaps
-                                UNION ALL
-                                SELECT amount_usd, amount0, amount1, timestamp, token0_symbol, token1_symbol, fee_tier, 'Uniswap V4' as protocol FROM uniswap_v4_swaps
-                            ) as all_swaps
+                            SELECT token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1))
+                            FROM {target_table}
                             WHERE timestamp >= %s AND timestamp <= %s
-                            {("AND protocol = 'Uniswap V3'" if '|v3' in str(fee).lower() else "AND protocol = 'Uniswap V4'") if ('|v3' in str(fee).lower() or '|v4' in str(fee).lower()) else ""}
+                            AND network = %s
+                            AND protocol = %s
                             AND (
-                                (UPPER(token0_symbol) = %s AND UPPER(token1_symbol) = %s)
+                                (token0_symbol = %s AND token1_symbol = %s)
                                 OR 
-                                (UPPER(token0_symbol) = %s AND UPPER(token1_symbol) = %s)
+                                (token0_symbol = %s AND token1_symbol = %s)
                             )
                         """
-                        params = [start_date, end_date, t0_sym, t1_sym, t1_sym, t0_sym]
+                        params = [start_date, end_date, network, protocol, t0_sym.upper(), t1_sym.upper(), t1_sym.upper(), t0_sym.upper()]
                         
                         # Handle both formats in DB ('500' and '0.05%')
                         swap_query += " AND (fee_tier = %s OR fee_tier = %s) GROUP BY token0_symbol, token1_symbol"

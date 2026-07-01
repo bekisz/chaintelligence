@@ -162,7 +162,8 @@ async def analyze(
     end_token: str,
     days: Optional[float] = Query(None, description="Lookback period in days"),
     start_date: Optional[str] = Query(None, description="ISO format start date"),
-    end_date: Optional[str] = Query(None, description="ISO format end date")
+    end_date: Optional[str] = Query(None, description="ISO format end date"),
+    network: Optional[str] = Query(None, description="Filter swaps by network")
 ):
     """Analyze swap routes between two tokens."""
     try:
@@ -217,7 +218,7 @@ async def analyze(
                 
             # Fetch Batch
             print(f"[Anaylsis] Processing batch: {current_chunk_start} -> {chunk_end}")
-            batch_swaps = fetcher.fetch_swaps(current_chunk_start, chunk_end, token_filter=token_filter)
+            batch_swaps = fetcher.fetch_swaps(current_chunk_start, chunk_end, token_filter=token_filter, network=network)
             
             if batch_swaps:
                 has_data = True
@@ -891,7 +892,7 @@ async def list_pools():
             FROM liquidity_pool_history
             ORDER BY pool_id, date DESC
         ) h ON p.id = h.pool_id
-        WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
+        WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3') -- Show all V3/V4 pools even if reverted, to avoid gaps
         ORDER BY h.tvl_usd DESC NULLS LAST
         """
         cur.execute(query)

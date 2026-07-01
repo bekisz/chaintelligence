@@ -88,17 +88,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const minTxsInput = document.getElementById('min-txs-filter');
         const acyclicCheckbox = document.getElementById('acyclic-filter');
         const networkFilter = document.getElementById('network-filter');
+        const protocolFilter = document.getElementById('protocol-filter');
 
         const minAprVal = minAprInput ? parseFloat(minAprInput.value) || 0 : 0;
         const minMktVal = minMktInput ? parseFloat(minMktInput.value) || 0 : 0;
         const minTxsVal = minTxsInput ? parseInt(minTxsInput.value) || 0 : 0;
         const acyclicOnly = acyclicCheckbox ? acyclicCheckbox.checked : false;
         const selectedNetwork = networkFilter ? networkFilter.value : 'all';
+        const selectedProtocol = protocolFilter ? protocolFilter.value : 'all';
 
         const filtered = currentRoutes.filter(route => {
             // Network filter
             if (selectedNetwork !== 'all' && (route.network || 'Ethereum') !== selectedNetwork) {
                 return false;
+            }
+            // Protocol filter
+            if (selectedProtocol !== 'all') {
+                const routePath = route.path || '';
+                if (!routePath.includes(selectedProtocol)) {
+                    return false;
+                }
             }
             // Min APR filter
             const avgAprPct = getRouteAvgApr(route) * 100;
@@ -157,9 +166,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         noDataMsg.classList.add('hidden');
 
         try {
+            const selectedNetwork = document.getElementById('network-filter')?.value || 'all';
             let url = `/api/routes/analyze?start_token=${startToken}&end_token=${endToken}`;
             if (startDate) url += `&start_date=${startDate}`;
             if (endDate) url += `&end_date=${endDate}`;
+            if (selectedNetwork && selectedNetwork !== 'all') {
+                url += `&network=${selectedNetwork}`;
+            }
 
             const response = await fetch(url);
             if (!response.ok) {
@@ -562,6 +575,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const networkFilterSelect = document.getElementById('network-filter');
     if (networkFilterSelect) {
         networkFilterSelect.addEventListener('change', () => {
+            filterAndRenderRoutes();
+        });
+    }
+
+    const protocolFilterSelect = document.getElementById('protocol-filter');
+    if (protocolFilterSelect) {
+        protocolFilterSelect.addEventListener('change', () => {
             filterAndRenderRoutes();
         });
     }

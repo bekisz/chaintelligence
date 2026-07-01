@@ -40,11 +40,8 @@ def normalize_fee_tier(fee_str):
     Normalizes fee string (e.g. '0.05%') to bips string (e.g. '500')
     """
     if not fee_str: return None
-    # If already bips (integer-like), return as string
-    # We check if it is purely digits
     if fee_str.isdigit(): return fee_str
     
-    # Map percentages
     mapping = {
         '0.01%': '100',
         '0.05%': '500',
@@ -64,18 +61,13 @@ def sync_pools_from_swaps():
     conn = pg_hook.get_conn()
     cur = conn.cursor()
     
-    # 0. Get allowed coins to avoid FK violations
     logging.info("Fetching allowed coins...")
     cur.execute("SELECT symbol FROM coin")
-    # Store normalized (upper, max 8 chars) just in case
     allowed_coins = set(row[0] for row in cur.fetchall())
     
-    # 1. Get all distinct pairs from swaps
-    # We treat (A, B, Fee) the same as (B, A, Fee) by normalizing order
     logging.info("Scanning swaps table for new pools...")
-    
     cur.execute("""
-        SELECT DISTINCT network, token0_symbol, token1_symbol, fee_tier 
+        SELECT DISTINCT network, token0_symbol, token1_symbol, fee_tier, protocol 
         FROM uniswap_v3_swaps
     """)
     rows = cur.fetchall()
@@ -84,40 +76,32 @@ def sync_pools_from_swaps():
     skipped_pools = 0
     
     for r in rows:
-        network, s0, s1, fee = r
+        network, s0, s1, fee, protocol = r
         if not s0 or not s1: continue
+        if not protocol: protocol = 'Uniswap V3'
         
-        # Check if coins exist (handle potential formatting diffs by normalizing check)
-        # The database trigger enforces 8 chars upper.
         s0_norm = s0[:8].upper()
         s1_norm = s1[:8].upper()
         
         if s0_norm not in allowed_coins or s1_norm not in allowed_coins:
             skipped_pools += 1
-            # logging.debug(f"Skipping pool {s0}-{s1} due to missing coin definition.")
             continue
         
-        # Normalize order for Pool Table
         c0, c1 = get_base_asset_order(s0_norm, s1_norm)
         pool_name = f"{c0} - {c1}"
-        
-        # Normalize fee
         fee_bips = normalize_fee_tier(fee)
 
-        # Insert without transaction rollback on conflict
-        # We rely on ON CONFLICT DO NOTHING.
         try:
             cur.execute("""
                 INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_symbol, coin1_symbol, fee_tier)
-                VALUES (%s, 'Uniswap V3', %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (network, protocol, pool_name, fee_tier) DO NOTHING
-            """, (network, pool_name, c0, c1, fee_bips))
+            """, (network, protocol, pool_name, c0, c1, fee_bips))
             
             if cur.statusmessage.startswith("INSERT 0 1"):
                 new_pools += 1
         except Exception as e:
             conn.rollback() 
-            # Log as warning since duplicate keys might cause issues depending on constraint specificity
             logging.warning(f"Failed to sync pool {pool_name}: {e}")
             
     conn.commit()
@@ -137,13 +121,6 @@ def build_daily_history():
     
     logging.info("Refreshing liquidity_pool_history from swaps...")
     
-    # Complex query to:
-    # 1. Aggregate swaps by Day + TokenPair + Fee
-    # 2. Join with liquidity_pool to get proper pool_id
-    # 3. Upsert into history
-    
-    # We use CASE statement to normalize swap fees (0.05% -> 500) to match pool table
-    
     query = """
     INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd)
     SELECT 
@@ -153,7 +130,7 @@ def build_daily_history():
         SUM(s.amount_usd) as volume_usd
     FROM uniswap_v3_swaps s
     JOIN liquidity_pool p ON 
-        p.network = s.network AND p.protocol = 'Uniswap V3' AND
+        p.network = s.network AND p.protocol = s.protocol AND
         p.fee_tier = CASE 
             WHEN s.fee_tier = '0.01%' THEN '100'
             WHEN s.fee_tier = '0.05%' THEN '500'
@@ -190,29 +167,21 @@ def sync_tvl_from_graph():
     """
     from common.utils.uniswap_utils import UniswapV3Fetcher
     
-    fetcher = UniswapV3Fetcher(verbose=True)
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     conn = pg_hook.get_conn()
     cur = conn.cursor()
     
-    # 1. Build Symbol -> Address Map
-    # Priority 1: coin table (Official)
-    # Priority 2: swaps history (Heuristic)
     from collections import defaultdict
     
-    # 1. Build Symbol -> Address Map by Network
     logging.info("Building symbol->address map by network...")
     symbol_map = defaultdict(dict)
     
-    # Priority 2: Official coin table (Fallback for Ethereum)
     cur.execute("SELECT symbol, ethereum_address FROM coin WHERE ethereum_address IS NOT NULL")
     for row in cur.fetchall():
         sym, addr = row
         if sym and addr:
             symbol_map["Ethereum"][sym.upper()] = addr.lower()
             
-    # Priority 1: Swaps (Heuristic per Network)
-    # Order by swap frequency ASC so the most frequent address per network wins
     cur.execute("""
         SELECT network, sym, addr, SUM(c) as total_c FROM (
             SELECT network, token0_symbol as sym, token0_address as addr, count(*) as c FROM uniswap_v3_swaps GROUP BY 1, 2, 3
@@ -227,20 +196,14 @@ def sync_tvl_from_graph():
             if len(sym) > 8:
                 symbol_map[network][sym[:8].upper()] = addr.lower()
                 
-    # 2. Get all pools
-    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier, network FROM liquidity_pool WHERE protocol = 'Uniswap V3'")
+    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier, network, protocol FROM liquidity_pool WHERE protocol IN ('Uniswap V3', 'PancakeSwap V3')")
     pools = cur.fetchall()
     
-    # Keep network-specific fetcher instances
-    fetchers = {
-        "Ethereum": UniswapV3Fetcher(verbose=True, network="Ethereum"),
-        "Arbitrum": UniswapV3Fetcher(verbose=True, network="Arbitrum"),
-        "Base": UniswapV3Fetcher(verbose=True, network="Base"),
-        "BNB": UniswapV3Fetcher(verbose=True, network="BNB")
-    }
+    # Keep cached fetcher instances
+    fetchers = {}
     
     for pool in pools:
-        pool_id, c0, c1, fee, network = pool
+        pool_id, c0, c1, fee, network, protocol = pool
         if not fee: continue
         
         net_symbol_map = symbol_map[network]
@@ -252,18 +215,21 @@ def sync_tvl_from_graph():
             continue
             
         try:
-           fee_bips = int(fee)
+            fee_bips = int(fee)
         except:
-           continue
-           
-        # Fetch last 90 days
+            continue
+            
         start_date = datetime.now(timezone.utc) - timedelta(days=90)
         
-        fetcher = fetchers.get(network, fetchers["Ethereum"])
+        fetcher_key = (network, protocol)
+        if fetcher_key not in fetchers:
+            fetchers[fetcher_key] = UniswapV3Fetcher(verbose=True, network=network, protocol=protocol)
+        fetcher = fetchers[fetcher_key]
+        
         try:
             data = fetcher.fetch_pool_daily_data(addr0, addr1, fee_bips, start_date)
         except Exception as e:
-            logging.error(f"Error fetching Graph data for pool {c0}-{c1} on {network}: {e}")
+            logging.error(f"Error fetching Graph data for pool {c0}-{c1} on {network} ({protocol}): {e}")
             continue
         
         if not data:
@@ -288,11 +254,11 @@ def sync_tvl_from_graph():
 with DAG(
     'uniswap_v3_history_sync',
     default_args=default_args,
-    description='Derived daily history for Uniswap V3 Pools',
+    description='Derived daily history for V3 Pools',
     schedule='0 1 * * *', # Daily at 1 AM
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
-    tags=['defi', 'uniswap', 'derived'],
+    tags=['defi', 'uniswap', 'pancakeswap', 'derived'],
 ) as dag:
 
     t1 = sync_pools_from_swaps()

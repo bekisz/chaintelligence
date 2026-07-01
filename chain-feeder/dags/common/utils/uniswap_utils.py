@@ -50,15 +50,19 @@ BNB_TOKEN_ADDRESSES = {
 }
 
 class UniswapV3Fetcher:
-    def __init__(self, verbose: bool = False, network: str = "Ethereum"):
+    def __init__(self, verbose: bool = False, network: str = "Ethereum", protocol: str = "Uniswap V3"):
         self.verbose = verbose
         self.network = network
+        self.protocol = protocol
         self.session = requests.Session()
 
         # Build network-aware V3 and V4 URLs
         import os
         GRAPH_API_KEY = os.getenv('GRAPH_API_KEY', '')
-        if self.network == "Arbitrum":
+        if self.network == "BNB" and self.protocol == "PancakeSwap V3":
+            v3_subgraph_id = "78EUqzJmEVJsAKvWghn7qotf9LVGqcTQxJhT5z84ZmgJ"
+            v4_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV" # Placeholder
+        elif self.network == "Arbitrum":
             v3_subgraph_id = "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM"  # Uniswap V3 Arbitrum swaps (verified)
             v4_subgraph_id = "G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"  # Uniswap V4 Arbitrum swaps
         elif self.network == "Base":
@@ -391,7 +395,7 @@ class PostgresStorage:
     def __init__(self):
         self.conn_str = DATA_WAREHOUSE_DB
     
-    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum"):
+    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum", protocol: str = "Uniswap V3"):
         if not swaps:
             return
         
@@ -400,8 +404,8 @@ class PostgresStorage:
                 insert_query = """
                 INSERT INTO uniswap_v3_swaps (
                     id, timestamp, tx_hash, token0_address, token1_address, 
-                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network, protocol
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO NOTHING;
                 """
                 data = [
@@ -417,27 +421,28 @@ class PostgresStorage:
                         s['amount1'],
                         s['amountUSD'],
                         s['fee_tier'],
-                        network
+                        network,
+                        protocol
                     ) for s in swaps
                 ]
                 cur.executemany(insert_query, data)
             conn.commit()
 
-    def get_last_swap_timestamp(self, network: str = "Ethereum") -> Optional[int]:
+    def get_last_swap_timestamp(self, network: str = "Ethereum", protocol: str = "Uniswap V3") -> Optional[int]:
         """
         Get the timestamp of the latest swap stored in the database.
         Returns None if the table is empty.
         """
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT MAX(timestamp) FROM uniswap_v3_swaps WHERE network = %s", (network,))
+                cur.execute("SELECT MAX(timestamp) FROM uniswap_v3_swaps WHERE network = %s AND protocol = %s", (network, protocol))
                 res = cur.fetchone()
                 if res and res[0]:
                     return int(res[0].timestamp())
         return None
 
 class PostgresStorageV4(PostgresStorage):
-    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum"):
+    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum", protocol: str = "Uniswap V4"):
         if not swaps:
             return
         
@@ -446,8 +451,8 @@ class PostgresStorageV4(PostgresStorage):
                 insert_query = """
                 INSERT INTO uniswap_v4_swaps (
                     id, timestamp, tx_hash, token0_address, token1_address, 
-                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network, protocol
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO NOTHING;
                 """
                 data = [
@@ -463,20 +468,21 @@ class PostgresStorageV4(PostgresStorage):
                         s['amount1'],
                         s['amountUSD'],
                         s['fee_tier'],
-                        network
+                        network,
+                        protocol
                     ) for s in swaps
                 ]
                 cur.executemany(insert_query, data)
             conn.commit()
 
-    def get_last_swap_timestamp(self, network: str = "Ethereum") -> Optional[int]:
+    def get_last_swap_timestamp(self, network: str = "Ethereum", protocol: str = "Uniswap V4") -> Optional[int]:
         """
         Get the timestamp of the latest swap stored in the database.
         Returns None if the table is empty.
         """
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s", (network,))
+                cur.execute("SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s AND protocol = %s", (network, protocol))
                 res = cur.fetchone()
                 if res and res[0]:
                     return int(res[0].timestamp())

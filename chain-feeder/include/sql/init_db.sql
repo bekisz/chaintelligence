@@ -141,12 +141,15 @@ CREATE TABLE IF NOT EXISTS uniswap_v3_swaps (
     amount0 NUMERIC,
     amount1 NUMERIC,
     amount_usd NUMERIC,
-    fee_tier VARCHAR(20)
+    fee_tier VARCHAR(20),
+    network VARCHAR(20) DEFAULT 'Ethereum',
+    protocol VARCHAR(50) DEFAULT 'Uniswap V3'
 );
 
 CREATE INDEX IF NOT EXISTS idx_swaps_timestamp ON uniswap_v3_swaps(timestamp);
 CREATE INDEX IF NOT EXISTS idx_swaps_token0 ON uniswap_v3_swaps(token0_symbol);
 CREATE INDEX IF NOT EXISTS idx_swaps_token1 ON uniswap_v3_swaps(token1_symbol);
+CREATE INDEX IF NOT EXISTS idx_swaps_network_timestamp ON uniswap_v3_swaps(network, timestamp);
 
 -- 5.1 UNISWAP V4 SWAPS
 CREATE TABLE IF NOT EXISTS uniswap_v4_swaps (
@@ -160,12 +163,15 @@ CREATE TABLE IF NOT EXISTS uniswap_v4_swaps (
     amount0 NUMERIC,
     amount1 NUMERIC,
     amount_usd NUMERIC,
-    fee_tier VARCHAR(20)
+    fee_tier VARCHAR(20),
+    network VARCHAR(20) DEFAULT 'Ethereum',
+    protocol VARCHAR(50) DEFAULT 'Uniswap V4'
 );
 
 CREATE INDEX IF NOT EXISTS idx_v4_swaps_timestamp ON uniswap_v4_swaps(timestamp);
 CREATE INDEX IF NOT EXISTS idx_v4_swaps_token0 ON uniswap_v4_swaps(token0_symbol);
 CREATE INDEX IF NOT EXISTS idx_v4_swaps_token1 ON uniswap_v4_swaps(token1_symbol);
+CREATE INDEX IF NOT EXISTS idx_v4_swaps_network_timestamp ON uniswap_v4_swaps(network, timestamp);
 
 -- 5.5 COIN PRICE HISTORY
 CREATE TABLE IF NOT EXISTS coin_price_history (
