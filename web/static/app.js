@@ -435,8 +435,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
-                let linkHtmlStart = '';
-                let linkHtmlEnd = '';
+                let tagStart = '';
+                let tagEnd = '';
+                let isClickable = false;
+
                 if (item && typeof item === 'object' && item.pool_address) {
                     let href = '';
                     const pool_addr = item.pool_address.toLowerCase();
@@ -472,20 +474,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     
                     if (href) {
-                        linkHtmlStart = `<a href="${href}" target="_blank" class="route-pool-link" style="text-decoration: none; color: inherit;">`;
-                        linkHtmlEnd = `</a>`;
+                        tagStart = `<a href="${href}" target="_blank" style="text-decoration: none; color: inherit;"`;
+                        tagEnd = `</a>`;
+                        isClickable = true;
+                        displayVal += ' ↗';
                     }
                 }
 
+                if (!isClickable) {
+                    tagStart = `<div`;
+                    tagEnd = `</div>`;
+                }
+
                 html += `
-                        ${linkHtmlStart}
-                        <div class="route-arrow-wrapper ${protocolClass}" data-tooltip="${tooltip}">
+                        ${tagStart} class="route-arrow-wrapper ${protocolClass} ${isClickable ? 'clickable-route-segment' : ''}" data-tooltip="${tooltip}">
                             <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
                             <svg class="route-arrow-svg" viewBox="0 0 48 24" fill="none" stroke="currentColor">
                                 <path d="M5 12h38M36 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
-                        </div>
-                        ${linkHtmlEnd}
+                        ${tagEnd}
                     `;
             }
         });

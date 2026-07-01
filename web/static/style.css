@@ -1122,23 +1122,22 @@ footer {
     opacity: 0.95;
 }
 
-.route-pool-link {
+.route-arrow-wrapper.clickable-route-segment {
     cursor: pointer;
     text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    transition: transform 0.2s ease;
 }
 
-.route-pool-link:hover .route-arrow-svg {
+.route-arrow-wrapper.clickable-route-segment:hover .route-arrow-svg {
     transform: scale(1.15);
     filter: drop-shadow(0 0 5px currentColor);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease;
 }
 
-.route-pool-link:hover .fee-pill {
+.route-arrow-wrapper.clickable-route-segment:hover .fee-pill {
     background: rgba(255, 255, 255, 0.2) !important;
     color: #ffffff !important;
     transform: translateY(-1px);
+    transition: transform 0.2s ease, background 0.2s ease;
 }
 
 /* Custom Tooltip Styling */
