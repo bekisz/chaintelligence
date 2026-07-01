@@ -346,11 +346,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const parts = feeString.split('|');
                 cleanFee = parts[0];
                 if (parts[1]) {
-                    protocolName = parts[1];
-                    const rawProto = parts[1].toLowerCase();
-                    if (rawProto === 'uniswap v3' || rawProto === 'v3') {
+                    protocolName = parts[1].trim();
+                    const rawProto = parts[1].trim().toLowerCase();
+                    if (rawProto === 'uniswap v3' || rawProto === 'v3' || rawProto === 'uniswap-v3') {
                         protocolClass = 'v3';
-                    } else if (rawProto === 'uniswap v4' || rawProto === 'v4') {
+                    } else if (rawProto === 'uniswap v4' || rawProto === 'v4' || rawProto === 'uniswap-v4') {
                         protocolClass = 'v4';
                     } else {
                         protocolClass = rawProto.replace(/\s+/g, '-');
@@ -438,8 +438,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 html += `
                         <div class="route-arrow-wrapper ${protocolClass}" data-tooltip="${tooltip}">
                             <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
-                            <svg class="route-arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                <path d="M5 12h14M12 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <svg class="route-arrow-svg" viewBox="0 0 48 24" fill="none" stroke="currentColor">
+                                <path d="M5 12h38M36 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </div>
                     `;

@@ -1099,18 +1099,20 @@ footer {
 }
 
 .route-arrow-svg {
-    width: 14px;
+    width: 28px;
     height: 14px;
     color: var(--text-secondary);
     opacity: 0.7;
 }
 
-.route-arrow-wrapper.v3 .route-arrow-svg {
+.route-arrow-wrapper.v3 .route-arrow-svg,
+.route-arrow-wrapper.uniswap-v3 .route-arrow-svg {
     color: #ff007a;
     opacity: 0.95;
 }
 
-.route-arrow-wrapper.v4 .route-arrow-svg {
+.route-arrow-wrapper.v4 .route-arrow-svg,
+.route-arrow-wrapper.uniswap-v4 .route-arrow-svg {
     color: #9860f3;
     opacity: 0.95;
 }
