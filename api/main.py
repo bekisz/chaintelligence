@@ -307,7 +307,7 @@ async def analyze(
                         "WETH":   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
                         "USDT":   "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
                         "WBTC":   "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
-                        "DAI":    "0xda10009c55681e77d502082691d29f8fb095569f",
+                        "DAI":    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
                         "LINK":   "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
                         "GMX":    "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
                         "AAVE":   "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
