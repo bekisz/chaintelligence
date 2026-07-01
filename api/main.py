@@ -424,17 +424,9 @@ async def analyze(
                     t1_bytes = bytes.fromhex(tokens[1][2:])
                     
                     if protocol == 'Uniswap V4':
-                        # Uniswap V4 Pool ID derivation:
-                        # keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks))
-                        tick_spacing = 10 if fee_val <= 500 else 60
-                        payload = (
-                            b'\x00'*12 + t0_bytes +
-                            b'\x00'*12 + t1_bytes +
-                            b'\x00'*29 + fee_val.to_bytes(3, 'big') +
-                            b'\x00'*29 + tick_spacing.to_bytes(3, 'big') +
-                            b'\x00'*32 # Hooks address is 0x0000... padded to 32 bytes
-                        )
-                        pool_addr = '0x' + keccak.new(digest_bits=256, data=payload).hexdigest()
+                        # V4 pool IDs require exact tick spacing & hooks address which
+                        # vary per pool and cannot be derived offline. Skip.
+                        continue
                     else:
                         # V3 style Create2 address derivation
                         if 'pancake' in protocol.lower():
