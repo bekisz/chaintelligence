@@ -178,6 +178,12 @@ coin-families:
       - AAVE
       - STKAAVE
 
+  - name: BNB
+    correlated: true
+    coin-list:
+      - BNB
+      - WBNB
+
   - name: Tier1
     correlated: false
     sql-rule: "cmc_rank < 100"
