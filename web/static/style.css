@@ -1115,6 +1115,11 @@ footer {
     opacity: 0.95;
 }
 
+.route-arrow-wrapper.pancakeswap-v3 .route-arrow-svg {
+    color: #1fc7d4;
+    opacity: 0.95;
+}
+
 /* Custom Tooltip Styling */
 .route-arrow-wrapper[data-tooltip] {
     position: relative;

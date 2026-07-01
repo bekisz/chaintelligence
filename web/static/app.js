@@ -351,13 +351,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (typeof item === 'object') {
                         // Backend enriched object
                         let cleanFee = item.fee || '';
-                        let protocolVer = ''; // 'v3' or 'v4'
+                        let protocolName = 'Uniswap';
                         let networkName = '';
+                        protocolClass = 'v3';
                         if (cleanFee.includes('|')) {
                             const parts = cleanFee.split('|');
                             cleanFee = parts[0];
                             if (parts[1]) {
-                                protocolVer = parts[1].toLowerCase(); // 'v3' or 'v4'
+                                protocolName = parts[1];
+                                protocolClass = parts[1].toLowerCase().replace(/\s+/g, '-');
                             }
                             if (parts[2]) {
                                 networkName = parts[2].trim();
@@ -387,16 +389,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                             displayVal = dispFee;
                         }
 
-                        tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolVer.toUpperCase()}\nNetwork: ${networkName || 'Ethereum'}`;
-                        protocolClass = protocolVer; // 'v3' or 'v4'
+                        tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: ${protocolName}\nNetwork: ${networkName || 'Ethereum'}`;
                     } else if (typeof item === 'string') {
                         let cleanFee = item;
                         let networkName = '';
+                        let protocolName = 'Uniswap';
+                        protocolClass = 'v3';
                         if (cleanFee.includes('|')) {
                             const parts = cleanFee.split('|');
                             cleanFee = parts[0];
                             if (parts[1]) {
-                                protocolClass = parts[1].toLowerCase();
+                                protocolName = parts[1];
+                                protocolClass = parts[1].toLowerCase().replace(/\s+/g, '-');
                             }
                             if (parts[2]) {
                                 networkName = parts[2].trim();
@@ -413,7 +417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else {
                             displayVal = dispFee;
                         }
-                        tooltip = `APR: N/A\nTier: ${cleanFee}\nProtocol: Uniswap ${protocolClass.toUpperCase()}\nNetwork: ${networkName || 'Ethereum'}`;
+                        tooltip = `APR: N/A\nTier: ${cleanFee}\nProtocol: ${protocolName}\nNetwork: ${networkName || 'Ethereum'}`;
                     } else {
                         const feeNum = parseFloat(item);
                         if (!isNaN(feeNum)) {
