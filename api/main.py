@@ -438,6 +438,8 @@ async def analyze(
                                 factory_hex = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD'
                             elif network.lower() in ('bnb', 'bsc'):
                                 factory_hex = '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7'
+                            elif network.lower() == 'arbitrum':
+                                factory_hex = '0x1F98431c8aD985736e4f3a7465352E461f092301'
                             else:
                                 factory_hex = '0x1F98431c8aD98523631AE4a59f267346ea31F984'
                             init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
