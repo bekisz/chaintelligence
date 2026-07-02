@@ -179,7 +179,45 @@ document.addEventListener('DOMContentLoaded', async () => {
                 throw new Error('API request failed');
             }
 
-            const data = await response.json();
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+            let data = null;
+
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, {stream: true});
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep last incomplete line in buffer
+                
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const msg = JSON.parse(line);
+                        if (msg.type === 'progress') {
+                            const barFill = document.getElementById('progress-bar-fill');
+                            const barText = document.getElementById('progress-text');
+                            if (barFill) barFill.style.width = `${msg.pct}%`;
+                            if (barText) barText.textContent = `${msg.message} ${msg.pct}%`;
+                        } else if (msg.type === 'result') {
+                            data = msg.data;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing JSON stream line', e);
+                    }
+                }
+            }
+            
+            if (buffer.trim()) {
+                try {
+                    const msg = JSON.parse(buffer);
+                    if (msg.type === 'result') data = msg.data;
+                } catch (e) {}
+            }
+            
+            if (!data) throw new Error('No final result received from stream');
 
             if (!data.routes || data.routes.length === 0) {
                 let msg = 'No swap data found for the specified period and tokens.';

@@ -179,8 +179,10 @@
             </section>
 
             <div id="loader" class="loader-container hidden">
-                <div class="spinner"></div>
-                <p>Analyzing routes from Postgres...</p>
+                <div class="progress-bar-container" style="width: 100%; max-width: 400px; height: 20px; background: #333; border-radius: 10px; overflow: hidden; margin: 10px auto; border: 1px solid #444;">
+                    <div id="progress-bar-fill" style="width: 0%; height: 100%; background: #00ffcc; transition: width 0.2s; box-shadow: 0 0 10px rgba(0, 255, 204, 0.5);"></div>
+                </div>
+                <p id="progress-text">Analyzing routes from Postgres... 0%</p>
             </div>
 
             <div id="no-data" class="no-data-msg hidden">

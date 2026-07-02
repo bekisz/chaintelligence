@@ -207,319 +207,327 @@ async def analyze(
         if not token_filter:
             token_filter = None # Fallback if both are wildcards
             
-        current_chunk_start = start_dt
-        has_data = False
-        
-        while current_chunk_start < end_dt:
-            current_chunk_end = min(current_chunk_start + timedelta(days=1), end_dt)
-            print(f"[Anaylsis] Processing batch: {current_chunk_start} -> {current_chunk_end}")
-            
-            batch_swaps = fetcher.fetch_swaps(current_chunk_start, current_chunk_end, token_filter=token_filter, network=network)
-            
-            if batch_swaps:
-                has_data = True
-                analyzer.process_batch(batch_swaps, start_tokens_list, end_tokens_list)
-                
-            # Free up memory to prevent OOM
-            batch_swaps = []
-            import gc
-            gc.collect()
-            
-            current_chunk_start = current_chunk_end
-            
-        if not has_data:
-            # Fetch min/max from DB to show user available range
-            import psycopg2
-            conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT MIN(timestamp), MAX(timestamp) FROM (
-                    SELECT timestamp FROM uniswap_v3_swaps
-                    UNION ALL
-                    SELECT timestamp FROM uniswap_v4_swaps
-                ) as all_swaps
-            """)
-            row = cur.fetchone()
-            db_min = row[0].isoformat() if row[0] else None
-            db_max = row[1].isoformat() if row[1] else None
-            cur.close()
-            conn.close()
-            
-            return {
-                "routes": [], 
-                "total_tx": 0, 
-                "total_volume": 0,
-                "db_range": {"min": db_min, "max": db_max}
-            }
+        from fastapi.responses import StreamingResponse
+        import json
+        import asyncio
+        import gc
+        import psycopg2
 
-        analysis = analyzer.get_results()
-        
-        # --- Enrichment with APRs ---
-        # 1. Identify pools
-        pools_to_fetch = set()
-        for route in analysis.get('routes', []):
-            path = route.get('path_tokens', [])
-            # Path: [Token, Fee, Token, Fee, Token]
-            for i in range(0, len(path) - 2, 2):
-                t0 = path[i]
-                fee = path[i+1]
-                t1 = path[i+2]
-                pools_to_fetch.add((t0, t1, fee))
-        
-        # 2. Fetch stats
-        aprs = {}
-        if pools_to_fetch:
-            try:
-                aprs = fetcher.fetch_pool_stats(list(pools_to_fetch), start_dt, end_dt, prices=latest_prices)
-            except Exception as e:
-                print(f"Error fetching pool stats: {e}")
-
-        # 2b. Compute pool addresses deterministically using Create2/Keccak-256
-        pool_addresses = {}
-        if pools_to_fetch:
-            token_symbols = set()
-            for (t0, t1, fee) in pools_to_fetch:
-                token_symbols.add(t0.upper())
-                token_symbols.add(t1.upper())
+        async def generate():
+            c_chunk_start = start_dt
+            has_data = False
+            total_seconds = (end_dt - start_dt).total_seconds()
+            
+            while c_chunk_start < end_dt:
+                c_chunk_end = min(c_chunk_start + timedelta(days=1), end_dt)
+                progress_sec = (c_chunk_start - start_dt).total_seconds()
+                pct = (progress_sec / total_seconds) * 100 if total_seconds > 0 else 0
+                yield json.dumps({"type": "progress", "pct": round(pct, 1), "message": f"Fetching {c_chunk_start.strftime('%Y-%m-%d')}..."}) + "\n"
+                await asyncio.sleep(0.01)
                 
-            token_addresses = {}
-            if token_symbols:
-                # Core verified on-chain token addresses by network to ensure correct Create2 calculations
-                NETWORK_TOKEN_MAPS = {
-                    "Ethereum": {
-                        "USDC": "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eB48",
-                        "USDT": "0xdAC17F958D2ee523a2206206994597c13d831ec7",
-                        "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-                        "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-                        "ETH":  "0x0000000000000000000000000000000000000000",
-                    },
-                    "BNB": {
-                        "WBNB": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-                        "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
-                        "USDT": "0x55d398326f99059ff775485246999027b3197955",
-                        "BTCB": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
-                        "ETH":  "0x0000000000000000000000000000000000000000",
-                    },
-                    "Arbitrum": {
-                        "ETH":    "0x0000000000000000000000000000000000000000",
-                        "USDC.e": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
-                        "USDC":   "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
-                        "WETH":   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
-                        "USDT":   "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
-                        "WBTC":   "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
-                        "DAI":    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
-                        "LINK":   "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
-                        "GMX":    "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
-                        "AAVE":   "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
-                        "ZRO":    "0x6985884c4392d348587b19cb9eaaf157f13271cd",
-                    },
-                    "Base": {
-                        "ETH":    "0x0000000000000000000000000000000000000000",
-                        "WETH":   "0x4200000000000000000000000000000000000006",
-                        "USDC":   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                        "USDbC":  "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-                        "cbBTC":  "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
-                    }
-                }
+                print(f"[Anaylsis] Processing batch: {c_chunk_start} -> {c_chunk_end}")
+                batch_swaps = fetcher.fetch_swaps(c_chunk_start, c_chunk_end, token_filter=token_filter, network=network)
                 
-                # Fetch dynamically for EACH network
-                for target_network in ["Ethereum", "Arbitrum", "BNB", "Base"]:
-                    net_map = NETWORK_TOKEN_MAPS.get(target_network, {})
-                    token_addresses[target_network] = {}
+                if batch_swaps:
+                    has_data = True
+                    analyzer.process_batch(batch_swaps, start_tokens_list, end_tokens_list)
                     
-                    # Pre-populate symbols we have in core mapping
-                    for sym in token_symbols:
-                        if sym in net_map:
-                            token_addresses[target_network][sym] = net_map[sym]
+                batch_swaps = []
+                gc.collect()
+                c_chunk_start = c_chunk_end
+                
+            yield json.dumps({"type": "progress", "pct": 100, "message": "Finalizing analysis..."}) + "\n"
+            await asyncio.sleep(0.01)
+            
+            if not has_data:
+                conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT MIN(timestamp), MAX(timestamp) FROM (
+                        SELECT timestamp FROM uniswap_v3_swaps
+                        UNION ALL
+                        SELECT timestamp FROM uniswap_v4_swaps
+                    ) as all_swaps
+                """)
+                row = cur.fetchone()
+                db_min = row[0].isoformat() if row[0] else None
+                db_max = row[1].isoformat() if row[1] else None
+                cur.close()
+                conn.close()
+                
+                yield json.dumps({"type": "result", "data": {"routes": [], "total_tx": 0, "total_volume": 0, "db_range": {"min": db_min, "max": db_max}}}) + "\n"
+                return
+
+            analysis = analyzer.get_results()
+        
+            # --- Enrichment with APRs ---
+            # 1. Identify pools
+            pools_to_fetch = set()
+            for route in analysis.get('routes', []):
+                path = route.get('path_tokens', [])
+                # Path: [Token, Fee, Token, Fee, Token]
+                for i in range(0, len(path) - 2, 2):
+                    t0 = path[i]
+                    fee = path[i+1]
+                    t1 = path[i+2]
+                    pools_to_fetch.add((t0, t1, fee))
+        
+            # 2. Fetch stats
+            aprs = {}
+            if pools_to_fetch:
+                try:
+                    aprs = fetcher.fetch_pool_stats(list(pools_to_fetch), start_dt, end_dt, prices=latest_prices)
+                except Exception as e:
+                    print(f"Error fetching pool stats: {e}")
+
+            # 2b. Compute pool addresses deterministically using Create2/Keccak-256
+            pool_addresses = {}
+            if pools_to_fetch:
+                token_symbols = set()
+                for (t0, t1, fee) in pools_to_fetch:
+                    token_symbols.add(t0.upper())
+                    token_symbols.add(t1.upper())
+                
+                token_addresses = {}
+                if token_symbols:
+                    # Core verified on-chain token addresses by network to ensure correct Create2 calculations
+                    NETWORK_TOKEN_MAPS = {
+                        "Ethereum": {
+                            "USDC": "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eB48",
+                            "USDT": "0xdAC17F958D2ee523a2206206994597c13d831ec7",
+                            "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+                            "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+                            "ETH":  "0x0000000000000000000000000000000000000000",
+                        },
+                        "BNB": {
+                            "WBNB": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                            "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+                            "USDT": "0x55d398326f99059ff775485246999027b3197955",
+                            "BTCB": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+                            "ETH":  "0x0000000000000000000000000000000000000000",
+                        },
+                        "Arbitrum": {
+                            "ETH":    "0x0000000000000000000000000000000000000000",
+                            "USDC.e": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+                            "USDC":   "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+                            "WETH":   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+                            "USDT":   "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+                            "WBTC":   "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+                            "DAI":    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+                            "LINK":   "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
+                            "GMX":    "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+                            "AAVE":   "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
+                            "ZRO":    "0x6985884c4392d348587b19cb9eaaf157f13271cd",
+                        },
+                        "Base": {
+                            "ETH":    "0x0000000000000000000000000000000000000000",
+                            "WETH":   "0x4200000000000000000000000000000000000006",
+                            "USDC":   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                            "USDbC":  "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+                            "cbBTC":  "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+                        }
+                    }
+                
+                    # Fetch dynamically for EACH network
+                    for target_network in ["Ethereum", "Arbitrum", "BNB", "Base"]:
+                        net_map = NETWORK_TOKEN_MAPS.get(target_network, {})
+                        token_addresses[target_network] = {}
+                    
+                        # Pre-populate symbols we have in core mapping
+                        for sym in token_symbols:
+                            if sym in net_map:
+                                token_addresses[target_network][sym] = net_map[sym]
                             
-                    # Database lookup only for any remaining missing symbols (e.g. custom test tokens)
-                    missing_symbols = [sym for sym in token_symbols if sym not in token_addresses[target_network]]
-                    if missing_symbols:
-                        try:
-                            import psycopg2
-                            conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-                            cur = conn.cursor()
+                        # Database lookup only for any remaining missing symbols (e.g. custom test tokens)
+                        missing_symbols = [sym for sym in token_symbols if sym not in token_addresses[target_network]]
+                        if missing_symbols:
+                            try:
+                                import psycopg2
+                                conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+                                cur = conn.cursor()
                             
-                            # 1. Fetch addresses from V3 swaps table for this specific network
-                            cur.execute("""
-                                SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v3_swaps
-                                WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
-                                UNION
-                                SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v3_swaps
-                                WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
-                            """, (target_network, missing_symbols, target_network, missing_symbols))
-                            for row in cur.fetchall():
-                                if row[1]:
-                                    token_addresses[target_network][row[0]] = row[1]
-                                    
-                            # 2. Fetch from V4 swaps table for any missing symbols
-                            missing_tokens_v4 = [sym for sym in missing_symbols if sym not in token_addresses[target_network]]
-                            if missing_tokens_v4:
+                                # 1. Fetch addresses from V3 swaps table for this specific network
                                 cur.execute("""
-                                    SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v4_swaps
+                                    SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v3_swaps
                                     WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
                                     UNION
-                                    SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v4_swaps
+                                    SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v3_swaps
                                     WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
-                                """, (target_network, missing_tokens_v4, target_network, missing_tokens_v4))
+                                """, (target_network, missing_symbols, target_network, missing_symbols))
                                 for row in cur.fetchall():
                                     if row[1]:
                                         token_addresses[target_network][row[0]] = row[1]
-                                        
-                            # 3. Fallback to general coin table for any remaining ones (assumes Ethereum)
-                            if target_network == "Ethereum":
-                                still_missing = [sym for sym in missing_tokens_v4 if sym not in token_addresses[target_network]]
-                                if still_missing:
-                                    cur.execute("SELECT UPPER(symbol), ethereum_address FROM coin WHERE UPPER(symbol) = ANY(%s)", (still_missing,))
+                                    
+                                # 2. Fetch from V4 swaps table for any missing symbols
+                                missing_tokens_v4 = [sym for sym in missing_symbols if sym not in token_addresses[target_network]]
+                                if missing_tokens_v4:
+                                    cur.execute("""
+                                        SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v4_swaps
+                                        WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
+                                        UNION
+                                        SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v4_swaps
+                                        WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
+                                    """, (target_network, missing_tokens_v4, target_network, missing_tokens_v4))
                                     for row in cur.fetchall():
                                         if row[1]:
                                             token_addresses[target_network][row[0]] = row[1]
+                                        
+                                # 3. Fallback to general coin table for any remaining ones (assumes Ethereum)
+                                if target_network == "Ethereum":
+                                    still_missing = [sym for sym in missing_tokens_v4 if sym not in token_addresses[target_network]]
+                                    if still_missing:
+                                        cur.execute("SELECT UPPER(symbol), ethereum_address FROM coin WHERE UPPER(symbol) = ANY(%s)", (still_missing,))
+                                        for row in cur.fetchall():
+                                            if row[1]:
+                                                token_addresses[target_network][row[0]] = row[1]
                                             
-                            cur.close()
-                            conn.close()
-                        except Exception as e:
-                            print(f"Error fetching token addresses from DB: {e}")
+                                cur.close()
+                                conn.close()
+                            except Exception as e:
+                                print(f"Error fetching token addresses from DB: {e}")
             
-            try:
-                from Crypto.Hash import keccak
-                for (t0, t1, fee) in pools_to_fetch:
-                    t0_sym, t1_sym = t0.upper(), t1.upper()
-                    fee_raw = str(fee).split('|')[0].strip()
-                    f_clean = fee_raw.replace('%', '').strip()
+                try:
+                    from Crypto.Hash import keccak
+                    for (t0, t1, fee) in pools_to_fetch:
+                        t0_sym, t1_sym = t0.upper(), t1.upper()
+                        fee_raw = str(fee).split('|')[0].strip()
+                        f_clean = fee_raw.replace('%', '').strip()
                     
-                    network = "Ethereum"
-                    parts = str(fee).split('|')
-                    if len(parts) >= 3:
-                        network = parts[2].strip()
+                        pool_network = "Ethereum"
+                        parts = str(fee).split('|')
+                        if len(parts) >= 3:
+                            pool_network = parts[2].strip()
                         
-                    protocol = "Uniswap V3"
-                    if len(parts) >= 2:
-                        proto_raw = parts[1].strip()
-                        if proto_raw.lower() in ('v3', 'uniswap v3', 'uniswap-v3'):
-                            protocol = 'Uniswap V3'
-                        elif proto_raw.lower() in ('v4', 'uniswap v4', 'uniswap-v4'):
-                            protocol = 'Uniswap V4'
-                        else:
-                            protocol = proto_raw
-                            
-                    addr0 = token_addresses.get(network, {}).get(t0_sym)
-                    addr1 = token_addresses.get(network, {}).get(t1_sym)
-                    if not addr0 or not addr1:
-                        continue
-                            
-                    try:
-                        fee_map = {'0.01': 100, '0.05': 500, '0.08': 800, '0.3': 3000, '1.0': 10000}
-                        if f_clean in fee_map:
-                            fee_val = fee_map[f_clean]
-                        else:
-                            fee_val = int(float(f_clean) * 10000)
-                    except:
-                        continue
-                        
-                    # Sort token addresses numerically
-                    t0_hex = addr0.lower()
-                    t1_hex = addr1.lower()
-                    tokens = sorted([t0_hex, t1_hex])
-                    t0_bytes = bytes.fromhex(tokens[0][2:])
-                    t1_bytes = bytes.fromhex(tokens[1][2:])
-                    
-                    if protocol == 'Uniswap V4':
-                        # V4 pool IDs require exact tick spacing & hooks address which
-                        # vary per pool and cannot be derived offline. Skip.
-                        continue
-                    else:
-                        # V3 style Create2 address derivation
-                        if 'pancake' in protocol.lower():
-                            # PancakeSwap V3 uses a separate Pool Deployer for CREATE2 (not the Factory)
-                            factory_hex = '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9'
-                            init_hash_hex = '0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2'
-                        else:
-                            if network.lower() == 'base':
-                                factory_hex = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD'
-                                init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
-                            elif network.lower() in ('bnb', 'bsc'):
-                                factory_hex = '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7'
-                                init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
-                            elif network.lower() == 'arbitrum':
-                                factory_hex = '0x1F98431c8aD985736e4f3a7465352E461f092301'
-                                init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244778a3299aa81600b3e67099710f'
+                        protocol = "Uniswap V3"
+                        if len(parts) >= 2:
+                            proto_raw = parts[1].strip()
+                            if proto_raw.lower() in ('v3', 'uniswap v3', 'uniswap-v3'):
+                                protocol = 'Uniswap V3'
+                            elif proto_raw.lower() in ('v4', 'uniswap v4', 'uniswap-v4'):
+                                protocol = 'Uniswap V4'
                             else:
-                                factory_hex = '0x1F98431c8aD98523631AE4a59f267346ea31F984'
-                                init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
+                                protocol = proto_raw
                             
-                        payload = (
-                            b'\x00'*12 + t0_bytes +
-                            b'\x00'*12 + t1_bytes +
-                            b'\x00'*29 + fee_val.to_bytes(3, 'big')
-                        )
-                        salt = keccak.new(digest_bits=256, data=payload).digest()
-                        factory = bytes.fromhex(factory_hex[2:])
-                        init_hash = bytes.fromhex(init_hash_hex[2:])
+                        addr0 = token_addresses.get(pool_network, {}).get(t0_sym)
+                        addr1 = token_addresses.get(pool_network, {}).get(t1_sym)
+                        if not addr0 or not addr1:
+                            continue
+                            
+                        try:
+                            fee_map = {'0.01': 100, '0.05': 500, '0.08': 800, '0.3': 3000, '1.0': 10000}
+                            if f_clean in fee_map:
+                                fee_val = fee_map[f_clean]
+                            else:
+                                fee_val = int(float(f_clean) * 10000)
+                        except:
+                            continue
                         
-                        create2_input = b'\xff' + factory + salt + init_hash
-                        pool_addr = '0x' + keccak.new(digest_bits=256, data=create2_input).digest()[-20:].hex()
+                        # Sort token addresses numerically
+                        t0_hex = addr0.lower()
+                        t1_hex = addr1.lower()
+                        tokens = sorted([t0_hex, t1_hex])
+                        t0_bytes = bytes.fromhex(tokens[0][2:])
+                        t1_bytes = bytes.fromhex(tokens[1][2:])
+                    
+                        if protocol == 'Uniswap V4':
+                            # V4 pool IDs require exact tick spacing & hooks address which
+                            # vary per pool and cannot be derived offline. Skip.
+                            continue
+                        else:
+                            # V3 style Create2 address derivation
+                            if 'pancake' in protocol.lower():
+                                # PancakeSwap V3 uses a separate Pool Deployer for CREATE2 (not the Factory)
+                                factory_hex = '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9'
+                                init_hash_hex = '0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2'
+                            else:
+                                if pool_network.lower() == 'base':
+                                    factory_hex = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD'
+                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
+                                elif pool_network.lower() in ('bnb', 'bsc'):
+                                    factory_hex = '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7'
+                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
+                                elif pool_network.lower() == 'arbitrum':
+                                    factory_hex = '0x1F98431c8aD985736e4f3a7465352E461f092301'
+                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244778a3299aa81600b3e67099710f'
+                                else:
+                                    factory_hex = '0x1F98431c8aD98523631AE4a59f267346ea31F984'
+                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
+                            
+                            payload = (
+                                b'\x00'*12 + t0_bytes +
+                                b'\x00'*12 + t1_bytes +
+                                b'\x00'*29 + fee_val.to_bytes(3, 'big')
+                            )
+                            salt = keccak.new(digest_bits=256, data=payload).digest()
+                            factory = bytes.fromhex(factory_hex[2:])
+                            init_hash = bytes.fromhex(init_hash_hex[2:])
                         
-                    pool_addresses[f"{t0}-{t1}-{fee}"] = pool_addr
-            except Exception as e:
-                print(f"Error computing pool addresses dynamically: {e}")
+                            create2_input = b'\xff' + factory + salt + init_hash
+                            pool_addr = '0x' + keccak.new(digest_bits=256, data=create2_input).digest()[-20:].hex()
+                        
+                        pool_addresses[f"{t0}-{t1}-{fee}"] = pool_addr
+                except Exception as e:
+                    print(f"Error computing pool addresses dynamically: {e}")
             
-        # 3. Inject into routes
-        for route_idx, route in enumerate(analysis.get('routes', [])):
-            path = route.get('path_tokens', [])
-            new_path = []
-            for i in range(len(path)):
-                item = path[i]
-                if i % 2 == 1: # This is a fee node
-                    # Previous token is at i-1, next at i+1
-                    t0 = path[i-1]
-                    fee = item
-                    t1 = path[i+1]
+            # 3. Inject into routes
+            for route_idx, route in enumerate(analysis.get('routes', [])):
+                path = route.get('path_tokens', [])
+                new_path = []
+                for i in range(len(path)):
+                    item = path[i]
+                    if i % 2 == 1: # This is a fee node
+                        # Previous token is at i-1, next at i+1
+                        t0 = path[i-1]
+                        fee = item
+                        t1 = path[i+1]
                     
-                    key = f"{t0}-{t1}-{fee}"
-                    apr_val = aprs.get(key)
+                        key = f"{t0}-{t1}-{fee}"
+                        apr_val = aprs.get(key)
                     
-                    # Also try reversed key just in case
-                    if apr_val is None:
-                        apr_val = aprs.get(f"{t1}-{t0}-{fee}")
+                        # Also try reversed key just in case
+                        if apr_val is None:
+                            apr_val = aprs.get(f"{t1}-{t0}-{fee}")
                     
-                    pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1}-{t0}-{fee}")
+                        pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1}-{t0}-{fee}")
                     
-                    # Replace string fee with object
-                    new_path.append({
-                        'fee': fee,
-                        'apr': apr_val if apr_val is not None else 0.0,
-                        'apr_str': f"{apr_val:.2%}" if apr_val is not None else "N/A",
-                        'pool_address': pool_addr
-                    })
+                        # Replace string fee with object
+                        new_path.append({
+                            'fee': fee,
+                            'apr': apr_val if apr_val is not None else 0.0,
+                            'apr_str': f"{apr_val:.2%}" if apr_val is not None else "N/A",
+                            'pool_address': pool_addr
+                        })
+                    else:
+                        new_path.append(item)
+            
+                # Calculate a combined APR for the route
+                # If there is more than one pool involved, it's a composite route, and APR is not valid.
+                pool_nodes = [p for p in new_path if isinstance(p, dict)]
+                if len(pool_nodes) > 1:
+                    route_apr = 0.0
+                    apr_str = "-"
                 else:
-                    new_path.append(item)
+                    leg_aprs = [p['apr'] for p in pool_nodes if 'apr' in p]
+                    route_apr = leg_aprs[0] if leg_aprs else 0.0
+                    apr_str = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
             
-            # Calculate a combined APR for the route
-            # If there is more than one pool involved, it's a composite route, and APR is not valid.
-            pool_nodes = [p for p in new_path if isinstance(p, dict)]
-            if len(pool_nodes) > 1:
-                route_apr = 0.0
-                apr_str = "-"
-            else:
-                leg_aprs = [p['apr'] for p in pool_nodes if 'apr' in p]
-                route_apr = leg_aprs[0] if leg_aprs else 0.0
-                apr_str = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
+                # Determine route-level network from path fee node
+                route_network = "Ethereum"
+                for p in pool_nodes:
+                    if 'fee' in p:
+                        fee_parts = p['fee'].split('|')
+                        if len(fee_parts) >= 3:
+                            route_network = fee_parts[2].strip()
+                            break
             
-            # Determine route-level network from path fee node
-            route_network = "Ethereum"
-            for p in pool_nodes:
-                if 'fee' in p:
-                    fee_parts = p['fee'].split('|')
-                    if len(fee_parts) >= 3:
-                        route_network = fee_parts[2]
-                        break
-            
-            analysis['routes'][route_idx]['path_tokens'] = new_path
-            analysis['routes'][route_idx]['apr'] = route_apr
-            analysis['routes'][route_idx]['apr_str'] = apr_str
-            analysis['routes'][route_idx]['network'] = route_network
+                analysis['routes'][route_idx]['path_tokens'] = new_path
+                analysis['routes'][route_idx]['apr'] = route_apr
+                analysis['routes'][route_idx]['apr_str'] = apr_str
+                analysis['routes'][route_idx]['network'] = route_network
 
-        return analysis
+            yield json.dumps({"type": "result", "data": analysis}) + "\n"
+
+        return StreamingResponse(generate(), media_type="application/x-ndjson")
     except Exception as e:
         import traceback
         traceback.print_exc()
