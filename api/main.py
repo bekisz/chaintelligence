@@ -226,7 +226,9 @@ async def analyze(
                 await asyncio.sleep(0.01)
                 
                 print(f"[Anaylsis] Processing batch: {c_chunk_start} -> {c_chunk_end}")
-                batch_swaps = fetcher.fetch_swaps(c_chunk_start, c_chunk_end, token_filter=token_filter, network=network)
+                batch_swaps = await asyncio.to_thread(
+                    fetcher.fetch_swaps, c_chunk_start, c_chunk_end, token_filter, network
+                )
                 
                 if batch_swaps:
                     has_data = True
@@ -276,9 +278,12 @@ async def analyze(
             aprs = {}
             if pools_to_fetch:
                 try:
-                    aprs = fetcher.fetch_pool_stats(list(pools_to_fetch), start_dt, end_dt, prices=latest_prices)
+                    aprs = await asyncio.to_thread(
+                        fetcher.fetch_pool_stats, list(pools_to_fetch), start_dt, end_dt, latest_prices
+                    )
                 except Exception as e:
                     print(f"Error fetching pool stats: {e}")
+
 
             # 2b. Compute pool addresses deterministically using Create2/Keccak-256
             pool_addresses = {}

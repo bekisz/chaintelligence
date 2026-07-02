@@ -94,7 +94,6 @@ class PostgresFetcher:
                 network
             FROM uniswap_v4_swaps
             WHERE timestamp >= %s AND timestamp <= %s AND amount_usd >= 10.0 {filter_sql}
-            ORDER BY timestamp ASC
             """
             
             cur.execute(query, params)
