@@ -12,35 +12,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     let tokenImageMap = {};
 
     // Fetch available date range from API and set defaults
-    try {
-        const response = await fetch('/api/routes/date-range');
-        const dateRange = await response.json();
+    const fetchDateRange = async (network) => {
+        try {
+            let url = '/api/routes/date-range';
+            if (network && network !== 'all') {
+                url += `?network=${encodeURIComponent(network)}`;
+            }
+            const response = await fetch(url);
+            const dateRange = await response.json();
 
-        if (dateRange.min_date && dateRange.max_date) {
-            // Set min/max constraints on date inputs
-            startDateInput.min = dateRange.min_date;
-            startDateInput.max = dateRange.max_date;
-            endDateInput.min = dateRange.min_date;
-            endDateInput.max = dateRange.max_date;
+            if (dateRange.min_date && dateRange.max_date) {
+                // Set min/max constraints on date inputs
+                startDateInput.min = dateRange.min_date;
+                startDateInput.max = dateRange.max_date;
+                endDateInput.min = dateRange.min_date;
+                endDateInput.max = dateRange.max_date;
 
-            // Set default end date to today (or max_date if today is beyond available data)
-            const today = new Date().toISOString().split('T')[0];
-            const maxDate = dateRange.max_date;
-            endDateInput.value = today <= maxDate ? today : maxDate;
+                // Set default end date to the last fetched data time (maxDate)
+                const maxDate = dateRange.max_date;
+                endDateInput.value = maxDate;
 
-            // Set default start date to 30 days before end date (or min_date if less than 30 days available)
-            const endDate = new Date(endDateInput.value);
-            const thirtyDaysAgo = new Date(endDate);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+                // Set default start date to 3 days before end date
+                const endDate = new Date(endDateInput.value);
+                const threeDaysAgo = new Date(endDate);
+                threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+                const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
 
-            startDateInput.value = thirtyDaysAgoStr >= dateRange.min_date ? thirtyDaysAgoStr : dateRange.min_date;
+                startDateInput.value = threeDaysAgoStr >= dateRange.min_date ? threeDaysAgoStr : dateRange.min_date;
+            }
+        } catch (error) {
+            console.error('Error fetching date range:', error);
+            // Fallback: just set end date to today and start date to 3 days ago
+            const today = new Date();
+            endDateInput.value = today.toISOString().split('T')[0];
+            const threeDaysAgo = new Date(today);
+            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+            startDateInput.value = threeDaysAgo.toISOString().split('T')[0];
         }
-    } catch (error) {
-        console.error('Error fetching date range:', error);
-        // Fallback: just set end date to today
-        const today = new Date().toISOString().split('T')[0];
-        endDateInput.value = today;
+    };
+
+    // Initial fetch with the current network filter value
+    const queryNetworkSelect = document.getElementById('query-network-filter');
+
+    // Set immediate defaults so the date inputs show real dates right away
+    // (the API call below will refine them once it completes)
+    const today = new Date();
+    const threeDaysAgo = new Date(today);
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    endDateInput.value = today.toISOString().split('T')[0];
+    startDateInput.value = threeDaysAgo.toISOString().split('T')[0];
+
+    fetchDateRange(queryNetworkSelect ? queryNetworkSelect.value : 'all');
+
+    // Re-fetch when the network filter changes
+    if (queryNetworkSelect) {
+        queryNetworkSelect.addEventListener('change', () => {
+            fetchDateRange(queryNetworkSelect.value);
+        });
     }
 
     // Fetch official token logos from backend
@@ -160,13 +188,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Show loader, hide results
+        // Show loader, hide results; re-enable post-hoc network filter
+        analyzeBtn.disabled = true;
         loader.classList.remove('hidden');
         resultsSection.classList.add('hidden');
         noDataMsg.classList.add('hidden');
+        const posthoc = document.getElementById('network-filter');
+        if (posthoc) posthoc.disabled = false;
 
         try {
-            const selectedNetwork = document.getElementById('network-filter')?.value || 'all';
+            const selectedNetwork = document.getElementById('query-network-filter')?.value || 'all';
             let url = `/api/routes/analyze?start_token=${startToken}&end_token=${endToken}`;
             if (startDate) url += `&start_date=${startDate}`;
             if (endDate) url += `&end_date=${endDate}`;
@@ -200,7 +231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const barFill = document.getElementById('progress-bar-fill');
                             const barText = document.getElementById('progress-text');
                             if (barFill) barFill.style.width = `${msg.pct}%`;
-                            if (barText) barText.textContent = `${msg.message} ${msg.pct}%`;
+                            if (barText) barText.textContent = msg.message;
                         } else if (msg.type === 'result') {
                             data = msg.data;
                         }
@@ -234,12 +265,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentRoutes = data.routes;
             filterAndRenderRoutes();
 
+            // Sync the post-hoc network filter to the queried network
+            // so the user can't filter to a network that wasn't queried.
+            const posthocNetwork = document.getElementById('network-filter');
+            if (posthocNetwork) {
+                posthocNetwork.value = selectedNetwork;
+                posthocNetwork.disabled = true;
+            }
+
             // Show results
             resultsSection.classList.remove('hidden');
         } catch (error) {
             console.error('Error during analysis:', error);
             alert('Analysis failed. Please check the console for details.');
         } finally {
+            analyzeBtn.disabled = false;
             loader.classList.add('hidden');
         }
     };
@@ -281,7 +321,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const renderRoutes = (routes) => {
         routesBody.innerHTML = '';
-        routes.forEach(route => {
+        routes.forEach((route, idx) => {
             // Calculate Route APR (only valid for single-hop)
             let totalApr = 0;
             let hopCount = 0;
@@ -303,6 +343,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const networkClass = networkVal.toLowerCase();
 
             const row = document.createElement('tr');
+            // Staggered fade-in animation
+            row.classList.add('fade-in');
+            row.style.animationDelay = `${idx * 30}ms`;
             row.innerHTML = `
                 <td class="path-cell">${renderPath(route)}</td>
                 <td class="col-network"><span class="badge ${networkClass}">${networkVal}</span></td>
@@ -479,32 +522,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (item && typeof item === 'object' && item.pool_address) {
                     let href = '';
-                    const pool_addr = item.pool_address.toLowerCase();
                     const parsed = parseProtocol(item.fee);
                     const protocolNameLower = parsed.protocolName.toLowerCase();
                     const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
                     
+                    const pool_addr = item.pool_address; // keep original case for checksum
                     let uniNetwork = 'ethereum';
-                    if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
-                        uniNetwork = 'bnb';
+                    if (networkLower.includes('base')) {
+                        uniNetwork = 'base';
+                    } else if (networkLower.includes('eth')) {
+                        uniNetwork = 'ethereum';
+                    } else if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
+                        uniNetwork = 'bnb'; // Uniswap uses 'bnb' for BNB Chain
                     } else if (networkLower.includes('arbitrum')) {
                         uniNetwork = 'arbitrum';
                     } else if (networkLower.includes('optimism')) {
                         uniNetwork = 'optimism';
                     } else if (networkLower.includes('polygon')) {
                         uniNetwork = 'polygon';
-                    } else if (networkLower.includes('base')) {
-                        uniNetwork = 'base';
                     }
                     
                     if (protocolNameLower.includes('pancake')) {
                         let pChain = 'bsc';
-                        if (networkLower.includes('eth')) {
+                        if (networkLower.includes('base')) {
+                            pChain = 'base';
+                        } else if (networkLower.includes('eth')) {
                             pChain = 'eth';
                         } else if (networkLower.includes('arbitrum')) {
                             pChain = 'arb';
-                        } else if (networkLower.includes('base')) {
-                            pChain = 'base';
                         }
                         href = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
                     } else {
@@ -613,12 +658,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sort-mkt').addEventListener('click', () => sortRoutes('mkt', 'sort-mkt'));
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
-
-    document.getElementById('swap-tokens-btn').addEventListener('click', () => {
-        const temp = startTokenInput.value;
-        startTokenInput.value = endTokenInput.value;
-        endTokenInput.value = temp;
-    });
 
     analyzeBtn.addEventListener('click', performAnalysis);
 
