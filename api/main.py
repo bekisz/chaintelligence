@@ -233,8 +233,8 @@ async def analyze(
                     end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             else:
                 end_dt = now
-            if (end_dt - start_dt).days > 7:
-                start_dt = end_dt - timedelta(days=7)
+            # No cap — the streaming + day‑chunking approach handles
+# large ranges efficiently, one day at a time.
         else:
             end_dt = now
             start_dt = end_dt - timedelta(days=1)
