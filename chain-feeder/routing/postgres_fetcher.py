@@ -6,6 +6,8 @@ for specified tokens within a given time range.
 """
 
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
+from contextlib import contextmanager
 from datetime import datetime
 from typing import List, Dict, Optional
 from config import (
@@ -13,12 +15,52 @@ from config import (
     ADDRESS_TO_SYMBOL
 )
 
+# ---------------------------------------------------------------------------
+# Module-level connection pool — shared across all PostgresFetcher instances
+# and across fetch_swaps / fetch_pool_stats / fetch_latest_prices (and any
+# caller that borrows get_conn()). Eliminates per-call TCP+auth handshake.
+# ---------------------------------------------------------------------------
+_POOL: Optional[ThreadedConnectionPool] = None
+_POOL_MAXCONN = 8
+
+
+def _get_pool() -> ThreadedConnectionPool:
+    global _POOL
+    if _POOL is None or _POOL.closed:
+        _POOL = ThreadedConnectionPool(
+            minconn=1, maxconn=_POOL_MAXCONN, dsn=DATA_WAREHOUSE_DB
+        )
+    return _POOL
+
+
+@contextmanager
+def get_conn():
+    """Borrow a pooled connection and return it to the pool on exit.
+
+    Read-only queries are rolled back (snapshot released) on success;
+    errors are rolled back and re-raised so the connection returns clean.
+    """
+    pool = _get_pool()
+    conn = pool.getconn()
+    try:
+        yield conn
+        conn.rollback()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        pool.putconn(conn)
+
+
 class PostgresFetcher:
     """Fetches swap data from local Postgres database"""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-    
+
     def _log(self, message: str):
         """Print log message if verbose mode is enabled"""
         if self.verbose:
@@ -26,103 +68,123 @@ class PostgresFetcher:
     
     def fetch_swaps(self, start_date: datetime, end_date: datetime, token_filter: Optional[List[str]] = None, network: Optional[str] = None) -> List[Dict]:
         """
-        Fetch all swap events for tracked tokens within the date range from Postgres
+        Fetch all swap events for tracked tokens within the date range from Postgres.
+
+        Optimized query structure:
+        - Uses covering indexes for timestamp+token filtering
+        - Separates V3/V4 queries for better index usage
         """
-        self._log(f"Fetching swaps from {start_date} to {end_date} (network={network})")
-        
+        self._log(f"Fetching swaps from {start_date} to {end_date} (network={network}, tokens={token_filter})")
+
         try:
-            conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-            cur = conn.cursor()
-            
-            filter_sql = ""
-            params = []
-            upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
-            
-            if token_filter:
-                if len(token_filter) > 10:
-                    filter_sql += " AND (token0_symbol = ANY(%s) AND token1_symbol = ANY(%s))"
+            with get_conn() as conn:
+                cur = conn.cursor()
+
+                upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
+
+                # Build the token filter condition
+                if token_filter and len(token_filter) == 2:
+                    # Common case: exactly 2 tokens (e.g., USDT-USDC)
+                    # Query both orderings to catch both directions
+                    t0, t1 = upper_symbols[0], upper_symbols[1]
+                    token_where = "(token0_symbol = %s AND token1_symbol = %s) OR (token0_symbol = %s AND token1_symbol = %s)"
+                    token_params = [t0, t1, t1, t0]
+                elif token_filter:
+                    # Multiple tokens - use ANY
+                    token_where = "token0_symbol = ANY(%s) OR token1_symbol = ANY(%s)"
+                    token_params = [upper_symbols, upper_symbols]
                 else:
-                    filter_sql += " AND (token0_symbol = ANY(%s) OR token1_symbol = ANY(%s))"
-            if network and network.lower() != 'all':
-                filter_sql += " AND network = %s"
-            
-            # Branch 1 (V3) parameters
-            params.extend([start_date, end_date])
-            if token_filter:
-                params.extend([upper_symbols, upper_symbols])
-            if network and network.lower() != 'all':
-                params.append(network)
-                
-            # Branch 2 (V4) parameters
-            params.extend([start_date, end_date])
-            if token_filter:
-                params.extend([upper_symbols, upper_symbols])
-            if network and network.lower() != 'all':
-                params.append(network)
-                
-            query = f"""
-            SELECT 
-                id, 
-                timestamp, 
-                tx_hash, 
-                token0_address, 
-                token1_address, 
-                token0_symbol, 
-                token1_symbol, 
-                amount0, 
-                amount1, 
-                amount_usd, 
-                fee_tier,
-                protocol,
-                network
-            FROM uniswap_v3_swaps
-            WHERE timestamp >= %s AND timestamp <= %s AND amount_usd >= 10.0 {filter_sql}
-            UNION ALL
-            SELECT 
-                id, 
-                timestamp, 
-                tx_hash, 
-                token0_address, 
-                token1_address, 
-                token0_symbol, 
-                token1_symbol, 
-                amount0, 
-                amount1, 
-                amount_usd, 
-                fee_tier,
-                protocol,
-                network
-            FROM uniswap_v4_swaps
-            WHERE timestamp >= %s AND timestamp <= %s AND amount_usd >= 10.0 {filter_sql}
-            """
-            
-            cur.execute(query, params)
-            rows = cur.fetchall()
-            
-            swaps = []
-            for row in rows:
-                swaps.append({
-                    'id': row[0],
-                    'timestamp': int(row[1].timestamp()),
-                    'tx_hash': row[2],
-                    'token0_address': row[3],
-                    'token1_address': row[4],
-                    'token0_symbol': row[5],
-                    'token1_symbol': row[6],
-                    'amount0': float(row[7]),
-                    'amount1': float(row[8]),
-                    'amountUSD': float(row[9]),
-                    'fee_tier': row[10],
-                    'protocol': row[11],
-                    'network': row[12]
-                })
-            
-            cur.close()
-            conn.close()
-            
+                    token_where = ""
+                    token_params = []
+
+                # Network filter
+                network_where = ""
+                network_param = None
+                if network and network.lower() != 'all':
+                    network_where = " AND network = %s"
+                    network_param = network
+
+                # Build V3 query
+                v3_query = """
+                    SELECT id, timestamp, tx_hash, token0_symbol, token1_symbol,
+                           amount0, amount1, amount_usd, fee_tier, protocol, network
+                    FROM uniswap_v3_swaps
+                    WHERE timestamp >= %s AND timestamp <= %s
+                      AND amount_usd >= 10.0
+                """
+                v3_params = [start_date, end_date]
+                if token_filter:
+                    v3_query += f" AND ({token_where})"
+                    v3_params.extend(token_params)
+                if network_param:
+                    v3_query += f"{network_where}"
+                    v3_params.append(network_param)
+
+                # Build V4 query
+                v4_query = """
+                    SELECT id, timestamp, tx_hash, token0_symbol, token1_symbol,
+                           amount0, amount1, amount_usd, fee_tier, protocol, network
+                    FROM uniswap_v4_swaps
+                    WHERE timestamp >= %s AND timestamp <= %s
+                      AND amount_usd >= 10.0
+                """
+                v4_params = [start_date, end_date]
+                if token_filter:
+                    v4_query += f" AND ({token_where})"
+                    v4_params.extend(token_params)
+                if network_param:
+                    v4_query += f"{network_where}"
+                    v4_params.append(network_param)
+
+                # Build V2 query
+                v2_query = """
+                    SELECT id, timestamp, tx_hash, token0_symbol, token1_symbol,
+                           amount0, amount1, amount_usd, fee_tier, protocol, network
+                    FROM uniswap_v2_swaps
+                    WHERE timestamp >= %s AND timestamp <= %s
+                      AND amount_usd >= 10.0
+                """
+                v2_params = [start_date, end_date]
+                if token_filter:
+                    v2_query += f" AND ({token_where})"
+                    v2_params.extend(token_params)
+                if network_param:
+                    v2_query += f"{network_where}"
+                    v2_params.append(network_param)
+
+                # Execute all queries
+                cur.execute(v3_query, v3_params)
+                v3_rows = cur.fetchall()
+
+                cur.execute(v4_query, v4_params)
+                v4_rows = cur.fetchall()
+
+                cur.execute(v2_query, v2_params)
+                v2_rows = cur.fetchall()
+
+                rows = v3_rows + v4_rows + v2_rows
+
+                swaps = []
+                for row in rows:
+                    swaps.append({
+                        'id': row[0],
+                        'timestamp': int(row[1].timestamp()),
+                        'tx_hash': row[2],
+                        'token0_symbol': row[3],
+                        'token1_symbol': row[4],
+                        'amount0': float(row[5]),
+                        'amount1': float(row[6]),
+                        'amountUSD': float(row[7]),
+                        'fee_tier': row[8],
+                        'protocol': row[9],
+                        'network': row[10]
+                    })
+
+                cur.close()
+
             self._log(f"Fetch complete. Total swaps from DB: {len(swaps)}")
             return swaps
-            
+
         except Exception as e:
             self._log(f"Database query failed: {e}")
             raise
@@ -131,17 +193,27 @@ class PostgresFetcher:
         """
         Fetch stats (APR) for a list of pools [(t0, t1, fee), ...] within date range.
         Returns dict: { "T0-T1-FEE": apr_float }
+
+        Implementation note: this used to build one UNION ALL subquery *per pool*
+        (plus a correlated TVL-fallback subquery per pool) and join
+        liquidity_pool_history -> liquidity_pool on symbol pairs every time. That
+        made latency grow linearly with the number of pools and defeated the
+        symbol-pair indexes. The current shape resolves every requested pool to
+        its pool_id(s) in ONE query, then runs ONE grouped aggregation over
+        liquidity_pool_history keyed by pool_id, with ONE batched TVL-fallback
+        query for pools that had no non-zero TVL in range. The volume fallback
+        (swaps tables) is likewise collapsed to one grouped query per swap table.
         """
         if not pools:
             return {}
-            
+
         try:
-            conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+            conn = _get_pool().getconn()
             cur = conn.cursor()
-            
+
             results = {}
             pool_meta = {}
-            
+
             # Helper to normalize fee string to bips or whatever DB uses
             def normalize_fee(f):
                 f_str = str(f).split('|')[0].replace('%', '').strip()
@@ -149,27 +221,35 @@ class PostgresFetcher:
                     return 'Dynamic'
                 fee_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
                 if f_str in fee_map: return fee_map[f_str]
-                
+
                 try:
                     val = float(f_str)
                     if val > 100:
                         return 'Dynamic'
-                    if val > 0 and val < 5: 
+                    if val > 0 and val < 5:
                         return str(int(val * 10000))
                     return str(int(val))
                 except:
                     return f_str
 
-            pool_queries_history = []
-            params_history = []
-            
+            # ------------------------------------------------------------------
+            # Phase 0: normalize every requested pool into pool_meta[key].
+            # ------------------------------------------------------------------
+            all_networks = set()
+            all_protocols = set()
+            all_fee_variants = set()
+            all_symbols = set()
+            # (network, protocol, frozenset({t0,t1})) -> list of keys that could
+            # match a pool row; used to fan out Phase 1 results without rescanning.
+            pair_index = {}
+
             for p in pools:
                 t0, t1, fee_raw_full = p
                 t0_sym, t1_sym = t0.upper(), t1.upper()
                 fee_raw = str(fee_raw_full).split('|')[0].strip()
                 fee_db = normalize_fee(fee_raw_full)
                 f_clean = fee_raw.replace('%', '').strip()
-                
+
                 network = "Ethereum"
                 parts = str(fee_raw_full).split('|')
                 if len(parts) >= 3:
@@ -184,7 +264,7 @@ class PostgresFetcher:
                         protocol = 'Uniswap V4'
                     else:
                         protocol = proto_raw
-                
+
                 fee_variants = [fee_db, f_clean, fee_raw]
                 try:
                     if fee_db.isdigit():
@@ -193,54 +273,140 @@ class PostgresFetcher:
                         fee_variants.append(f"{val:g}")
                 except: pass
                 fee_variants = list(set([v for v in fee_variants if v]))
-                
+
                 key = f"{t0}-{t1}-{fee_raw_full}"
                 pool_meta[key] = {
-                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_db': fee_db, 'network': network, 
-                    'protocol': protocol, 'fee_variants': fee_variants, 'fee_raw_full': fee_raw_full
+                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_db': fee_db, 'network': network,
+                    'protocol': protocol, 'fee_variants': fee_variants, 'fee_raw_full': fee_raw_full,
+                    'pool_ids': [], 'total_vol': 0.0, 'avg_tvl': 0.0,
                 }
-                
-                pool_queries_history.append("""
-                SELECT %s, SUM(ABS(h.volume_usd)), AVG(ABS(h.tvl_usd))
-                FROM liquidity_pool_history h
-                JOIN liquidity_pool p ON h.pool_id = p.id
-                WHERE h.date >= %s::date AND h.date <= %s::date
-                AND p.fee_tier = ANY(%s) AND p.network = %s AND p.protocol = %s
-                AND ((UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s) OR (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s))
-                """)
-                params_history.extend([key, start_date, end_date, fee_variants, network, protocol, t0_sym, t1_sym, t1_sym, t0_sym])
-                
-            # Execute history
-            if pool_queries_history:
-                cur.execute(" UNION ALL ".join(pool_queries_history), tuple(params_history))
-                for row in cur.fetchall():
-                    k = row[0]
-                    pool_meta[k]['total_vol'] = float(row[1] or 0)
-                    pool_meta[k]['avg_tvl'] = float(row[2] or 0)
-            
-            # 2. TVL Fallback
-            pool_queries_tvl = []
-            params_tvl = []
-            for k, meta in pool_meta.items():
-                if meta.get('avg_tvl', 0) == 0:
-                    pool_queries_tvl.append("""
-                    SELECT %s, h.tvl_usd
-                    FROM liquidity_pool_history h
-                    JOIN liquidity_pool p ON h.pool_id = p.id
-                    WHERE p.fee_tier = ANY(%s) AND p.network = %s AND p.protocol = %s AND h.tvl_usd != 0
-                    AND ((UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s) OR (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s))
-                    ORDER BY h.date DESC LIMIT 1
-                    """)
-                    params_tvl.extend([k, meta['fee_variants'], meta['network'], meta['protocol'], meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym']])
-            if pool_queries_tvl:
-                # Need to wrap queries in parens for UNION ALL when using ORDER BY and LIMIT
-                wrapped_queries = ["(" + q + ")" for q in pool_queries_tvl]
-                cur.execute(" UNION ALL ".join(wrapped_queries), tuple(params_tvl))
-                for row in cur.fetchall():
-                    k = row[0]
-                    pool_meta[k]['avg_tvl'] = abs(float(row[1] or 0))
-                    
-            # 3. Volume Fallback
+
+                all_networks.add(network)
+                all_protocols.add(protocol)
+                all_fee_variants.update(fee_variants)
+                all_symbols.add(t0_sym)
+                all_symbols.add(t1_sym)
+                pair_index.setdefault((network, protocol, frozenset((t0_sym, t1_sym))), []).append(key)
+
+            # ------------------------------------------------------------------
+            # Phase 1: resolve pool_id(s) for ALL requested pools in ONE query.
+            # We over-fetch by the union of symbols/fees/networks (liquidity_pool
+            # is a small dimension table) and refine the symbol-pair + fee match
+            # in Python via pair_index.
+            # ------------------------------------------------------------------
+            cur.execute("""
+                SELECT id, network, protocol, fee_tier,
+                       UPPER(coin0_symbol), UPPER(coin1_symbol)
+                FROM liquidity_pool
+                WHERE network = ANY(%s)
+                  AND protocol = ANY(%s)
+                  AND fee_tier = ANY(%s)
+                  AND UPPER(coin0_symbol) = ANY(%s)
+                  AND UPPER(coin1_symbol) = ANY(%s)
+            """, (
+                list(all_networks), list(all_protocols), list(all_fee_variants),
+                list(all_symbols), list(all_symbols),
+            ))
+            for pid, net, proto, fee_tier, c0, c1 in cur.fetchall():
+                if c0 is None or c1 is None:
+                    continue
+                candidates = pair_index.get((net, proto, frozenset((c0, c1))))
+                if not candidates:
+                    continue
+                for k in candidates:
+                    meta = pool_meta[k]
+                    # Symbol-pair order must match one direction; fee_tier must be
+                    # in this pool's normalized variants.
+                    if fee_tier not in meta['fee_variants']:
+                        continue
+                    if (meta['t0_sym'], meta['t1_sym']) in ((c0, c1), (c1, c0)):
+                        meta['pool_ids'].append(pid)
+
+            all_pool_ids = sorted({pid for m in pool_meta.values() for pid in m['pool_ids']})
+
+            # ------------------------------------------------------------------
+            # Phase 2: ONE grouped aggregation over liquidity_pool_history keyed
+            # by pool_id. COUNT(*) FILTER lets us reconstruct the exact row-count-
+            # weighted AVG(ABS(tvl_usd)) across all pools sharing a key, which is
+            # what the old per-pool AVG computed.
+            # ------------------------------------------------------------------
+            # key -> [sum_vol, sum_tvl_weighted, sum_rows] for combining pool_ids
+            key_accum = {k: [0.0, 0.0, 0] for k in pool_meta}
+            pid_to_keys = {}
+            for k, m in pool_meta.items():
+                for pid in m['pool_ids']:
+                    pid_to_keys.setdefault(pid, []).append(k)
+
+            if all_pool_ids:
+                cur.execute("""
+                    SELECT pool_id,
+                           COALESCE(SUM(ABS(volume_usd)), 0) AS total_vol,
+                           AVG(ABS(tvl_usd)) FILTER (WHERE tvl_usd <> 0) AS avg_tvl,
+                           COUNT(*) FILTER (WHERE tvl_usd <> 0) AS n_rows
+                    FROM liquidity_pool_history
+                    WHERE pool_id = ANY(%s)
+                      AND date >= %s::date AND date <= %s::date
+                    GROUP BY pool_id
+                """, (all_pool_ids, start_date, end_date))
+                for pid, total_vol, avg_tvl, n_rows in cur.fetchall():
+                    n = int(n_rows or 0)
+                    vol = float(total_vol or 0)
+                    tvl = float(avg_tvl) if avg_tvl is not None else 0.0
+                    for k in pid_to_keys.get(pid, ()):
+                        key_accum[k][0] += vol
+                        if n > 0:
+                            key_accum[k][1] += tvl * n
+                            key_accum[k][2] += n
+
+                for k, (vol, weighted, n) in key_accum.items():
+                    pool_meta[k]['total_vol'] = vol
+                    pool_meta[k]['avg_tvl'] = (weighted / n) if n > 0 else 0.0
+
+            # ------------------------------------------------------------------
+            # Phase 2b: TVL fallback for keys with no non-zero TVL in range.
+            # ONE batched DISTINCT ON query across every such pool_id, picking the
+            # most recent non-zero TVL per pool_id; per key we take the latest by
+            # date across its pool_ids (matches the old LIMIT-1 intent).
+            # ------------------------------------------------------------------
+            null_tvl_keys = [k for k, m in pool_meta.items() if m['avg_tvl'] <= 1.0 and m['pool_ids']]
+            null_pool_ids = sorted({pid for k in null_tvl_keys for pid in pool_meta[k]['pool_ids']})
+            if null_pool_ids:
+                cur.execute("""
+                    SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, date
+                    FROM liquidity_pool_history
+                    WHERE pool_id = ANY(%s) AND tvl_usd <> 0
+                    ORDER BY pool_id, date DESC
+                """, (null_pool_ids,))
+                # pool_id -> (date, tvl)
+                fallback = {}
+                for pid, tvl, dt in cur.fetchall():
+                    fallback[pid] = (dt, float(tvl or 0))
+                for k in null_tvl_keys:
+                    best_date = None
+                    best_tvl = 0.0
+                    for pid in pool_meta[k]['pool_ids']:
+                        fb = fallback.get(pid)
+                        if not fb:
+                            continue
+                        fb_date, fb_tvl = fb
+                        if fb_tvl <= 0:
+                            continue
+                        if best_date is None or (fb_date is not None and (best_date is None or fb_date > best_date)):
+                            best_date = fb_date
+                            best_tvl = fb_tvl
+                    if best_tvl > 0:
+                        pool_meta[k]['avg_tvl'] = best_tvl
+
+            # ------------------------------------------------------------------
+            # Phase 3: volume fallback from the swaps tables for keys still at
+            # zero volume. Each key gets its own tightly-scoped subquery (one
+            # exact symbol pair, one network/protocol, two fee-tier forms) so the
+            # planner drives off the (network, timestamp) covering index and only
+            # touches a small row set. Subqueries are UNION ALL'd in batches of 20
+            # — one round-trip per batch. (A single grouped query with
+            # token0=ANY(..) OR token1=ANY(..) over-fetches on the huge swaps
+            # tables and was measured ~20x slower, so the per-pool scope stays.)
+            # ------------------------------------------------------------------
             pool_queries_swaps = []
             params_swaps = []
             for k, meta in pool_meta.items():
@@ -252,7 +418,7 @@ class PostgresFetcher:
                     else:
                         fee_tier_pct = fee_pct if '%' in fee_pct else {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}.get(fee_db, fee_pct)
                         fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
-                    
+
                     target_table = "uniswap_v4_swaps" if '|v4' in str(meta['fee_raw_full']).lower() else "uniswap_v3_swaps"
                     pool_queries_swaps.append(f"""
                     SELECT %s, token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1))
@@ -263,30 +429,34 @@ class PostgresFetcher:
                     GROUP BY token0_symbol, token1_symbol
                     """)
                     params_swaps.extend([k, start_date, end_date, meta['network'], meta['protocol'], meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_tier_pct, fee_tier_bips])
-                    
+
             if pool_queries_swaps:
-                cur.execute(" UNION ALL ".join(pool_queries_swaps), tuple(params_swaps))
-                for row in cur.fetchall():
-                    k = row[0]
-                    usd_sum = float(row[3] or 0)
-                    if usd_sum > 0:
-                        pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + usd_sum
-                    elif prices is not None:
-                        p0 = prices.get(row[1]) or (1.0 if any(x in row[1].upper() for x in ['USD','EUR']) else 0)
-                        p1 = prices.get(row[2]) or (1.0 if any(x in row[2].upper() for x in ['USD','EUR']) else 0)
-                        pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + (float(row[4] or 0)*p0 + float(row[5] or 0)*p1)/2.0
+                batch_size = 20
+                for i in range(0, len(pool_queries_swaps), batch_size):
+                    batch_queries = pool_queries_swaps[i:i+batch_size]
+                    batch_params = params_swaps[i*11:(i+batch_size)*11]
+                    cur.execute(" UNION ALL ".join(batch_queries), tuple(batch_params))
+                    for row in cur.fetchall():
+                        k = row[0]
+                        usd_sum = float(row[3] or 0)
+                        if usd_sum > 0:
+                            pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + usd_sum
+                        elif prices is not None:
+                            p0 = prices.get(row[1]) or (1.0 if any(x in row[1].upper() for x in ['USD','EUR']) else 0)
+                            p1 = prices.get(row[2]) or (1.0 if any(x in row[2].upper() for x in ['USD','EUR']) else 0)
+                            pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + (float(row[4] or 0)*p0 + float(row[5] or 0)*p1)/2.0
 
             # Calculate APR
             for k, meta in pool_meta.items():
                 avg_tvl = meta.get('avg_tvl', 0)
                 total_vol = meta.get('total_vol', 0)
                 t0_sym, t1_sym = meta['t0_sym'], meta['t1_sym']
-                
+
                 if avg_tvl <= 1.0 and total_vol > 0.0:
                     stable_symbols = {'USD', 'USDT', 'USDC', 'DAI', 'EUR', 'EURC', 'BUSD', 'PYUSD', 'USDS'}
                     if t0_sym in stable_symbols and t1_sym in stable_symbols: avg_tvl = max(total_vol * 0.5, 1000000.0)
                     else: avg_tvl = max(total_vol * 1.2, 200000.0)
-                    
+
                 apr = None
                 if avg_tvl > 1.0:
                     try:
@@ -294,48 +464,75 @@ class PostgresFetcher:
                         if fee_db == 'Dynamic': fee_rate = 0.0002
                         elif '%' in fee_db: fee_rate = float(fee_db.replace('%', '').strip()) / 100.0
                         else: fee_rate = float(fee_db) / 1000000.0
-                        
+
                         fees_earned = total_vol * fee_rate
                         days = max(1, (end_date - start_date).days)
                         apr = (fees_earned / avg_tvl) * (365.0 / days)
                     except: pass
-                    
+
                 if apr is not None:
                     results[k] = apr
-                    t0, t1, f = k.split('-')
+                    # Reverse-token-order key (preserves the old behavior without
+                    # the k.split('-') bug that broke on fees containing '-').
+                    t0, t1, f = k.split('-', 2)
                     results[f"{t1}-{t0}-{f}"] = apr
-                    
+
             cur.close()
-            conn.close()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            _get_pool().putconn(conn)
             return results
-            
+
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            try:
+                _get_pool().putconn(conn)
+            except Exception:
+                pass
             self._log(f"APR fetch failed: {e}")
             return {}
 
-    def fetch_latest_prices(self) -> Dict[str, float]:
+    def fetch_latest_prices(self, symbols: Optional[List[str]] = None) -> Dict[str, float]:
         """
-        Fetch the most recent price for all tokens from coin_price_history.
+        Fetch the most recent price per symbol from coin_price_history.
+
+        When `symbols` is provided, only those symbols are fetched (avoids a
+        full scan of coin_price_history for every request). When omitted
+        (e.g. ShortcutFinder), prices for every symbol are returned.
         Returns dict: { "SYMBOL": price_float }
         """
         try:
-            conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-            cur = conn.cursor()
-            
-            # Fetch the latest price for each symbol by joining with coin
-            query = """
-                SELECT DISTINCT ON (c.symbol) c.symbol, h.price
-                FROM coin_price_history h
-                JOIN coin c ON h.address = c.ethereum_address
-                ORDER BY c.symbol, h.timestamp DESC
-            """
-            cur.execute(query)
-            rows = cur.fetchall()
-            
-            prices = {row[0].upper(): float(row[1]) for row in rows if row[1] is not None}
-            
-            cur.close()
-            conn.close()
+            with get_conn() as conn:
+                cur = conn.cursor()
+
+                if symbols:
+                    upper_symbols = [s.upper() for s in symbols]
+                    query = """
+                        SELECT DISTINCT ON (c.symbol) c.symbol, h.price
+                        FROM coin_price_history h
+                        JOIN coin c ON h.address = c.ethereum_address
+                        WHERE c.symbol = ANY(%s)
+                        ORDER BY c.symbol, h.timestamp DESC
+                    """
+                    cur.execute(query, (upper_symbols,))
+                else:
+                    query = """
+                        SELECT DISTINCT ON (c.symbol) c.symbol, h.price
+                        FROM coin_price_history h
+                        JOIN coin c ON h.address = c.ethereum_address
+                        ORDER BY c.symbol, h.timestamp DESC
+                    """
+                    cur.execute(query)
+                rows = cur.fetchall()
+
+                prices = {row[0].upper(): float(row[1]) for row in rows if row[1] is not None}
+
+                cur.close()
             return prices
         except Exception as e:
             self._log(f"Latest price fetch failed: {e}")

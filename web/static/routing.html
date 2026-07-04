@@ -47,40 +47,35 @@
         </nav>
 
         <main>
-            <div class="swap-container">
-                <div class="swap-card">
-                    <div class="swap-header">
-                        <h2>Route Analysis</h2>
+            <div class="page-hero">
+                <h1 class="page-title">Route Analysis</h1>
+                <p class="page-subtitle">Discover swap routes across chains and protocols</p>
+            </div>
+            <div class="controls-wrapper">
+                <div class="selection-row">
+                    <div class="input-group-pair">
+                        <input type="text" id="start-token" placeholder="Token" value="USDC" class="token-input-field">
+                        <span class="token-arrow">→</span>
+                        <input type="text" id="end-token" placeholder="Token" value="USDT" class="token-input-field">
                     </div>
 
-                    <div class="token-input-container">
-                        <div class="token-input">
-                            <label>From</label>
-                            <input type="text" id="start-token" placeholder="Select token" value="USDC">
-                        </div>
-
-                        <div class="swap-arrow" id="swap-tokens-btn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                <path d="M7 13L12 18L17 13M7 6L12 11L17 6" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" />
-                            </svg>
-                        </div>
-
-                        <div class="token-input">
-                            <label>To</label>
-                            <input type="text" id="end-token" placeholder="Select token" value="USDT">
-                        </div>
-                    </div>
-                    <div class="date-range-container">
+                    <div class="input-group-pair">
                         <div class="input-group date-input">
-                            <label>Start Date</label>
                             <input type="date" id="start-date">
                         </div>
+                        <span class="date-arrow">→</span>
                         <div class="input-group date-input">
-                            <label>End Date</label>
                             <input type="date" id="end-date">
                         </div>
                     </div>
+
+                    <select id="query-network-filter" class="network-select">
+                        <option value="all">All Chains</option>
+                        <option value="Ethereum">Ethereum</option>
+                        <option value="Arbitrum">Arbitrum</option>
+                        <option value="Base">Base</option>
+                        <option value="BNB">BNB Chain</option>
+                    </select>
 
                     <button id="analyze-btn" class="primary-btn">Analyze Routes</button>
                 </div>
@@ -114,6 +109,7 @@
                                 <label for="protocol-filter">Protocol</label>
                                 <select id="protocol-filter" class="filter-select">
                                     <option value="all">All</option>
+                                    <option value="Uniswap V2">Uniswap V2</option>
                                     <option value="Uniswap V3">Uniswap V3</option>
                                     <option value="Uniswap V4">Uniswap V4</option>
                                     <option value="PancakeSwap V3">PancakeSwap V3</option>
@@ -179,14 +175,24 @@
             </section>
 
             <div id="loader" class="loader-container hidden">
-                <div class="progress-bar-container" style="width: 100%; max-width: 400px; height: 20px; background: #333; border-radius: 10px; overflow: hidden; margin: 10px auto; border: 1px solid #444;">
-                    <div id="progress-bar-fill" style="width: 0%; height: 100%; background: #00ffcc; transition: width 0.2s; box-shadow: 0 0 10px rgba(0, 255, 204, 0.5);"></div>
+                <div class="loader-card">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-shimmer"></div>
+                        <div id="progress-bar-fill"></div>
+                        <p id="progress-text" class="progress-text">Analyzing routes...</p>
+                    </div>
                 </div>
-                <p id="progress-text">Analyzing routes from Postgres... 0%</p>
             </div>
 
             <div id="no-data" class="no-data-msg hidden">
-                <p>No swap data found for the specified period and tokens.</p>
+                <div class="empty-state-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v4M12 16h.01"/>
+                    </svg>
+                </div>
+                <p class="empty-state-title">No Data Found</p>
+                <p class="empty-state-desc">No swap data found for the specified period and tokens.</p>
             </div>
         </main>
 
@@ -195,7 +201,7 @@
     </div>
 
     <script src="/static/nav.js"></script>
-    <script src="/static/app.js?v=4.06"></script>
+    <script src="/static/app.js?v=4.10"></script>
 </body>
 
 </html>

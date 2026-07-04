@@ -377,6 +377,7 @@ async def test_route_analysis_ui(config: Dict[str, Any]):
     assert "Arbitrum" in networks_seen, "No routes from Arbitrum found"
     assert "Base" in networks_seen, "No routes from Base found"
     assert "BNB" in networks_seen, "No routes from BNB chain found"
+    assert "Uniswap V2" in protocols_seen, "No Uniswap V2 pools found"
     assert "Uniswap V3" in protocols_seen, "No Uniswap V3 pools found"
     assert "Uniswap V4" in protocols_seen, "No Uniswap V4 pools found"
     assert "PancakeSwap V3" in protocols_seen, "No PancakeSwap V3 pools found"

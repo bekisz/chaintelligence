@@ -73,15 +73,22 @@ def get_factory_and_hash(protocol: str, network: str):
     return net_cfg['factory'], net_cfg['init_hash']
 
 
-def _derive_address(t0_bytes: bytes, t1_bytes: bytes, fee_val: int, factory_hex: str, init_hash_hex: str) -> str:
-    """Derive a Uniswap V3-style pool address via CREATE2.
+def _derive_address(t0_bytes: bytes, t1_bytes: bytes, fee_val: int, factory_hex: str, init_hash_hex: str, is_v2: bool = False) -> str:
+    """Derive a pool address via CREATE2.
 
-    Uses the same formula as PoolAddress.sol:
-      salt = keccak256(abi.encode(token0, token1, fee))          # each 32 bytes
+    V3/V4 formula (PoolAddress.sol):
+      salt = keccak256(abi.encode(token0, token1, fee))          # each 32 bytes (padded)
+
+    V2 formula (UniswapV2Library):
+      salt = keccak256(abi.encodePacked(token0, token1))         # packed (no padding)
       address = keccak256(0xff || factory || salt || init_hash)[12:]
     """
-    # abi.encode pads each value to 32 bytes
-    salt = keccak(b'\x00' * 12 + t0_bytes + b'\x00' * 12 + t1_bytes + fee_val.to_bytes(32, 'big'))
+    if is_v2:
+        # V2: abi.encodePacked — just concatenate the two 20-byte addresses
+        salt = keccak(t0_bytes + t1_bytes)
+    else:
+        # V3/V4: abi.encode pads each value to 32 bytes
+        salt = keccak(b'\x00' * 12 + t0_bytes + b'\x00' * 12 + t1_bytes + fee_val.to_bytes(32, 'big'))
     f_bytes = bytes.fromhex(factory_hex.removeprefix('0x'))
     ih_bytes = bytes.fromhex(init_hash_hex.removeprefix('0x'))
     return '0x' + keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
@@ -484,7 +491,12 @@ async def analyze(
                         if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4'):
                             continue  # V4 not supported yet
 
-                        protocol = 'Uniswap V3' if proto_lower in ('v3', 'uniswap v3', 'uniswap-v3') else proto_raw
+                        if proto_lower in ('v2', 'uniswap v2', 'uniswap-v2'):
+                            protocol = 'Uniswap V2'
+                            # V2 has a single fee tier (0.30%), so fee_val is not used in CREATE2 salt
+                            # V2 address derivation uses abi.encodePacked (no padding) — handled below
+                        else:
+                            protocol = 'Uniswap V3' if proto_lower in ('v3', 'uniswap v3', 'uniswap-v3') else proto_raw
 
                         addr0 = token_addresses.get(pool_network, {}).get(t0_sym)
                         addr1 = token_addresses.get(pool_network, {}).get(t1_sym)
@@ -517,6 +529,7 @@ async def analyze(
                                 print(f"  Skipping {key}: {ex}")
                                 continue
 
+                        is_v2 = (protocol == 'Uniswap V2')
                         pool_cache_key = (tokens[0], tokens[1], fee_val, protocol, pool_network)
                         jobs.append({
                             'key': key,
@@ -526,6 +539,7 @@ async def analyze(
                             'fee_val': fee_val,
                             'factory_hex': factory_hex,
                             'init_hash_hex': init_hash_hex,
+                            'is_v2': is_v2,
                         })
                     except Exception as ex:
                         print(f"  Skipping pool ({t0},{t1},{fee}): {ex}")
@@ -544,7 +558,8 @@ async def analyze(
                                 try:
                                     addr = _derive_address(
                                         j['t0_bytes'], j['t1_bytes'], j['fee_val'],
-                                        j['factory_hex'], j['init_hash_hex']
+                                        j['factory_hex'], j['init_hash_hex'],
+                                        is_v2=j.get('is_v2', False)
                                     )
                                     batch_results[j['key']] = addr
                                     POOL_ADDRESS_CACHE[pk] = addr
