@@ -631,18 +631,28 @@ async def get_date_range(network: Optional[str] = Query(None, description="Filte
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            where = ""
-            params = []
             if network and network.lower() != 'all':
-                where = " WHERE network = %s"
-                params = [network]
-            cur.execute(f"""
-                SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM (
-                    SELECT timestamp, network FROM uniswap_v3_swaps
-                    UNION ALL
-                    SELECT timestamp, network FROM uniswap_v4_swaps
-                ) as all_swaps{where}
-            """, params)
+                # Per-network: return the exact date range for that network
+                cur.execute("""
+                    SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM (
+                        SELECT timestamp, network FROM uniswap_v3_swaps
+                        UNION ALL
+                        SELECT timestamp, network FROM uniswap_v4_swaps
+                    ) as all_swaps WHERE network = %s
+                """, (network,))
+            else:
+                # "All" mode: return the tightest range that has data for every network
+                cur.execute("""
+                    SELECT MAX(min_date)::date, MAX(max_date)::date FROM (
+                        SELECT network, MIN(timestamp) as min_date, MAX(timestamp) as max_date
+                        FROM (
+                            SELECT timestamp, network FROM uniswap_v3_swaps
+                            UNION ALL
+                            SELECT timestamp, network FROM uniswap_v4_swaps
+                        ) as all_swaps
+                        GROUP BY network
+                    ) as per_network
+                """)
             row = cur.fetchone()
             cur.close()
 
