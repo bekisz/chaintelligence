@@ -13,6 +13,15 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from anyio import to_thread
 from dotenv import load_dotenv
+from eth_hash.auto import keccak
+import yaml
+import hashlib
+
+# Global caches for pool address derivation
+from typing import Tuple, Dict
+
+POOL_ADDRESS_CACHE: Dict[Tuple[str, str, int, str, str], str] = {}
+FACTORY_HASH_CACHE: Dict[Tuple[str, str], Tuple[str, str]] = {}
 
 # Airflow API Configuration
 AIRFLOW_API_URL = os.getenv("AIRFLOW_API_URL", "http://airflow-webserver:8080/api/v2")
@@ -25,19 +34,61 @@ STATIC_DIR = os.path.join(WEB_DIR, 'static')
 load_dotenv(os.path.join(ROOT_DIR, '.env'))
 
 # Import routing logic from chain-feeder
+
+# Load DEX configuration
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'dex_config.yaml')
+with open(CONFIG_PATH, 'r') as f:
+    DEX_CONFIG = yaml.safe_load(f)
+
+
 CHAIN_FEEDER_ROUTING = os.path.join(ROOT_DIR, 'chain-feeder', 'routing')
 if CHAIN_FEEDER_ROUTING not in sys.path:
     sys.path.insert(0, CHAIN_FEEDER_ROUTING)
 
 # Import graph discovery client
+
+
 GRAPH_CLIENT_DIR = os.path.join(ROOT_DIR, 'chain-feeder')
 if GRAPH_CLIENT_DIR not in sys.path:
     sys.path.insert(0, GRAPH_CLIENT_DIR)
 if os.path.join(GRAPH_CLIENT_DIR, 'include') not in sys.path:
     sys.path.insert(0, os.path.join(GRAPH_CLIENT_DIR, 'include'))
 
+# Import graph discovery client
+def get_factory_and_hash(protocol: str, network: str):
+    """Return the factory address and init code hash for a given protocol/network.
+    Supports network-specific entries in the config file.
+    """
+    key = protocol.lower().replace(' ', '_')
+    cfg = DEX_CONFIG.get(key)
+    if not cfg:
+        raise ValueError(f"Unsupported protocol '{protocol}'")
+    # Direct entries (same config for all networks)
+    if isinstance(cfg, dict) and 'factory' in cfg and 'init_hash' in cfg:
+        return cfg['factory'], cfg['init_hash']
+    # Network-specific entries (case-insensitive)
+    net_cfg = cfg.get(network) or cfg.get(network.lower())
+    if not net_cfg:
+        raise ValueError(f"Unsupported network '{network}' for protocol '{protocol}'")
+    return net_cfg['factory'], net_cfg['init_hash']
+
+
+def _derive_address(t0_bytes: bytes, t1_bytes: bytes, fee_val: int, factory_hex: str, init_hash_hex: str) -> str:
+    """Derive a Uniswap V3-style pool address via CREATE2.
+
+    Uses the same formula as PoolAddress.sol:
+      salt = keccak256(abi.encode(token0, token1, fee))          # each 32 bytes
+      address = keccak256(0xff || factory || salt || init_hash)[12:]
+    """
+    # abi.encode pads each value to 32 bytes
+    salt = keccak(b'\x00' * 12 + t0_bytes + b'\x00' * 12 + t1_bytes + fee_val.to_bytes(32, 'big'))
+    f_bytes = bytes.fromhex(factory_hex.removeprefix('0x'))
+    ih_bytes = bytes.fromhex(init_hash_hex.removeprefix('0x'))
+    return '0x' + keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
+
+
 try:
-    from postgres_fetcher import PostgresFetcher
+    from postgres_fetcher import PostgresFetcher, get_conn
     from route_analyzer import RouteAnalyzer
     from shortcut_finder import ShortcutFinder
     from config import DATA_WAREHOUSE_DB
@@ -60,7 +111,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/api/routes/date-range", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp", "/routing"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -130,31 +181,33 @@ def resolve_token_input(input_str: str) -> list[str]:
     """
     if input_str == '*':
         return ['*']
-        
+
     try:
-        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-        cur = conn.cursor()
-        
-        # Check if it's a family
-        # We search case-insensitive for family name in the official coin_family table
-        cur.execute("""
-            SELECT symbol FROM coin_family
-            WHERE UPPER(name) = %s
-        """, (input_str.upper(),))
-        rows = cur.fetchall()
-        
-        cur.close()
-        conn.close()
-        
+        with get_conn() as conn:
+            cur = conn.cursor()
+
+            # Check if it's a family
+            # We search case-insensitive for family name in the official coin_family table
+            cur.execute("""
+                SELECT symbol FROM coin_family
+                WHERE UPPER(name) = %s
+            """, (input_str.upper(),))
+            rows = cur.fetchall()
+
+            cur.close()
+
         if rows:
             return [row[0] for row in rows]
-        
+
         # Not a family, assume single token
         return [input_str]
-        
+
     except Exception as e:
         print(f"Error resolving token family: {e}")
         return [input_str]
+
+# Global memory cache for resolved token symbols to contract addresses per network to prevent repetitive slow DB queries
+TOKEN_ADDRESS_CACHE = {}
 
 @app.get("/api/routes/analyze", tags=["Route Analytics"])
 async def analyze(
@@ -194,10 +247,7 @@ async def analyze(
         if not end_tokens_list: end_tokens_list = [end_token]
 
         fetcher = PostgresFetcher(verbose=True)
-        # Fetch prices for volume fallback
-        latest_prices = fetcher.fetch_latest_prices()
-        analyzer = RouteAnalyzer(verbose=True, prices=latest_prices)
-        
+
         # Build token_filter to prevent fetching millions of irrelevant rows
         token_filter = []
         if "*" not in start_tokens_list:
@@ -206,11 +256,14 @@ async def analyze(
             token_filter.extend(end_tokens_list)
         if not token_filter:
             token_filter = None # Fallback if both are wildcards
-            
+
+        # Fetch prices (scoped to the involved tokens) for volume fallback
+        latest_prices = fetcher.fetch_latest_prices(token_filter)
+        analyzer = RouteAnalyzer(verbose=True, prices=latest_prices)
+
         from fastapi.responses import StreamingResponse
         import json
         import asyncio
-        import gc
         import psycopg2
 
         async def generate():
@@ -221,24 +274,26 @@ async def analyze(
             while c_chunk_start < end_dt:
                 c_chunk_end = min(c_chunk_start + timedelta(days=1), end_dt)
                 progress_sec = (c_chunk_start - start_dt).total_seconds()
-                pct = (progress_sec / total_seconds) * 100 if total_seconds > 0 else 0
-                yield json.dumps({"type": "progress", "pct": round(pct, 1), "message": f"Fetching {c_chunk_start.strftime('%Y-%m-%d')}..."}) + "\n"
+                # Fetching takes 0% to 75% of the total progress
+                pct = (progress_sec / total_seconds) * 75 if total_seconds > 0 else 0
+                yield json.dumps({"type": "progress", "pct": round(pct, 1), "message": f"Fetching swaps for {c_chunk_start.strftime('%Y-%m-%d')} → {c_chunk_end.strftime('%Y-%m-%d')}..."}) + "\n"
                 await asyncio.sleep(0.01)
-                
+
                 print(f"[Anaylsis] Processing batch: {c_chunk_start} -> {c_chunk_end}")
                 batch_swaps = await asyncio.to_thread(
                     fetcher.fetch_swaps, c_chunk_start, c_chunk_end, token_filter, network
                 )
-                
+
                 if batch_swaps:
                     has_data = True
-                    analyzer.process_batch(batch_swaps, start_tokens_list, end_tokens_list)
-                    
+                    await asyncio.to_thread(
+                        analyzer.process_batch, batch_swaps, start_tokens_list, end_tokens_list
+                    )
+
                 batch_swaps = []
-                gc.collect()
                 c_chunk_start = c_chunk_end
                 
-            yield json.dumps({"type": "progress", "pct": 100, "message": "Finalizing analysis..."}) + "\n"
+            yield json.dumps({"type": "progress", "pct": 75.0, "message": "Building routing path graph..."}) + "\n"
             await asyncio.sleep(0.01)
             
             if not has_data:
@@ -277,6 +332,8 @@ async def analyze(
             # 2. Fetch stats
             aprs = {}
             if pools_to_fetch:
+                yield json.dumps({"type": "progress", "pct": 80.0, "message": "Querying pool stats & APRs..."}) + "\n"
+                await asyncio.sleep(0.01)
                 try:
                     aprs = await asyncio.to_thread(
                         fetcher.fetch_pool_stats, list(pools_to_fetch), start_dt, end_dt, latest_prices
@@ -288,11 +345,18 @@ async def analyze(
             # 2b. Compute pool addresses deterministically using Create2/Keccak-256
             pool_addresses = {}
             if pools_to_fetch:
+                yield json.dumps({"type": "progress", "pct": 90.0, "message": "Generating pool smart contract addresses..."}) + "\n"
+                await asyncio.sleep(0.01)
                 token_symbols = set()
+                # Collect all unique networks needed for these pools
+                needed_networks = set()
                 for (t0, t1, fee) in pools_to_fetch:
                     token_symbols.add(t0.upper())
                     token_symbols.add(t1.upper())
-                
+                    parts = str(fee).split('|')
+                    pool_network = parts[2].strip() if len(parts) >= 3 else "Ethereum"
+                    needed_networks.add(pool_network)
+
                 token_addresses = {}
                 if token_symbols:
                     # Core verified on-chain token addresses by network to ensure correct Create2 calculations
@@ -309,6 +373,11 @@ async def analyze(
                             "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
                             "USDT": "0x55d398326f99059ff775485246999027b3197955",
                             "BTCB": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+                            "BUSD": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
+                            "CAKE": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+                            "BETH": "0x25063237838E18f49999b541a61962C641914a81",
+                            "FDUSD": "0x3813e82e6f7098b9583FC0F33a962D02018B6803",
+                            "TUSD": "0x14016E85a25aeb13065688e4B4a6E8F5679bEe99",
                             "ETH":  "0x0000000000000000000000000000000000000000",
                         },
                         "Arbitrum": {
@@ -332,17 +401,22 @@ async def analyze(
                             "cbBTC":  "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
                         }
                     }
-                
-                    # Fetch dynamically for EACH network
-                    for target_network in ["Ethereum", "Arbitrum", "BNB", "Base"]:
+
+                    # Fetch dynamically ONLY for networks actually needed by the pools
+                    for target_network in needed_networks:
                         net_map = NETWORK_TOKEN_MAPS.get(target_network, {})
                         token_addresses[target_network] = {}
-                    
-                        # Pre-populate symbols we have in core mapping
+
+                        if target_network not in TOKEN_ADDRESS_CACHE:
+                            TOKEN_ADDRESS_CACHE[target_network] = {}
+
+                        # Pre-populate symbols we have in core mapping or global cache
                         for sym in token_symbols:
                             if sym in net_map:
                                 token_addresses[target_network][sym] = net_map[sym]
-                            
+                            elif sym in TOKEN_ADDRESS_CACHE[target_network]:
+                                token_addresses[target_network][sym] = TOKEN_ADDRESS_CACHE[target_network][sym]
+
                         # Database lookup only for any remaining missing symbols (e.g. custom test tokens)
                         missing_symbols = [sym for sym in token_symbols if sym not in token_addresses[target_network]]
                         if missing_symbols:
@@ -350,7 +424,7 @@ async def analyze(
                                 import psycopg2
                                 conn = psycopg2.connect(DATA_WAREHOUSE_DB)
                                 cur = conn.cursor()
-                            
+
                                 # 1. Fetch addresses from V3 swaps table for this specific network
                                 cur.execute("""
                                     SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v3_swaps
@@ -362,7 +436,8 @@ async def analyze(
                                 for row in cur.fetchall():
                                     if row[1]:
                                         token_addresses[target_network][row[0]] = row[1]
-                                    
+                                        TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
+
                                 # 2. Fetch from V4 swaps table for any missing symbols
                                 missing_tokens_v4 = [sym for sym in missing_symbols if sym not in token_addresses[target_network]]
                                 if missing_tokens_v4:
@@ -376,7 +451,8 @@ async def analyze(
                                     for row in cur.fetchall():
                                         if row[1]:
                                             token_addresses[target_network][row[0]] = row[1]
-                                        
+                                            TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
+
                                 # 3. Fallback to general coin table for any remaining ones (assumes Ethereum)
                                 if target_network == "Ethereum":
                                     still_missing = [sym for sym in missing_tokens_v4 if sym not in token_addresses[target_network]]
@@ -385,94 +461,99 @@ async def analyze(
                                         for row in cur.fetchall():
                                             if row[1]:
                                                 token_addresses[target_network][row[0]] = row[1]
-                                            
+                                                TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
+
                                 cur.close()
                                 conn.close()
                             except Exception as e:
                                 print(f"Error fetching token addresses from DB: {e}")
             
-                try:
-                    from Crypto.Hash import keccak
-                    for (t0, t1, fee) in pools_to_fetch:
+                # Build a list of derivation jobs, each as a dict with all needed info.
+                # Errors for individual pools (missing addresses, unsupported protocol/network,
+                # fee parsing) are caught inline; only valid jobs make it into the list.
+                jobs = []
+                for (t0, t1, fee) in pools_to_fetch:
+                    try:
                         t0_sym, t1_sym = t0.upper(), t1.upper()
-                        fee_raw = str(fee).split('|')[0].strip()
-                        f_clean = fee_raw.replace('%', '').strip()
-                    
-                        pool_network = "Ethereum"
                         parts = str(fee).split('|')
-                        if len(parts) >= 3:
-                            pool_network = parts[2].strip()
-                        
-                        protocol = "Uniswap V3"
-                        if len(parts) >= 2:
-                            proto_raw = parts[1].strip()
-                            if proto_raw.lower() in ('v3', 'uniswap v3', 'uniswap-v3'):
-                                protocol = 'Uniswap V3'
-                            elif proto_raw.lower() in ('v4', 'uniswap v4', 'uniswap-v4'):
-                                protocol = 'Uniswap V4'
-                            else:
-                                protocol = proto_raw
-                            
+
+                        pool_network = parts[2].strip() if len(parts) >= 3 else "Ethereum"
+                        proto_raw = parts[1].strip() if len(parts) >= 2 else "Uniswap V3"
+                        proto_lower = proto_raw.lower()
+
+                        if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4'):
+                            continue  # V4 not supported yet
+
+                        protocol = 'Uniswap V3' if proto_lower in ('v3', 'uniswap v3', 'uniswap-v3') else proto_raw
+
                         addr0 = token_addresses.get(pool_network, {}).get(t0_sym)
                         addr1 = token_addresses.get(pool_network, {}).get(t1_sym)
                         if not addr0 or not addr1:
                             continue
-                            
-                        try:
-                            fee_map = {'0.01': 100, '0.05': 500, '0.08': 800, '0.3': 3000, '1.0': 10000}
-                            if f_clean in fee_map:
-                                fee_val = fee_map[f_clean]
-                            else:
-                                fee_val = int(float(f_clean) * 10000)
-                        except:
-                            continue
-                        
-                        # Sort token addresses numerically
-                        t0_hex = addr0.lower()
-                        t1_hex = addr1.lower()
-                        tokens = sorted([t0_hex, t1_hex])
+
+                        fee_clean = parts[0].replace('%', '').strip()
+                        fee_map = {'0.01': 100, '0.05': 500, '0.08': 800, '0.3': 3000, '1.0': 10000}
+                        fee_val = fee_map.get(fee_clean) or int(float(fee_clean) * 10000)
+
+                        # Sorted token addresses (contract creation order)
+                        tokens = sorted([addr0.lower(), addr1.lower()])
                         t0_bytes = bytes.fromhex(tokens[0][2:])
                         t1_bytes = bytes.fromhex(tokens[1][2:])
-                    
-                        if protocol == 'Uniswap V4':
-                            # V4 pool IDs require exact tick spacing & hooks address which
-                            # vary per pool and cannot be derived offline. Skip.
-                            continue
+                        key = f"{t0}-{t1}-{fee}"
+
+                        # Map network name to config key (e.g. "BNB" → "bsc")
+                        net_map = {"BNB": "bsc", "ETH": "ethereum"}
+                        cfg_network = net_map.get(pool_network, pool_network.lower())
+
+                        # Retrieve factory and init_hash (cache hit avoids config lookup)
+                        fh_key = (protocol, cfg_network)
+                        if fh_key in FACTORY_HASH_CACHE:
+                            factory_hex, init_hash_hex = FACTORY_HASH_CACHE[fh_key]
                         else:
-                            # V3 style Create2 address derivation
-                            if 'pancake' in protocol.lower():
-                                # PancakeSwap V3 uses a separate Pool Deployer for CREATE2 (not the Factory)
-                                factory_hex = '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9'
-                                init_hash_hex = '0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2'
+                            try:
+                                factory_hex, init_hash_hex = get_factory_and_hash(protocol, cfg_network)
+                                FACTORY_HASH_CACHE[fh_key] = (factory_hex, init_hash_hex)
+                            except ValueError as ex:
+                                print(f"  Skipping {key}: {ex}")
+                                continue
+
+                        pool_cache_key = (tokens[0], tokens[1], fee_val, protocol, pool_network)
+                        jobs.append({
+                            'key': key,
+                            'pool_cache_key': pool_cache_key,
+                            't0_bytes': t0_bytes,
+                            't1_bytes': t1_bytes,
+                            'fee_val': fee_val,
+                            'factory_hex': factory_hex,
+                            'init_hash_hex': init_hash_hex,
+                        })
+                    except Exception as ex:
+                        print(f"  Skipping pool ({t0},{t1},{fee}): {ex}")
+                        continue
+
+                # Derive pool addresses in a single thread — keccak is CPU-bound,
+                # so per-call to_thread overhead would dominate with hundreds of pools.
+                if jobs:
+                    def _derive_batch():
+                        batch_results = {}
+                        for j in jobs:
+                            pk = j['pool_cache_key']
+                            if pk in POOL_ADDRESS_CACHE:
+                                batch_results[j['key']] = POOL_ADDRESS_CACHE[pk]
                             else:
-                                if pool_network.lower() == 'base':
-                                    factory_hex = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD'
-                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
-                                elif pool_network.lower() in ('bnb', 'bsc'):
-                                    factory_hex = '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7'
-                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
-                                elif pool_network.lower() == 'arbitrum':
-                                    factory_hex = '0x1F98431c8aD985736e4f3a7465352E461f092301'
-                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244778a3299aa81600b3e67099710f'
-                                else:
-                                    factory_hex = '0x1F98431c8aD98523631AE4a59f267346ea31F984'
-                                    init_hash_hex = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
-                            
-                            payload = (
-                                b'\x00'*12 + t0_bytes +
-                                b'\x00'*12 + t1_bytes +
-                                b'\x00'*29 + fee_val.to_bytes(3, 'big')
-                            )
-                            salt = keccak.new(digest_bits=256, data=payload).digest()
-                            factory = bytes.fromhex(factory_hex[2:])
-                            init_hash = bytes.fromhex(init_hash_hex[2:])
-                        
-                            create2_input = b'\xff' + factory + salt + init_hash
-                            pool_addr = '0x' + keccak.new(digest_bits=256, data=create2_input).digest()[-20:].hex()
-                        
-                        pool_addresses[f"{t0}-{t1}-{fee}"] = pool_addr
-                except Exception as e:
-                    print(f"Error computing pool addresses dynamically: {e}")
+                                try:
+                                    addr = _derive_address(
+                                        j['t0_bytes'], j['t1_bytes'], j['fee_val'],
+                                        j['factory_hex'], j['init_hash_hex']
+                                    )
+                                    batch_results[j['key']] = addr
+                                    POOL_ADDRESS_CACHE[pk] = addr
+                                except Exception as ex:
+                                    print(f"  Error deriving address for {j['key']}: {ex}")
+                        return batch_results
+
+                    batch = await asyncio.to_thread(_derive_batch)
+                    pool_addresses.update(batch)
             
             # 3. Inject into routes
             for route_idx, route in enumerate(analysis.get('routes', [])):
@@ -530,6 +611,12 @@ async def analyze(
                 analysis['routes'][route_idx]['apr_str'] = apr_str
                 analysis['routes'][route_idx]['network'] = route_network
 
+            yield json.dumps({"type": "progress", "pct": 98.0, "message": "Formatting routing path data..."}) + "\n"
+            await asyncio.sleep(0.01)
+            
+            yield json.dumps({"type": "progress", "pct": 100.0, "message": "Analysis complete!"}) + "\n"
+            await asyncio.sleep(0.01)
+
             yield json.dumps({"type": "result", "data": analysis}) + "\n"
 
         return StreamingResponse(generate(), media_type="application/x-ndjson")
@@ -539,22 +626,26 @@ async def analyze(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/routes/date-range", tags=["Route Analytics"])
-async def get_date_range():
-    """Get the available date range from the swap data."""
+async def get_date_range(network: Optional[str] = Query(None, description="Filter by network")):
+    """Get the available date range from the swap data, optionally scoped to a network."""
     try:
-        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM (
-                SELECT timestamp FROM uniswap_v3_swaps
-                UNION ALL
-                SELECT timestamp FROM uniswap_v4_swaps
-            ) as all_swaps
-        """)
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        
+        with get_conn() as conn:
+            cur = conn.cursor()
+            where = ""
+            params = []
+            if network and network.lower() != 'all':
+                where = " WHERE network = %s"
+                params = [network]
+            cur.execute(f"""
+                SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM (
+                    SELECT timestamp, network FROM uniswap_v3_swaps
+                    UNION ALL
+                    SELECT timestamp, network FROM uniswap_v4_swaps
+                ) as all_swaps{where}
+            """, params)
+            row = cur.fetchone()
+            cur.close()
+
         if row and row[0] and row[1]:
             return {
                 "min_date": row[0].isoformat(),
