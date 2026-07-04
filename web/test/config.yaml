@@ -1,0 +1,27 @@
+---
+# UI test configuration for pytest version of routing UI test
+# Adjust values as needed for your environment. These are read by the pytest test.
+api_url: "http://localhost:8000"
+portal_username: "admin"
+portal_password: "chaintelligence77"
+headless: false
+record_video: true
+video_dir: "./recordings"
+# Browser viewport size (controls the visible browser area in the video)
+viewport_width: 1920
+viewport_height: 1080
+# Video recording resolution (width x height)
+video_width: 1920
+video_height: 1080
+# Test parameters
+token_in: "USDC"
+token_out: "USDT"
+# Date range for the analysis (ISO format YYYY-MM-DD). By default last 2 days.
+# You can also set specific dates if desired.
+start_date: ""  # leave empty to use dynamic calculation (now - 2 days)
+end_date: ""    # leave empty to use today
+networks:
+  - ethereum
+  - arbitrum
+  - base
+  - bsc
