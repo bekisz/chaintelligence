@@ -39,6 +39,7 @@ x-airflow-common: &airflow-common
 services:
   postgres:
     image: postgres:17
+    shm_size: 1g
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -122,6 +123,7 @@ services:
       - ./api:/app/api
       - ./web:/app/web
       - ./chain-feeder:/app/chain-feeder
+      - ./config:/app/config
     depends_on:
       postgres:
         condition: service_healthy

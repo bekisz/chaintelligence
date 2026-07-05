@@ -70,9 +70,7 @@ class PostgresFetcher:
         """
         Fetch all swap events for tracked tokens within the date range from Postgres.
 
-        Optimized query structure:
-        - Uses covering indexes for timestamp+token filtering
-        - Separates V3/V4 queries for better index usage
+        Queries the unified `swaps` table with coin_id joins for symbol resolution.
         """
         self._log(f"Fetching swaps from {start_date} to {end_date} (network={network}, tokens={token_filter})")
 
@@ -82,16 +80,13 @@ class PostgresFetcher:
 
                 upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
 
-                # Build the token filter condition
+                # Build the token filter condition using coin symbols
                 if token_filter and len(token_filter) == 2:
-                    # Common case: exactly 2 tokens (e.g., USDT-USDC)
-                    # Query both orderings to catch both directions
                     t0, t1 = upper_symbols[0], upper_symbols[1]
-                    token_where = "(token0_symbol = %s AND token1_symbol = %s) OR (token0_symbol = %s AND token1_symbol = %s)"
+                    token_where = "(UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)"
                     token_params = [t0, t1, t1, t0]
                 elif token_filter:
-                    # Multiple tokens - use ANY
-                    token_where = "token0_symbol = ANY(%s) OR token1_symbol = ANY(%s)"
+                    token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
                     token_params = [upper_symbols, upper_symbols]
                 else:
                     token_where = ""
@@ -101,83 +96,50 @@ class PostgresFetcher:
                 network_where = ""
                 network_param = None
                 if network and network.lower() != 'all':
-                    network_where = " AND network = %s"
+                    network_where = " AND s.network = %s"
                     network_param = network
 
-                # Build V3 query
-                v3_query = """
-                    SELECT id, timestamp, tx_hash, token0_symbol, token1_symbol,
-                           amount0, amount1, amount_usd, fee_tier, protocol, network
-                    FROM uniswap_v3_swaps
-                    WHERE timestamp >= %s AND timestamp <= %s
-                      AND amount_usd >= 10.0
+                # Query the unified swaps table
+                query = f"""
+                    SELECT s.tx_hash, s.log_index, s.ts, s.network, s.protocol,
+                           c0.symbol, c1.symbol,
+                           s.amount0, s.amount1, s.amount_usd, s.fee_display, s.fee_bps
+                    FROM swaps s
+                    JOIN coin c0 ON s.t0_coin_id = c0.coin_id
+                    JOIN coin c1 ON s.t1_coin_id = c1.coin_id
+                    WHERE s.ts >= %s AND s.ts <= %s
+                      AND s.amount_usd >= 10.0
                 """
-                v3_params = [start_date, end_date]
-                if token_filter:
-                    v3_query += f" AND ({token_where})"
-                    v3_params.extend(token_params)
+                params = [start_date, end_date]
+                if token_where:
+                    query += f" AND ({token_where})"
+                    params.extend(token_params)
                 if network_param:
-                    v3_query += f"{network_where}"
-                    v3_params.append(network_param)
+                    query += network_where
+                    params.append(network_param)
+                query += "\nORDER BY s.ts"
 
-                # Build V4 query
-                v4_query = """
-                    SELECT id, timestamp, tx_hash, token0_symbol, token1_symbol,
-                           amount0, amount1, amount_usd, fee_tier, protocol, network
-                    FROM uniswap_v4_swaps
-                    WHERE timestamp >= %s AND timestamp <= %s
-                      AND amount_usd >= 10.0
-                """
-                v4_params = [start_date, end_date]
-                if token_filter:
-                    v4_query += f" AND ({token_where})"
-                    v4_params.extend(token_params)
-                if network_param:
-                    v4_query += f"{network_where}"
-                    v4_params.append(network_param)
-
-                # Build V2 query
-                v2_query = """
-                    SELECT id, timestamp, tx_hash, token0_symbol, token1_symbol,
-                           amount0, amount1, amount_usd, fee_tier, protocol, network
-                    FROM uniswap_v2_swaps
-                    WHERE timestamp >= %s AND timestamp <= %s
-                      AND amount_usd >= 10.0
-                """
-                v2_params = [start_date, end_date]
-                if token_filter:
-                    v2_query += f" AND ({token_where})"
-                    v2_params.extend(token_params)
-                if network_param:
-                    v2_query += f"{network_where}"
-                    v2_params.append(network_param)
-
-                # Execute all queries
-                cur.execute(v3_query, v3_params)
-                v3_rows = cur.fetchall()
-
-                cur.execute(v4_query, v4_params)
-                v4_rows = cur.fetchall()
-
-                cur.execute(v2_query, v2_params)
-                v2_rows = cur.fetchall()
-
-                rows = v3_rows + v4_rows + v2_rows
+                cur.execute(query, params)
+                rows = cur.fetchall()
 
                 swaps = []
                 for row in rows:
+                    tx_hash = row[0]
+                    log_index = row[1]
                     swaps.append({
-                        'id': row[0],
-                        'timestamp': int(row[1].timestamp()),
-                        'tx_hash': row[2],
-                        'token0_symbol': row[3],
-                        'token1_symbol': row[4],
-                        'amount0': float(row[5]),
-                        'amount1': float(row[6]),
-                        'amountUSD': float(row[7]),
-                        'fee_tier': row[8],
-                        'protocol': row[9],
-                        'network': row[10]
+                        'id': f"{tx_hash}#{log_index}",
+                        'timestamp': int(row[2].timestamp()),
+                        'tx_hash': tx_hash,
+                        'token0_symbol': row[5],
+                        'token1_symbol': row[6],
+                        'amount0': float(row[7]) if row[7] is not None else 0.0,
+                        'amount1': float(row[8]) if row[8] is not None else 0.0,
+                        'amountUSD': float(row[9]) if row[9] is not None else 0.0,
+                        'fee_tier': row[10] or '',
+                        'fee_bps': float(row[11]) if row[11] is not None else None,
+                        'protocol': row[4],
+                        'network': row[3],
+                        'log_index': log_index,
                     })
 
                 cur.close()
@@ -188,6 +150,97 @@ class PostgresFetcher:
         except Exception as e:
             self._log(f"Database query failed: {e}")
             raise
+
+    def fetch_swaps_streaming(self, start_date: datetime, end_date: datetime,
+                              token_filter: Optional[List[str]] = None,
+                              network: Optional[str] = None,
+                              batch_size: int = 5000):
+        """Generator that yields batches of swap dicts using a server-side cursor.
+
+        Each yield is a list of up to `batch_size` swap dicts, keeping Python heap
+        memory bounded regardless of the total result set size.  The caller receives
+        one connection (not pooled) that lives for the duration of the generator.
+
+        Example usage:
+            for batch in fetcher.fetch_swaps_streaming(...):
+                analyzer.process_batch(batch, ...)
+        """
+        import psycopg2
+
+        upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
+
+        # Build token filter condition using coin symbols
+        if token_filter and len(token_filter) == 2:
+            t0, t1 = upper_symbols[0], upper_symbols[1]
+            token_where = "(UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)"
+            token_params = [t0, t1, t1, t0]
+        elif token_filter:
+            token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
+            token_params = [upper_symbols, upper_symbols]
+        else:
+            token_where = ""
+            token_params = []
+
+        network_where = ""
+        network_param = None
+        if network and network.lower() != 'all':
+            network_where = " AND s.network = %s"
+            network_param = network
+
+        # Single query against the unified swaps table
+        query = f"""
+            SELECT s.tx_hash, s.log_index, s.ts, s.network, s.protocol,
+                   c0.symbol, c1.symbol,
+                   s.amount0, s.amount1, s.amount_usd, s.fee_display
+            FROM swaps s
+            JOIN coin c0 ON s.t0_coin_id = c0.coin_id
+            JOIN coin c1 ON s.t1_coin_id = c1.coin_id
+            WHERE s.ts >= %s AND s.ts <= %s
+              AND s.amount_usd >= 10.0
+        """
+        params = [start_date, end_date]
+        if token_where:
+            query += f" AND ({token_where})"
+            params.extend(token_params)
+        if network_param:
+            query += network_where
+            params.append(network_param)
+        query += "\nORDER BY s.ts"
+
+        # Use a dedicated connection with a server-side named cursor
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        try:
+            cur = conn.cursor(name='swaps_stream')
+            cur.execute(query, params)
+            while True:
+                rows = cur.fetchmany(batch_size)
+                if not rows:
+                    break
+                batch = []
+                for row in rows:
+                    tx_hash = row[0]
+                    log_index = row[1]
+                    batch.append({
+                        'id': f"{tx_hash}#{log_index}",
+                        'timestamp': int(row[2].timestamp()),
+                        'tx_hash': tx_hash,
+                        'token0_symbol': row[5],
+                        'token1_symbol': row[6],
+                        'amount0': float(row[7]) if row[7] is not None else 0.0,
+                        'amount1': float(row[8]) if row[8] is not None else 0.0,
+                        'amountUSD': float(row[9]) if row[9] is not None else 0.0,
+                        'fee_tier': row[10] or '',
+                        'protocol': row[4],
+                        'network': row[3],
+                        'log_index': log_index,
+                    })
+                yield batch
+        finally:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            conn.close()
 
     def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         """
@@ -419,14 +472,15 @@ class PostgresFetcher:
                         fee_tier_pct = fee_pct if '%' in fee_pct else {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}.get(fee_db, fee_pct)
                         fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
 
-                    target_table = "uniswap_v4_swaps" if '|v4' in str(meta['fee_raw_full']).lower() else "uniswap_v3_swaps"
-                    pool_queries_swaps.append(f"""
-                    SELECT %s, token0_symbol, token1_symbol, SUM(amount_usd), SUM(ABS(amount0)), SUM(ABS(amount1))
-                    FROM {target_table}
-                    WHERE timestamp >= %s AND timestamp <= %s AND network = %s AND protocol = %s
-                    AND ((token0_symbol = %s AND token1_symbol = %s) OR (token0_symbol = %s AND token1_symbol = %s))
-                    AND (fee_tier = %s OR fee_tier = %s)
-                    GROUP BY token0_symbol, token1_symbol
+                    pool_queries_swaps.append("""
+                    SELECT %s, c0.symbol, c1.symbol, SUM(s.amount_usd), SUM(ABS(s.amount0)), SUM(ABS(s.amount1))
+                    FROM swaps s
+                    JOIN coin c0 ON s.t0_coin_id = c0.coin_id
+                    JOIN coin c1 ON s.t1_coin_id = c1.coin_id
+                    WHERE s.ts >= %s AND s.ts <= %s AND s.network = %s AND s.protocol = %s
+                    AND ((UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s))
+                    AND (s.fee_display = %s OR s.fee_display = %s)
+                    GROUP BY c0.symbol, c1.symbol
                     """)
                     params_swaps.extend([k, start_date, end_date, meta['network'], meta['protocol'], meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_tier_pct, fee_tier_bips])
 

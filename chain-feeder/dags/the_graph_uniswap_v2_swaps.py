@@ -11,11 +11,14 @@ from typing import List, Dict, Optional, Callable
 
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
+# Import the shared coin_id mapping and fee_bps helper from the common utils
+from common.utils.uniswap_utils import SYMBOL_TO_COIN_ID, _compute_fee_bps
+
 # Asset for metadata tracking
 uniswap_v2_swaps_asset = Asset("postgres://postgres/chaintelligence/public/uniswap_v2_swaps")
 
 # Uniswap V2 subgraph ID (Ethereum only)
-UNISWAP_V2_SUBGRAPH_ID = "EYCKATKZKLutcRcYvmignYqH3dU3GtD5xLQq2Gf2W3Zx"
+UNISWAP_V2_SUBGRAPH_ID = "EYCKATKGBKLWvSfwvBjzfCBmGwYNdVkduYXVivCsLRFu"
 
 MAX_RESULTS_PER_QUERY = 1000
 REQUEST_TIMEOUT = 30
@@ -47,7 +50,7 @@ class UniswapV2Fetcher:
         if not GRAPH_API_KEY or GRAPH_API_KEY == 'YOUR_GRAPH_API_KEY':
             self.subgraph_url = f'https://gateway-arbitrum.network.thegraph.com/api/[api-key]/subgraphs/id/{UNISWAP_V2_SUBGRAPH_ID}'
         else:
-            self.subgraph_url = f'https://gateway.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/{UNISWAP_V2_SUBGRAPH_ID}'
+            self.subgraph_url = f'https://gateway-arbitrum.network.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/{UNISWAP_V2_SUBGRAPH_ID}'
 
     def _log(self, message: str):
         if self.verbose:
@@ -227,32 +230,45 @@ class PostgresStorageV2:
             pg_hook = PostgresHook(postgres_conn_id='postgres_default')
             conn_str = pg_hook.get_uri()
 
+        insert_query = """
+        INSERT INTO swaps (
+            tx_hash, log_index, ts, network, protocol,
+            t0_coin_id, t1_coin_id, amount0, amount1, amount_usd, fee_bps, fee_display
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
+        """
+        data = []
+        for s in swaps:
+            t0_id = SYMBOL_TO_COIN_ID.get(s.get('token0_symbol', '').upper())
+            t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
+            if t0_id is None or t1_id is None:
+                continue
+
+            # V2 id format: "v2-{tx_hash}-{log_index}"
+            log_index = int(s.get('id', '').rsplit('-', 1)[1])
+
+            ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
+
+            data.append((
+                s['tx_hash'],
+                log_index,
+                ts_val,
+                network,
+                protocol,
+                t0_id,
+                t1_id,
+                s.get('amount0'),
+                s.get('amount1'),
+                s.get('amountUSD'),
+                _compute_fee_bps(s.get('fee_tier')),
+                s.get('fee_tier', ''),
+            ))
+
+        if not data:
+            return
+
         with psycopg2.connect(conn_str) as conn:
             with conn.cursor() as cur:
-                insert_query = """
-                INSERT INTO uniswap_v2_swaps (
-                    id, timestamp, tx_hash, token0_address, token1_address,
-                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network, protocol
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO NOTHING;
-                """
-                data = [
-                    (
-                        s['id'],
-                        datetime.fromtimestamp(s['timestamp'], timezone.utc),
-                        s['tx_hash'],
-                        s['token0_address'],
-                        s['token1_address'],
-                        s['token0_symbol'],
-                        s['token1_symbol'],
-                        s['amount0'],
-                        s['amount1'],
-                        s['amountUSD'],
-                        s['fee_tier'],
-                        network,
-                        protocol
-                    ) for s in swaps
-                ]
                 cur.executemany(insert_query, data)
             conn.commit()
 

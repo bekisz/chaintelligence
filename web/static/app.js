@@ -71,18 +71,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Fetch official token logos from backend
-    try {
-        const response = await fetch('/api/coin/list');
-        const coins = await response.json();
-        coins.forEach(coin => {
-            if (coin.symbol && coin.image) {
-                tokenImageMap[coin.symbol.toUpperCase()] = coin.image;
-            }
+    // Fetch official token logos from backend (non-blocking — populate map when ready)
+    fetch('/api/coin/list')
+        .then(response => response.json())
+        .then(coins => {
+            coins.forEach(coin => {
+                if (coin.symbol && coin.image) {
+                    tokenImageMap[coin.symbol.toUpperCase()] = coin.image;
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching token images:', error);
         });
-    } catch (error) {
-        console.error('Error fetching token images:', error);
-    }
 
     const formatUSD = (amount) => {
         const fractionDigits = amount >= 10 ? 0 : 2;
@@ -172,6 +173,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderRoutes(filtered);
     };
 
+    const showError = (msg) => {
+        noDataMsg.innerHTML = `<div class="empty-state-icon" style="color: var(--red);">⚠</div><p class="empty-state-title">Error</p><p class="empty-state-desc">${msg}</p>`;
+        noDataMsg.classList.remove('hidden');
+    };
+
     const performAnalysis = async () => {
         const startToken = startTokenInput.value.trim().toUpperCase();
         const endToken = endTokenInput.value.trim().toUpperCase();
@@ -207,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const response = await fetch(url);
             if (!response.ok) {
-                throw new Error('API request failed');
+                throw new Error(`API request failed with status ${response.status}`);
             }
 
             const reader = response.body.getReader();
@@ -277,7 +283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             resultsSection.classList.remove('hidden');
         } catch (error) {
             console.error('Error during analysis:', error);
-            alert('Analysis failed. Please check the console for details.');
+            showError(error.message || 'Unknown error');
         } finally {
             analyzeBtn.disabled = false;
             loader.classList.add('hidden');

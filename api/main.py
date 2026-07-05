@@ -118,7 +118,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/api/routes/date-range", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp", "/routing"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/api/routes/date-range", "/api/routes/analyze", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp", "/routing"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -307,11 +307,7 @@ async def analyze(
                 conn = psycopg2.connect(DATA_WAREHOUSE_DB)
                 cur = conn.cursor()
                 cur.execute("""
-                    SELECT MIN(timestamp), MAX(timestamp) FROM (
-                        SELECT timestamp FROM uniswap_v3_swaps
-                        UNION ALL
-                        SELECT timestamp FROM uniswap_v4_swaps
-                    ) as all_swaps
+                    SELECT MIN(ts), MAX(ts) FROM swaps
                 """)
                 row = cur.fetchone()
                 db_min = row[0].isoformat() if row[0] else None

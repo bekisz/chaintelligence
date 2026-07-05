@@ -14,3 +14,7 @@ logs/
 !.env.secrets.example
 *.key
 *.pem
+
+# Test recordings and artifacts
+recordings/
+test-results/

@@ -1,196 +1,127 @@
-# UI Tests
+# Routing UI Test
 
-This directory contains Playwright-based UI tests for the Chain Intelligence routing interface.
+End-to-end Playwright test for the Route Analysis page. Calls the backend API directly for timing data, then drives the browser to verify the UI renders correctly.
 
-## Test File
+## Files
 
-- **`test_routing_ui_simple.py`** — Main test script that:
-  1. Calls the `/api/routes/analyze` endpoint directly via HTTP streaming to capture detailed NDJSON progress timing
-  2. Runs a Playwright browser test to verify the UI renders correctly and captures a video recording
-  3. Compares API results with UI results
+| File | Purpose |
+|---|---|
+| `test_routing_ui_simple.py` | The test — pytest with asyncio + Playwright |
+| `config.yaml` | Configuration (API URL, credentials, tokens, date range, networks) |
+| `recordings/` | Video recordings (created when `record_video: true`) |
 
-## Prerequisites
+## Setup
 
 ```bash
 # Install Python dependencies
-pip install playwright httpx python-dotenv
+pip3 install --break-system-packages pytest pytest-asyncio httpx playwright pyyaml
 
-# Install Chromium for Playwright
-playwright install chromium
+# Install Playwright Chromium browser
+python3 -m playwright install chromium
 ```
 
-## Environment Variables
+## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `API_URL` | `http://localhost:8000` | Base URL of the FastAPI server |
-| `PORTAL_USERNAME` | `admin` | HTTP Basic Auth username |
-| `PORTAL_PASSWORD` | `chaintelligence77` | HTTP Basic Auth password |
-| `HEADLESS` | `true` | Run browser in headless mode (`false` for visible browser) |
-| `RECORD_VIDEO` | `true` | Record video of test run |
-| `VIDEO_DIR` | `./recordings` | Directory for video recordings |
+Edit `config.yaml` in this directory to set test parameters:
 
-## Running the Tests
+```yaml
+api_url: "http://localhost:8000"      # Chaintelligence server
+portal_username: "admin"              # HTTP Basic Auth username
+portal_password: "chaintelligence77"  # HTTP Basic Auth password
+headless: true                        # true = no visible browser; false = watch it run
+record_video: true                    # save .webm recording
+token_in: "USDC"                      # Source token
+token_out: "USDT"                     # Destination token
+start_date: ""                        # empty → computed as 2 days ago
+end_date: ""                          # empty → computed as today
+networks:
+  - ethereum
+  - arbitrum
+  - base
+  - bsc
+```
 
-### Basic Run (Headless, with Video Recording)
+## Running the test
 
 ```bash
 cd web/test
-PORTAL_USERNAME=admin PORTAL_PASSWORD=chaintelligence77 python test_routing_ui_simple.py
+pytest -s test_routing_ui_simple.py
 ```
 
-### Headful Mode (Visible Browser)
+The `-s` flag shows live output (phase timings, route counts, pool-link verifications).
+
+### Run API-only (no browser)
 
 ```bash
-HEADLESS=false PORTAL_USERNAME=admin PORTAL_PASSWORD=chaintelligence77 python test_routing_ui_simple.py
+cd web/test
+python3 -c "
+import asyncio, httpx, json, yaml
+from pathlib import Path
+
+cfg = yaml.safe_load(Path('config.yaml').read_text())
+cfg['end_date'] = '\$(date +%Y-%m-%d)'
+cfg['start_date'] = '\$(date -d '2 days ago' +%Y-%m-%d)'
+
+async def main():
+    params = {'start_token': cfg['token_in'], 'end_token': cfg['token_out'],
+              'start_date': cfg['start_date'], 'end_date': cfg['end_date'],
+              'networks': ','.join(cfg['networks'])}
+    auth = httpx.BasicAuth(cfg['portal_username'], cfg['portal_password'])
+    async with httpx.AsyncClient(auth=auth, timeout=300.0) as client:
+        async with client.stream('GET', f'{cfg[\"api_url\"]}/api/routes/analyze', params=params) as resp:
+            print(f'Status: {resp.status_code}')
+            async for line in resp.aiter_lines():
+                if line.strip():
+                    print(line[:200])
+                    print()
+asyncio.run(main())
+"
 ```
 
-### Disable Video Recording
+## What the test does
 
-```bash
-RECORD_VIDEO=false PORTAL_USERNAME=admin PORTAL_PASSWORD=chaintelligence77 python test_routing_ui_simple.py
+1. **Calls the API** (`/api/routes/analyze`) via NDJSON streaming — captures progress events and the final result payload.
+2. **Validates the result** — asserts at least 10 routes, checks Ethereum/Arbitrum/Base/BNB networks, and verifies Uniswap V2/V3/V4 + PancakeSwap V3 protocols appear.
+3. **Drives the browser** — fills the form, clicks "Analyze", waits for the progress bar.
+4. **Verifies pool external links** — for the highest-volume route per chain, clicks the pool link and checks the URL resolves.
+
+## Test output example
+
+```
+API routes: 29 | networks: Arbitrum, Base, BNB, Ethereum | protocols: PancakeSwap V3, Uniswap V3, Uniswap V4
+UI completed in 12.34s
+  ✅ Ethereum: Uniswap V3 external link → https://app.uniswap.org/explore/pools/ethereum/0x3416cf6c...
+  ✅ Arbitrum: Uniswap V3 external link → https://app.uniswap.org/explore/pools/arbitrum/0xbe3ad6...
+  ✅ Base: Uniswap V3 external link → https://app.uniswap.org/explore/pools/base/0xd56da2b...
+  ✅ BNB: Uniswap V3 external link → https://app.uniswap.org/explore/pools/bnb/0x2c3c320...
+  ✅ PancakeSwap V3 (BNB): external link → https://pancakeswap.finance/info/v3/pairs/0x92b78...
+  UI rendered 29 routes, API reported 29
+  Video saved to ./recordings/2026-07-05_1430/test_route_analysis_ui.webm
 ```
 
-### Custom API URL
+## Known issues
 
-```bash
-API_URL=http://my-server:8000 PORTAL_USERNAME=admin PORTAL_PASSWORD=chaintelligence77 python test_routing_ui_simple.py
-```
-
-### Using `.env` File
-
-Create a `.env` file in the `ui` directory:
-
-```env
-API_URL=http://localhost:8000
-PORTAL_USERNAME=admin
-PORTAL_PASSWORD=chaintelligence77
-HEADLESS=true
-RECORD_VIDEO=true
-VIDEO_DIR=./recordings
-```
-
-Then simply run:
-```bash
-python test_routing_ui_simple.py
-```
-
-## Test Output
-
-The test produces:
-1. **API Timing Report** — Detailed breakdown of each streaming phase (fetch chunks, building routes, pool stats, pool addresses, formatting)
-2. **UI Verification** — Confirms the frontend renders results correctly
-3. **Video Recording** — WebM file in `./recordings/` (if enabled)
-
-Example output:
-```
-========================================================================
-  🎯  Chain Intelligence - Route Analysis UI Test
-========================================================================
-  API URL:        http://localhost:8000
-  Token pair:     USDC → USDT
-  Date range:     2026-07-02 to 2026-07-04
-  Networks:       ethereum, arbitrum, optimism, base, polygon, bsc, avalanche, gnosis, fantom, linea
-  Headless:       true
-  Record video:   true
-
-========================================================================
-  🚀  Calling API endpoint directly (streaming NDJSON)
-========================================================================
-
-  ⏮️  Progress Event Timeline:
-     🔄  +0.1s  Fetching 2026-07-02...
-     🔄  +1.2s  Fetching 2026-07-03...
-     🔄  +2.3s  Fetching 2026-07-04...
-     🔨  +2.5s  Building route graph...
-     📊  +5.1s  Loading pool stats & APRs...
-     🏗️  +8.2s  Generating pool addresses...
-     🎨  +8.5s  Formatting results...
-     ✅  +8.7s  Complete
-
-  📅 Fetch Chunk Detail (3 chunks):
-     Chunk                    Duration     Cumulative    % of API
-     -------------------------------------------------------------
-     2026-07-03              1.10s        1.10s         12.6%
-     2026-07-04              1.10s        2.20s         25.3%
-
-  📊 Phase Timing Breakdown:
-     Phase                                          Duration     % of Total
-     --------------------------------------------------------
-     Fetching 2026-07-02...                         0.10s        1.1%
-     Fetching 2026-07-03...                         1.10s        12.6%
-     Fetching 2026-07-04...                         1.10s        12.6%
-     Building route graph...                        0.20s        2.3%
-     Loading pool stats & APRs...                   3.10s        35.6%
-     Generating pool addresses...                   0.30s        3.4%
-     Formatting results...                          0.20s        2.3%
-     Inter-phase overhead                           2.60s        29.9%
-     --------------------------------------------------------
-     Total API time                                 8.70s       100.0%
-
-  📦 Result Summary:
-     Routes:          42
-     Total TXs:       15,234
-     Total Volume:    $2,341,567.89
-
-  🌐 Per-Network Route Count:
-     ethereum        12 routes
-     arbitrum        10 routes
-     optimism         8 routes
-     base             7 routes
-     polygon          5 routes
-
-========================================================================
-  🎭  Running Playwright UI Test (Chromium)
-========================================================================
-
-  🌐  Navigating to http://localhost:8000/routing.html...
-  📝  Filling form: USDC → USDT, 2026-07-02 to 2026-07-04
-  ▶️  Clicking 'Analyze Routes'...
-  ✅  UI completed in 12.45s
-
-  📦 UI Result Summary:
-     Routes rendered: 42
-     API routes:      42
-
-  🎥  Video recorded to: /path/to/recordings/video-123.webm
-
-========================================================================
-  ✅  All tests passed!
-========================================================================
-```
+- **"No Uniswap V2 pools found" assertion** — the `uniswap_v2_swaps` table is empty when no V2 DAG has populated it yet. If V2 data hasn't been loaded, comment out or remove the V2 assertion (line 380) in the test.
+- **External site blocks** — Uniswap/PancakeSwap frontends may block headless browsers. The test navigates to the pool page and checks the URL; if blocked, the assertion may time out.
 
 ## Video Recordings
 
-Videos are saved as WebM files in the `recordings/` directory with timestamps in the filename. Open them in any browser or media player.
+Videos are saved as WebM files in the `recordings/` directory, timestamped per run.
 
 ## Troubleshooting
 
 | Issue | Solution |
-|-------|----------|
-| `ModuleNotFoundError: playwright` | Run `pip install playwright && playwright install chromium` |
-| `TimeoutError` on page load | Increase timeout or check if API server is running |
-| `401 Unauthorized` | Verify `PORTAL_USERNAME` and `PORTAL_PASSWORD` match your `.env.secrets` |
-| No routes found | Check if data exists for the date range in the database |
-| Video not saving | Ensure `RECORD_VIDEO=true` and `VIDEO_DIR` is writable |
+|---|---|
+| `ModuleNotFoundError: playwright` | `pip3 install --break-system-packages playwright && python3 -m playwright install chromium` |
+| `TimeoutError` on page load | Check that the API server is running at `api_url` |
+| `401 Unauthorized` | Verify credentials in `config.yaml` match your `.env.secrets` |
+| No routes returned | Pick a date range that has swap data (use `curl` to check) |
 
 ## CI/CD Integration
-
-For CI pipelines, run headless without video:
 
 ```yaml
 - name: Run UI Tests
   run: |
     cd web/test
-    RECORD_VIDEO=false python test_routing_ui_simple.py
-  env:
-    PORTAL_USERNAME: ${{ secrets.PORTAL_USERNAME }}
-    PORTAL_PASSWORD: ${{ secrets.PORTAL_PASSWORD }}
-    API_URL: http://localhost:8000
-```
-
-## Related
-
-- Parent test docs: [../../chain-feeder/tests/test.md](../../chain-feeder/tests/test.md)
-- API documentation: [/docs](/docs) (when server is running)
-- Architecture docs: [../../docs/architecture.md](../../docs/architecture.md)
+    sed -i '' 's/headless: false/headless: true/' config.yaml
+    pytest -s test_routing_ui_simple.py

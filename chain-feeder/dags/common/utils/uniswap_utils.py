@@ -511,99 +511,101 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
              
         return normalized_data
 
+# ---------------------------------------------------------------------------
+# Symbol → coin_id lookup for the unified swaps table
+# Loaded at module init so DAG tasks have it in memory.
+# ---------------------------------------------------------------------------
+def _load_symbol_to_coin_id() -> Dict[str, int]:
+    mapping = {}
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        cur.execute("SELECT UPPER(symbol), coin_id FROM coin WHERE coin_id IS NOT NULL")
+        for row in cur.fetchall():
+            mapping[row[0]] = row[1]
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
+    return mapping
+
+SYMBOL_TO_COIN_ID = _load_symbol_to_coin_id()
+
+def _compute_fee_bps(fee_tier: Optional[str]) -> Optional[float]:
+    """Convert a fee tier string like '0.05%' to fee_bps (5.0)."""
+    if not fee_tier or fee_tier == 'Dynamic':
+        return None
+    try:
+        fee_pct = float(fee_tier.replace('%', '').strip())
+        return fee_pct * 100.0
+    except (ValueError, AttributeError):
+        return None
+
 class PostgresStorage:
     def __init__(self):
         self.conn_str = DATA_WAREHOUSE_DB
-    
+
     def save_swaps(self, swaps: List[Dict], network: str = "Ethereum", protocol: str = "Uniswap V3"):
         if not swaps:
             return
-        
+
+        insert_query = """
+        INSERT INTO swaps (
+            tx_hash, log_index, ts, network, protocol,
+            t0_coin_id, t1_coin_id, amount0, amount1, amount_usd, fee_bps, fee_display
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
+        """
+        data = []
+        for s in swaps:
+            t0_id = SYMBOL_TO_COIN_ID.get(s.get('token0_symbol', '').upper())
+            t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
+            if t0_id is None or t1_id is None:
+                continue  # skip swaps for untracked tokens
+
+            # Extract log_index from the subgraph id
+            swap_id = s.get('id', '')
+            if '#' in swap_id:
+                # V3: tx_hash#logindex
+                log_index = int(swap_id.split('#')[1])
+            else:
+                # V4 (tx_hash-logindex) or V2 (v2-tx_hash-logindex)
+                log_index = int(swap_id.rsplit('-', 1)[1])
+
+            ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
+
+            data.append((
+                s['tx_hash'],
+                log_index,
+                ts_val,
+                network,
+                protocol,
+                t0_id,
+                t1_id,
+                s.get('amount0'),
+                s.get('amount1'),
+                s.get('amountUSD'),
+                _compute_fee_bps(s.get('fee_tier')),
+                s.get('fee_tier', ''),
+            ))
+
+        if not data:
+            return
+
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                insert_query = """
-                INSERT INTO uniswap_v3_swaps (
-                    id, timestamp, tx_hash, token0_address, token1_address, 
-                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network, protocol
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO NOTHING;
-                """
-                data = [
-                    (
-                        s['id'],
-                        datetime.fromtimestamp(s['timestamp'], timezone.utc),
-                        s['tx_hash'],
-                        s['token0_address'],
-                        s['token1_address'],
-                        s['token0_symbol'],
-                        s['token1_symbol'],
-                        s['amount0'],
-                        s['amount1'],
-                        s['amountUSD'],
-                        s['fee_tier'],
-                        network,
-                        protocol
-                    ) for s in swaps
-                ]
                 cur.executemany(insert_query, data)
             conn.commit()
 
     def get_last_swap_timestamp(self, network: str = "Ethereum", protocol: str = "Uniswap V3") -> Optional[int]:
-        """
-        Get the timestamp of the latest swap stored in the database.
-        Returns None if the table is empty.
-        """
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT MAX(timestamp) FROM uniswap_v3_swaps WHERE network = %s AND protocol = %s", (network, protocol))
+                cur.execute("SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = %s", (network, protocol))
                 res = cur.fetchone()
                 if res and res[0]:
                     return int(res[0].timestamp())
         return None
 
 class PostgresStorageV4(PostgresStorage):
-    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum", protocol: str = "Uniswap V4"):
-        if not swaps:
-            return
-        
-        with psycopg2.connect(self.conn_str) as conn:
-            with conn.cursor() as cur:
-                insert_query = """
-                INSERT INTO uniswap_v4_swaps (
-                    id, timestamp, tx_hash, token0_address, token1_address, 
-                    token0_symbol, token1_symbol, amount0, amount1, amount_usd, fee_tier, network, protocol
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO NOTHING;
-                """
-                data = [
-                    (
-                        s['id'],
-                        datetime.fromtimestamp(s['timestamp'], timezone.utc),
-                        s['tx_hash'],
-                        s['token0_address'],
-                        s['token1_address'],
-                        s['token0_symbol'],
-                        s['token1_symbol'],
-                        s['amount0'],
-                        s['amount1'],
-                        s['amountUSD'],
-                        s['fee_tier'],
-                        network,
-                        protocol
-                    ) for s in swaps
-                ]
-                cur.executemany(insert_query, data)
-            conn.commit()
-
-    def get_last_swap_timestamp(self, network: str = "Ethereum", protocol: str = "Uniswap V4") -> Optional[int]:
-        """
-        Get the timestamp of the latest swap stored in the database.
-        Returns None if the table is empty.
-        """
-        with psycopg2.connect(self.conn_str) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s AND protocol = %s", (network, protocol))
-                res = cur.fetchone()
-                if res and res[0]:
-                    return int(res[0].timestamp())
-        return None
+    """V4 storage — targets the same unified swaps table. Kept for backward compat."""
+    pass

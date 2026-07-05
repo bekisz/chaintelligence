@@ -700,6 +700,213 @@ header h1 {
     background: var(--uniswap-input-bg);
 }
 
+/* ======================================
+   Route Analysis — Horizontal Controls Bar
+   ====================================== */
+
+.controls-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    background: var(--uniswap-card);
+    border: 1px solid var(--uniswap-border);
+    border-radius: 24px;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.selection-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+/* Input group pair — wraps related inputs into a tight block */
+.input-group-pair {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+/* Token input fields — bare inputs, no wrapper panel */
+.token-input-field {
+    flex: 0 0 105px;
+    min-width: 0;
+    padding: 0.875rem 1rem;
+    background: var(--uniswap-input-bg);
+    border: 1px solid var(--uniswap-border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.token-input-field:focus {
+    border-color: var(--uniswap-pink);
+    box-shadow: 0 0 0 1px var(--uniswap-pink), 0 0 20px rgba(255, 0, 122, 0.15);
+}
+
+.token-input-field:hover {
+    border-color: #565A69;
+}
+
+.token-input-field::placeholder {
+    color: #565A69;
+}
+
+/* Network filter select in the controls bar */
+.network-select {
+    flex: 0 0 150px;
+    min-width: 0;
+    padding: 0.875rem 1rem;
+    background: var(--uniswap-input-bg);
+    border: 1px solid var(--uniswap-border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 2.5rem;
+}
+
+.network-select:hover {
+    border-color: #565A69;
+}
+
+.network-select:focus {
+    border-color: var(--uniswap-pink);
+    box-shadow: 0 0 0 1px var(--uniswap-pink), 0 0 20px rgba(255, 0, 122, 0.15);
+}
+
+.network-select option {
+    background: #191B1F;
+    color: var(--text-primary);
+}
+
+/* Token arrow — same style as date arrow */
+.token-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    padding: 0 2px;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background-color: var(--bg-color);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 2px;
+    flex-shrink: 0;
+}
+
+.icon-btn:hover {
+    color: var(--uniswap-pink);
+    border-color: var(--uniswap-pink);
+    background-color: rgba(255, 0, 122, 0.1);
+}
+
+.selection-row .input-group.date-input {
+    flex: 0 0 160px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.date-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    padding: 0 2px;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.selection-row .input-group.date-input input[type="date"] {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: var(--uniswap-input-bg);
+    border: 1px solid var(--uniswap-border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.selection-row .input-group.date-input input[type="date"]:focus {
+    border-color: var(--uniswap-pink);
+    box-shadow: 0 0 0 1px var(--uniswap-pink);
+}
+
+.selection-row .input-group.date-input input[type="date"]:hover {
+    border-color: #565A69;
+}
+
+.selection-row .primary-btn {
+    width: auto;
+    padding: 0.75rem 2rem;
+    height: 46px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Responsive: stack on narrow screens */
+@media (max-width: 900px) {
+    .controls-wrapper {
+        padding: 1.25rem;
+    }
+    .selection-row {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .input-group-pair {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+    .token-input-field {
+        flex: 1 1 90px;
+    }
+    .network-select {
+        flex: 1 1 150px;
+    }
+    .selection-row .input-group.date-input {
+        flex: 1 1 140px;
+    }
+    .selection-row .primary-btn {
+        flex: 1;
+    }
+}
+
+/* Keep old swap-container styles for other pages if any, but hide the old vertical layout */
 .date-range-container {
     display: flex;
     gap: 1rem;
@@ -709,9 +916,7 @@ header h1 {
 
 .date-input {
     flex: 1;
-    /* evenly distributed width */
     min-width: 0;
-    /* prevent overflow */
 }
 
 .date-input label {
@@ -914,7 +1119,6 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 /* Results section updates */
 .results-container {
-    max-width: 1200px;
     margin: 3rem auto;
 }
 
@@ -2080,4 +2284,354 @@ input:focus+.slider {
 .filter-input-group select.filter-select:focus {
     border-color: var(--uniswap-pink);
     background: rgba(255, 255, 255, 0.08);
+}
+
+/* ======================================
+   Visual Polish — Route Analysis Page
+   ====================================== */
+
+/* Page Hero */
+.page-hero {
+    text-align: center;
+    padding: 0.5rem 1rem 2rem 1rem;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.page-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--uniswap-pink), #a78bfa, #60a5fa);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+.page-subtitle {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    font-weight: 400;
+}
+
+/* Enhanced Controls Wrapper */
+.controls-wrapper {
+    position: relative;
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
+    overflow: visible;
+}
+
+.controls-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 2rem;
+    right: 2rem;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--uniswap-pink), var(--accent), transparent);
+    border-radius: 2px;
+    opacity: 0.6;
+}
+
+.controls-wrapper:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+/* Token pair focus glow */
+.token-pair {
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.token-pair:focus-within {
+    border-color: var(--uniswap-pink);
+    box-shadow: 0 0 0 1px var(--uniswap-pink), 0 0 20px rgba(255, 0, 122, 0.15);
+}
+
+/* Enhanced Primary Button */
+.primary-btn {
+    background: linear-gradient(135deg, var(--uniswap-pink), #ff2d8a);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.primary-btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent 50%, rgba(255,255,255,0.05));
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.primary-btn:hover::after {
+    opacity: 1;
+}
+
+.primary-btn:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 28px var(--uniswap-pink-glow);
+}
+
+.primary-btn:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* Pulse animation on idle — subtle */
+@keyframes btn-pulse-glow {
+    0%, 100% { box-shadow: 0 4px 12px var(--uniswap-pink-glow); }
+    50% { box-shadow: 0 4px 20px var(--uniswap-pink-glow), 0 0 30px rgba(255, 0, 122, 0.1); }
+}
+
+.primary-btn:not(:disabled) {
+    animation: btn-pulse-glow 4s ease-in-out infinite;
+}
+
+.primary-btn:not(:disabled):hover {
+    animation: none;
+}
+
+/* Enhanced Table */
+.table-container {
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.table-container:hover {
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+}
+
+table thead {
+    background: rgba(44, 47, 54, 0.8);
+    backdrop-filter: blur(4px);
+}
+
+table th {
+    padding: 12px 14px;
+    font-size: 0.75rem;
+    letter-spacing: 0.07em;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.06);
+}
+
+table td {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+table tbody tr {
+    background: transparent;
+    transition: background 0.15s ease;
+}
+
+table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.015);
+}
+
+table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Row entrance animation */
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+table tbody tr.fade-in {
+    animation: fadeSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Enhanced Progress Bar — full-width match controls wrapper */
+.loader-card {
+    margin: 2rem auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.progress-bar-container {
+    position: relative;
+    width: 100%;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#progress-bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--uniswap-pink), #ff2d8a, #a78bfa);
+    background-size: 200% 100%;
+    border-radius: 12px;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 16px rgba(255, 0, 122, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+/* Shimmer sweep on the bar */
+@keyframes progress-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+#progress-bar-fill {
+    animation: progress-shimmer 2s linear infinite;
+}
+
+/* Shimmer overlay — unused */
+.progress-bar-shimmer {
+    display: none;
+}
+
+/* Progress text — overlaid centered inside the bar */
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.85rem;
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 8px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Enhanced Empty State */
+.no-data-msg {
+    text-align: center;
+    padding: 3rem 1rem;
+    max-width: 400px;
+    margin: 1rem auto;
+}
+
+.empty-state-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
+.empty-state-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* Enhanced Filter Controls */
+.filter-input-group input {
+    border-radius: 20px;
+    padding: 6px 12px;
+    width: 90px;
+    font-size: 0.78rem;
+}
+
+.filter-input-group select.filter-select {
+    border-radius: 20px;
+    padding: 6px 12px;
+    width: 110px;
+    font-size: 0.78rem;
+}
+
+.filter-input-group label {
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+}
+
+/* Enhanced Network Badges */
+.badge {
+    font-size: 0.72rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: inline-block;
+}
+
+/* Better Scrollbar for dark theme */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+/* Column selector dropdown polish */
+.column-dropdown {
+    border-radius: 14px;
+    padding: 10px;
+    min-width: 170px;
+}
+
+.column-dropdown .checkbox-label {
+    padding: 4px 6px;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+
+.column-dropdown .checkbox-label:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Responsive hero */
+@media (max-width: 600px) {
+    .page-hero {
+        padding: 0.25rem 0.5rem 1.25rem 0.5rem;
+    }
+    .page-title {
+        font-size: 1.6rem;
+    }
+    .page-subtitle {
+        font-size: 0.85rem;
+    }
+    .progress-bar-container {
+        height: 34px;
+    }
 }

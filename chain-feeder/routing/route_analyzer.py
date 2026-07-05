@@ -23,12 +23,9 @@ class RouteAnalyzer:
         self.total_tx_count = 0
         self.total_volume = 0.0
 
-    def _get_log_index(self, swap_id: str) -> int:
-        """Extract log index from swap ID (format: tx_hash#log_index)"""
-        try:
-            return int(swap_id.split('#')[1])
-        except (IndexError, ValueError):
-            return 0
+    def _get_log_index(self, swap: dict) -> int:
+        """Get the log index from the pre-parsed field on the swap dict."""
+        return swap.get('log_index', 0)
 
     def process_batch(self, swaps: List[Dict], start_tokens: List[str], end_tokens: List[str]):
         """
@@ -53,7 +50,7 @@ class RouteAnalyzer:
         
         for tx_hash, tx_events in tx_swaps.items():
             # Sort by log index to get correct order of swaps
-            tx_events.sort(key=lambda x: self._get_log_index(x['id']))
+            tx_events.sort(key=self._get_log_index)
             
             if not tx_events:
                 continue
