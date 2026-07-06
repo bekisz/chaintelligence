@@ -56,15 +56,15 @@ def fetch_all_v4_pools(fetcher: UniswapV4Fetcher) -> list:
     all_pools = []
     skip = 0
     page_size = 1000
-    max_pools = 50000  # safety limit
+    max_pools = 200000  # safety limit
 
     while skip < max_pools:
         query = f"""
         {{
           pools(first: {page_size}, skip: {skip}) {{
             id
-            token0 {{ id }}
-            token1 {{ id }}
+            token0 {{ id symbol }}
+            token1 {{ id symbol }}
             feeTier
           }}
         }}
@@ -82,6 +82,8 @@ def fetch_all_v4_pools(fetcher: UniswapV4Fetcher) -> list:
                 'id': p['id'],
                 'token0': p['token0']['id'],
                 'token1': p['token1']['id'],
+                'sym0': p['token0'].get('symbol', ''),
+                'sym1': p['token1'].get('symbol', ''),
                 'feeTier': p['feeTier'],
             })
 
@@ -95,6 +97,16 @@ def fetch_all_v4_pools(fetcher: UniswapV4Fetcher) -> list:
     return all_pools
 
 
+def _try_match(pool_lookup: dict, sym0: str, sym1: str, fee: str):
+    """Try to find a pool_id in pool_lookup by (sym0, sym1, fee) in both orderings."""
+    key = (sym0, sym1, fee)
+    pool_id = pool_lookup.get(key)
+    if not pool_id and sym0 != sym1:
+        key_r = (sym1, sym0, fee)
+        pool_id = pool_lookup.get(key_r)
+    return pool_id
+
+
 def main():
     logging.info("Connecting to DB...")
     try:
@@ -104,28 +116,7 @@ def main():
         sys.exit(1)
     cur = conn.cursor()
 
-    # 1. Build symbol→address map from coin_contract (primary source)
-    logging.info("Building token address map from coin_contract...")
-    symbol_map = defaultdict(dict)
-
-    cur.execute("""
-        SELECT LOWER(cc.chain) as chain, UPPER(c.symbol) as sym, LOWER(cc.contract_address) as addr
-        FROM coin_contract cc
-        JOIN coin c ON cc.coin_id = c.coin_id
-        WHERE cc.contract_address IS NOT NULL
-          AND cc.contract_address != ''
-    """)
-    for chain, sym, addr in cur.fetchall():
-        if sym and addr and '0x' in addr:
-            chain_key = {
-                'ethereum': 'Ethereum',
-                'arbitrum': 'Arbitrum',
-                'base': 'Base',
-                'bsc': 'BNB',
-            }.get(chain, chain.capitalize())
-            symbol_map[chain_key][sym] = addr
-
-    # 2. Get V4 pools missing pool_id, grouped by network
+    # 1. Get V4 pools missing pool_id, grouped by network
     cur.execute("""
         SELECT lp.id, UPPER(c0.symbol) as s0, UPPER(c1.symbol) as s1,
                lp.fee_tier, lp.network
@@ -159,7 +150,8 @@ def main():
     if unsupported:
         logging.info(f"  Skipping {unsupported} pools on unsupported networks (BNB)")
 
-    # 3. For each supported network, fetch ALL pools from subgraph, match, UPDATE
+    # 2. For each supported network, fetch ALL pools from subgraph with token symbols,
+    #    then match by (symbol0, symbol1, fee) directly — no address lookup needed.
     total_updated = 0
     total_skipped = 0
 
@@ -167,10 +159,7 @@ def main():
         logging.info(f"\n{'='*60}")
         logging.info(f"Processing {network}: {len(missing)} pools")
 
-        # Build address→symbol reverse map for this network
-        addr_to_symbol = {v: k for k, v in symbol_map.get(network, {}).items()}
-
-        # Fetch all V4 pools from subgraph
+        # Fetch all V4 pools from subgraph (with token symbols)
         fetcher = UniswapV4Fetcher(verbose=False, network=network)
         try:
             all_pools = fetch_all_v4_pools(fetcher)
@@ -184,43 +173,56 @@ def main():
             total_skipped += len(missing)
             continue
 
-        # Build local lookup: (addr0_sorted, addr1_sorted, fee_bips) → pool_id
-        # The subgraph token IDs are hex addresses.
+        # Build lookup: (symbol0_upper, symbol1_upper, fee) → pool_id (bytes32)
+        # Normalize both DB and subgraph side: uppercase, 8-char truncation
         pool_lookup = {}
         for p in all_pools:
-            t0 = p['token0'].lower()
-            t1 = p['token1'].lower()
-            key = (t0, t1, p['feeTier'])
-            pool_lookup[key] = p['id']
-            # Also sorted direction
-            if t0 != t1:
-                sorted_key = tuple(sorted([t0, t1])) + (p['feeTier'],)
-                if sorted_key not in pool_lookup:
-                    pool_lookup[sorted_key] = p['id']
+            s0 = p.get('sym0', '').upper()[:8]
+            s1 = p.get('sym1', '').upper()[:8]
+            fee = str(p['feeTier'])
+            if s0 and s1:
+                key = (s0, s1, fee)
+                pool_lookup[key] = p['id']
+                # Also store sorted ordering (same pool, tokens might be reversed)
+                if s0 != s1:
+                    sk = tuple(sorted([s0, s1])) + (fee,)
+                    if sk not in pool_lookup:
+                        pool_lookup[sk] = p['id']
 
-        # Match DB pools to subgraph pools
+        # Match DB pools to subgraph pools by symbol+symbol+fee
+        net_updated = 0
         for pool_db_id, c0, c1, fee, _net in missing:
-            addr0 = symbol_map.get(network, {}).get(c0)
-            addr1 = symbol_map.get(network, {}).get(c1)
+            c0n = c0.upper()[:8]
+            c1n = c1.upper()[:8]
 
-            if not addr0 or not addr1:
-                logging.warning(f"  Skipping pool {pool_db_id} ({c0}-{c1}): address not found")
-                total_skipped += 1
-                continue
+            # Determine fee tier type and try multiple match strategies
+            STANDARD_TIERS_PCT = {'0.01%', '0.05%', '0.08%', '0.3%', '1.0%'}
 
-            fee_bips = normalize_fee_to_bips(fee)
-            try:
-                fee_int = int(fee_bips)
-            except ValueError:
-                total_skipped += 1
-                continue
+            fee = fee if fee else ''
 
-            # Look up by (addr0, addr1, fee) in both directions
-            key = (addr0.lower(), addr1.lower(), str(fee_int))
-            pool_id = pool_lookup.get(key)
-            if not pool_id:
-                key_r = (addr1.lower(), addr0.lower(), str(fee_int))
-                pool_id = pool_lookup.get(key_r)
+            # Strategy 1: Try exact fee match (standard tiers already match this)
+            fee_clean = fee.strip().replace('%', '').strip()
+            pool_id = _try_match(pool_lookup, c0n, c1n, fee_clean)
+
+            # Strategy 2: If fee is a %, compute bips and try matching
+            if not pool_id and '%' in fee:
+                try:
+                    pct = float(fee_clean)
+                    fee_bips = str(int(pct * 10000))
+                    pool_id = _try_match(pool_lookup, c0n, c1n, fee_bips)
+                except ValueError:
+                    pass
+
+            # Strategy 3: If fee starts with '%' and is high (>50%), it's dynamic — match feeTier=0
+            if not pool_id and fee in STANDARD_TIERS_PCT:
+                # Standard tier that didn't match — just skip
+                pass
+            elif not pool_id:
+                # Try dynamic fee match (feeTier=0 or 8388608 in subgraph)
+                pool_id = _try_match(pool_lookup, c0n, c1n, '0')
+                if not pool_id:
+                    pool_id = _try_match(pool_lookup, c0n, c1n, '8388608')
+
             if not pool_id:
                 total_skipped += 1
                 continue
@@ -230,13 +232,14 @@ def main():
                 (pool_id, pool_db_id)
             )
             total_updated += 1
+            net_updated += 1
 
-            if total_updated % 100 == 0:
+            if total_updated % 200 == 0:
                 conn.commit()
                 logging.info(f"  Progress: {total_updated} updated, {total_skipped} skipped")
 
         conn.commit()
-        logging.info(f"  {network} done: {len(missing) - (total_skipped - sum(len(v) for v in missing_by_network.values() if v == missing))} in this batch")
+        logging.info(f"  {network} done: matched {net_updated} of {len(missing)}")
 
     cur.close()
     conn.close()
