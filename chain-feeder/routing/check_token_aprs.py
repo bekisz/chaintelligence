@@ -31,9 +31,11 @@ def get_token_aprs(symbols):
     for symbol in symbols:
         # 1. Find all pools for this token (from metadata table)
         query_pools = """
-        SELECT id, coin0_symbol, coin1_symbol, fee_tier
-        FROM liquidity_pool
-        WHERE UPPER(coin0_symbol) = %s OR UPPER(coin1_symbol) = %s
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_tier
+        FROM liquidity_pool lp
+        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+        WHERE UPPER(c0.symbol) = %s OR UPPER(c1.symbol) = %s
         """
         cur.execute(query_pools, (symbol.upper(), symbol.upper()))
         pools = cur.fetchall()

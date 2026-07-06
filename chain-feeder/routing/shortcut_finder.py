@@ -244,15 +244,17 @@ class ShortcutFinder:
             cur.execute("""
                 SELECT p.fee_tier, h.tvl_usd
                 FROM liquidity_pool p
+                JOIN coin c0 ON p.coin0_id = c0.coin_id
+                JOIN coin c1 ON p.coin1_id = c1.coin_id
                 LEFT JOIN LATERAL (
                     SELECT tvl_usd FROM liquidity_pool_history
                     WHERE pool_id = p.id AND tvl_usd > 0
                     ORDER BY date DESC LIMIT 1
                 ) h ON true
                 WHERE (
-                    (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
+                    (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)
                     OR
-                    (UPPER(p.coin0_symbol) = %s AND UPPER(p.coin1_symbol) = %s)
+                    (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)
                 )
                 AND p.reverted = false
                 ORDER BY h.tvl_usd DESC NULLS LAST

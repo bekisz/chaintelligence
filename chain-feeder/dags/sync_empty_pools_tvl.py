@@ -48,12 +48,13 @@ def sync_tvl_empty_only():
     for sym, addr in mainnet_overrides.items():
         symbol_map[sym] = addr
                 
-    # 2. Get only V3 pools that are missing history
     cur.execute("""
-        SELECT id, coin0_symbol, coin1_symbol, fee_tier 
-        FROM liquidity_pool 
-        WHERE protocol = 'Uniswap V3'
-          AND id NOT IN (SELECT DISTINCT pool_id FROM liquidity_pool_history)
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_tier 
+        FROM liquidity_pool lp
+        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+        WHERE lp.protocol = 'Uniswap V3'
+          AND lp.id NOT IN (SELECT DISTINCT pool_id FROM liquidity_pool_history)
     """)
     pools = cur.fetchall()
     logging.info(f"Found {len(pools)} Uniswap V3 pools missing daily history.")

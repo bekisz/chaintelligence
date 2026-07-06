@@ -275,16 +275,28 @@ def ingest_pools(positions: list):
         if not pool_name: continue
 
         # Upsert Pool
+        # Resolve coin0_id and coin1_id from symbol
+        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0,))
+        row0 = cur.fetchone()
+        coin0_id = row0[0] if row0 else None
+        
+        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c1,))
+        row1 = cur.fetchone()
+        coin1_id = row1[0] if row1 else None
+        
+        if coin0_id is None or coin1_id is None:
+            continue
+
         try:
             cur.execute("""
-                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_symbol, coin1_symbol, pool_address, reverted)
+                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_id, coin1_id, pool_address, reverted)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (network, protocol, pool_name) DO UPDATE
                 SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
                     reverted = EXCLUDED.reverted,
-                    coin0_symbol = EXCLUDED.coin0_symbol,
-                    coin1_symbol = EXCLUDED.coin1_symbol
-            """, (network, protocol, pool_name, c0, c1, p.get('pool_address'), reverted))
+                    coin0_id = EXCLUDED.coin0_id,
+                    coin1_id = EXCLUDED.coin1_id
+            """, (network, protocol, pool_name, coin0_id, coin1_id, p.get('pool_address'), reverted))
         except Exception as e:
             conn.rollback()
             logging.error(f"Error inserting pool {pool_name}: {e}")
@@ -455,8 +467,13 @@ def ingest_snapshots(positions: list):
             if not res: continue
             pos_id, pool_id = res
             
-            # Need Pool Coin order to map assets correctly
-            cur.execute("SELECT coin0_symbol, coin1_symbol FROM liquidity_pool WHERE id = %s", (pool_id,))
+            cur.execute("""
+                SELECT c0.symbol, c1.symbol 
+                FROM liquidity_pool lp
+                JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                WHERE lp.id = %s
+            """, (pool_id,))
             pool_res = cur.fetchone()
             if not pool_res: continue
             c0_sym, c1_sym = pool_res

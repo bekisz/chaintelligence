@@ -91,12 +91,24 @@ def sync_pools_from_swaps():
         pool_name = f"{c0} - {c1}"
         fee_bips = normalize_fee_tier(fee)
 
+        # Resolve coin0_id and coin1_id from symbol
+        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0,))
+        row0 = cur.fetchone()
+        coin0_id = row0[0] if row0 else None
+        
+        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c1,))
+        row1 = cur.fetchone()
+        coin1_id = row1[0] if row1 else None
+        
+        if coin0_id is None or coin1_id is None:
+            continue
+
         try:
             cur.execute("""
-                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_symbol, coin1_symbol, fee_tier)
+                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_id, coin1_id, fee_tier)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (network, protocol, pool_name, fee_tier) DO NOTHING
-            """, (network, protocol, pool_name, c0, c1, fee_bips))
+            """, (network, protocol, pool_name, coin0_id, coin1_id, fee_bips))
             
             if cur.statusmessage.startswith("INSERT 0 1"):
                 new_pools += 1
@@ -196,7 +208,13 @@ def sync_tvl_from_graph():
             if len(sym) > 8:
                 symbol_map[network][sym[:8].upper()] = addr.lower()
                 
-    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier, network, protocol FROM liquidity_pool WHERE protocol IN ('Uniswap V3', 'PancakeSwap V3')")
+    cur.execute("""
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_tier, lp.network, lp.protocol 
+        FROM liquidity_pool lp
+        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+        WHERE lp.protocol IN ('Uniswap V3', 'PancakeSwap V3')
+    """)
     pools = cur.fetchall()
     
     # Keep cached fetcher instances

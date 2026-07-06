@@ -18,3 +18,6 @@ logs/
 # Test recordings and artifacts
 recordings/
 test-results/
+
+# Local psycopg2 stub (shadows real package)
+psycopg2/

@@ -1,0 +1,22 @@
+# Supported chains for token contract address ingestion
+chains:
+  - name: ethereum
+    cmc_platform_name: "Ethereum"
+    native_coin_symbol: ETH
+    address_format: evm       # 0x-prefixed hex, 42 chars
+  - name: arbitrum
+    cmc_platform_name: "Arbitrum"
+    native_coin_symbol: ETH
+    address_format: evm
+  - name: base
+    cmc_platform_name: "Base"
+    native_coin_symbol: ETH
+    address_format: evm
+  - name: bsc
+    cmc_platform_name: "BNB Smart Chain (BEP20)"
+    native_coin_symbol: BNB
+    address_format: evm
+  - name: solana
+    cmc_platform_name: "Solana"
+    native_coin_symbol: SOL
+    address_format: solana    # base58, ~44 chars

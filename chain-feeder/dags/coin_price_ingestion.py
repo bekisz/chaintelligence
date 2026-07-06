@@ -67,13 +67,18 @@ def resolve_targets(target_list=None):
         
     # 2. Addresses
     if addresses:
-        val_list = ",".join([f"'{a}'" for a in addresses])
-        sql = f"SELECT cmc_id, ethereum_address FROM coin WHERE ethereum_address IN ({val_list}) AND cmc_id IS NOT NULL"
+        val_list = ",".join([f"'{a.lower()}'" for a in addresses])
+        sql = f"""
+            SELECT DISTINCT c.cmc_id, cc.contract_address 
+            FROM coin_contract cc
+            JOIN coin c ON cc.coin_id = c.coin_id
+            WHERE LOWER(cc.contract_address) IN ({val_list}) AND c.cmc_id IS NOT NULL
+        """
         rows = pg_hook.get_records(sql)
         for r in rows:
             resolved_ids.add(r[0])
         found_addrs = [r[1] for r in rows]
-        missing = set(addresses) - set(found_addrs)
+        missing = set(a.lower() for a in addresses) - set(a.lower() for a in found_addrs)
         logging.info(f"Resolved {len(rows)} addresses to IDs. Found: {len(found_addrs)}. Missing: {missing}")
 
     # 3. Symbols

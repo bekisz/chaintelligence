@@ -31,6 +31,7 @@ x-airflow-test-common: &airflow-test-common
     - ../include:/opt/airflow/include
     - ../logs:/opt/airflow/logs
     - ../plugins:/opt/airflow/plugins
+    - ../../config:/opt/airflow/config
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
   depends_on: &airflow-test-common-depends-on
     postgres-test:

@@ -73,6 +73,19 @@ def get_factory_and_hash(protocol: str, network: str):
     return net_cfg['factory'], net_cfg['init_hash']
 
 
+def to_checksum_address(address: str) -> str:
+    """Convert an address to EIP-55 checksum format."""
+    addr_lower = address.lower().replace('0x', '')
+    if len(addr_lower) != 40:
+        return address  # Return as-is if not an EVM address
+    address_hash = keccak(addr_lower.encode('ascii')).hex()
+    checksum_address = '0x' + ''.join(
+        c.upper() if int(address_hash[i], 16) >= 8 else c 
+        for i, c in enumerate(addr_lower)
+    )
+    return checksum_address
+
+
 def _derive_address(t0_bytes: bytes, t1_bytes: bytes, fee_val: int, factory_hex: str, init_hash_hex: str, is_v2: bool = False) -> str:
     """Derive a pool address via CREATE2.
 
@@ -91,7 +104,8 @@ def _derive_address(t0_bytes: bytes, t1_bytes: bytes, fee_val: int, factory_hex:
         salt = keccak(b'\x00' * 12 + t0_bytes + b'\x00' * 12 + t1_bytes + fee_val.to_bytes(32, 'big'))
     f_bytes = bytes.fromhex(factory_hex.removeprefix('0x'))
     ih_bytes = bytes.fromhex(init_hash_hex.removeprefix('0x'))
-    return '0x' + keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
+    derived = '0x' + keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
+    return to_checksum_address(derived)
 
 
 try:
@@ -196,8 +210,10 @@ def resolve_token_input(input_str: str) -> list[str]:
             # Check if it's a family
             # We search case-insensitive for family name in the official coin_family table
             cur.execute("""
-                SELECT symbol FROM coin_family
-                WHERE UPPER(name) = %s
+                SELECT c.symbol 
+                FROM coin_family f
+                JOIN coin c ON f.coin_id = c.coin_id
+                WHERE UPPER(f.name) = %s
             """, (input_str.upper(),))
             rows = cur.fetchall()
 
@@ -362,112 +378,36 @@ async def analyze(
 
                 token_addresses = {}
                 if token_symbols:
-                    # Core verified on-chain token addresses by network to ensure correct Create2 calculations
-                    NETWORK_TOKEN_MAPS = {
-                        "Ethereum": {
-                            "USDC": "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eB48",
-                            "USDT": "0xdAC17F958D2ee523a2206206994597c13d831ec7",
-                            "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-                            "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-                            "ETH":  "0x0000000000000000000000000000000000000000",
-                        },
-                        "BNB": {
-                            "WBNB": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-                            "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
-                            "USDT": "0x55d398326f99059ff775485246999027b3197955",
-                            "BTCB": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
-                            "BUSD": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
-                            "CAKE": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-                            "BETH": "0x25063237838E18f49999b541a61962C641914a81",
-                            "FDUSD": "0x3813e82e6f7098b9583FC0F33a962D02018B6803",
-                            "TUSD": "0x14016E85a25aeb13065688e4B4a6E8F5679bEe99",
-                            "ETH":  "0x0000000000000000000000000000000000000000",
-                        },
-                        "Arbitrum": {
-                            "ETH":    "0x0000000000000000000000000000000000000000",
-                            "USDC.e": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
-                            "USDC":   "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
-                            "WETH":   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
-                            "USDT":   "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
-                            "WBTC":   "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
-                            "DAI":    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
-                            "LINK":   "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
-                            "GMX":    "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
-                            "AAVE":   "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
-                            "ZRO":    "0x6985884c4392d348587b19cb9eaaf157f13271cd",
-                        },
-                        "Base": {
-                            "ETH":    "0x0000000000000000000000000000000000000000",
-                            "WETH":   "0x4200000000000000000000000000000000000006",
-                            "USDC":   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                            "USDbC":  "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-                            "cbBTC":  "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
-                        }
-                    }
-
                     # Fetch dynamically ONLY for networks actually needed by the pools
                     for target_network in needed_networks:
-                        net_map = NETWORK_TOKEN_MAPS.get(target_network, {})
                         token_addresses[target_network] = {}
 
                         if target_network not in TOKEN_ADDRESS_CACHE:
                             TOKEN_ADDRESS_CACHE[target_network] = {}
 
-                        # Pre-populate symbols we have in core mapping or global cache
+                        # Pre-populate from global cache
                         for sym in token_symbols:
-                            if sym in net_map:
-                                token_addresses[target_network][sym] = net_map[sym]
-                            elif sym in TOKEN_ADDRESS_CACHE[target_network]:
+                            if sym in TOKEN_ADDRESS_CACHE[target_network]:
                                 token_addresses[target_network][sym] = TOKEN_ADDRESS_CACHE[target_network][sym]
 
-                        # Database lookup only for any remaining missing symbols (e.g. custom test tokens)
+                        # Database lookup for any remaining missing symbols (using central coin_contract table)
                         missing_symbols = [sym for sym in token_symbols if sym not in token_addresses[target_network]]
                         if missing_symbols:
                             try:
-                                import psycopg2
-                                conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-                                cur = conn.cursor()
-
-                                # 1. Fetch addresses from V3 swaps table for this specific network
-                                cur.execute("""
-                                    SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v3_swaps
-                                    WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
-                                    UNION
-                                    SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v3_swaps
-                                    WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
-                                """, (target_network, missing_symbols, target_network, missing_symbols))
-                                for row in cur.fetchall():
-                                    if row[1]:
-                                        token_addresses[target_network][row[0]] = row[1]
-                                        TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
-
-                                # 2. Fetch from V4 swaps table for any missing symbols
-                                missing_tokens_v4 = [sym for sym in missing_symbols if sym not in token_addresses[target_network]]
-                                if missing_tokens_v4:
+                                with get_conn() as conn:
+                                    cur = conn.cursor()
+                                    db_chain = 'bsc' if target_network.lower() == 'bnb' else target_network.lower()
                                     cur.execute("""
-                                        SELECT DISTINCT UPPER(token0_symbol), token0_address FROM uniswap_v4_swaps
-                                        WHERE network = %s AND UPPER(token0_symbol) = ANY(%s)
-                                        UNION
-                                        SELECT DISTINCT UPPER(token1_symbol), token1_address FROM uniswap_v4_swaps
-                                        WHERE network = %s AND UPPER(token1_symbol) = ANY(%s)
-                                    """, (target_network, missing_tokens_v4, target_network, missing_tokens_v4))
+                                        SELECT UPPER(c.symbol), cc.contract_address 
+                                        FROM coin_contract cc
+                                        JOIN coin c ON cc.coin_id = c.coin_id
+                                        WHERE LOWER(cc.chain) = %s AND UPPER(c.symbol) = ANY(%s)
+                                    """, (db_chain, missing_symbols))
                                     for row in cur.fetchall():
                                         if row[1]:
                                             token_addresses[target_network][row[0]] = row[1]
                                             TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
-
-                                # 3. Fallback to general coin table for any remaining ones (assumes Ethereum)
-                                if target_network == "Ethereum":
-                                    still_missing = [sym for sym in missing_tokens_v4 if sym not in token_addresses[target_network]]
-                                    if still_missing:
-                                        cur.execute("SELECT UPPER(symbol), ethereum_address FROM coin WHERE UPPER(symbol) = ANY(%s)", (still_missing,))
-                                        for row in cur.fetchall():
-                                            if row[1]:
-                                                token_addresses[target_network][row[0]] = row[1]
-                                                TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
-
-                                cur.close()
-                                conn.close()
+                                    cur.close()
                             except Exception as e:
                                 print(f"Error fetching token addresses from DB: {e}")
             
@@ -645,22 +585,16 @@ async def get_date_range(network: Optional[str] = Query(None, description="Filte
             if network and network.lower() != 'all':
                 # Per-network: return the exact date range for that network
                 cur.execute("""
-                    SELECT MIN(timestamp)::date, MAX(timestamp)::date FROM (
-                        SELECT timestamp, network FROM uniswap_v3_swaps
-                        UNION ALL
-                        SELECT timestamp, network FROM uniswap_v4_swaps
-                    ) as all_swaps WHERE network = %s
+                    SELECT MIN(ts)::date, MAX(ts)::date
+                    FROM swaps
+                    WHERE network = %s
                 """, (network,))
             else:
                 # "All" mode: return the tightest range that has data for every network
                 cur.execute("""
                     SELECT MAX(min_date)::date, MAX(max_date)::date FROM (
-                        SELECT network, MIN(timestamp) as min_date, MAX(timestamp) as max_date
-                        FROM (
-                            SELECT timestamp, network FROM uniswap_v3_swaps
-                            UNION ALL
-                            SELECT timestamp, network FROM uniswap_v4_swaps
-                        ) as all_swaps
+                        SELECT network, MIN(ts) as min_date, MAX(ts) as max_date
+                        FROM swaps
                         GROUP BY network
                     ) as per_network
                 """)
@@ -1016,11 +950,11 @@ async def price_history(symbol: str):
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         
-        # We join with coin table because history is now linked via address
+        # We join with coin table via coin_id
         query = """
         SELECT h.timestamp, h.price 
         FROM coin_price_history h
-        JOIN coin c ON h.address = c.ethereum_address
+        JOIN coin c ON h.coin_id = c.coin_id
         WHERE UPPER(c.symbol) = %s
         ORDER BY h.timestamp ASC
         """
@@ -1301,7 +1235,13 @@ async def sync_pool(pool_id: int):
         cur = conn.cursor()
         
         # 1. Get pool details
-        cur.execute("SELECT network, pool_address, protocol, coin0_symbol, coin1_symbol, fee_tier FROM liquidity_pool WHERE id = %s", (pool_id,))
+        cur.execute("""
+            SELECT lp.network, lp.pool_address, lp.protocol, c0.symbol, c1.symbol, lp.fee_tier 
+            FROM liquidity_pool lp
+            JOIN coin c0 ON lp.coin0_id = c0.coin_id
+            JOIN coin c1 ON lp.coin1_id = c1.coin_id
+            WHERE lp.id = %s
+        """, (pool_id,))
         pool_res = cur.fetchone()
         if not pool_res:
             raise HTTPException(status_code=404, detail="Pool not found")
@@ -1311,8 +1251,13 @@ async def sync_pool(pool_id: int):
         # 2. Attempt to resolve address if missing
         if not pool_address:
             print(f"Pool address missing for ID {pool_id}. Attempting to resolve...")
-            # Fetch token addresses
-            cur.execute("SELECT symbol, ethereum_address FROM coin WHERE symbol IN (%s, %s)", (c0, c1))
+            # Fetch token addresses for the pool's network
+            cur.execute("""
+                SELECT c.symbol, cc.contract_address 
+                FROM coin_contract cc
+                JOIN coin c ON cc.coin_id = c.coin_id
+                WHERE c.symbol IN (%s, %s) AND LOWER(cc.chain) = %s
+            """, (c0, c1, network.lower()))
             coin_rows = cur.fetchall()
             coin_map = {row[0]: row[1] for row in coin_rows}
             
@@ -1397,35 +1342,56 @@ async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated 
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         
+        # Fetch coin details and map ethereum_address if it exists
         query = """
         SELECT 
-            cmc_id, symbol, name, price, price_timestamp,
-            percent_change_1h, percent_change_24h, percent_change_7d,
-            market_cap, tvl, cmc_rank, image_url, ethereum_address
-        FROM coin
-        WHERE cmc_id = ANY(%s)
+            c.coin_id, c.cmc_id, c.symbol, c.name, c.price, c.price_timestamp,
+            c.percent_change_1h, c.percent_change_24h, c.percent_change_7d,
+            c.market_cap, c.tvl, c.cmc_rank, c.image_url,
+            eth.contract_address AS ethereum_address
+        FROM coin c
+        LEFT JOIN coin_contract eth ON c.coin_id = eth.coin_id AND eth.chain = 'ethereum'
+        WHERE c.cmc_id = ANY(%s)
         """
         cur.execute(query, (cmc_ids,))
         rows = cur.fetchall()
         
+        # Fetch all other contracts for these coins
+        cur.execute("""
+            SELECT cc.coin_id, cc.chain, cc.contract_address, cc.decimals, cc.is_native
+            FROM coin_contract cc
+            JOIN coin c ON cc.coin_id = c.coin_id
+            WHERE c.cmc_id = ANY(%s)
+        """, (cmc_ids,))
+        contract_rows = cur.fetchall()
+        contracts_by_coin = {}
+        for cid, chain, addr, dec, is_native in contract_rows:
+            contracts_by_coin.setdefault(cid, {})[chain] = {
+                "contract_address": addr,
+                "decimals": dec,
+                "is_native": is_native
+            }
+        
         # Build response keyed by CMC ID
         data = {}
         for row in rows:
-            cmc_id_val = row[0]
+            coin_id = row[0]
+            cmc_id_val = row[1]
             data[str(cmc_id_val)] = {
                 "cmc_id": cmc_id_val,
-                "symbol": row[1],
-                "name": row[2],
-                "price": float(row[3]) if row[3] is not None else None,
-                "price_timestamp": row[4].isoformat() if row[4] is not None else None,
-                "percent_change_1h": float(row[5]) if row[5] is not None else None,
-                "percent_change_24h": float(row[6]) if row[6] is not None else None,
-                "percent_change_7d": float(row[7]) if row[7] is not None else None,
-                "market_cap": float(row[8]) if row[8] is not None else None,
-                "tvl": float(row[9]) if row[9] is not None else None,
-                "cmc_rank": row[10],
-                "image_url": row[11],
-                "ethereum_address": row[12]
+                "symbol": row[2],
+                "name": row[3],
+                "price": float(row[4]) if row[4] is not None else None,
+                "price_timestamp": row[5].isoformat() if row[5] is not None else None,
+                "percent_change_1h": float(row[6]) if row[6] is not None else None,
+                "percent_change_24h": float(row[7]) if row[7] is not None else None,
+                "percent_change_7d": float(row[8]) if row[8] is not None else None,
+                "market_cap": float(row[9]) if row[9] is not None else None,
+                "tvl": float(row[10]) if row[10] is not None else None,
+                "cmc_rank": row[11],
+                "image_url": row[12],
+                "ethereum_address": row[13],
+                "platforms": contracts_by_coin.get(coin_id, {})
             }
         
         cur.close()

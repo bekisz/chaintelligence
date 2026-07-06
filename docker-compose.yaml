@@ -31,6 +31,7 @@ x-airflow-common: &airflow-common
     - ./chain-feeder/include:/opt/airflow/include
     - ./chain-feeder/logs:/opt/airflow/logs
     - ./chain-feeder/plugins:/opt/airflow/plugins
+    - ./config:/opt/airflow/config
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
   depends_on: &airflow-common-depends-on
     postgres:

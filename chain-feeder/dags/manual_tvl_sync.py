@@ -52,8 +52,12 @@ def sync_tvl_manual():
         symbol_map[sym] = addr
         print(f"Overriding {sym} -> {addr}")
                 
-    # 2. Get all pools
-    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier FROM liquidity_pool")
+    cur.execute("""
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_tier 
+        FROM liquidity_pool lp
+        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+    """)
     pools = cur.fetchall()
     
     for pool in pools:

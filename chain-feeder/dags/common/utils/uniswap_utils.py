@@ -14,40 +14,60 @@ from .config import (
     DATA_WAREHOUSE_DB
 )
 
-# Arbitrum token addresses — verified against live V3 and V4 subgraph data
-ARBITRUM_TOKEN_ADDRESSES = {
-    # Native ETH (used as address 0x000… in V4)
-    'ETH':  '0x0000000000000000000000000000000000000000',
-    # Bridged USDC (used in V3)
-    'USDC.e': '0xff970a61a04b1ca14834a43f5de4533ebddb5cc8',
-    # Native USDC (used in V4)
-    'USDC': '0xaf88d065e77c8cc2239327c5edb3a432268e5831',
-    # Wrapped ETH token (used in V3)
-    'WETH': '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
-    'USDT': '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
-    'WBTC': '0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f',
-    'DAI':  '0xda10009c55681e77d502082691d29f8fb095569f',
-    'LINK': '0xf97f4df75117a78c1a5a0dbb814af92458539fb4',
-    'GMX':  '0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a',
-    'AAVE': '0xba5ddd1f9d7f570dc94a51479a000e3bce967196',
-    'ZRO':  '0x6985884c4392d348587b19cb9eaaf157f13271cd',
-}
-
-# Base token addresses
-BASE_TOKEN_ADDRESSES = {
-    'ETH':   '0x0000000000000000000000000000000000000000',
-    'WETH':  '0x4200000000000000000000000000000000000006',
-    'USDC':  '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    'USDbC': '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA',
-    'cbBTC': '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf',
-}
-
-# BNB token addresses
-BNB_TOKEN_ADDRESSES = {
-    'WBNB':  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
-    'USDC':  '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
-    'USDT':  '0x55d398326f99059ff775485246999027b3197955',
-}
+def load_token_addresses_for_chain(chain: str) -> Dict[str, str]:
+    """Load symbol → contract_address mapping for a given chain from DB."""
+    mapping = {}
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT UPPER(c.symbol), cc.contract_address 
+            FROM coin_contract cc
+            JOIN coin c ON cc.coin_id = c.coin_id
+            WHERE LOWER(cc.chain) = %s
+        """, (chain.lower(),))
+        for row in cur.fetchall():
+            mapping[row[0]] = row[1]
+        cur.close()
+        conn.close()
+    except Exception as e:
+        # Static fallbacks for testing/safety if DB is unavailable
+        if chain.lower() == 'arbitrum':
+            return {
+                'ETH':  '0x0000000000000000000000000000000000000000',
+                'USDC.e': '0xff970a61a04b1ca14834a43f5de4533ebddb5cc8',
+                'USDC': '0xaf88d065e77c8cc2239327c5edb3a432268e5831',
+                'WETH': '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
+                'USDT': '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
+                'WBTC': '0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f',
+                'DAI':  '0xda10009c55681e77d502082691d29f8fb095569f',
+                'LINK': '0xf97f4df75117a78c1a5a0dbb814af92458539fb4',
+                'GMX':  '0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a',
+                'AAVE': '0xba5ddd1f9d7f570dc94a51479a000e3bce967196',
+                'ZRO':  '0x6985884c4392d348587b19cb9eaaf157f13271cd',
+            }
+        elif chain.lower() == 'base':
+            return {
+                'ETH':   '0x0000000000000000000000000000000000000000',
+                'WETH':  '0x4200000000000000000000000000000000000006',
+                'USDC':  '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                'USDbC': '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA',
+                'cbBTC': '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf',
+            }
+        elif chain.lower() == 'bsc':
+            return {
+                'WBNB':  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
+                'USDC':  '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+                'USDT':  '0x55d398326f99059ff775485246999027b3197955',
+            }
+        elif chain.lower() == 'ethereum':
+            return {
+                'USDC': '0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eB48',
+                'USDT': '0xdAC17F958D2ee523a2206206994597c13d831ec7',
+                'WETH': '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+                'WBTC': '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
+            }
+    return mapping
 
 class UniswapV3Fetcher:
     def __init__(self, verbose: bool = False, network: str = "Ethereum", protocol: str = "Uniswap V3"):
@@ -81,6 +101,9 @@ class UniswapV3Fetcher:
         else:
             self.subgraph_url = f'https://gateway-arbitrum.network.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/{v3_subgraph_id}'
             self.subgraph_v4_url = f'https://gateway-arbitrum.network.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/{v4_subgraph_id}'
+        
+        # Load token addresses dynamically
+        self.token_addresses = load_token_addresses_for_chain(self.network)
     
     def _log(self, message: str):
         if self.verbose:
@@ -174,14 +197,7 @@ class UniswapV3Fetcher:
         seen_ids = set()
         current_start_time = start_timestamp
 
-        if self.network == "Arbitrum":
-            addr_to_sym = {addr.lower(): sym for sym, addr in ARBITRUM_TOKEN_ADDRESSES.items()}
-        elif self.network == "Base":
-            addr_to_sym = {addr.lower(): sym for sym, addr in BASE_TOKEN_ADDRESSES.items()}
-        elif self.network == "BNB":
-            addr_to_sym = {addr.lower(): sym for sym, addr in BNB_TOKEN_ADDRESSES.items()}
-        else:
-            addr_to_sym = ADDRESS_TO_SYMBOL
+        addr_to_sym = {addr.lower(): sym for sym, addr in self.token_addresses.items()}
 
         while True:
             query = self._build_swap_query(current_start_time, end_timestamp, filter_field, filter_addresses)
@@ -305,14 +321,7 @@ class UniswapV3Fetcher:
         start_ts = int(start_date.timestamp())
         end_ts = int(end_date.timestamp())
         
-        if self.network == "Arbitrum":
-            addresses = [addr.lower() for addr in ARBITRUM_TOKEN_ADDRESSES.values()]
-        elif self.network == "Base":
-            addresses = [addr.lower() for addr in BASE_TOKEN_ADDRESSES.values()]
-        elif self.network == "BNB":
-            addresses = [addr.lower() for addr in BNB_TOKEN_ADDRESSES.values()]
-        else:
-            addresses = TOKEN_ADDRESSES
+        addresses = [addr.lower() for addr in self.token_addresses.values()]
             
         swaps_token0 = self._fetch_swaps_with_filter(start_ts, end_ts, "token0_in", addresses, on_batch_callback, collect_results=collect_results)
         swaps_token1 = self._fetch_swaps_with_filter(start_ts, end_ts, "token1_in", addresses, on_batch_callback, collect_results=collect_results)

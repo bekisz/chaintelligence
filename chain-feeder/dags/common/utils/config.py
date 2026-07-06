@@ -14,11 +14,12 @@ def load_tokens_from_db():
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
-        # Fetch tokens with an address and high enough rank (top 1000)
+        # Fetch tokens with an address on ethereum network
         cur.execute("""
-            SELECT symbol, ethereum_address, decimals 
-            FROM coin 
-            WHERE ethereum_address IS NOT NULL
+            SELECT c.symbol, cc.contract_address, cc.decimals 
+            FROM coin_contract cc
+            JOIN coin c ON cc.coin_id = c.coin_id
+            WHERE cc.chain = 'ethereum'
         """)
         rows = cur.fetchall()
         for row in rows:

@@ -103,9 +103,9 @@ class CoinFamilyResolver:
         conn = psycopg2.connect(self.db_config)
         cur = conn.cursor()
         try:
-            # Fetch all known symbols from the coin table
-            cur.execute("SELECT UPPER(symbol) FROM coin")
-            known_symbols = {r[0] for r in cur.fetchall()}
+            # Fetch all known symbols from the coin table mapped to coin_id
+            cur.execute("SELECT UPPER(symbol), coin_id FROM coin")
+            known_symbols = {r[0]: r[1] for r in cur.fetchall()}
             logger.info(f"Known coins in DB: {len(known_symbols)}")
 
             # Clear existing mappings
@@ -117,10 +117,11 @@ class CoinFamilyResolver:
                 name = family.get('name')
                 symbols = self.resolve_family(name)
                 for symbol in symbols:
-                    if symbol.upper() in known_symbols:
+                    sym_upper = symbol.upper()
+                    if sym_upper in known_symbols:
                         cur.execute(
-                            "INSERT INTO coin_family (name, symbol) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                            (name, symbol)
+                            "INSERT INTO coin_family (name, coin_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                            (name, known_symbols[sym_upper])
                         )
                         total_inserted += 1
                     else:

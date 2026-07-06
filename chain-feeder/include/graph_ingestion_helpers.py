@@ -73,23 +73,35 @@ def ingest_coins_data(conn, positions: list):
     if not positions: return
     coins_data = {}
     for p in positions:
+        net = p.get('network', 'ethereum').lower()
         for a in p.get('assets', []):
             sym = normalize_symbol(a.get('symbol'))
             addr = a.get('address')
             dec = a.get('decimals', 18)
             if sym and addr:
-                if sym not in coins_data:
-                    coins_data[sym] = {'address': addr, 'decimals': dec}
+                key = (sym, net)
+                if key not in coins_data:
+                    coins_data[key] = {'address': addr, 'decimals': dec}
             
     with conn.cursor() as cur:
-        for sym, data in coins_data.items():
+        for (sym, net), data in coins_data.items():
             cur.execute("""
-                INSERT INTO coin (symbol, ethereum_address, decimals, hardness) 
-                VALUES (%s, %s, %s, 0) 
+                INSERT INTO coin (symbol, decimals, hardness) 
+                VALUES (%s, %s, 0) 
                 ON CONFLICT (symbol) DO UPDATE SET 
-                    ethereum_address = COALESCE(coin.ethereum_address, EXCLUDED.ethereum_address),
                     decimals = COALESCE(coin.decimals, EXCLUDED.decimals)
-            """, (sym, data['address'], data['decimals']))
+                RETURNING coin_id
+            """, (sym, data['decimals']))
+            coin_id = cur.fetchone()[0]
+
+            cur.execute("""
+                INSERT INTO coin_contract (coin_id, chain, contract_address, decimals, verified_at)
+                VALUES (%s, %s, %s, %s, NOW())
+                ON CONFLICT (coin_id, chain) DO UPDATE SET
+                    contract_address = EXCLUDED.contract_address,
+                    decimals = COALESCE(EXCLUDED.decimals, coin_contract.decimals),
+                    verified_at = EXCLUDED.verified_at
+            """, (coin_id, net, data['address'].lower(), data['decimals']))
     conn.commit()
 
 def ingest_pools_data(conn, positions: list):
@@ -105,13 +117,24 @@ def ingest_pools_data(conn, positions: list):
             if fee and str(fee).isdigit() and int(fee) >= 10:
                 fee = str(int(fee))
             
+            cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0,))
+            row0 = cur.fetchone()
+            coin0_id = row0[0] if row0 else None
+            
+            cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c1,))
+            row1 = cur.fetchone()
+            coin1_id = row1[0] if row1 else None
+            
+            if coin0_id is None or coin1_id is None:
+                continue
+
             cur.execute("""
-                INSERT INTO liquidity_pool (network, protocol, pool_name, fee_tier, coin0_symbol, coin1_symbol, pool_address, reverted)
+                INSERT INTO liquidity_pool (network, protocol, pool_name, fee_tier, coin0_id, coin1_id, pool_address, reverted)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (network, protocol, pool_name, fee_tier) DO UPDATE
                 SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
                     reverted = EXCLUDED.reverted
-            """, (p['network'], p['protocol'], pool_name, fee, c0, c1, p['pool_address'], rev))
+            """, (p['network'], p['protocol'], pool_name, fee, coin0_id, coin1_id, p['pool_address'], rev))
     conn.commit()
 
 def ingest_pool_stats(conn, positions: list):

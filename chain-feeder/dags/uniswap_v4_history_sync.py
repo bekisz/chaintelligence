@@ -106,12 +106,24 @@ def sync_pools_from_swaps():
 
         # Insert without transaction rollback on conflict
         # We rely on ON CONFLICT DO NOTHING.
+        # Resolve coin0_id and coin1_id from symbol
+        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0,))
+        row0 = cur.fetchone()
+        coin0_id = row0[0] if row0 else None
+        
+        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c1,))
+        row1 = cur.fetchone()
+        coin1_id = row1[0] if row1 else None
+        
+        if coin0_id is None or coin1_id is None:
+            continue
+
         try:
             cur.execute("""
-                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_symbol, coin1_symbol, fee_tier)
+                INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_id, coin1_id, fee_tier)
                 VALUES (%s, 'Uniswap V4', %s, %s, %s, %s)
                 ON CONFLICT (network, protocol, pool_name, fee_tier) DO NOTHING
-            """, (network, pool_name, c0, c1, fee_bips))
+            """, (network, pool_name, coin0_id, coin1_id, fee_bips))
             
             if cur.statusmessage.startswith("INSERT 0 1"):
                 new_pools += 1
@@ -205,7 +217,12 @@ def sync_tvl_from_graph():
     symbol_map = defaultdict(dict)
     
     # Priority 2: Official coin table (Fallback for Ethereum)
-    cur.execute("SELECT symbol, ethereum_address FROM coin WHERE ethereum_address IS NOT NULL")
+    cur.execute("""
+        SELECT c.symbol, cc.contract_address 
+        FROM coin_contract cc
+        JOIN coin c ON cc.coin_id = c.coin_id
+        WHERE cc.chain = 'ethereum'
+    """)
     for row in cur.fetchall():
         sym, addr = row
         if sym and addr:
@@ -228,7 +245,13 @@ def sync_tvl_from_graph():
                 symbol_map[network][sym[:8].upper()] = addr.lower()
                 
     # 2. Get all pools
-    cur.execute("SELECT id, coin0_symbol, coin1_symbol, fee_tier, network FROM liquidity_pool WHERE protocol = 'Uniswap V4'")
+    cur.execute("""
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_tier, lp.network 
+        FROM liquidity_pool lp
+        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+        WHERE lp.protocol = 'Uniswap V4'
+    """)
     pools = cur.fetchall()
     
     # Keep network-specific fetcher instances

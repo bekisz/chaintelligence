@@ -348,14 +348,16 @@ class PostgresFetcher:
             # in Python via pair_index.
             # ------------------------------------------------------------------
             cur.execute("""
-                SELECT id, network, protocol, fee_tier,
-                       UPPER(coin0_symbol), UPPER(coin1_symbol)
-                FROM liquidity_pool
-                WHERE network = ANY(%s)
-                  AND protocol = ANY(%s)
-                  AND fee_tier = ANY(%s)
-                  AND UPPER(coin0_symbol) = ANY(%s)
-                  AND UPPER(coin1_symbol) = ANY(%s)
+                SELECT lp.id, lp.network, lp.protocol, lp.fee_tier,
+                       UPPER(c0.symbol), UPPER(c1.symbol)
+                FROM liquidity_pool lp
+                JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                WHERE lp.network = ANY(%s)
+                  AND lp.protocol = ANY(%s)
+                  AND lp.fee_tier = ANY(%s)
+                  AND UPPER(c0.symbol) = ANY(%s)
+                  AND UPPER(c1.symbol) = ANY(%s)
             """, (
                 list(all_networks), list(all_protocols), list(all_fee_variants),
                 list(all_symbols), list(all_symbols),
@@ -506,7 +508,12 @@ class PostgresFetcher:
                 total_vol = meta.get('total_vol', 0)
                 t0_sym, t1_sym = meta['t0_sym'], meta['t1_sym']
 
-                if avg_tvl <= 1.0 and total_vol > 0.0:
+                days = max(1, (end_date - start_date).days)
+                # Sanity check: if TVL is missing, extremely low, or unreasonably small compared to the volume
+                # (e.g. less than 5% of average daily volume), fallback to an estimated TVL to prevent exploding, unrealistic APRs.
+                is_unrealistic_tvl = avg_tvl <= 1.0 or (total_vol > 0.0 and avg_tvl < (total_vol / days) * 0.05)
+
+                if is_unrealistic_tvl and total_vol > 0.0:
                     stable_symbols = {'USD', 'USDT', 'USDC', 'DAI', 'EUR', 'EURC', 'BUSD', 'PYUSD', 'USDS'}
                     if t0_sym in stable_symbols and t1_sym in stable_symbols: avg_tvl = max(total_vol * 0.5, 1000000.0)
                     else: avg_tvl = max(total_vol * 1.2, 200000.0)
@@ -520,7 +527,6 @@ class PostgresFetcher:
                         else: fee_rate = float(fee_db) / 1000000.0
 
                         fees_earned = total_vol * fee_rate
-                        days = max(1, (end_date - start_date).days)
                         apr = (fees_earned / avg_tvl) * (365.0 / days)
                     except: pass
 
@@ -569,7 +575,7 @@ class PostgresFetcher:
                     query = """
                         SELECT DISTINCT ON (c.symbol) c.symbol, h.price
                         FROM coin_price_history h
-                        JOIN coin c ON h.address = c.ethereum_address
+                        JOIN coin c ON h.coin_id = c.coin_id
                         WHERE c.symbol = ANY(%s)
                         ORDER BY c.symbol, h.timestamp DESC
                     """
@@ -578,7 +584,7 @@ class PostgresFetcher:
                     query = """
                         SELECT DISTINCT ON (c.symbol) c.symbol, h.price
                         FROM coin_price_history h
-                        JOIN coin c ON h.address = c.ethereum_address
+                        JOIN coin c ON h.coin_id = c.coin_id
                         ORDER BY c.symbol, h.timestamp DESC
                     """
                     cur.execute(query)

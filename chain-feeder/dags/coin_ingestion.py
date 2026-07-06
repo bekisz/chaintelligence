@@ -281,6 +281,19 @@ def cmc_info_fetch(mapping_data: dict):
     logging.info(f"Fetched detailed and price info for {len(detailed_info)} coins.")
     return {"detailed_info": detailed_info, "rank_map": rank_map}
 
+def load_chains_config():
+    paths = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'chains.yaml')),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config', 'chains.yaml')),
+        '/opt/airflow/config/chains.yaml'
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            with open(p, 'r') as f:
+                import yaml
+                return yaml.safe_load(f)
+    raise FileNotFoundError("Could not locate chains.yaml configuration file")
+
 @task(outlets=[coin_table_asset])
 def cmc_upsert_to_db(fetch_result: dict):
     """
@@ -288,6 +301,13 @@ def cmc_upsert_to_db(fetch_result: dict):
     """
     detailed_info = fetch_result.get('detailed_info', {})
     rank_map = fetch_result.get('rank_map', {})
+    
+    # Load chains configuration
+    chains_config = load_chains_config()
+    platform_to_chain = {
+        c['cmc_platform_name']: c['name'] 
+        for c in chains_config['chains']
+    }
     
     # Load all coins configured in coin-families.yml to check against
     family_coins = set()
@@ -451,30 +471,42 @@ def cmc_upsert_to_db(fetch_result: dict):
                 logo = info.get('logo')
                 rank = rank_map.get(cmc_id_str)
                 
-                eth_address = None
                 decimals = info.get('decimals', 18)
                 contracts = info.get('contract_address', [])
+                chain_addresses = {}
                 if isinstance(contracts, list):
                     for c in contracts:
-                        if c.get('platform', {}).get('name') == 'Ethereum':
-                            eth_address = c.get('contract_address')
-                            break
+                        platform_name = c.get('platform', {}).get('name', '')
+                        chain = platform_to_chain.get(platform_name)
+                        if chain:
+                            chain_addresses[chain] = c.get('contract_address')
                 
                 # Check decimals override
                 if symbol in DECIMALS_MAP:
                     decimals = DECIMALS_MAP[symbol]
 
+                # Sentinel logic for native coins on configured chains
+                for c_conf in chains_config['chains']:
+                    ch_name = c_conf['name']
+                    native_sym = c_conf['native_coin_symbol']
+                    if ch_name not in chain_addresses:
+                        if symbol == native_sym:
+                            if ch_name == 'ethereum':
+                                chain_addresses[ch_name] = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+                            else:
+                                chain_addresses[ch_name] = '0x0000000000000000000000000000000000000000'
+
                 # Fallback for family coins that don't have Ethereum addresses on CMC
-                if eth_address is None and symbol in family_coins:
+                if not chain_addresses and symbol in family_coins:
                     fallback = FALLBACK_METADATA.get(symbol)
                     if fallback:
-                        eth_address = fallback.get('ethereum_address')
+                        chain_addresses['ethereum'] = fallback.get('ethereum_address')
                         decimals = fallback.get('decimals', decimals)
                     else:
-                        eth_address = f"0xdummy_{symbol.lower()}"
+                        chain_addresses['ethereum'] = f"0xdummy_{symbol.lower()}"
                 
-                # Only keep coins that have a contract address (skip if none)
-                if eth_address is None:
+                # Only keep coins that have at least one contract address (skip if none)
+                if not chain_addresses:
                     continue
                 
                 if not symbol:
@@ -483,22 +515,18 @@ def cmc_upsert_to_db(fetch_result: dict):
                 cur.execute("""
                     INSERT INTO coin (
                         symbol, name, slug, cmc_id, cmc_rank,
-                        ethereum_address, image_url, decimals, cmc_last_updated,
+                        image_url, decimals, cmc_last_updated,
                         price, price_timestamp, market_cap,
                         percent_change_1h, percent_change_24h, percent_change_7d,
                         percent_change_30d, percent_change_60d, percent_change_90d,
                         fully_diluted_market_cap, market_cap_dominance, tvl,
                         total_supply, circulating_supply, max_supply
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (symbol) DO UPDATE SET
                         name = EXCLUDED.name,
                         slug = EXCLUDED.slug,
                         cmc_id = COALESCE(EXCLUDED.cmc_id, coin.cmc_id),
                         cmc_rank = COALESCE(EXCLUDED.cmc_rank, coin.cmc_rank),
-                        ethereum_address = CASE 
-                            WHEN coin.ethereum_address LIKE '0xdummy_%%' AND EXCLUDED.ethereum_address NOT LIKE '0xdummy_%%' THEN EXCLUDED.ethereum_address
-                            ELSE COALESCE(coin.ethereum_address, EXCLUDED.ethereum_address)
-                        END,
                         image_url = EXCLUDED.image_url,
                         cmc_last_updated = EXCLUDED.cmc_last_updated,
                         price = EXCLUDED.price,
@@ -517,15 +545,39 @@ def cmc_upsert_to_db(fetch_result: dict):
                         circulating_supply = EXCLUDED.circulating_supply,
                         max_supply = EXCLUDED.max_supply,
                         decimals = CASE WHEN EXCLUDED.decimals != 18 THEN EXCLUDED.decimals ELSE coin.decimals END
+                    RETURNING coin_id
                 """,
                 (
-                    symbol[:8], name, slug, cmc_id, rank, eth_address, logo, decimals, now,
+                    symbol[:10], name, slug, cmc_id, rank, logo, decimals, now,
                     info.get('price'), info.get('price_timestamp'), info.get('market_cap'),
                     info.get('percent_change_1h'), info.get('percent_change_24h'), info.get('percent_change_7d'),
                     info.get('percent_change_30d'), info.get('percent_change_60d'), info.get('percent_change_90d'),
                     info.get('fully_diluted_market_cap'), info.get('market_cap_dominance'), info.get('tvl'),
                     info.get('total_supply'), info.get('circulating_supply'), info.get('max_supply')
                 ))
+                coin_id = cur.fetchone()[0]
+                
+                # Upsert contract addresses into coin_contract
+                for chain_name, contract_addr in chain_addresses.items():
+                    ch_decimals = decimals
+                    if symbol in DECIMALS_MAP:
+                        ch_decimals = DECIMALS_MAP[symbol]
+                    
+                    is_native = False
+                    for c_conf in chains_config['chains']:
+                        if c_conf['name'] == chain_name and symbol == c_conf['native_coin_symbol']:
+                            is_native = True
+                            break
+                    
+                    cur.execute("""
+                        INSERT INTO coin_contract (coin_id, chain, contract_address, decimals, is_native, verified_at)
+                        VALUES (%s, %s, %s, %s, %s, NOW())
+                        ON CONFLICT (coin_id, chain) DO UPDATE SET
+                            contract_address = EXCLUDED.contract_address,
+                            decimals = COALESCE(EXCLUDED.decimals, coin_contract.decimals),
+                            verified_at = EXCLUDED.verified_at
+                    """, (coin_id, chain_name, contract_addr.lower(), ch_decimals, is_native))
+                
                 upsert_count += 1
         conn.commit()
 
