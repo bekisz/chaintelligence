@@ -29,14 +29,14 @@ To maximize performance, pool metrics are queried and computed in **three progre
 
 ```mermaid
 graph TD
-    A[Start: List of pools (t0, t1, fee)] --> B[Phase 2: Query liquidity_pool_history]
-    B --> C{TVL is zero or <= 1.0?}
-    C -- Yes --> D[Phase 2b: Fallback to latest non-zero TVL snapshot]
-    C -- No --> E[Phase 3: Fallback volume from swaps table]
+    A["Start: List of pools (t0, t1, fee)"] --> B["Phase 2: Query liquidity_pool_history"]
+    B --> C{"TVL is zero or <= 1.0?"}
+    C -- Yes --> D["Phase 2b: Fallback to latest non-zero TVL snapshot"]
+    C -- No --> E["Phase 3: Fallback volume from swaps table"]
     D --> E
-    E --> F[Phase 4: Run Sanity Checks & estimate TVL if needed]
-    F --> G[Phase 5: Apply fee rate and project APR]
-    G --> H[End: Return mapping of pool_key to APR]
+    E --> F["Phase 4: Run Sanity Checks & estimate TVL if needed"]
+    F --> G["Phase 5: Apply fee rate and project APR"]
+    G --> H["End: Return mapping of pool_key to APR"]
 ```
 
 ### Phase 2: Historical snap queries
