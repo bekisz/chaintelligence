@@ -51,7 +51,8 @@ def normalize_fee_to_bips(fee_str: str) -> str:
 def fetch_all_v4_pools(fetcher: UniswapV4Fetcher) -> list:
     """
     Paginated fetch of ALL V4 pools from the subgraph.
-    Returns list of {id, token0, token1, feeTier}.
+    Returns list of {id, token0, token1, sym0, sym1, feeTier, hooks, liquidity}.
+    hooks is included to disambiguate pools with same tokens+fee (prefer no-hook pools).
     """
     all_pools = []
     skip = 0
@@ -66,6 +67,8 @@ def fetch_all_v4_pools(fetcher: UniswapV4Fetcher) -> list:
             token0 {{ id symbol }}
             token1 {{ id symbol }}
             feeTier
+            hooks
+            liquidity
           }}
         }}
         """
@@ -85,6 +88,8 @@ def fetch_all_v4_pools(fetcher: UniswapV4Fetcher) -> list:
                 'sym0': p['token0'].get('symbol', ''),
                 'sym1': p['token1'].get('symbol', ''),
                 'feeTier': p['feeTier'],
+                'hooks': p.get('hooks', ''),
+                'liquidity': int(p.get('liquidity', '0') or '0'),
             })
 
         logging.info(f"  Fetched {len(all_pools)} pools so far...")
@@ -174,20 +179,34 @@ def main():
             continue
 
         # Build lookup: (symbol0_upper, symbol1_upper, fee) → pool_id (bytes32)
+        # When multiple pools share the same tokens+fee (different hooks), prefer:
+        # 1. Pools WITHOUT hooks (0x000...000) — standard V4 pools (no hook contract)
+        # 2. Pools with higher liquidity
         # Normalize both DB and subgraph side: uppercase, 8-char truncation
         pool_lookup = {}
+        # Track best pool per key to compare when duplicates arise
+        best_pool = {}
         for p in all_pools:
             s0 = p.get('sym0', '').upper()[:8]
             s1 = p.get('sym1', '').upper()[:8]
             fee = str(p['feeTier'])
-            if s0 and s1:
-                key = (s0, s1, fee)
-                pool_lookup[key] = p['id']
-                # Also store sorted ordering (same pool, tokens might be reversed)
-                if s0 != s1:
-                    sk = tuple(sorted([s0, s1])) + (fee,)
-                    if sk not in pool_lookup:
-                        pool_lookup[sk] = p['id']
+            if not s0 or not s1:
+                continue
+
+            def pool_score(pp):
+                """Higher score = better pool to link to. Prefer no-hook, high-liquidity."""
+                no_hook = pp.get('hooks', '') in ('0x0000000000000000000000000000000000000000', '0x', '')
+                liq = pp.get('liquidity', 0) or 0
+                return (2 if no_hook else 0) + min(liq, 10**30)
+
+            keys = [(s0, s1, fee)]
+            if s0 != s1:
+                keys.append(tuple(sorted([s0, s1])) + (fee,))
+            for key in keys:
+                existing = best_pool.get(key)
+                if existing is None or pool_score(p) > pool_score(existing):
+                    best_pool[key] = p
+                    pool_lookup[key] = p['id']
 
         # Match DB pools to subgraph pools by symbol+symbol+fee
         net_updated = 0
