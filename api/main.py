@@ -544,8 +544,21 @@ async def analyze(
                                 for net, fee_tier, pid, sym0, sym1 in cur.fetchall():
                                     if not pid:
                                         continue
-                                    # Normalize DB fee_tier to bips for key matching
+                                    # Build keys with ALL fee formats so we match
+                                    # regardless of what format the route uses.
+                                    # The route uses fee_display from swaps (e.g. "0.01%")
+                                    # while liquidity_pool stores the normalized version (e.g. "100").
                                     ft = fee_tier.replace('%', '').strip()
+                                    raw_fee_str = fee_tier
+                                    if '%' not in fee_tier:
+                                        # fee_tier is already in "Uniswap fee tier" format (e.g. "500" for 0.05%)
+                                        # Add the percentage format as an alternative key
+                                        try:
+                                            val = int(fee_tier)
+                                            raw_fee_str = f"{val / 10000:.4f}%".rstrip('0').rstrip('.') + '%'
+                                        except ValueError:
+                                            pass
+                                    # Normalized key (bips/Uniswap tier format)
                                     ft_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
                                     if ft in ft_map:
                                         ft_norm = ft_map[ft]
@@ -558,9 +571,14 @@ async def analyze(
                                                 ft_norm = str(int(fv))
                                         except:
                                             ft_norm = fee_tier
-                                    key_fwd = f"{sym0}-{sym1}-{ft_norm}|Uniswap V4|{net}"
-                                    key_rev = f"{sym1}-{sym0}-{ft_norm}|Uniswap V4|{net}"
-                                    v4_results[key_fwd] = pid
+                                    for fee_key in [ft_norm, fee_tier, raw_fee_str]:
+                                        fee_key = fee_key.strip()
+                                        if not fee_key:
+                                            continue
+                                        key_fwd = f"{sym0}-{sym1}-{fee_key}|Uniswap V4|{net}"
+                                        key_rev = f"{sym1}-{sym0}-{fee_key}|Uniswap V4|{net}"
+                                        v4_results[key_fwd] = pid
+                                        v4_results[key_rev] = pid
                                     v4_results[key_rev] = pid
                         except Exception as ex:
                             print(f"  Error looking up V4 pool_ids: {ex}")
