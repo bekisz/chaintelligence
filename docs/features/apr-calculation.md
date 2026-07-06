@@ -82,7 +82,7 @@ Pool fees are configured dynamically and normalized into decimal multipliers:
 
 ---
 
-## 5. TVL Sanity Checks & Fallbacks
+## 5. TVL Sanity Checks & Fallback Rules
 
 > [!WARNING]
 > In testing environments or newly initialized pools, TVL can occasionally be recorded as extremely small (e.g. `$10` or `$480`) while swap volume is high. Dividing by these values results in unrealistically high, exploding APRs (e.g., $>100,000\%$).
@@ -93,10 +93,4 @@ An observed TVL is marked as **unreliable** if:
 2.  Average TVL is less than **5% of the average daily volume** in the range:
     $$\text{TVL} < \left(\frac{\text{Total Volume}}{\text{Days}}\right) \times 0.05$$
 
-When flagged, the engine ignores the database TVL and uses an **Estimated TVL fallback**:
-*   **Stablecoin-only Pools**:
-    $$\text{Estimated TVL} = \max(\text{Total Volume} \times 0.5, \$1,000,000)$$
-*   **All Other Volatile Pools**:
-    $$\text{Estimated TVL} = \max(\text{Total Volume} \times 1.2, \$200,000)$$
-
-This bounds the maximum APR calculation to realistic historical thresholds.
+When flagged, the engine **bypasses the APR calculation completely and returns `None`**. In the routing UI, this is displayed as a dash (`-`) or `N/A`. This ensures that routes with missing or corrupted TVL data do not show misleading or exaggerated yield percentages.

@@ -509,17 +509,12 @@ class PostgresFetcher:
                 t0_sym, t1_sym = meta['t0_sym'], meta['t1_sym']
 
                 days = max(1, (end_date - start_date).days)
-                # Sanity check: if TVL is missing, extremely low, or unreasonably small compared to the volume
-                # (e.g. less than 5% of average daily volume), fallback to an estimated TVL to prevent exploding, unrealistic APRs.
-                is_unrealistic_tvl = avg_tvl <= 1.0 or (total_vol > 0.0 and avg_tvl < (total_vol / days) * 0.05)
-
-                if is_unrealistic_tvl and total_vol > 0.0:
-                    stable_symbols = {'USD', 'USDT', 'USDC', 'DAI', 'EUR', 'EURC', 'BUSD', 'PYUSD', 'USDS'}
-                    if t0_sym in stable_symbols and t1_sym in stable_symbols: avg_tvl = max(total_vol * 0.5, 1000000.0)
-                    else: avg_tvl = max(total_vol * 1.2, 200000.0)
+                # If TVL is missing, zero, or unreasonably low (e.g. less than 5% of average daily volume),
+                # we do not calculate APR (we set it to None, which displays as a dash '-' or 'N/A' in the UI).
+                is_unreliable_tvl = avg_tvl <= 1.0 or (total_vol > 0.0 and avg_tvl < (total_vol / days) * 0.05)
 
                 apr = None
-                if avg_tvl > 1.0:
+                if not is_unreliable_tvl:
                     try:
                         fee_db = meta['fee_db']
                         if fee_db == 'Dynamic': fee_rate = 0.0002
