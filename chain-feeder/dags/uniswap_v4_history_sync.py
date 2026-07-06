@@ -195,6 +195,150 @@ def build_daily_history():
     logging.info(f"Updated {updated_rows} daily history records.")
 
 @task
+def sync_v4_pool_ids():
+    """
+    Queries the V4 subgraph for each liquidity_pool row that lacks a pool_id
+    and UPDATEs it with the poolId (bytes32 hex).
+
+    The V4 subgraph pool entity's 'id' IS the poolId
+    (= keccak256(abi.encode(PoolKey))).
+    """
+    from common.utils.uniswap_utils import UniswapV4Fetcher
+
+    pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
+    conn = pg_hook.get_conn()
+    cur = conn.cursor()
+
+    # 1. Build symbol→address map by network (same strategy as sync_tvl_from_graph)
+    from collections import defaultdict
+    symbol_map = defaultdict(dict)
+
+    # Priority 1: Official coin_contract table
+    cur.execute("""
+        SELECT cc.chain, c.symbol, cc.contract_address
+        FROM coin_contract cc
+        JOIN coin c ON cc.coin_id = c.coin_id
+    """)
+    for row in cur.fetchall():
+        chain, sym, addr = row
+        if sym and addr:
+            chain_key = chain.capitalize()
+            symbol_map[chain_key][sym.upper()] = addr.lower()
+
+    # Priority 2: Swap heuristics (most frequent address per network)
+    cur.execute("""
+        SELECT network, sym, addr, SUM(c) as total_c FROM (
+            SELECT network, token0_symbol as sym, token0_address as addr,
+                   count(*) as c FROM uniswap_v4_swaps GROUP BY 1, 2, 3
+            UNION ALL
+            SELECT network, token1_symbol as sym, token1_address as addr,
+                   count(*) as c FROM uniswap_v4_swaps GROUP BY 1, 2, 3
+        ) t GROUP BY 1, 2, 3 ORDER BY total_c ASC
+    """)
+    for row in cur.fetchall():
+        network, sym, addr, count = row
+        if sym and addr:
+            symbol_map[network][sym.upper()] = addr.lower()
+            if len(sym) > 8:
+                symbol_map[network][sym[:8].upper()] = addr.lower()
+
+    # 2. Get V4 pools that are missing pool_id
+    cur.execute("""
+        SELECT lp.id, UPPER(c0.symbol) as s0, UPPER(c1.symbol) as s1,
+               lp.fee_tier, lp.network
+        FROM liquidity_pool lp
+        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+        WHERE lp.protocol = 'Uniswap V4'
+          AND lp.pool_id IS NULL
+    """)
+    missing = cur.fetchall()
+    logging.info(f"Found {len(missing)} V4 pools without pool_id")
+
+    if not missing:
+        logging.info("No V4 pools need pool_id — nothing to do.")
+        cur.close()
+        conn.close()
+        return
+
+    # 3. Query subgraph per pool to get poolId
+    updated = 0
+    for pool_row in missing:
+        pool_db_id, c0, c1, fee, network = pool_row
+        if not fee:
+            continue
+
+        net_symbol_map = symbol_map.get(network, {})
+        addr0 = net_symbol_map.get(c0.upper())
+        addr1 = net_symbol_map.get(c1.upper())
+
+        if not addr0 or not addr1:
+            logging.warning(
+                f"Cannot resolve addresses for pool {pool_db_id} "
+                f"({c0}-{c1}) on {network}"
+            )
+            continue
+
+        # Normalize fee to bips for subgraph query
+        try:
+            if fee == 'Dynamic':
+                fee_bips = 8388608
+            elif fee.isdigit():
+                fee_bips = int(fee)
+            else:
+                fee_clean = fee.replace('%', '').strip()
+                fee_bips = int(round(float(fee_clean) * 10000))
+        except:
+            continue
+
+        # Query subgraph for this pool
+        fetcher = UniswapV4Fetcher(verbose=False, network=network)
+        try:
+            t0, t1 = sorted([addr0.lower(), addr1.lower()])
+            query = f"""
+            {{
+              pools(where: {{
+                token0: "{t0}",
+                token1: "{t1}",
+                feeTier: "{fee_bips}"
+              }}) {{
+                id
+              }}
+            }}
+            """
+            result = fetcher._execute_query(query)
+        except Exception as e:
+            logging.warning(
+                f"Query failed for pool {pool_db_id} ({c0}-{c1}) "
+                f"on {network}: {e}"
+            )
+            continue
+
+        if not result or 'data' not in result:
+            continue
+
+        pools = result['data'].get('pools', [])
+        if not pools:
+            continue
+
+        # If multiple pools match (different hooks/spacing), take the first
+        pool_id = pools[0].get('id')
+        if not pool_id:
+            continue
+
+        cur.execute(
+            "UPDATE liquidity_pool SET pool_id = %s WHERE id = %s",
+            (pool_id, pool_db_id)
+        )
+        updated += 1
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    logging.info(f"Updated {updated} V4 pool rows with pool_id.")
+
+
+@task
 def sync_tvl_from_graph():
     """
     Fetches daily TVL/Volume/TxCount from The Graph for all active pools
@@ -325,7 +469,8 @@ with DAG(
 ) as dag:
 
     t1 = sync_pools_from_swaps()
-    t2 = build_daily_history()
-    t3 = sync_tvl_from_graph()
-    
-    t1 >> t2 >> t3
+    t2 = sync_v4_pool_ids()
+    t3 = build_daily_history()
+    t4 = sync_tvl_from_graph()
+
+    t1 >> t2 >> t3 >> t4

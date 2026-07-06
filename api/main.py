@@ -415,6 +415,7 @@ async def analyze(
                 # Errors for individual pools (missing addresses, unsupported protocol/network,
                 # fee parsing) are caught inline; only valid jobs make it into the list.
                 jobs = []
+                v4_keys = []  # Collect V4 pool keys for batch DB lookup
                 for (t0, t1, fee) in pools_to_fetch:
                     try:
                         t0_sym, t1_sym = t0.upper(), t1.upper()
@@ -425,7 +426,9 @@ async def analyze(
                         proto_lower = proto_raw.lower()
 
                         if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4'):
-                            continue  # V4 not supported yet
+                            # V4: no CREATE2 address; pool_id is fetched from DB
+                            v4_keys.append(f"{t0_sym}-{t1_sym}-{parts[0]}|Uniswap V4|{pool_network}")
+                            continue
 
                         if proto_lower in ('v2', 'uniswap v2', 'uniswap-v2'):
                             protocol = 'Uniswap V2'
@@ -505,6 +508,38 @@ async def analyze(
 
                     batch = await asyncio.to_thread(_derive_batch)
                     pool_addresses.update(batch)
+
+                # V4: batch-lookup pool_ids from the DB (stored by the ingestion DAG)
+                if v4_keys:
+                    def _lookup_v4_pool_ids():
+                        """Fetch all V4 pool_id mappings from DB in one query."""
+                        v4_results = {}
+                        try:
+                            with get_conn() as conn:
+                                cur = conn.cursor()
+                                cur.execute("""
+                                    SELECT lp.network, lp.fee_tier, lp.pool_id,
+                                           UPPER(c0.symbol) AS s0,
+                                           UPPER(c1.symbol) AS s1
+                                    FROM liquidity_pool lp
+                                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                                    WHERE lp.protocol = 'Uniswap V4'
+                                      AND lp.pool_id IS NOT NULL
+                                """)
+                                for net, fee_tier, pid, sym0, sym1 in cur.fetchall():
+                                    if not pid:
+                                        continue
+                                    key_fwd = f"{sym0}-{sym1}-{fee_tier}|Uniswap V4|{net}"
+                                    key_rev = f"{sym1}-{sym0}-{fee_tier}|Uniswap V4|{net}"
+                                    v4_results[key_fwd] = pid
+                                    v4_results[key_rev] = pid
+                        except Exception as ex:
+                            print(f"  Error looking up V4 pool_ids: {ex}")
+                        return v4_results
+
+                    v4_batch = await asyncio.to_thread(_lookup_v4_pool_ids)
+                    pool_addresses.update(v4_batch)
             
             # 3. Inject into routes
             for route_idx, route in enumerate(analysis.get('routes', [])):

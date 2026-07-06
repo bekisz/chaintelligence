@@ -531,24 +531,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const parsed = parseProtocol(item.fee);
                     const protocolNameLower = parsed.protocolName.toLowerCase();
                     const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
-                    
-                    const pool_addr = item.pool_address; // keep original case for checksum
-                    let uniNetwork = 'ethereum';
-                    if (networkLower.includes('base')) {
-                        uniNetwork = 'base';
-                    } else if (networkLower.includes('eth')) {
-                        uniNetwork = 'ethereum';
-                    } else if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
-                        uniNetwork = 'bnb'; // Uniswap uses 'bnb' for BNB Chain
-                    } else if (networkLower.includes('arbitrum')) {
-                        uniNetwork = 'arbitrum';
-                    } else if (networkLower.includes('optimism')) {
-                        uniNetwork = 'optimism';
-                    } else if (networkLower.includes('polygon')) {
-                        uniNetwork = 'polygon';
-                    }
-                    
-                    if (protocolNameLower.includes('pancake')) {
+
+                    const pool_addr = item.pool_address;
+
+                    if (protocolNameLower.includes('uniswap v4')) {
+                        // V4: link uses poolId (bytes32), not a contract address
+                        href = `https://app.uniswap.org/pool/v4/${pool_addr}`;
+                    } else if (protocolNameLower.includes('pancake')) {
                         let pChain = 'bsc';
                         if (networkLower.includes('base')) {
                             pChain = 'base';
@@ -559,6 +548,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                         href = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
                     } else {
+                        // V3/V2: link uses contract address
+                        let uniNetwork = 'ethereum';
+                        if (networkLower.includes('base')) {
+                            uniNetwork = 'base';
+                        } else if (networkLower.includes('eth')) {
+                            uniNetwork = 'ethereum';
+                        } else if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
+                            uniNetwork = 'bnb';
+                        } else if (networkLower.includes('arbitrum')) {
+                            uniNetwork = 'arbitrum';
+                        } else if (networkLower.includes('optimism')) {
+                            uniNetwork = 'optimism';
+                        } else if (networkLower.includes('polygon')) {
+                            uniNetwork = 'polygon';
+                        }
                         href = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
                     }
                     

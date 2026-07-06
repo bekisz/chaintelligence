@@ -82,11 +82,13 @@ CREATE TABLE IF NOT EXISTS liquidity_pool (
     coin1_id SMALLINT NOT NULL REFERENCES coin(coin_id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     pool_address VARCHAR(42),
+    pool_id VARCHAR(66),       -- V4 poolId (bytes32 hex); NULL for V2/V3
     reverted BOOLEAN DEFAULT FALSE,
     UNIQUE(network, protocol, pool_name)
 );
 
 CREATE INDEX IF NOT EXISTS idx_lp_pool_address ON liquidity_pool(pool_address);
+CREATE INDEX IF NOT EXISTS idx_lp_pool_id ON liquidity_pool(pool_id);
 CREATE INDEX IF NOT EXISTS idx_lp_coin0_id ON liquidity_pool(coin0_id);
 CREATE INDEX IF NOT EXISTS idx_lp_coin1_id ON liquidity_pool(coin1_id);
 
