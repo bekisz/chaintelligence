@@ -427,7 +427,21 @@ async def analyze(
 
                         if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4'):
                             # V4: no CREATE2 address; pool_id is fetched from DB
-                            v4_keys.append(f"{t0_sym}-{t1_sym}-{parts[0]}|Uniswap V4|{pool_network}")
+                            # Normalize fee to bips for key matching with DB
+                            fee_clean_v4 = parts[0].replace('%', '').strip()
+                            fee_map_v4 = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
+                            if fee_clean_v4 in fee_map_v4:
+                                fee_norm = fee_map_v4[fee_clean_v4]
+                            else:
+                                try:
+                                    fv = float(fee_clean_v4)
+                                    if fv > 0 and fv < 5:
+                                        fee_norm = str(int(fv * 10000))
+                                    else:
+                                        fee_norm = str(int(fv))
+                                except:
+                                    fee_norm = parts[0]
+                            v4_keys.append(f"{t0_sym}-{t1_sym}-{fee_norm}|Uniswap V4|{pool_network}")
                             continue
 
                         if proto_lower in ('v2', 'uniswap v2', 'uniswap-v2'):
@@ -530,8 +544,22 @@ async def analyze(
                                 for net, fee_tier, pid, sym0, sym1 in cur.fetchall():
                                     if not pid:
                                         continue
-                                    key_fwd = f"{sym0}-{sym1}-{fee_tier}|Uniswap V4|{net}"
-                                    key_rev = f"{sym1}-{sym0}-{fee_tier}|Uniswap V4|{net}"
+                                    # Normalize DB fee_tier to bips for key matching
+                                    ft = fee_tier.replace('%', '').strip()
+                                    ft_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
+                                    if ft in ft_map:
+                                        ft_norm = ft_map[ft]
+                                    else:
+                                        try:
+                                            fv = float(ft)
+                                            if fv > 0 and fv < 5:
+                                                ft_norm = str(int(fv * 10000))
+                                            else:
+                                                ft_norm = str(int(fv))
+                                        except:
+                                            ft_norm = fee_tier
+                                    key_fwd = f"{sym0}-{sym1}-{ft_norm}|Uniswap V4|{net}"
+                                    key_rev = f"{sym1}-{sym0}-{ft_norm}|Uniswap V4|{net}"
                                     v4_results[key_fwd] = pid
                                     v4_results[key_rev] = pid
                         except Exception as ex:
