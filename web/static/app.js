@@ -535,8 +535,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const pool_addr = item.pool_address;
 
                     if (protocolNameLower.includes('uniswap v4')) {
-                        // V4: link uses poolId (bytes32), not a contract address
-                        href = `https://app.uniswap.org/pool/v4/${pool_addr}`;
+                        // V4: link uses poolId (bytes32) in the same /explore/pools/<net>/<id> format
+                        // as V3, but with a 64-char hex (bytes32) instead of 40-char (address)
+                        let uniNetwork = 'ethereum';
+                        if (networkLower.includes('base')) {
+                            uniNetwork = 'base';
+                        } else if (networkLower.includes('eth')) {
+                            uniNetwork = 'ethereum';
+                        } else if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
+                            uniNetwork = 'bnb';
+                        } else if (networkLower.includes('arbitrum')) {
+                            uniNetwork = 'arbitrum';
+                        } else if (networkLower.includes('optimism')) {
+                            uniNetwork = 'optimism';
+                        }
+                        href = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
                     } else if (protocolNameLower.includes('pancake')) {
                         let pChain = 'bsc';
                         if (networkLower.includes('base')) {
