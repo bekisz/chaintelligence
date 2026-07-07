@@ -16,6 +16,7 @@ logs/
 *.pem
 
 # Test recordings and artifacts
+*.sqlite-wal
 recordings/
 test-results/
 
