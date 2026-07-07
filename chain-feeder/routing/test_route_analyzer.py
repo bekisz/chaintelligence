@@ -80,6 +80,36 @@ class TestRouteAnalyzer(unittest.TestCase):
         self.assertEqual(routes[0]['path'],
                          'TOKEN_A -- 0.05%|Uniswap V3|Ethereum --> TOKEN_B -- 0.05%|Uniswap V3|Ethereum --> TOKEN_C')
 
+    def test_aerodrome_base_route(self):
+        # USDC -> AERO via an Aerodrome (Base) pool — verifies the route analyzer
+        # reconstructs paths for protocol='Aerodrome' on network='Base' exactly as
+        # it does for Uniswap V3 on Ethereum (protocol/network are labels, not keys).
+        swaps = [
+            {
+                'id': 'txaero#1',
+                'tx_hash': 'txaero',
+                'token0_symbol': 'USDC',
+                'token1_symbol': 'AERO',
+                'amount0': 1000,   # Input USDC
+                'amount1': -500,   # Output AERO
+                'amountUSD': 1000,
+                'fee_tier': '0.3%',
+                'protocol': 'Aerodrome',
+                'network': 'Base',
+            }
+        ]
+
+        result = self.analyzer.analyze_routes(swaps, 'USDC', 'AERO')
+        routes = result['routes']
+
+        self.assertEqual(len(routes), 1)
+        self.assertEqual(
+            routes[0]['path'],
+            'USDC -- 0.3%|Aerodrome|Base --> AERO'
+        )
+        self.assertEqual(routes[0]['count'], 1)
+        self.assertEqual(routes[0]['volume'], 1000)
+
     def test_broken_chain(self):
         # A -> B ... break ... D -> E
         swaps = [

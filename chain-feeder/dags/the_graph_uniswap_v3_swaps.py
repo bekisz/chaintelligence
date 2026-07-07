@@ -160,6 +160,55 @@ with DAG(
         logging.info(f"Fetched and saved {num_swaps} unique swaps for {network} {protocol}")
 
     @task(outlets=[uniswap_v3_swaps_asset])
+    def fetch_and_store_aerodrome_swaps(**context):
+        """Fetch Aerodrome (Slipstream, V3-fork) swaps for Base network.
+
+        Reuses UniswapV3Fetcher — the Aerodrome Slipstream subgraph schema is
+        Uniswap-V3-identical (see uniswap_utils.py). Stored with
+        network='Base', protocol='Aerodrome' in the unified swaps table.
+        """
+        conf = {}
+        if context.get('dag_run') and context['dag_run'].conf:
+            conf = context['dag_run'].conf
+
+        backfill_days = conf.get('backfill_days', {})
+        days = backfill_days.get('Base_Aerodrome', 3)
+        force_backfill = 'backfill_days' in conf
+        network = 'Base'
+        protocol = 'Aerodrome'
+
+        pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+        # Checkpoint against the unified swaps table (ts column).
+        last_ts_row = pg_hook.get_first(
+            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = %s",
+            parameters=(network, protocol)
+        )
+        last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
+
+        end_date = datetime.now(timezone.utc)
+        if last_ts is not None and not force_backfill:
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=timezone.utc)
+            start_date = last_ts
+        else:
+            start_date = end_date - timedelta(days=days)
+
+        logging.info(f"Fetching {network} {protocol} swaps from {start_date} to {end_date}")
+        fetcher = UniswapV3Fetcher(network=network, protocol=protocol)
+        storage = PostgresStorage()
+
+        def save_batch(batch):
+            storage.save_swaps(batch, network=network, protocol=protocol)
+
+        num_swaps = fetcher.fetch_swaps(
+            start_date=start_date,
+            end_date=end_date,
+            on_batch_callback=save_batch,
+            collect_results=False
+        )
+        logging.info(f"Fetched and saved {num_swaps} unique swaps for {network} {protocol}")
+
+    @task(outlets=[uniswap_v3_swaps_asset])
     def fetch_and_store_bnb_swaps(**context):
         """Fetch Uniswap V3 swaps for BNB network."""
         conf = {}
@@ -248,5 +297,6 @@ with DAG(
     ethereum_task = fetch_and_store_ethereum_swaps()
     arbitrum_task = fetch_and_store_arbitrum_swaps()
     base_task = fetch_and_store_base_swaps()
+    aerodrome_task = fetch_and_store_aerodrome_swaps()
     bnb_task = fetch_and_store_bnb_swaps()
     pancakeswap_v3_task = fetch_and_store_pancakeswap_v3_swaps()

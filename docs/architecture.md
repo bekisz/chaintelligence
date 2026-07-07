@@ -215,3 +215,17 @@ Chaintelligence integrates with several key infrastructure providers via the **I
 - **Environment-Based Secrets**: All API keys and credentials are managed via environment variables, never committed to version control.
 - **CORS & Rate Limiting**: Configured at the FastAPI layer to prevent abuse and unauthorized access.
 - **Docker Network Isolation**: Services communicate via internal Docker networks, with only necessary ports exposed to the host.
+
+---
+
+## 🟦 Base Chain / Aerodrome Support
+
+Aerodrome is supported as a **protocol on the Base network** (`network='Base'`, `protocol='Aerodrome'`), not as a separate chain. Because the routing layer keys chain by the `network` string column (there is no `chain_id`), no new chain plumbing is required — Aerodrome swaps flow through the same unified `swaps` table and `postgres_fetcher` query as every other protocol.
+
+**Scope — Slipstream only.** The live, queryable Aerodrome swaps subgraph on The Graph Decentralized Network (`GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM`) is the **Slipstream** concentrated-liquidity fork (a Uniswap V3 clone). Its swap schema is V3-identical (`id`=`{tx}#{logIndex}`, `token0/1`, `amount0/1`, `amountUSD`, `pool{feeTier}`), so `UniswapV3Fetcher` is reused unchanged — only the subgraph deployment ID differs (branch in `chain-feeder/dags/common/utils/uniswap_utils.py`). The Aerodrome V1 (Velodrome-fork stable/volatile) subgraph is not on this gateway and is **out of scope**; add it later by extending the fetcher if/when its deployment is located.
+
+**Ingestion.** A `fetch_and_store_aerodrome_swaps` task in `the_graph_uniswap_v3_swaps.py` DAG fetches nightly and checkpoints against `MAX(ts) FROM swaps WHERE network='Base' AND protocol='Aerodrome'`. Initial three-day backfill = trigger the DAG with conf `{"backfill_days":{"Base_Aerodrome":3}}` (no separate backfill DAG).
+
+**Pool addresses — subgraph-sourced, not CREATE2-derived.** Aerodrome Slipstream pools are created by their own CL PoolDeployer (not the Uniswap V3 factory), so `api/main.py`'s `_derive_address` CREATE2 path does not apply. The enrichment loop **skips** `protocol='Aerodrome'` pools (mirrors the V4 skip). Pool cards still render from swap data; APR/address enrichment for Aerodrome is a follow-up.
+
+**Token registry.** AERO/USDT/WBTC on Base are seeded via `chain-feeder/include/sql/add_aerodrome_base_tokens.sql` (addresses verified against the subgraph). Without this, `PostgresStorage.save_swaps` drops AERO-pair swaps (symbol not in `SYMBOL_TO_COIN_ID`).

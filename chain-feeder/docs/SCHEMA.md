@@ -10,7 +10,7 @@ The schema is divided into eight main tables:
 4. **`liquidity_pool_position_snapshot`**: Stores time-series data for a position. **Assets and Rewards are flattened**.
 5. **`liquidity_pool_history`**: Aggregated daily stats for pools (Volume, TVL, Tx count).
 6. **`coin_family`**: Grouping of assets for multi-token analysis (e.g. "USD" -> USDC, USDT, DAI).
-7. **`uniswap_v3_swaps`**: High-performance index of raw on-chain swap events.
+7. **`swaps`**: Unified, partitioned index of raw on-chain swap events across all chains/protocols (replaces the former `uniswap_v3_swaps`/`v4`/`v2` tables).
 8. **`coin_price_history`**: Time-series history of asset prices.
 
 ---
@@ -111,17 +111,31 @@ Mapping for token groups.
 | `name` | VARCHAR(50) | Family name (e.g. "EUR"). |
 | `symbol` | VARCHAR(8) (FK) | Member token symbol. |
 
-### 7. `uniswap_v3_swaps`
+### 7. `swaps` (unified, partitioned)
 
-Raw transactional data from the blockchain.
+Raw swap events from the blockchain, unified across protocols and chains
+(replaces the former `uniswap_v3_swaps` / `uniswap_v4_swaps` / `uniswap_v2_swaps`
+tables). Partitioned `RANGE(ts)` by month (see `create_swaps_table.sql`).
 
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` | VARCHAR (PK) | Unique event ID from The Graph. |
-| `timestamp` | TIMESTAMP | Block time. |
-| `amount_usd` | NUMERIC | Normalized value of the swap. |
-| `token0_symbol` | VARCHAR | Denormalized symbol for fast querying. |
-| `token1_symbol` | VARCHAR | Denormalized symbol for fast querying. |
+| `tx_hash` | VARCHAR(80) | Transaction hash (part of PK). |
+| `log_index` | INT | Log index within the tx (part of PK). |
+| `ts` | TIMESTAMPTZ | Block time (partition key, part of PK). |
+| `network` | VARCHAR(20) | Chain name string: `Ethereum`/`Arbitrum`/`Base`/`BNB`. **No `chain_id` column — chain is keyed by this string.** |
+| `protocol` | VARCHAR(50) | DEX label: `Uniswap V2`/`Uniswap V3`/`Uniswap V4`/`PancakeSwap V3`/`PancakeSwap V4`/`Aerodrome`. |
+| `t0_coin_id` | SMALLINT (FK) | `coin(coin_id)` for token0. |
+| `t1_coin_id` | SMALLINT (FK) | `coin(coin_id)` for token1. |
+| `amount0` | DOUBLE PRECISION | Signed amount of token0 (positive = into pool). |
+| `amount1` | DOUBLE PRECISION | Signed amount of token1. |
+| `amount_usd` | DOUBLE PRECISION | Normalized USD value. |
+| `fee_bps` | DOUBLE PRECISION | Fee in basis points (5 = 0.05%); NULL = dynamic. |
+| `fee_display` | VARCHAR(20) | Original display string, e.g. `0.05%`. |
+
+**Routing query** (`chain-feeder/routing/postgres_fetcher.py`): filters by
+`s.network = %s` and `s.ts` range, joins `coin` for symbol resolution. Aerodrome
+(Base) swaps are stored with `network='Base'`, `protocol='Aerodrome'` and are
+returned by the same query — no protocol-specific branch is needed.
 
 ### 8. `coin_price_history`
 

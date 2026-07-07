@@ -1336,6 +1336,11 @@ footer {
     opacity: 0.95;
 }
 
+.route-arrow-wrapper.aerodrome .route-arrow-svg {
+    color: var(--accent);
+    opacity: 0.95;
+}
+
 .route-arrow-wrapper.clickable-route-segment {
     cursor: pointer;
     text-decoration: none;

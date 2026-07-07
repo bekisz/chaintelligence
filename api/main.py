@@ -452,6 +452,14 @@ async def analyze(
                             v4_keys.append(f"{t0_sym}-{t1_sym}-{fee_norm}|{v4_proto}|{pool_network}")
                             continue
 
+                        if proto_lower in ('aerodrome',):
+                            # Aerodrome (Slipstream, V3-fork) pools are NOT
+                            # CREATE2-derivable with the V3 factory/init-hash
+                            # (different PoolDeployer + init code). Skip
+                            # derivation; pool cards still render from swap
+                            # data. APR/address enrichment is a follow-up.
+                            continue
+
                         if proto_lower in ('v2', 'uniswap v2', 'uniswap-v2'):
                             protocol = 'Uniswap V2'
                             # V2 has a single fee tier (0.30%), so fee_val is not used in CREATE2 salt

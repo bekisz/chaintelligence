@@ -98,6 +98,18 @@ class UniswapV3Fetcher:
         elif self.network == "Arbitrum":
             v3_subgraph_id = "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM"  # Uniswap V3 Arbitrum swaps (verified)
             v4_subgraph_id = "G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"  # Uniswap V4 Arbitrum swaps
+        elif self.network == "Base" and self.protocol == "Aerodrome":
+            # Aerodrome Slipstream (concentrated-liquidity, V3-fork) subgraph on
+            # The Graph Decentralized Network. Schema is Uniswap-V3-identical
+            # (swaps: id="{tx}#{logIndex}", token0/1, amount0/1, amountUSD,
+            # pool{feeTier}), so the V3 query + normalization below are reused
+            # unchanged. Verified via scratch/probe_aerodrome_subgraph.py.
+            # NB: this is Slipstream (V2-CL), NOT Aerodrome V1 (Velodrome-fork);
+            # the V1 subgraph is not on this gateway. Pool addresses are NOT
+            # CREATE2-derivable with the V3 factory/init-hash, so the API
+            # enrichment path skips derivation for protocol='Aerodrome'.
+            v3_subgraph_id = "GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM"
+            v4_subgraph_id = "GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM"  # unused (V3 protocol)
         elif self.network == "Base":
             v3_subgraph_id = "43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG"
             v4_subgraph_id = "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS" # Placeholder if V4 is not available
