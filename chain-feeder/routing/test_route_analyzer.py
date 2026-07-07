@@ -16,7 +16,10 @@ class TestRouteAnalyzer(unittest.TestCase):
                 'token1_symbol': 'TOKEN_B',
                 'amount0': 100,  # Input to pool (User sold A)
                 'amount1': -50,  # Output from pool (User bought B)
-                'amountUSD': 1000
+                'amountUSD': 1000,
+                'fee_tier': '0.05%',
+                'protocol': 'Uniswap V3',
+                'network': 'Ethereum',
             },
             {
                 'id': 'tx1#2',
@@ -25,15 +28,19 @@ class TestRouteAnalyzer(unittest.TestCase):
                 'token1_symbol': 'TOKEN_C',
                 'amount0': 50,   # Input to pool (User sold B)
                 'amount1': -25,  # Output from pool (User bought C)
-                'amountUSD': 1000
+                'amountUSD': 1000,
+                'fee_tier': '0.05%',
+                'protocol': 'Uniswap V3',
+                'network': 'Ethereum',
             }
         ]
-        
+
         result = self.analyzer.analyze_routes(swaps, 'TOKEN_A', 'TOKEN_C')
         routes = result['routes']
-        
+
         self.assertEqual(len(routes), 1)
-        self.assertEqual(routes[0]['path'], 'TOKEN_A -> TOKEN_B -> TOKEN_C')
+        self.assertEqual(routes[0]['path'],
+                         'TOKEN_A -- 0.05%|Uniswap V3|Ethereum --> TOKEN_B -- 0.05%|Uniswap V3|Ethereum --> TOKEN_C')
         self.assertEqual(routes[0]['count'], 1)
         self.assertEqual(routes[0]['volume'], 1000)
 
@@ -47,7 +54,10 @@ class TestRouteAnalyzer(unittest.TestCase):
                 'token1_symbol': 'TOKEN_A',
                 'amount0': -50,  # Output B (User bought B)
                 'amount1': 100,  # Input A (User sold A)
-                'amountUSD': 1000
+                'amountUSD': 1000,
+                'fee_tier': '0.05%',
+                'protocol': 'Uniswap V3',
+                'network': 'Ethereum',
             },
             {
                 'id': 'tx1#2',
@@ -56,15 +66,19 @@ class TestRouteAnalyzer(unittest.TestCase):
                 'token1_symbol': 'TOKEN_C',
                 'amount0': 50,   # Input B
                 'amount1': -25,  # Output C
-                'amountUSD': 1000
+                'amountUSD': 1000,
+                'fee_tier': '0.05%',
+                'protocol': 'Uniswap V3',
+                'network': 'Ethereum',
             }
         ]
-        
+
         result = self.analyzer.analyze_routes(swaps, 'TOKEN_A', 'TOKEN_C')
         routes = result['routes']
-        
+
         self.assertEqual(len(routes), 1)
-        self.assertEqual(routes[0]['path'], 'TOKEN_A -> TOKEN_B -> TOKEN_C')
+        self.assertEqual(routes[0]['path'],
+                         'TOKEN_A -- 0.05%|Uniswap V3|Ethereum --> TOKEN_B -- 0.05%|Uniswap V3|Ethereum --> TOKEN_C')
 
     def test_broken_chain(self):
         # A -> B ... break ... D -> E
@@ -76,7 +90,10 @@ class TestRouteAnalyzer(unittest.TestCase):
                 'token1_symbol': 'TOKEN_B',
                 'amount0': 100,
                 'amount1': -50,
-                'amountUSD': 1000
+                'amountUSD': 1000,
+                'fee_tier': '0.05%',
+                'protocol': 'Uniswap V3',
+                'network': 'Ethereum',
             },
             {
                 'id': 'tx1#2',
@@ -85,10 +102,13 @@ class TestRouteAnalyzer(unittest.TestCase):
                 'token1_symbol': 'TOKEN_E',
                 'amount0': 10,
                 'amount1': -5,
-                'amountUSD': 100
+                'amountUSD': 100,
+                'fee_tier': '0.3%',
+                'protocol': 'Uniswap V3',
+                'network': 'Ethereum',
             }
         ]
-        
+
         result = self.analyzer.analyze_routes(swaps, 'TOKEN_A', 'TOKEN_E')
         self.assertEqual(len(result['routes']), 0)
 

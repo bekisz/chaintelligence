@@ -1326,6 +1326,16 @@ footer {
     opacity: 0.95;
 }
 
+.route-arrow-wrapper.pancakeswap-v4 .route-arrow-svg {
+    color: #4ade80;
+    opacity: 0.95;
+}
+
+.route-arrow-wrapper.uniswap-v2 .route-arrow-svg {
+    color: #ff6ba6;
+    opacity: 0.95;
+}
+
 .route-arrow-wrapper.clickable-route-segment {
     cursor: pointer;
     text-decoration: none;

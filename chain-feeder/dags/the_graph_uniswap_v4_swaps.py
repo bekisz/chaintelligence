@@ -44,7 +44,7 @@ with DAG(
 
         pg_hook = PostgresHook(postgres_conn_id='postgres_default')
         last_ts_row = pg_hook.get_first(
-            "SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s",
+            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = 'Uniswap V4'",
             parameters=(network,)
         )
         last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
@@ -81,7 +81,7 @@ with DAG(
 
         pg_hook = PostgresHook(postgres_conn_id='postgres_default')
         last_ts_row = pg_hook.get_first(
-            "SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s",
+            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = 'Uniswap V4'",
             parameters=(network,)
         )
         last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
@@ -118,7 +118,7 @@ with DAG(
 
         pg_hook = PostgresHook(postgres_conn_id='postgres_default')
         last_ts_row = pg_hook.get_first(
-            "SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s",
+            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = 'Uniswap V4'",
             parameters=(network,)
         )
         last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
@@ -142,21 +142,32 @@ with DAG(
         logging.info(f"{network} V4 fetch complete. Processed {count} unique swaps.")
 
     @task(outlets=[uniswap_v4_swaps_asset])
-    def fetch_and_store_bnb_swaps(**context):
-        """Fetch Uniswap V4 swaps for BNB network."""
+    def fetch_and_store_pancakeswap_v4_swaps(**context):
+        """Fetch PancakeSwap V4 (Infinity) swaps for BNB network.
+
+        PancakeSwap V4 uses the same singleton PoolManager model as Uniswap V4,
+        and its BNB subgraph (The Graph decentralized network) exposes the same
+        Uniswap-V4-like swap schema, so UniswapV4Fetcher handles it once pointed
+        at the right subgraph via protocol='PancakeSwap V4'. Swaps are written to
+        the unified swaps table with protocol='PancakeSwap V4'.
+        """
         conf = {}
         if context.get('dag_run') and context['dag_run'].conf:
             conf = context['dag_run'].conf
 
         backfill_days = conf.get('backfill_days', {})
-        days = backfill_days.get('BNB', 7)
+        days = backfill_days.get('BNB_PancakeSwap_V4', 7)
         force_backfill = 'backfill_days' in conf
         network = 'BNB'
+        protocol = 'PancakeSwap V4'
 
+        # Checkpoint from the unified swaps table (the storage target), filtered
+        # by both network and protocol so this task's watermark is independent of
+        # the Uniswap V4 BNB task.
         pg_hook = PostgresHook(postgres_conn_id='postgres_default')
         last_ts_row = pg_hook.get_first(
-            "SELECT MAX(timestamp) FROM uniswap_v4_swaps WHERE network = %s",
-            parameters=(network,)
+            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = %s",
+            parameters=(network, protocol)
         )
         last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
 
@@ -168,17 +179,19 @@ with DAG(
         else:
             start_date = end_date - timedelta(days=days)
 
-        logging.info(f"Fetching {network} V4 swaps from {start_date} to {end_date}")
-        fetcher = UniswapV4Fetcher(network=network, verbose=True)
+        logging.info(f"Fetching {network} {protocol} swaps from {start_date} to {end_date}")
+        fetcher = UniswapV4Fetcher(network=network, protocol=protocol, verbose=True)
         storage = PostgresStorageV4()
         count = fetcher.fetch_swaps(
             start_date, end_date,
-            on_batch_callback=lambda s, net=network: storage.save_swaps(s, network=net),
+            on_batch_callback=lambda s, net=network: storage.save_swaps(
+                s, network=net, protocol=protocol
+            ),
             collect_results=False
         )
-        logging.info(f"{network} V4 fetch complete. Processed {count} unique swaps.")
+        logging.info(f"{network} {protocol} fetch complete. Processed {count} unique swaps.")
 
     ethereum_task = fetch_and_store_ethereum_swaps()
     arbitrum_task = fetch_and_store_arbitrum_swaps()
     base_task = fetch_and_store_base_swaps()
-    bnb_task = fetch_and_store_bnb_swaps()
+    pancakeswap_v4_task = fetch_and_store_pancakeswap_v4_swaps()

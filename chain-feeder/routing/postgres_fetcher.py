@@ -315,6 +315,9 @@ class PostgresFetcher:
                         protocol = 'Uniswap V3'
                     elif proto_raw.lower() in ('v4', 'uniswap v4'):
                         protocol = 'Uniswap V4'
+                    elif proto_raw.lower() in ('pancakeswap v4', 'pancake v4',
+                                              'pancakeswap-v4', 'pancake-v4'):
+                        protocol = 'PancakeSwap V4'
                     else:
                         protocol = proto_raw
 

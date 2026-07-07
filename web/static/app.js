@@ -559,7 +559,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else if (networkLower.includes('arbitrum')) {
                             pChain = 'arb';
                         }
-                        href = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
+                        if (protocolNameLower.includes('v4')) {
+                            // PancakeSwap V4 (Infinity): pool_address is either the
+                            // canonical 32-byte poolId (66 hex chars) -> the pool's
+                            // /liquidity/pool page, or coin0's contract address (42
+                            // hex chars, when no explorer match) -> the token's pairs
+                            // page as a fallback.
+                            if (pool_addr.length === 66) {
+                                href = `https://pancakeswap.finance/liquidity/pool/${pChain}/${pool_addr}`;
+                            } else {
+                                href = `https://pancakeswap.finance/info/infinity/pairs/tokens/${pool_addr}?chain=${pChain}`;
+                            }
+                        } else {
+                            href = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
+                        }
                     } else {
                         // V3/V2: link uses contract address
                         let uniNetwork = 'ethereum';

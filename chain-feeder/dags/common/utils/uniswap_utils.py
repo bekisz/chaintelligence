@@ -16,16 +16,21 @@ from .config import (
 
 def load_token_addresses_for_chain(chain: str) -> Dict[str, str]:
     """Load symbol → contract_address mapping for a given chain from DB."""
+    # Normalize the network name used internally ("BNB") to the canonical
+    # chain name stored in coin_contract.chain ("bsc"). Without this, the
+    # BNB fetchers (PancakeSwap V3 / V4) resolve 0 tracked token addresses
+    # and ingest nothing.
+    chain = 'bsc' if chain.lower() == 'bnb' else chain.lower()
     mapping = {}
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         cur.execute("""
-            SELECT UPPER(c.symbol), cc.contract_address 
+            SELECT UPPER(c.symbol), cc.contract_address
             FROM coin_contract cc
             JOIN coin c ON cc.coin_id = c.coin_id
             WHERE LOWER(cc.chain) = %s
-        """, (chain.lower(),))
+        """, (chain,))
         for row in cur.fetchall():
             mapping[row[0]] = row[1]
         cur.close()
@@ -81,7 +86,15 @@ class UniswapV3Fetcher:
         GRAPH_API_KEY = os.getenv('GRAPH_API_KEY', '')
         if self.network == "BNB" and self.protocol == "PancakeSwap V3":
             v3_subgraph_id = "ChmxqA9bX71cB2cQTRRULbWUBKoMRk7oh3JnpZShDQ2V"
-            v4_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV" # Placeholder
+            v4_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV"  # unused (V3 protocol)
+        elif self.network == "BNB" and self.protocol == "PancakeSwap V4":
+            # PancakeSwap V4 (Infinity) BNB subgraph on The Graph Decentralized
+            # Network. Schema is Uniswap-V4-like (swaps: token0/token1/amount0/
+            # amount1/amountUSD/pool.feeTier; id = "{txhash}-{logIndex}"), so the
+            # V4 query + normalization branches below handle it unchanged.
+            # Verified via scratch/probe_pancakeswap_v4_subgraph.py.
+            v3_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV"  # unused (V4 protocol)
+            v4_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV"
         elif self.network == "Arbitrum":
             v3_subgraph_id = "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM"  # Uniswap V3 Arbitrum swaps (verified)
             v4_subgraph_id = "G5TsTKNi8yhPSV7kycaE23oWbqv9zzNqR49FoEQjzq1r"  # Uniswap V4 Arbitrum swaps
@@ -616,5 +629,11 @@ class PostgresStorage:
         return None
 
 class PostgresStorageV4(PostgresStorage):
-    """V4 storage — targets the same unified swaps table. Kept for backward compat."""
-    pass
+    """V4 storage — targets the same unified swaps table.
+
+    Overrides save_swaps so the default protocol is 'Uniswap V4' (the parent
+    defaults to 'Uniswap V3', which would mislabel V4 ingestion). Callers that
+    pass an explicit protocol (e.g. PancakeSwap V4) override this default.
+    """
+    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum", protocol: str = "Uniswap V4"):
+        return super().save_swaps(swaps, network=network, protocol=protocol)

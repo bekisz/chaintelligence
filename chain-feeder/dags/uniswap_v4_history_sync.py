@@ -57,65 +57,37 @@ def normalize_fee_tier(fee_str):
 @task
 def sync_pools_from_swaps():
     """
-    Scans uniswap_v4_swaps for all distinct token pairings and ensures
+    Scans the unified swaps table for Uniswap V4 token pairings and ensures
     they exist in the liquidity_pool table.
     """
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     conn = pg_hook.get_conn()
     cur = conn.cursor()
-    
-    # 0. Get allowed coins to avoid FK violations
-    logging.info("Fetching allowed coins...")
-    cur.execute("SELECT symbol FROM coin")
-    # Store normalized (upper, max 8 chars) just in case
-    allowed_coins = set(row[0] for row in cur.fetchall())
-    
-    # 1. Get all distinct pairs from swaps
-    # We treat (A, B, Fee) the same as (B, A, Fee) by normalizing order
-    logging.info("Scanning swaps table for new pools...")
-    
+
+    # Distinct pairings from the unified swaps table (coin_id FKs → symbols).
+    logging.info("Scanning swaps table for new Uniswap V4 pools...")
     cur.execute("""
-        SELECT DISTINCT network, token0_symbol, token1_symbol, fee_tier 
-        FROM uniswap_v4_swaps
+        SELECT DISTINCT s.network, c0.symbol, c1.symbol, s.fee_display
+        FROM swaps s
+        JOIN coin c0 ON s.t0_coin_id = c0.coin_id
+        JOIN coin c1 ON s.t1_coin_id = c1.coin_id
+        WHERE s.protocol = 'Uniswap V4'
     """)
     rows = cur.fetchall()
-    
+
     new_pools = 0
-    skipped_pools = 0
-    
-    for r in rows:
-        network, s0, s1, fee = r
-        if not s0 or not s1: continue
-        
-        # Check if coins exist (handle potential formatting diffs by normalizing check)
-        # The database trigger enforces 8 chars upper.
-        s0_norm = s0[:8].upper()
-        s1_norm = s1[:8].upper()
-        
-        if s0_norm not in allowed_coins or s1_norm not in allowed_coins:
-            skipped_pools += 1
-            # logging.debug(f"Skipping pool {s0}-{s1} due to missing coin definition.")
+    for network, s0, s1, fee in rows:
+        if not s0 or not s1:
             continue
-        
-        # Normalize order for Pool Table
-        c0, c1 = get_base_asset_order(s0_norm, s1_norm)
+        c0, c1 = get_base_asset_order(s0.upper(), s1.upper())
         pool_name = f"{c0} - {c1}"
-        
-        # Normalize fee
         fee_bips = normalize_fee_tier(fee)
 
-        # Insert without transaction rollback on conflict
-        # We rely on ON CONFLICT DO NOTHING.
-        # Resolve coin0_id and coin1_id from symbol
-        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0,))
+        cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = %s", (c0,))
         row0 = cur.fetchone()
-        coin0_id = row0[0] if row0 else None
-        
-        cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c1,))
+        cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = %s", (c1,))
         row1 = cur.fetchone()
-        coin1_id = row1[0] if row1 else None
-        
-        if coin0_id is None or coin1_id is None:
+        if not row0 or not row1:
             continue
 
         try:
@@ -123,19 +95,17 @@ def sync_pools_from_swaps():
                 INSERT INTO liquidity_pool (network, protocol, pool_name, coin0_id, coin1_id, fee_tier)
                 VALUES (%s, 'Uniswap V4', %s, %s, %s, %s)
                 ON CONFLICT (network, protocol, pool_name, fee_tier) DO NOTHING
-            """, (network, pool_name, coin0_id, coin1_id, fee_bips))
-            
+            """, (network, pool_name, row0[0], row1[0], fee_bips))
             if cur.statusmessage.startswith("INSERT 0 1"):
                 new_pools += 1
         except Exception as e:
-            conn.rollback() 
-            # Log as warning since duplicate keys might cause issues depending on constraint specificity
+            conn.rollback()
             logging.warning(f"Failed to sync pool {pool_name}: {e}")
-            
+
     conn.commit()
     cur.close()
     conn.close()
-    logging.info(f"Synced {new_pools} new pools from swap history. Skipped {skipped_pools} due to missing coins.")
+    logging.info(f"Synced {new_pools} new Uniswap V4 pools from swaps.")
 
 @task
 def build_daily_history():
@@ -158,30 +128,30 @@ def build_daily_history():
     
     query = """
     INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd)
-    SELECT 
-        p.id as pool_id,
-        DATE(s.timestamp) as date,
-        COUNT(*) as tx_count,
-        SUM(s.amount_usd) as volume_usd
-    FROM uniswap_v4_swaps s
-    JOIN liquidity_pool p ON 
+    SELECT
+        p.id AS pool_id,
+        DATE(s.ts) AS date,
+        COUNT(*) AS tx_count,
+        SUM(s.amount_usd) AS volume_usd
+    FROM swaps s
+    JOIN liquidity_pool p ON
         p.network = s.network AND p.protocol = 'Uniswap V4' AND
-        p.fee_tier = CASE 
-            WHEN s.fee_tier = '0.01%' THEN '100'
-            WHEN s.fee_tier = '0.05%' THEN '500'
-            WHEN s.fee_tier = '0.08%' THEN '800'
-            WHEN s.fee_tier = '0.3%' THEN '3000'
-            WHEN s.fee_tier = '1.0%' THEN '10000'
-            ELSE s.fee_tier 
+        p.fee_tier = CASE s.fee_display
+            WHEN '0.01%' THEN '100'
+            WHEN '0.05%' THEN '500'
+            WHEN '0.08%' THEN '800'
+            WHEN '0.25%' THEN '2500'
+            WHEN '0.3%'  THEN '3000'
+            WHEN '1.0%'  THEN '10000'
+            ELSE s.fee_display
         END AND
         (
-            (p.coin0_symbol = LEFT(UPPER(s.token0_symbol), 8) AND p.coin1_symbol = LEFT(UPPER(s.token1_symbol), 8))
-            OR 
-            (p.coin0_symbol = LEFT(UPPER(s.token1_symbol), 8) AND p.coin1_symbol = LEFT(UPPER(s.token0_symbol), 8))
+            (p.coin0_id = s.t0_coin_id AND p.coin1_id = s.t1_coin_id) OR
+            (p.coin0_id = s.t1_coin_id AND p.coin1_id = s.t0_coin_id)
         )
-    WHERE s.amount_usd IS NOT NULL
-    GROUP BY p.id, DATE(s.timestamp)
-    ON CONFLICT (pool_id, date) DO UPDATE 
+    WHERE s.protocol = 'Uniswap V4' AND s.amount_usd IS NOT NULL
+    GROUP BY p.id, DATE(s.ts)
+    ON CONFLICT (pool_id, date) DO UPDATE
     SET tx_count = EXCLUDED.tx_count,
         volume_usd = EXCLUDED.volume_usd;
     """
@@ -209,11 +179,13 @@ def sync_v4_pool_ids():
     conn = pg_hook.get_conn()
     cur = conn.cursor()
 
-    # 1. Build symbol→address map by network (same strategy as sync_tvl_from_graph)
+    # 1. Build symbol→address map by network from coin_contract (official addresses).
+    # (The unified swaps table no longer stores token addresses, so the old
+    # swap-frequency heuristic is gone; coin_contract covers the tracked tokens
+    # that V4 routing cares about.)
     from collections import defaultdict
     symbol_map = defaultdict(dict)
 
-    # Priority 1: Official coin_contract table
     cur.execute("""
         SELECT cc.chain, c.symbol, cc.contract_address
         FROM coin_contract cc
@@ -224,23 +196,6 @@ def sync_v4_pool_ids():
         if sym and addr:
             chain_key = chain.capitalize()
             symbol_map[chain_key][sym.upper()] = addr.lower()
-
-    # Priority 2: Swap heuristics (most frequent address per network)
-    cur.execute("""
-        SELECT network, sym, addr, SUM(c) as total_c FROM (
-            SELECT network, token0_symbol as sym, token0_address as addr,
-                   count(*) as c FROM uniswap_v4_swaps GROUP BY 1, 2, 3
-            UNION ALL
-            SELECT network, token1_symbol as sym, token1_address as addr,
-                   count(*) as c FROM uniswap_v4_swaps GROUP BY 1, 2, 3
-        ) t GROUP BY 1, 2, 3 ORDER BY total_c ASC
-    """)
-    for row in cur.fetchall():
-        network, sym, addr, count = row
-        if sym and addr:
-            symbol_map[network][sym.upper()] = addr.lower()
-            if len(sym) > 8:
-                symbol_map[network][sym[:8].upper()] = addr.lower()
 
     # 2. Get V4 pools that are missing pool_id
     cur.execute("""
@@ -351,42 +306,21 @@ def sync_tvl_from_graph():
     conn = pg_hook.get_conn()
     cur = conn.cursor()
     
-    # 1. Build Symbol -> Address Map
-    # Priority 1: coin table (Official)
-    # Priority 2: swaps history (Heuristic)
+    # 1. Build Symbol -> Address Map by Network from coin_contract.
+    # (Unified swaps no longer stores token addresses, so the old swap-frequency
+    # heuristic is gone; coin_contract covers the tracked V4 tokens.)
     from collections import defaultdict
-    
-    # 1. Build Symbol -> Address Map by Network
     logging.info("Building symbol->address map by network...")
     symbol_map = defaultdict(dict)
-    
-    # Priority 2: Official coin table (Fallback for Ethereum)
     cur.execute("""
-        SELECT c.symbol, cc.contract_address 
+        SELECT cc.chain, c.symbol, cc.contract_address
         FROM coin_contract cc
         JOIN coin c ON cc.coin_id = c.coin_id
-        WHERE cc.chain = 'ethereum'
     """)
     for row in cur.fetchall():
-        sym, addr = row
+        chain, sym, addr = row
         if sym and addr:
-            symbol_map["Ethereum"][sym.upper()] = addr.lower()
-            
-    # Priority 1: Swaps (Heuristic per Network)
-    # Order by swap frequency ASC so the most frequent address per network wins
-    cur.execute("""
-        SELECT network, sym, addr, SUM(c) as total_c FROM (
-            SELECT network, token0_symbol as sym, token0_address as addr, count(*) as c FROM uniswap_v4_swaps GROUP BY 1, 2, 3
-            UNION ALL 
-            SELECT network, token1_symbol as sym, token1_address as addr, count(*) as c FROM uniswap_v4_swaps GROUP BY 1, 2, 3
-        ) t GROUP BY 1, 2, 3 ORDER BY total_c ASC
-    """)
-    for row in cur.fetchall():
-        network, sym, addr, count = row
-        if sym and addr:
-            symbol_map[network][sym.upper()] = addr.lower()
-            if len(sym) > 8:
-                symbol_map[network][sym[:8].upper()] = addr.lower()
+            symbol_map[chain.capitalize()][sym.upper()] = addr.lower()
                 
     # 2. Get all pools
     cur.execute("""

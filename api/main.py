@@ -425,11 +425,19 @@ async def analyze(
                         proto_raw = parts[1].strip() if len(parts) >= 2 else "Uniswap V3"
                         proto_lower = proto_raw.lower()
 
-                        if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4'):
+                        if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4',
+                                           'pancakeswap v4', 'pancake v4',
+                                           'pancakeswap-v4', 'pancake-v4'):
                             # V4: no CREATE2 address; pool_id is fetched from DB
+                            # (singleton PoolManager model — applies to both
+                            # Uniswap V4 and PancakeSwap V4 / Infinity).
+                            # Normalize the protocol label so the key matches
+                            # what the V4 pool_id lookup builds from the DB.
+                            v4_proto = 'PancakeSwap V4' if 'pancake' in proto_lower else 'Uniswap V4'
                             # Normalize fee to bips for key matching with DB
                             fee_clean_v4 = parts[0].replace('%', '').strip()
-                            fee_map_v4 = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
+                            fee_map_v4 = {'0.01': '100', '0.05': '500', '0.08': '800',
+                                          '0.25': '2500', '0.3': '3000', '1.0': '10000'}
                             if fee_clean_v4 in fee_map_v4:
                                 fee_norm = fee_map_v4[fee_clean_v4]
                             else:
@@ -441,7 +449,7 @@ async def analyze(
                                         fee_norm = str(int(fv))
                                 except:
                                     fee_norm = parts[0]
-                            v4_keys.append(f"{t0_sym}-{t1_sym}-{fee_norm}|Uniswap V4|{pool_network}")
+                            v4_keys.append(f"{t0_sym}-{t1_sym}-{fee_norm}|{v4_proto}|{pool_network}")
                             continue
 
                         if proto_lower in ('v2', 'uniswap v2', 'uniswap-v2'):
@@ -526,24 +534,54 @@ async def analyze(
                 # V4: batch-lookup pool_ids from the DB (stored by the ingestion DAG)
                 if v4_keys:
                     def _lookup_v4_pool_ids():
-                        """Fetch all V4 pool_id mappings from DB in one query."""
+                        """Fetch V4 pool identifiers from DB in one query.
+
+                        Uniswap V4: the value is the 32-byte poolId (lp.pool_id),
+                        used for the Uniswap explore pool link.
+
+                        PancakeSwap V4: the Infinity info site has no per-pool
+                        page keyed by the subgraph's 20-byte id, and the canonical
+                        32-byte poolId can't be derived without tickSpacing/hooks.
+                        So the value is coin0's contract address, and the frontend
+                        links to that token's Infinity pairs page (which lists the
+                        pool).
+                        """
                         v4_results = {}
                         try:
                             with get_conn() as conn:
                                 cur = conn.cursor()
                                 cur.execute("""
-                                    SELECT lp.network, lp.fee_tier, lp.pool_id,
+                                    SELECT lp.network, lp.protocol, lp.fee_tier, lp.pool_id,
                                            UPPER(c0.symbol) AS s0,
-                                           UPPER(c1.symbol) AS s1
+                                           UPPER(c1.symbol) AS s1,
+                                           cc0.contract_address AS t0_addr
                                     FROM liquidity_pool lp
                                     JOIN coin c0 ON lp.coin0_id = c0.coin_id
                                     JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                                    WHERE lp.protocol = 'Uniswap V4'
-                                      AND lp.pool_id IS NOT NULL
+                                    LEFT JOIN coin_contract cc0
+                                        ON cc0.coin_id = lp.coin0_id
+                                       AND LOWER(cc0.chain) =
+                                           CASE WHEN lp.network = 'BNB' THEN 'bsc'
+                                                ELSE LOWER(lp.network) END
+                                    WHERE (lp.protocol = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
+                                       OR lp.protocol = 'PancakeSwap V4'
                                 """)
-                                for net, fee_tier, pid, sym0, sym1 in cur.fetchall():
-                                    if not pid:
-                                        continue
+                                for net, proto, fee_tier, pid, sym0, sym1, t0_addr in cur.fetchall():
+                                    if proto == 'PancakeSwap V4':
+                                        # Prefer the canonical 32-byte poolId for the
+                                        # /liquidity/pool/<chain>/<poolId> link; fall back
+                                        # to coin0's contract address (token-page link)
+                                        # when no explorer match was stored.
+                                        if pid and len(pid) == 66:
+                                            value = pid
+                                        elif t0_addr:
+                                            value = t0_addr
+                                        else:
+                                            continue
+                                    else:
+                                        if not pid:
+                                            continue
+                                        value = pid
                                     # Build ALL possible fee format keys so we match
                                     # whatever format the route uses (fee_display from
                                     # swaps is percentage like "0.05%", while DB
@@ -565,11 +603,11 @@ async def analyze(
                                     for fk in fee_keys:
                                         if not fk:
                                             continue
-                                        key_fwd = f"{sym0}-{sym1}-{fk}|Uniswap V4|{net}"
-                                        key_rev = f"{sym1}-{sym0}-{fk}|Uniswap V4|{net}"
-                                        v4_results[key_fwd] = pid
-                                        v4_results[key_rev] = pid
-                                    v4_results[key_rev] = pid
+                                        key_fwd = f"{sym0}-{sym1}-{fk}|{proto}|{net}"
+                                        key_rev = f"{sym1}-{sym0}-{fk}|{proto}|{net}"
+                                        v4_results[key_fwd] = value
+                                        v4_results[key_rev] = value
+                                    v4_results[key_rev] = value
                         except Exception as ex:
                             print(f"  Error looking up V4 pool_ids: {ex}")
                         return v4_results
@@ -708,6 +746,7 @@ async def lp_summary():
             ORDER BY timestamp DESC
             """
             cur.execute(query_latest, target_addresses)
+            all_rows = cur.fetchall()
         else:
             query_latest = """
             SELECT 
@@ -738,7 +777,7 @@ async def lp_summary():
                 if not all_rows:
                     return JSONResponse(status_code=200, content={"detail": "No liquidity‑pool positions found in the database."})
 
-            latest_positions = {}
+        latest_positions = {}
         for row in all_rows:
             key = row[11] if row[11] else f"{row[3]}-{row[5]}-{row[4]}"
             if key not in latest_positions:
@@ -764,8 +803,8 @@ async def lp_summary():
         -- Or rely on captured USD? The snapshot table lacks captured price history usually, 
         -- so we use current price for older tokens approximation or if snapshot has it.
         -- Actually, let's just fetch amounts and use CURRENT price to value them for consistency.
-        JOIN coin c0 ON pool.coin0_symbol = c0.symbol
-        JOIN coin c1 ON pool.coin1_symbol = c1.symbol
+        JOIN coin c0 ON pool.coin0_id = c0.coin_id
+        JOIN coin c1 ON pool.coin1_id = c1.coin_id
         CROSS JOIN LATERAL (SELECT c0.price as coin0_price, c1.price as coin1_price) p
         WHERE s.timestamp > NOW() - INTERVAL '8 days'
         ORDER BY s.timestamp DESC
@@ -956,12 +995,14 @@ async def lp_history(position_key: str):
             e.amount0,
             e.amount1,
             e.tx_hash,
-            pool.coin0_symbol,
-            pool.coin1_symbol,
+            c0.symbol,
+            c1.symbol,
             pool.network
         FROM liquidity_pool_position_event e
         JOIN liquidity_pool_position pos ON e.position_id = pos.id
         JOIN liquidity_pool pool ON pos.pool_id = pool.id
+        JOIN coin c0 ON pool.coin0_id = c0.coin_id
+        JOIN coin c1 ON pool.coin1_id = c1.coin_id
         WHERE (pos.position_key = %s OR pos.id::text = %s)
           AND e.event_type IN ('create', 'add_liquidity', 'withdraw', 'delete', 'collect_claim')
         ORDER BY e.timestamp DESC
@@ -1202,16 +1243,18 @@ async def list_pools():
         cur = conn.cursor()
         
         query = """
-        SELECT 
+        SELECT
             p.id, p.network, p.protocol, p.pool_name, p.fee_tier, p.pool_address,
-            h.tvl_usd, h.volume_usd, h.tx_count, p.coin0_symbol, p.coin1_symbol
+            h.tvl_usd, h.volume_usd, h.tx_count, c0.symbol, c1.symbol
         FROM liquidity_pool p
+        JOIN coin c0 ON p.coin0_id = c0.coin_id
+        JOIN coin c1 ON p.coin1_id = c1.coin_id
         LEFT JOIN (
             SELECT DISTINCT ON (pool_id) pool_id, tvl_usd, volume_usd, tx_count
             FROM liquidity_pool_history
             ORDER BY pool_id, date DESC
         ) h ON p.id = h.pool_id
-        WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3') -- Show all V3/V4 pools even if reverted, to avoid gaps
+        WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
         ORDER BY h.tvl_usd DESC NULLS LAST
         """
         cur.execute(query)
