@@ -1,0 +1,80 @@
+[    2291ms] [INFO] Loading the script 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit' violates the following Content Security Policy directive: "script-src 'self' 'wasm-unsafe-eval' https://vercel.com https://vercel.live/". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The policy is report-only, so the violation has been logged but no further action has been taken. @ https://app.uniswap.org/explore/tokens/ethereum/0xe343167631d89b6ffc58b88d6b7fb0228795491d:0
+[    2467ms] [WARNING] WARN {context: Object} Invalid call to `updateScrollLock` before calling `initializeScrollWatcher` @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    2489ms] [INFO] INFO {context: Object} Session init started @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    2527ms] [LOG] [DEBUG] ethereum-provider request {method: eth_accounts} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:1644
+[    2539ms] [WARNING] WalletConnect Core is already initialized. This is probably a mistake and can lead to unexpected behavior. Init() was called 2 times. @ https://app.uniswap.org/assets/index-XX3PBvmS.js:2176
+[    2783ms] [INFO] INFO {context: Object} Session init completed {needChallenge: false, durationMs: -2482.699999988079} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    2915ms] [LOG] %cWarning! color:#F16552; font-size:50px; font-weight: bold; -webkit-text-stroke: 1px black; @ https://privy.app.uniswap.org/_next/static/chunks/pages/apps/%5Bapp_id%5D/embedded-wallets-3b0a280e81465b5c.js?dpl=dpl_GL6qx3sHqaUtCfY1Nxk8NsDDA5Kc:0
+[    2915ms] [LOG] %cYou are reading this message because you opened the browser console, a developer tool. Do not enter or paste code you do not understand. Never share your tokens or any other info with anyone. If someone told you to do this, it is very likely a scam. font-size: 18px; @ https://privy.app.uniswap.org/_next/static/chunks/pages/apps/%5Bapp_id%5D/embedded-wallets-3b0a280e81465b5c.js?dpl=dpl_GL6qx3sHqaUtCfY1Nxk8NsDDA5Kc:0
+[    3269ms] [INFO] INFO {context: Object} RPC response {method: getBlockNumber, chainId: 1, durationMs: 786, provider: unirpc, transport: ethers} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    3293ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 794, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    3302ms] [INFO] INFO {context: Object} RPC response {method: eth_call, chainId: 1, durationMs: 791, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    3315ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 826, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    4383ms] [INFO] INFO {context: Object} RPC response {method: call, chainId: 1, durationMs: 546, provider: unirpc, transport: ethers} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    4383ms] [WARNING] WARN {context: Object} Failed to get swap taxes for token(s): [0xe343167631d89B6Ffc58B88d6b7fB0228795491D, 0xe343167631d89B6Ffc58B88d6b7fB0228795491D] Error: call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="batchValidate(address[],address,uint256)", data="0x86fc9278", errorArgs=[], errorName="PairLookupFailed", errorSignature="PairLookupFailed()", reason=null, code=CALL_EXCEPTION, version=abi/5.7.0)
+    at Ud.makeError (https://app.uniswap.org/assets/index-XX3PBvmS.js:1578:201901)
+    at Ud.throwError (https://app.uniswap.org/assets/index-XX3PBvmS.js:1578:202019)
+    at Qh.decodeFunctionResult (https://app.uniswap.org/assets/index-XX3PBvmS.js:1579:12354)
+    at Object.<anonymous> (https://app.uniswap.org/assets/index-XX3PBvmS.js:1583:209171)
+    at Generator.next (<anonymous>)
+    at a (https://app.uniswap.org/assets/index-XX3PBvmS.js:1583:204658) @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    4389ms] [INFO] INFO {context: Object} RPC response {method: call, chainId: 1, durationMs: 553, provider: unirpc, transport: ethers} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    4389ms] [WARNING] WARN {context: Object} Failed to get swap taxes for token(s): [0xe343167631d89b6ffc58b88d6b7fb0228795491d, 0xe343167631d89b6ffc58b88d6b7fb0228795491d] Error: call revert exception [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (method="batchValidate(address[],address,uint256)", data="0x86fc9278", errorArgs=[], errorName="PairLookupFailed", errorSignature="PairLookupFailed()", reason=null, code=CALL_EXCEPTION, version=abi/5.7.0)
+    at Ud.makeError (https://app.uniswap.org/assets/index-XX3PBvmS.js:1578:201901)
+    at Ud.throwError (https://app.uniswap.org/assets/index-XX3PBvmS.js:1578:202019)
+    at Qh.decodeFunctionResult (https://app.uniswap.org/assets/index-XX3PBvmS.js:1579:12354)
+    at Object.<anonymous> (https://app.uniswap.org/assets/index-XX3PBvmS.js:1583:209171)
+    at Generator.next (<anonymous>)
+    at a (https://app.uniswap.org/assets/index-XX3PBvmS.js:1583:204658) @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    6721ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 249, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[    6726ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 255, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   10780ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 308, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   10822ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 351, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   14742ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 257, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   14743ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 257, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   18716ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 246, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   18717ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 244, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   22725ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 252, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   22735ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 265, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   26746ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 276, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   26757ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 281, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   30712ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 241, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   30717ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 240, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   34777ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 306, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   34779ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 303, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   38744ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 271, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   38751ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 273, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   42727ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 251, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   42730ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 259, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   46712ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 241, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   46716ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 239, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   50706ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 235, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   50728ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 253, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   54712ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 236, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   54714ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 244, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   58739ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 263, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   58791ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 321, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   62713ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 235, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   62714ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 242, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   66817ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 346, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   66843ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 367, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   70859ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 388, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   70865ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 388, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   74812ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 339, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   74815ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 338, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   79031ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 560, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   79052ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 576, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   82787ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 316, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   82787ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 311, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   86817ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 346, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   86818ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 341, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   90851ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 374, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   90854ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 383, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   94739ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 267, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   94740ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 263, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   98728ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 252, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[   98735ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 265, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[  102704ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 233, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[  102712ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 234, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[  106806ms] [INFO] INFO {context: Object} RPC response {method: eth_blockNumber, chainId: 1, durationMs: 334, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59
+[  106808ms] [INFO] INFO {context: Object} RPC response {method: eth_chainId, chainId: 1, durationMs: 330, provider: unirpc, transport: viem} @ https://app.uniswap.org/assets/index-XX3PBvmS.js:59

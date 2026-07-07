@@ -1,0 +1,595 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e4]:
+    - navigation [ref=f2e6]:
+      - generic [ref=f2e7]:
+        - generic [ref=f2e8]:
+          - generic [ref=f2e11] [cursor=pointer]:
+            - link [ref=f2e12]:
+              - /url: /?intro=true
+              - img [ref=f2e15]
+            - img [ref=f2e26]
+          - link "Trade" [ref=f2e30] [cursor=pointer]:
+            - /url: /swap
+          - link "Explore" [ref=f2e33] [cursor=pointer]:
+            - /url: /explore
+          - link "Pool" [ref=f2e36] [cursor=pointer]:
+            - /url: /positions
+          - link "Portfolio" [ref=f2e39] [cursor=pointer]:
+            - /url: /portfolio
+        - generic [ref=f2e40]:
+          - button "Search tokens, pools, and wallets" [ref=f2e41] [cursor=pointer]:
+            - img [ref=f2e45]
+          - button "Navigation button" [ref=f2e49] [cursor=pointer]:
+            - img [ref=f2e52]
+          - button "Get started" [ref=f2e61] [cursor=pointer]:
+            - generic [ref=f2e58]: Get started
+    - generic [ref=f2e62]:
+      - region "Notifications alt+T"
+      - button [ref=f2e66] [cursor=pointer]:
+        - img [ref=f2e67]
+      - generic "breadcrumb-nav" [ref=f2e69]:
+        - link "Tokens" [ref=f2e70] [cursor=pointer]:
+          - /url: /explore/tokens
+          - generic [ref=f2e71]:
+            - text: Tokens
+            - img [ref=f2e73]
+        - heading "USDG" [level=1] [ref=f2e76]
+      - generic [ref=f2e79]:
+        - generic [ref=f2e80]:
+          - img [ref=f2e83]
+          - generic [ref=f2e84]:
+            - heading "Global Dollar" [level=1] [ref=f2e1471]
+            - generic [ref=f2e88]:
+              - generic [ref=f2e91]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - img
+                                - generic:
+                                  - generic:
+                                    - textbox "Search networks"
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - button "5 networks":
+                                  - generic:
+                                    - generic:
+                                      - generic: 5 networks
+                                - button "Ethereum":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Ethereum
+                                    - generic:
+                                      - img
+                                - button "Unichain":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Unichain
+                                - button "Robinhood Chain New":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Robinhood Chain
+                                        - generic:
+                                          - generic:
+                                            - generic: New
+                                - button "Solana":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Solana
+                                - button "X Layer":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: X Layer
+                - generic [ref=f2e116] [cursor=pointer]:
+                  - generic [ref=f2e121]: Ethereum
+                  - img [ref=f2e123]
+              - button "0xe343...491D" [ref=f2e127] [cursor=pointer]:
+                - generic [ref=f2e129]: 0xe343...491D
+        - generic [ref=f2e132]:
+          - button [ref=f2e135] [cursor=pointer]:
+            - img [ref=f2e137]
+          - generic [ref=f2e140]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Copy link":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Copy link
+                  - button "Share to Twitter":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Share to Twitter
+            - img [ref=f2e145] [cursor=pointer]
+          - generic [ref=f2e148]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Report data issue":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Report data issue
+                  - button "Report token":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Report token
+            - img [ref=f2e153] [cursor=pointer]
+      - generic [ref=f2e157]:
+        - generic [ref=f2e158]:
+          - generic [ref=f2e159]:
+            - generic [ref=f2e160]:
+              - table [ref=f2e163]:
+                - row [ref=f2e164]:
+                  - cell
+                  - cell [ref=f2e165]
+                  - cell [ref=f2e169]
+                - row [ref=f2e173]:
+                  - cell
+                  - cell [ref=f2e174]
+                  - cell [ref=f2e178]
+              - generic:
+                - generic:
+                  - heading "$1.00" [level=2]
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img "down"
+                        - text: $0.00 (0.01%)
+            - generic [ref=f2e181]:
+              - generic [ref=f2e182]:
+                - tablist [ref=f2e184]:
+                  - button [ref=f2e187] [cursor=pointer]:
+                    - img [ref=f2e188]
+                  - button [ref=f2e192] [cursor=pointer]:
+                    - img [ref=f2e194]
+                - tablist [ref=f2e199]:
+                  - button "Price" [ref=f2e202] [cursor=pointer]:
+                    - generic [ref=f2e203]: Price
+                  - button "Volume" [ref=f2e206] [cursor=pointer]:
+                    - generic [ref=f2e207]: Volume
+                  - button "TVL" [ref=f2e210] [cursor=pointer]:
+                    - generic [ref=f2e211]: TVL
+              - tablist [ref=f2e215]:
+                - button "1H" [ref=f2e218] [cursor=pointer]:
+                  - generic [ref=f2e219]: 1H
+                - button "1D" [ref=f2e222] [cursor=pointer]:
+                  - generic [ref=f2e223]: 1D
+                - button "1W" [ref=f2e226] [cursor=pointer]:
+                  - generic [ref=f2e227]: 1W
+                - button "1M" [ref=f2e230] [cursor=pointer]:
+                  - generic [ref=f2e231]: 1M
+                - button "1Y" [ref=f2e234] [cursor=pointer]:
+                  - generic [ref=f2e235]: 1Y
+                - button "All" [ref=f2e238] [cursor=pointer]:
+                  - generic [ref=f2e239]: All
+          - generic [ref=f2e241]:
+            - heading "Stats" [level=3] [ref=f2e242]
+            - table [ref=f2e243]:
+              - row "TVL $707.2K" [ref=f2e244]:
+                - cell "TVL" [ref=f2e245]:
+                  - generic [ref=f2e248]: TVL
+                - cell "$707.2K" [ref=f2e249]:
+                  - heading "$707.2K" [level=3] [ref=f2e252]
+              - row "Market cap $3.1B" [ref=f2e253]:
+                - cell "Market cap" [ref=f2e254]:
+                  - generic [ref=f2e257]: Market cap
+                - cell "$3.1B" [ref=f2e258]:
+                  - heading "$3.1B" [level=3] [ref=f2e261]
+              - row "FDV $3.1B" [ref=f2e262]:
+                - cell "FDV" [ref=f2e263]:
+                  - generic [ref=f2e266]: FDV
+                - cell "$3.1B" [ref=f2e267]:
+                  - heading "$3.1B" [level=3] [ref=f2e270]
+              - row "1 day volume $1.7M" [ref=f2e271]:
+                - cell "1 day volume" [ref=f2e272]:
+                  - generic [ref=f2e275]: 1 day volume
+                - cell "$1.7M" [ref=f2e276]:
+                  - heading "$1.7M" [level=3] [ref=f2e279]
+              - row "52W High $1.002" [ref=f2e280]:
+                - cell "52W High" [ref=f2e281]
+                - cell "$1.002" [ref=f2e282]:
+                  - heading "$1.002" [level=3] [ref=f2e285]
+              - row "52W Low $0.999" [ref=f2e286]:
+                - cell "52W Low" [ref=f2e287]
+                - cell "$0.999" [ref=f2e288]:
+                  - heading "$0.999" [level=3] [ref=f2e291]
+          - generic [ref=f2e292]:
+            - heading "About" [level=3] [ref=f2e293]
+            - generic [ref=f2e294]:
+              - heading "Global Dollar (USDG) is a single-currency stablecoin pegged to the US dollar. USDG is fully redeemable from Paxos on a one-to-one basis for US dollars. Global Dollar (USDG) is issued by Paxos Digital Singapore (PDS), which is a Major Payments Institution supervised by the Monetary Authority of..." [level=2] [ref=f2e295]
+              - button "Show more" [ref=f2e296] [cursor=pointer]
+            - generic [ref=f2e297]:
+              - button "0xe343...491D" [ref=f2e298] [cursor=pointer]:
+                - generic [ref=f2e302]: 0xe343...491D
+                - img [ref=f2e306]
+              - link "Etherscan" [ref=f2e308] [cursor=pointer]:
+                - /url: https://etherscan.io/token/0xe343167631d89b6ffc58b88d6b7fb0228795491d
+                - img [ref=f2e309]
+                - generic [ref=f2e311]: Etherscan
+              - link "Website" [ref=f2e312] [cursor=pointer]:
+                - /url: https://globaldollar.com
+                - img [ref=f2e313]
+                - generic [ref=f2e315]: Website
+              - link "Twitter" [ref=f2e316] [cursor=pointer]:
+                - /url: https://x.com/global_dollar
+                - img [ref=f2e317]
+                - generic [ref=f2e319]: Twitter
+          - generic [ref=f2e320]:
+            - generic [ref=f2e321]:
+              - heading "Transactions" [level=3] [ref=f2e322] [cursor=pointer]
+              - heading "Pools" [level=3] [ref=f2e323] [cursor=pointer]
+            - generic [ref=f2e1473]:
+              - generic [ref=f2e1474]:
+                - button [ref=f2e1476] [cursor=pointer]:
+                  - img [ref=f2e1478]
+                - generic [ref=f2e1480]:
+                  - generic [ref=f2e1483]: "#"
+                  - generic [ref=f2e1486]: Pool
+                  - generic [ref=f2e1489]: Protocol
+                  - generic [ref=f2e1492]: Fee tier
+                  - generic [ref=f2e1498] [cursor=pointer]:
+                    - img [ref=f2e1499]
+                    - generic [ref=f2e1501]: TVL
+                  - generic [ref=f2e1508] [cursor=pointer]: Pool APR
+                  - generic [ref=f2e1515] [cursor=pointer]: 1D vol
+                  - generic [ref=f2e1522] [cursor=pointer]: 30D vol
+              - generic [ref=f2e1524]:
+                - link "1 USDG/USDC v4 0.01% $423.5K 10.69% $1.2M $81.4M" [ref=f2e1527] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x0d3d26ec61a6c96d74153f62f67fbdcbb8cd9bca49e7901017e22d2b371efd02
+                  - generic [ref=f2e1528]:
+                    - generic [ref=f2e1531]: "1"
+                    - generic [ref=f2e1534]:
+                      - generic [ref=f2e1535]:
+                        - img [ref=f2e1539]
+                        - img [ref=f2e1543]
+                      - generic [ref=f2e1548]: USDG/USDC
+                    - generic [ref=f2e1551]: v4
+                    - generic [ref=f2e1554]: 0.01%
+                    - generic [ref=f2e1557]: $423.5K
+                    - generic [ref=f2e1560]: 10.69%
+                    - generic [ref=f2e1563]: $1.2M
+                    - generic [ref=f2e1566]: $81.4M
+                - link "2 USDG/USDC v4 0.0098% $303.3K 0% - $10.4M" [ref=f2e1569] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0xe22b28c9bee610f6763a3d0a11d1415fa4db63fdb7f2e3db843e21a5a8c174f4
+                  - generic [ref=f2e1570]:
+                    - generic [ref=f2e1573]: "2"
+                    - generic [ref=f2e1576]:
+                      - generic [ref=f2e1577]:
+                        - img [ref=f2e1581]
+                        - img [ref=f2e1585]
+                      - generic [ref=f2e1590]: USDG/USDC
+                    - generic [ref=f2e1593]: v4
+                    - generic [ref=f2e1596]: 0.0098%
+                    - generic [ref=f2e1599]: $303.3K
+                    - generic [ref=f2e1602]: 0%
+                    - generic [ref=f2e1605]: "-"
+                    - generic [ref=f2e1608]: $10.4M
+                - link "3 USDG/USDT v4 0.01% $120.7K 2.85% $94.2K $5.3M" [ref=f2e1611] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x397fb17f2f23d2618574ab0cff0320b424d9ab0b31d036096b2ee9c02e649e22
+                  - generic [ref=f2e1612]:
+                    - generic [ref=f2e1615]: "3"
+                    - generic [ref=f2e1618]:
+                      - generic [ref=f2e1619]:
+                        - img [ref=f2e1623]
+                        - img [ref=f2e1627]
+                      - generic [ref=f2e1632]: USDG/USDT
+                    - generic [ref=f2e1635]: v4
+                    - generic [ref=f2e1638]: 0.01%
+                    - generic [ref=f2e1641]: $120.7K
+                    - generic [ref=f2e1644]: 2.85%
+                    - generic [ref=f2e1647]: $94.2K
+                    - generic [ref=f2e1650]: $5.3M
+                - link "4 USDG/USDC v3 0.01% $2.6K 45.96% $33.2K $2.4M" [ref=f2e1653] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x817097Ff6BfbF3E76097FC481e17BE155cfd9bD4
+                  - generic [ref=f2e1654]:
+                    - generic [ref=f2e1657]: "4"
+                    - generic [ref=f2e1660]:
+                      - generic [ref=f2e1661]:
+                        - img [ref=f2e1665]
+                        - img [ref=f2e1669]
+                      - generic [ref=f2e1674]: USDG/USDC
+                    - generic [ref=f2e1677]: v3
+                    - generic [ref=f2e1680]: 0.01%
+                    - generic [ref=f2e1683]: $2.6K
+                    - generic [ref=f2e1686]: 45.96%
+                    - generic [ref=f2e1689]: $33.2K
+                    - generic [ref=f2e1692]: $2.4M
+                - link "5 USDG/USDC v4 90% $2.0K 0% - -" [ref=f2e1695] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0xb2183e8c75e0586b5ffb1ef7b3fd1fec8b4a1b38887d9f103c44eaab334e279e
+                  - generic [ref=f2e1696]:
+                    - generic [ref=f2e1699]: "5"
+                    - generic [ref=f2e1702]:
+                      - generic [ref=f2e1703]:
+                        - img [ref=f2e1707]
+                        - img [ref=f2e1711]
+                      - generic [ref=f2e1716]: USDG/USDC
+                    - generic [ref=f2e1719]: v4
+                    - generic [ref=f2e1722]: 90%
+                    - generic [ref=f2e1725]: $2.0K
+                    - generic [ref=f2e1728]: 0%
+                    - generic [ref=f2e1731]: "-"
+                    - generic [ref=f2e1734]: "-"
+                - link "6 USDG/USDC v4 3.1% $1.0K 0% - $0.25" [ref=f2e1737] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0xe8a0130a096e1d5b69f9e5c3e220ebd32bade82fcf9521936405465b826b57cb
+                  - generic [ref=f2e1738]:
+                    - generic [ref=f2e1741]: "6"
+                    - generic [ref=f2e1744]:
+                      - generic [ref=f2e1745]:
+                        - img [ref=f2e1749]
+                        - img [ref=f2e1753]
+                      - generic [ref=f2e1758]: USDG/USDC
+                    - generic [ref=f2e1761]: v4
+                    - generic [ref=f2e1764]: 3.1%
+                    - generic [ref=f2e1767]: $1.0K
+                    - generic [ref=f2e1770]: 0%
+                    - generic [ref=f2e1773]: "-"
+                    - generic [ref=f2e1776]: $0.25
+                - link "7 USDG/USDC v4 4% $688.59 0% - -" [ref=f2e1779] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0xf7ce56c08ce621dab0c0ef11579f1a370f1b4105ad4c921572218726f2fa17bb
+                  - generic [ref=f2e1780]:
+                    - generic [ref=f2e1783]: "7"
+                    - generic [ref=f2e1786]:
+                      - generic [ref=f2e1787]:
+                        - img [ref=f2e1791]
+                        - img [ref=f2e1795]
+                      - generic [ref=f2e1800]: USDG/USDC
+                    - generic [ref=f2e1803]: v4
+                    - generic [ref=f2e1806]: 4%
+                    - generic [ref=f2e1809]: $688.59
+                    - generic [ref=f2e1812]: 0%
+                    - generic [ref=f2e1815]: "-"
+                    - generic [ref=f2e1818]: "-"
+                - link "8 USDG/USDC v4 5.5% $370.44 0% - -" [ref=f2e1821] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x34605bb5f18e460ad4a201556f4a6d5587629ba4e79f310afdcfa492ab3a2c73
+                  - generic [ref=f2e1822]:
+                    - generic [ref=f2e1825]: "8"
+                    - generic [ref=f2e1828]:
+                      - generic [ref=f2e1829]:
+                        - img [ref=f2e1833]
+                        - img [ref=f2e1837]
+                      - generic [ref=f2e1842]: USDG/USDC
+                    - generic [ref=f2e1845]: v4
+                    - generic [ref=f2e1848]: 5.5%
+                    - generic [ref=f2e1851]: $370.44
+                    - generic [ref=f2e1854]: 0%
+                    - generic [ref=f2e1857]: "-"
+                    - generic [ref=f2e1860]: "-"
+                - link "9 USDG/ETH v4 80% $289.06 0% - $0.01" [ref=f2e1863] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x298267f27198e024bb6b63ef125306a61fdb65f09851705b7ba39cc8b73ea264
+                  - generic [ref=f2e1864]:
+                    - generic [ref=f2e1867]: "9"
+                    - generic [ref=f2e1870]:
+                      - generic [ref=f2e1871]:
+                        - img [ref=f2e1875]
+                        - img [ref=f2e1879]
+                      - generic [ref=f2e1884]: USDG/ETH
+                    - generic [ref=f2e1887]: v4
+                    - generic [ref=f2e1890]: 80%
+                    - generic [ref=f2e1893]: $289.06
+                    - generic [ref=f2e1896]: 0%
+                    - generic [ref=f2e1899]: "-"
+                    - generic [ref=f2e1902]: $0.01
+                - link "10 USDG/ETH v4 79% $184.79 0% - <$0.01" [ref=f2e1905] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x21629287d15c59d08563232b9ec2db2d467a489a9ddc0a8f574a3a98cea39f1f
+                  - generic [ref=f2e1906]:
+                    - generic [ref=f2e1909]: "10"
+                    - generic [ref=f2e1912]:
+                      - generic [ref=f2e1913]:
+                        - img [ref=f2e1917]
+                        - img [ref=f2e1921]
+                      - generic [ref=f2e1926]: USDG/ETH
+                    - generic [ref=f2e1929]: v4
+                    - generic [ref=f2e1932]: 79%
+                    - generic [ref=f2e1935]: $184.79
+                    - generic [ref=f2e1938]: 0%
+                    - generic [ref=f2e1941]: "-"
+                    - generic [ref=f2e1944]: <$0.01
+                - link "11 USDG/USDC v4 5% $112.49 0% - -" [ref=f2e1947] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x340c1e0976654453196a0de4c1c1b3a892c82b3aed06056db43a25df8d44ab2e
+                  - generic [ref=f2e1948]:
+                    - generic [ref=f2e1951]: "11"
+                    - generic [ref=f2e1954]:
+                      - generic [ref=f2e1955]:
+                        - img [ref=f2e1959]
+                        - img [ref=f2e1963]
+                      - generic [ref=f2e1968]: USDG/USDC
+                    - generic [ref=f2e1971]: v4
+                    - generic [ref=f2e1974]: 5%
+                    - generic [ref=f2e1977]: $112.49
+                    - generic [ref=f2e1980]: 0%
+                    - generic [ref=f2e1983]: "-"
+                    - generic [ref=f2e1986]: "-"
+                - link "12 USDG/USDC v4 6% $72.15 0% - -" [ref=f2e1989] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0xf96d82a9f379d02307865f47110c762ad27cff56c77783b9f07396b1b0a099de
+                  - generic [ref=f2e1990]:
+                    - generic [ref=f2e1993]: "12"
+                    - generic [ref=f2e1996]:
+                      - generic [ref=f2e1997]:
+                        - img [ref=f2e2001]
+                        - img [ref=f2e2005]
+                      - generic [ref=f2e2010]: USDG/USDC
+                    - generic [ref=f2e2013]: v4
+                    - generic [ref=f2e2016]: 6%
+                    - generic [ref=f2e2019]: $72.15
+                    - generic [ref=f2e2022]: 0%
+                    - generic [ref=f2e2025]: "-"
+                    - generic [ref=f2e2028]: "-"
+                - link "13 USDG/USDC v4 3.09% $0.81 0% - -" [ref=f2e2031] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x083633affb08d3b9976a7f9a59c3c158e49bbe5e84ac88f067cbdf7e2f349c40
+                  - generic [ref=f2e2032]:
+                    - generic [ref=f2e2035]: "13"
+                    - generic [ref=f2e2038]:
+                      - generic [ref=f2e2039]:
+                        - img [ref=f2e2043]
+                        - img [ref=f2e2047]
+                      - generic [ref=f2e2052]: USDG/USDC
+                    - generic [ref=f2e2055]: v4
+                    - generic [ref=f2e2058]: 3.09%
+                    - generic [ref=f2e2061]: $0.81
+                    - generic [ref=f2e2064]: 0%
+                    - generic [ref=f2e2067]: "-"
+                    - generic [ref=f2e2070]: "-"
+                - link "14 USDG/ETH v4 90% $0.02 0% - -" [ref=f2e2073] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x31588bbf173ebb6c6150b105e17752082c60714e73e69923d66d64ce78a56d41
+                  - generic [ref=f2e2074]:
+                    - generic [ref=f2e2077]: "14"
+                    - generic [ref=f2e2080]:
+                      - generic [ref=f2e2081]:
+                        - img [ref=f2e2085]
+                        - img [ref=f2e2089]
+                      - generic [ref=f2e2094]: USDG/ETH
+                    - generic [ref=f2e2097]: v4
+                    - generic [ref=f2e2100]: 90%
+                    - generic [ref=f2e2103]: $0.02
+                    - generic [ref=f2e2106]: 0%
+                    - generic [ref=f2e2109]: "-"
+                    - generic [ref=f2e2112]: "-"
+                - link "15 USDG/USDT v3 0.05% <$0.01 0% - -" [ref=f2e2115] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x01d6EcE9a64595953c24a002Af615A922D578e69
+                  - generic [ref=f2e2116]:
+                    - generic [ref=f2e2119]: "15"
+                    - generic [ref=f2e2122]:
+                      - generic [ref=f2e2123]:
+                        - img [ref=f2e2127]
+                        - img [ref=f2e2131]
+                      - generic [ref=f2e2136]: USDG/USDT
+                    - generic [ref=f2e2139]: v3
+                    - generic [ref=f2e2142]: 0.05%
+                    - generic [ref=f2e2145]: <$0.01
+                    - generic [ref=f2e2148]: 0%
+                    - generic [ref=f2e2151]: "-"
+                    - generic [ref=f2e2154]: "-"
+                - link "16 USDG/USDC v4 3% <$0.01 0% - -" [ref=f2e2157] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x803d3f79504e030a8cf9f545230c7090727a6c44edce03f8a470e9ad90a3b82c
+                  - generic [ref=f2e2158]:
+                    - generic [ref=f2e2161]: "16"
+                    - generic [ref=f2e2164]:
+                      - generic [ref=f2e2165]:
+                        - img [ref=f2e2169]
+                        - img [ref=f2e2173]
+                      - generic [ref=f2e2178]: USDG/USDC
+                    - generic [ref=f2e2181]: v4
+                    - generic [ref=f2e2184]: 3%
+                    - generic [ref=f2e2187]: <$0.01
+                    - generic [ref=f2e2190]: 0%
+                    - generic [ref=f2e2193]: "-"
+                    - generic [ref=f2e2196]: "-"
+                - link "17 USDG/USDC v4 7% <$0.01 0% - -" [ref=f2e2199] [cursor=pointer]:
+                  - /url: /explore/pools/ethereum/0x9c2c54c4cdd66bc7e2d065456f58f5605cbfe48e29735ff4cf0d864fb66947ad
+                  - generic [ref=f2e2200]:
+                    - generic [ref=f2e2203]: "17"
+                    - generic [ref=f2e2206]:
+                      - generic [ref=f2e2207]:
+                        - img [ref=f2e2211]
+                        - img [ref=f2e2215]
+                      - generic [ref=f2e2220]: USDG/USDC
+                    - generic [ref=f2e2223]: v4
+                    - generic [ref=f2e2226]: 7%
+                    - generic [ref=f2e2229]: <$0.01
+                    - generic [ref=f2e2232]: 0%
+                    - generic [ref=f2e2235]: "-"
+                    - generic [ref=f2e2238]: "-"
+        - generic [ref=f2e1359]:
+          - generic [ref=f2e1360]:
+            - tablist [ref=f2e1362]:
+              - button "Swap" [ref=f2e1365] [cursor=pointer]:
+                - generic [ref=f2e1366]: Swap
+              - button "Limit" [ref=f2e1369] [cursor=pointer]:
+                - generic [ref=f2e1370]: Limit
+              - button "Buy" [ref=f2e1373] [cursor=pointer]:
+                - generic [ref=f2e1374]: Buy
+              - button "Sell" [ref=f2e1377] [cursor=pointer]:
+                - generic [ref=f2e1378]: Sell
+            - button [ref=f2e1385] [cursor=pointer]:
+              - img [ref=f2e1389]
+          - generic [ref=f2e1395]:
+            - generic [ref=f2e1396]:
+              - button "Sell ETH $0" [ref=f2e1398] [cursor=pointer]:
+                - generic [ref=f2e1399]:
+                  - generic [ref=f2e1401]: Sell
+                  - generic [ref=f2e1402]:
+                    - textbox "0" [ref=f2e1406]
+                    - button "ETH" [ref=f2e1408]:
+                      - generic [ref=f2e1409]:
+                        - img [ref=f2e1413]
+                        - generic [ref=f2e1418]: ETH
+                        - img [ref=f2e1420]
+                  - button "$0" [ref=f2e1424]:
+                    - generic [ref=f2e1426]: $0
+              - button [ref=f2e1428] [cursor=pointer]:
+                - img [ref=f2e1429]
+              - button "Buy USDG $0" [ref=f2e1432] [cursor=pointer]:
+                - generic [ref=f2e1433]:
+                  - generic [ref=f2e1435]: Buy
+                  - generic [ref=f2e1436]:
+                    - textbox "0" [ref=f2e1440]
+                    - button "USDG" [ref=f2e1442]:
+                      - generic [ref=f2e1443]:
+                        - img [ref=f2e1447]
+                        - generic [ref=f2e1452]: USDG
+                        - img [ref=f2e1454]
+                  - button "$0" [ref=f2e1458]:
+                    - generic [ref=f2e1460]: $0
+            - button "Get started" [ref=f2e1469] [cursor=pointer]:
+              - generic [ref=f2e1470]: Get started
+  - generic [ref=f2e59]:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: Connect a wallet
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Uniswap Mobile
+                        - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Other wallets
+                        - img
+                  - generic:
+                    - generic: or
+                  - generic:
+                    - generic:
+                      - button "Create account":
+                        - generic: Create account
+                    - button "Log in":
+                      - generic:
+                        - img
+                        - generic: Log in
+                  - generic:
+                    - generic:
+                      - generic:
+                        - text: By connecting a wallet, you agree to Uniswap Labs’
+                        - link "Terms of Service":
+                          - /url: https://uniswap.org/terms-of-service
+                        - text: and consent to its
+                        - link "Privacy Policy":
+                          - /url: https://uniswap.org/privacy-policy
+                        - text: .

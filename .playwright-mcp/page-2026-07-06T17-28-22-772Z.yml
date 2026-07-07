@@ -1,0 +1,240 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - navigation [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - generic [ref=e11] [cursor=pointer]:
+            - link [ref=e12]:
+              - /url: /?intro=true
+              - img [ref=e15]
+            - img [ref=e26]
+          - link "Trade" [ref=e30] [cursor=pointer]:
+            - /url: /swap
+          - link "Explore" [ref=e33] [cursor=pointer]:
+            - /url: /explore
+          - link "Pool" [ref=e36] [cursor=pointer]:
+            - /url: /positions
+          - link "Portfolio" [ref=e39] [cursor=pointer]:
+            - /url: /portfolio
+        - generic [ref=e40]:
+          - button "Search tokens, pools, and wallets" [ref=e41] [cursor=pointer]:
+            - img [ref=e45]
+          - button "Navigation button" [ref=e49] [cursor=pointer]:
+            - img [ref=e52]
+          - button "Get started" [ref=e61] [cursor=pointer]:
+            - generic [ref=e58]: Get started
+    - generic [ref=e62]:
+      - region "Notifications alt+T"
+      - button [ref=e66] [cursor=pointer]:
+        - img [ref=e67]
+      - generic "breadcrumb-nav" [ref=e69]:
+        - link "Pools" [ref=e70] [cursor=pointer]:
+          - /url: /explore/pools
+          - generic [ref=e71]:
+            - text: Pools
+            - img [ref=e73]
+        - heading "USDG / USDC" [level=1] [ref=e76]
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e83]:
+            - img [ref=e87]
+            - img [ref=e91]
+          - generic [ref=e96]:
+            - generic [ref=e98]:
+              - generic [ref=e99]:
+                - link "USDG /" [ref=e100] [cursor=pointer]:
+                  - /url: /explore/tokens/ethereum/0xe343167631d89b6ffc58b88d6b7fb0228795491d
+                  - heading "USDG /" [level=3] [ref=e101]
+                - link "USDC" [ref=e102] [cursor=pointer]:
+                  - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                  - heading "USDC" [level=3] [ref=e103]
+              - generic [ref=e104]:
+                - generic [ref=e107]: v4
+                - generic [ref=e110] [cursor=pointer]:
+                  - img [ref=e111]
+                  - button "0xC256...e888" [ref=e113]:
+                    - generic [ref=e115]: 0xC256...e888
+                - generic [ref=e119]: 0.01%
+              - button [ref=e120] [cursor=pointer]:
+                - img [ref=e121]
+            - button "0x1111...22e8" [ref=e124] [cursor=pointer]:
+              - generic [ref=e126]: 0x1111...22e8
+        - generic [ref=e129]:
+          - generic [ref=e131]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "USDG 0xe343...491D":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: USDG
+                        - generic: 0xe343...491D
+                      - img
+                  - button "USDC 0xA0b8...eB48":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: USDC
+                        - generic: 0xA0b8...eB48
+                      - img
+            - img [ref=e136] [cursor=pointer]
+          - generic [ref=e139]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Copy link":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Copy link
+                  - button "Share to Twitter":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Share to Twitter
+            - img [ref=e144] [cursor=pointer]
+          - generic [ref=e147]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Report data issue":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Report data issue
+            - img [ref=e152] [cursor=pointer]
+      - generic [ref=e156]:
+        - generic [ref=e157]:
+          - generic [ref=e159]:
+            - generic [ref=e161]:
+              - generic [ref=e162] [cursor=pointer]: Price
+              - generic [ref=e163] [cursor=pointer]: Volume
+              - generic [ref=e164] [cursor=pointer]: Liquidity
+              - generic [ref=e165] [cursor=pointer]: Depth
+            - generic [ref=e166]:
+              - table [ref=e169]:
+                - row [ref=e170]:
+                  - cell
+                  - cell [ref=e171]
+                  - cell [ref=e175]
+                - row [ref=e179]:
+                  - cell
+                  - cell [ref=e180]
+                  - cell [ref=e184]
+              - generic:
+                - generic:
+                  - heading "-" [level=3]
+                  - generic:
+                    - generic: Past day
+            - tablist [ref=e190]:
+              - button "1H" [ref=e193] [cursor=pointer]:
+                - generic [ref=e194]: 1H
+              - button "1D" [ref=e197] [cursor=pointer]:
+                - generic [ref=e198]: 1D
+              - button "1W" [ref=e201] [cursor=pointer]:
+                - generic [ref=e202]: 1W
+              - button "1M" [ref=e205] [cursor=pointer]:
+                - generic [ref=e206]: 1M
+              - button "1Y" [ref=e209] [cursor=pointer]:
+                - generic [ref=e210]: 1Y
+              - button "All" [ref=e213] [cursor=pointer]:
+                - generic [ref=e214]: All
+          - generic [ref=e217]:
+            - heading "Transactions" [level=3] [ref=e218]
+            - generic [ref=e220]:
+              - generic [ref=e222]:
+                - generic [ref=e226]: Time
+                - generic [ref=e229] [cursor=pointer]:
+                  - img [ref=e230]
+                  - generic [ref=e232]: Type
+                - generic [ref=e235]: USD
+                - generic [ref=e238]: USDG
+                - generic [ref=e241]: USDC
+                - generic [ref=e244]: Wallet
+              - generic [ref=e247]: No data found
+              - generic [ref=e249]:
+                - img [ref=e251]
+                - text: Loading
+        - generic [ref=e254]:
+          - generic [ref=e258]:
+            - button "Swap" [ref=e259] [cursor=pointer]:
+              - img [ref=e260]
+              - generic [ref=e262]: Swap
+            - button "Add liquidity" [ref=e263] [cursor=pointer]:
+              - img [ref=e264]
+              - generic [ref=e266]: Add liquidity
+          - generic [ref=e291]:
+            - generic [ref=e292]: Links
+            - generic [ref=e293]:
+              - generic [ref=e294]:
+                - generic [ref=e295] [cursor=pointer]:
+                  - img [ref=e298]
+                  - generic [ref=e305]:
+                    - text: USDC
+                    - img [ref=e307]
+                - generic [ref=e309]:
+                  - button "0xA0b8...eB48" [ref=e310] [cursor=pointer]:
+                    - generic [ref=e311]: 0xA0b8...eB48
+                    - img [ref=e312]
+                  - link [ref=e314] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                    - img [ref=e316]
+              - generic [ref=e319]:
+                - generic [ref=e320] [cursor=pointer]:
+                  - img [ref=e323]
+                  - generic [ref=e330]:
+                    - text: USDG
+                    - img [ref=e332]
+                - generic [ref=e334]:
+                  - button "0xe343...491D" [ref=e335] [cursor=pointer]:
+                    - generic [ref=e336]: 0xe343...491D
+                    - img [ref=e337]
+                  - link [ref=e339] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/0xe343167631d89b6ffc58b88d6b7fb0228795491d
+                    - img [ref=e341]
+  - generic [ref=e59]:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: Connect a wallet
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Uniswap Mobile
+                        - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Other wallets
+                        - img
+                  - generic:
+                    - generic: or
+                  - generic:
+                    - generic:
+                      - button "Create account":
+                        - generic: Create account
+                    - button "Log in":
+                      - generic:
+                        - img
+                        - generic: Log in
+                  - generic:
+                    - generic:
+                      - generic:
+                        - text: By connecting a wallet, you agree to Uniswap Labs’
+                        - link "Terms of Service":
+                          - /url: https://uniswap.org/terms-of-service
+                        - text: and consent to its
+                        - link "Privacy Policy":
+                          - /url: https://uniswap.org/privacy-policy
+                        - text: .

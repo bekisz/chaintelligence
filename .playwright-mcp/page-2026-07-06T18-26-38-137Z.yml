@@ -1,0 +1,118 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e4]:
+    - navigation [ref=f6e6]:
+      - generic [ref=f6e7]:
+        - generic [ref=f6e8]:
+          - generic [ref=f6e11] [cursor=pointer]:
+            - link [ref=f6e12]:
+              - /url: /?intro=true
+              - img [ref=f6e15]
+            - img [ref=f6e26]
+          - link "Trade" [ref=f6e30] [cursor=pointer]:
+            - /url: /swap
+          - link "Explore" [ref=f6e33] [cursor=pointer]:
+            - /url: /explore
+          - link "Pool" [ref=f6e36] [cursor=pointer]:
+            - /url: /positions
+          - link "Portfolio" [ref=f6e39] [cursor=pointer]:
+            - /url: /portfolio
+        - generic [ref=f6e40]:
+          - generic:
+            - heading [level=2]
+          - button "Search tokens, pools, and wallets" [ref=f6e41] [cursor=pointer]:
+            - img [ref=f6e45]
+          - button "Navigation button" [ref=f6e49] [cursor=pointer]:
+            - img [ref=f6e52]
+          - button "Get started" [ref=f6e57] [cursor=pointer]:
+            - generic [ref=f6e58]: Get started
+    - generic [ref=f6e59]:
+      - generic "breadcrumb-nav" [ref=f6e60]:
+        - link "Pools" [ref=f6e61] [cursor=pointer]:
+          - /url: /explore/pools
+          - generic [ref=f6e62]:
+            - text: Pools
+            - img [ref=f6e64]
+      - generic [ref=f6e86]:
+        - generic [ref=f6e87]:
+          - generic [ref=f6e89]:
+            - generic [ref=f6e91]:
+              - generic [ref=f6e92] [cursor=pointer]: Price
+              - generic [ref=f6e93] [cursor=pointer]: Volume
+              - generic [ref=f6e94] [cursor=pointer]: Liquidity
+              - generic [ref=f6e95] [cursor=pointer]: Depth
+            - img [ref=f6e97]
+            - tablist [ref=f6e118]:
+              - button "1H" [ref=f6e121] [cursor=pointer]:
+                - generic [ref=f6e122]: 1H
+              - button "1D" [ref=f6e125] [cursor=pointer]:
+                - generic [ref=f6e126]: 1D
+              - button "1W" [ref=f6e129] [cursor=pointer]:
+                - generic [ref=f6e130]: 1W
+              - button "1M" [ref=f6e133] [cursor=pointer]:
+                - generic [ref=f6e134]: 1M
+              - button "1Y" [ref=f6e137] [cursor=pointer]:
+                - generic [ref=f6e138]: 1Y
+              - button "All" [ref=f6e141] [cursor=pointer]:
+                - generic [ref=f6e142]: All
+          - generic [ref=f6e144]:
+            - heading "Transactions" [level=3] [ref=f6e145]
+            - generic [ref=f6e147]:
+              - generic [ref=f6e149]:
+                - generic [ref=f6e153]: Time
+                - generic [ref=f6e156] [cursor=pointer]:
+                  - img [ref=f6e157]
+                  - generic [ref=f6e159]: Type
+                - generic [ref=f6e162]: USD
+                - generic [ref=f6e169]: Wallet
+              - generic [ref=f6e172]: No data found
+              - generic [ref=f6e174]:
+                - img [ref=f6e176]
+                - text: Loading
+        - generic [ref=f6e211]: Links
+  - generic [ref=f6e228]:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=2]
+                - generic:
+                  - generic:
+                    - generic: Connect a wallet
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Uniswap Mobile
+                        - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Other wallets
+                        - img
+                  - generic:
+                    - generic: or
+                  - generic:
+                    - generic:
+                      - button "Create account":
+                        - generic: Create account
+                    - button "Log in":
+                      - generic:
+                        - img
+                        - generic: Log in
+                  - generic:
+                    - generic:
+                      - generic:
+                        - text: By connecting a wallet, you agree to Uniswap Labs’
+                        - link "Terms of Service":
+                          - /url: https://uniswap.org/terms-of-service
+                        - text: and consent to its
+                        - link "Privacy Policy":
+                          - /url: https://uniswap.org/privacy-policy
+                        - text: .

@@ -1,0 +1,81 @@
+- generic [active] [ref=f2e1]:
+  - navigation [ref=f2e6]:
+    - generic [ref=f2e7]:
+      - generic [ref=f2e8]:
+        - generic [ref=f2e11] [cursor=pointer]:
+          - link [ref=f2e12]:
+            - /url: /?intro=true
+            - img [ref=f2e15]
+          - img [ref=f2e26]
+        - link "Trade" [ref=f2e30] [cursor=pointer]:
+          - /url: /swap
+        - link "Explore" [ref=f2e33] [cursor=pointer]:
+          - /url: /explore
+        - link "Pool" [ref=f2e36] [cursor=pointer]:
+          - /url: /positions
+        - link "Portfolio" [ref=f2e39] [cursor=pointer]:
+          - /url: /portfolio
+      - generic [ref=f2e40]:
+        - generic:
+          - heading [level=2]
+        - button "Search tokens, pools, and wallets" [ref=f2e41] [cursor=pointer]:
+          - img [ref=f2e45]
+        - button "Navigation button" [ref=f2e49] [cursor=pointer]:
+          - img [ref=f2e52]
+        - button "Connect" [ref=f2e57] [cursor=pointer]:
+          - generic [ref=f2e58]: Connect
+  - generic [ref=f2e59]:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=2]
+                - generic:
+                  - generic:
+                    - generic: Connect a wallet
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic: Get Uniswap Wallet
+                              - generic: Available on iOS, Android, and Chrome
+                      - generic:
+                        - generic:
+                          - img
+                        - generic:
+                          - generic:
+                            - generic: Uniswap Mobile
+                            - generic: Scan QR code to connect
+                  - generic:
+                    - generic:
+                      - generic: Other wallets
+                      - img
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img "WalletConnect"
+                          - generic: WalletConnect
+                      - generic:
+                        - generic:
+                          - img "Coinbase Wallet"
+                          - generic: Coinbase Wallet
+                      - generic:
+                        - generic:
+                          - generic: Binance Wallet
+                  - generic:
+                    - generic:
+                      - generic:
+                        - text: By connecting a wallet, you agree to Uniswap Labs’
+                        - link "Terms of Service":
+                          - /url: https://uniswap.org/terms-of-service
+                        - text: and consent to its
+                        - link "Privacy Policy":
+                          - /url: https://uniswap.org/privacy-policy
+                        - text: .

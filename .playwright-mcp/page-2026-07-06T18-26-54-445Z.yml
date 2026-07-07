@@ -1,0 +1,521 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e4]:
+    - navigation [ref=f6e6]:
+      - generic [ref=f6e7]:
+        - generic [ref=f6e8]:
+          - generic [ref=f6e11] [cursor=pointer]:
+            - link [ref=f6e12]:
+              - /url: /?intro=true
+              - img [ref=f6e15]
+            - img [ref=f6e26]
+          - link "Trade" [ref=f6e30] [cursor=pointer]:
+            - /url: /swap
+          - link "Explore" [ref=f6e33] [cursor=pointer]:
+            - /url: /explore
+          - link "Pool" [ref=f6e36] [cursor=pointer]:
+            - /url: /positions
+          - link "Portfolio" [ref=f6e39] [cursor=pointer]:
+            - /url: /portfolio
+        - generic [ref=f6e40]:
+          - button "Search tokens, pools, and wallets" [ref=f6e41] [cursor=pointer]:
+            - img [ref=f6e45]
+          - button "Navigation button" [ref=f6e49] [cursor=pointer]:
+            - img [ref=f6e52]
+          - button "Get started" [ref=f6e57] [cursor=pointer]:
+            - generic [ref=f6e58]: Get started
+    - generic [ref=f6e59]:
+      - region "Notifications alt+T"
+      - button [ref=f6e233] [cursor=pointer]:
+        - img [ref=f6e234]
+      - generic "breadcrumb-nav" [ref=f6e60]:
+        - link "Pools" [ref=f6e61] [cursor=pointer]:
+          - /url: /explore/pools
+          - generic [ref=f6e62]:
+            - text: Pools
+            - img [ref=f6e64]
+        - heading "USDG / USDC" [level=1] [ref=f6e237]
+      - generic [ref=f6e238]:
+        - generic [ref=f6e239]:
+          - generic [ref=f6e242]:
+            - img [ref=f6e246]
+            - img [ref=f6e250]
+          - generic [ref=f6e255]:
+            - generic [ref=f6e257]:
+              - generic [ref=f6e258]:
+                - link "USDG /" [ref=f6e259] [cursor=pointer]:
+                  - /url: /explore/tokens/ethereum/0xe343167631d89b6ffc58b88d6b7fb0228795491d
+                  - heading "USDG /" [level=3] [ref=f6e260]
+                - link "USDC" [ref=f6e261] [cursor=pointer]:
+                  - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                  - heading "USDC" [level=3] [ref=f6e262]
+              - generic [ref=f6e263]:
+                - generic [ref=f6e266]: v4
+                - generic [ref=f6e269]: 0.01%
+              - button [ref=f6e270] [cursor=pointer]:
+                - img [ref=f6e271]
+            - button "0x0d3d...fd02" [ref=f6e274] [cursor=pointer]:
+              - generic [ref=f6e276]: 0x0d3d...fd02
+        - generic [ref=f6e279]:
+          - generic [ref=f6e281]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "USDG 0xe343...491D":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: USDG
+                        - generic: 0xe343...491D
+                      - img
+                  - button "USDC 0xA0b8...eB48":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: USDC
+                        - generic: 0xA0b8...eB48
+                      - img
+            - img [ref=f6e286] [cursor=pointer]
+          - generic [ref=f6e289]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Copy link":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Copy link
+                  - button "Share to Twitter":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Share to Twitter
+            - img [ref=f6e294] [cursor=pointer]
+          - generic [ref=f6e297]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Report data issue":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Report data issue
+            - img [ref=f6e302] [cursor=pointer]
+      - generic [ref=f6e86]:
+        - generic [ref=f6e87]:
+          - generic [ref=f6e89]:
+            - generic [ref=f6e91]:
+              - generic [ref=f6e92] [cursor=pointer]: Price
+              - generic [ref=f6e93] [cursor=pointer]: Volume
+              - generic [ref=f6e94] [cursor=pointer]: Liquidity
+              - generic [ref=f6e95] [cursor=pointer]: Depth
+            - generic [ref=f6e306]:
+              - table [ref=f6e309]:
+                - row [ref=f6e310]:
+                  - cell
+                  - cell [ref=f6e311]
+                  - cell [ref=f6e315]
+                - row [ref=f6e319]:
+                  - cell
+                  - cell [ref=f6e320]
+                  - cell [ref=f6e324]
+              - generic:
+                - generic:
+                  - heading "$1.3M" [level=3]
+                  - generic:
+                    - generic: Past day
+            - tablist [ref=f6e118]:
+              - button "1H" [ref=f6e121] [cursor=pointer]:
+                - generic [ref=f6e122]: 1H
+              - button "1D" [ref=f6e125] [cursor=pointer]:
+                - generic [ref=f6e126]: 1D
+              - button "1W" [ref=f6e129] [cursor=pointer]:
+                - generic [ref=f6e130]: 1W
+              - button "1M" [ref=f6e133] [cursor=pointer]:
+                - generic [ref=f6e134]: 1M
+              - button "1Y" [ref=f6e137] [cursor=pointer]:
+                - generic [ref=f6e138]: 1Y
+              - button "All" [ref=f6e141] [cursor=pointer]:
+                - generic [ref=f6e142]: All
+          - generic [ref=f6e144]:
+            - heading "Transactions" [level=3] [ref=f6e145]
+            - generic [ref=f6e147]:
+              - generic [ref=f6e149]:
+                - generic [ref=f6e330]: Time
+                - generic [ref=f6e332] [cursor=pointer]:
+                  - img [ref=f6e333]
+                  - generic [ref=f6e335]: Type
+                - generic [ref=f6e337]: USD
+                - generic [ref=f6e339]: USDG
+                - generic [ref=f6e341]: USDC
+                - generic [ref=f6e343]: Wallet
+              - generic [ref=f6e344]:
+                - generic [ref=f6e347]:
+                  - link "6m" [ref=f6e350] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xaa02f77feb4f2141a3d5cb980fd3d9cd0dab56a262656abe4023c3378bc9348a
+                    - generic [ref=f6e353]: 6m
+                  - generic [ref=f6e357]: Buy USDG
+                  - generic [ref=f6e360]: $968.61
+                  - generic [ref=f6e363]: "968.653"
+                  - generic [ref=f6e366]: "968.606"
+                  - link "0xca7d...4589" [ref=f6e369] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xca7ded7e4F4Ba8aB3B10009236Ae6d1b95094589
+                - generic [ref=f6e372]:
+                  - link "22m" [ref=f6e375] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xc965e00f5cb2c0623a2e82dc1f464bed91cbc7196acf6a4909d48614943f6d82
+                    - generic [ref=f6e378]: 22m
+                  - generic [ref=f6e382]: Buy USDG
+                  - generic [ref=f6e385]: $17.98
+                  - generic [ref=f6e388]: "17.9838"
+                  - generic [ref=f6e391]: "17.9829"
+                  - link "0xa67D...3FBb" [ref=f6e394] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xa67D7Eb4dc68fa6ce8e34Ef8CaDaF075b9893FBb
+                - generic [ref=f6e397]:
+                  - link "26m" [ref=f6e400] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xbf403df48840ef9b06ef496d5f4d816cffeb9206478320b26c15bcd56921d7d0
+                    - generic [ref=f6e403]: 26m
+                  - generic [ref=f6e407]: Buy USDG
+                  - generic [ref=f6e410]: $250.16
+                  - generic [ref=f6e413]: "250.173"
+                  - generic [ref=f6e416]: "250.16"
+                  - link "0x18DD...8e25" [ref=f6e419] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x18DD3C14e34c1BC379F7538068c59160D9F68e25
+                - generic [ref=f6e422]:
+                  - link "37m" [ref=f6e425] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x7b97666346fe1388dc840df9c67b8cc48ae7c46d15d4903b270669f37dc08e62
+                    - generic [ref=f6e428]: 37m
+                  - generic [ref=f6e432]: Buy USDG
+                  - generic [ref=f6e435]: $8.94
+                  - generic [ref=f6e438]: "8.94245"
+                  - generic [ref=f6e441]: "8.94198"
+                  - link "0x370A...12cF" [ref=f6e444] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x370A7E2d300c14D79d4A7ee07aACA46c4B3012cF
+                - generic [ref=f6e447]:
+                  - link "39m" [ref=f6e450] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xc8fb7f85992590224b38e3c812a3faff8b6fefb151956c8429f47cc8171041e1
+                    - generic [ref=f6e453]: 39m
+                  - generic [ref=f6e457]: Buy USDG
+                  - generic [ref=f6e460]: $21.98
+                  - generic [ref=f6e463]: "21.9859"
+                  - generic [ref=f6e466]: "21.9847"
+                  - link "0xca7d...4589" [ref=f6e469] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xca7ded7e4F4Ba8aB3B10009236Ae6d1b95094589
+                - generic [ref=f6e472]:
+                  - link "39m" [ref=f6e475] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xab82756bad8d1eed2c7420b89f1f632cfdcf874dc3d99872fdfa59eee8a3f85b
+                    - generic [ref=f6e478]: 39m
+                  - generic [ref=f6e482]: Buy USDG
+                  - generic [ref=f6e485]: $10.01
+                  - generic [ref=f6e488]: "10.0075"
+                  - generic [ref=f6e491]: "10.007"
+                  - link "0xca7d...4589" [ref=f6e494] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xca7ded7e4F4Ba8aB3B10009236Ae6d1b95094589
+                - generic [ref=f6e497]:
+                  - link "42m" [ref=f6e500] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x00183cd9c00ebc02488cfaa605c274f0274bf7ac15c12b7ba1c7772c41eb962c
+                    - generic [ref=f6e503]: 42m
+                  - generic [ref=f6e507]: Buy USDG
+                  - generic [ref=f6e510]: $178.85
+                  - generic [ref=f6e513]: "178.857"
+                  - generic [ref=f6e516]: "178.848"
+                  - link "0x370A...12cF" [ref=f6e519] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x370A7E2d300c14D79d4A7ee07aACA46c4B3012cF
+                - generic [ref=f6e522]:
+                  - link "43m" [ref=f6e525] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x6be35e671f406aff7b99a0350958b2284288aecd305dfc16b2fe09c43f57ad2e
+                    - generic [ref=f6e528]: 43m
+                  - generic [ref=f6e532]: Buy USDG
+                  - generic [ref=f6e535]: $178.78
+                  - generic [ref=f6e538]: "178.792"
+                  - generic [ref=f6e541]: "178.782"
+                  - link "0x18DD...8e25" [ref=f6e544] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x18DD3C14e34c1BC379F7538068c59160D9F68e25
+                - generic [ref=f6e547]:
+                  - link "46m" [ref=f6e550] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x0980019fa73932e2b02a9693e0b6fb9a97df0d31c6f6f578e4ddb38363002512
+                    - generic [ref=f6e553]: 46m
+                  - generic [ref=f6e557]: Buy USDG
+                  - generic [ref=f6e560]: $357.83
+                  - generic [ref=f6e563]: "357.845"
+                  - generic [ref=f6e566]: "357.825"
+                  - link "0x370A...12cF" [ref=f6e569] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x370A7E2d300c14D79d4A7ee07aACA46c4B3012cF
+                - generic [ref=f6e572]:
+                  - link "50m" [ref=f6e575] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x595e36549921aac463920fa344f47f7c75618e6cd930a84113faa083798c0db3
+                    - generic [ref=f6e578]: 50m
+                  - generic [ref=f6e582]: Buy USDG
+                  - generic [ref=f6e585]: $44.35
+                  - generic [ref=f6e588]: "44.3479"
+                  - generic [ref=f6e591]: "44.3454"
+                  - link "0x5b70...2BEb" [ref=f6e594] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x5b7052bb5fB2D2568BBa04bD0cfE3c93Fa1B2BEb
+                - generic [ref=f6e597]:
+                  - link "51m" [ref=f6e600] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x9cb3a61fd267e50b84dc15b0f934bf471f043245ee5e95b3fa161c187fdb7845
+                    - generic [ref=f6e603]: 51m
+                  - generic [ref=f6e607]: Buy USDG
+                  - generic [ref=f6e610]: $8.59
+                  - generic [ref=f6e613]: "8.59145"
+                  - generic [ref=f6e616]: "8.59098"
+                  - link "0xA5a5...A142" [ref=f6e619] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xA5a5491bCa93dD4C076e4906e79E7673F4A5A142
+                - generic [ref=f6e622]:
+                  - link "55m" [ref=f6e625] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x61cfdf4e04a4f428c83f1e81bce933d3fb5fdaafbd8ea2be583b7faa31baf4ec
+                    - generic [ref=f6e628]: 55m
+                  - generic [ref=f6e632]: Buy USDG
+                  - generic [ref=f6e635]: $135.36
+                  - generic [ref=f6e638]: "135.372"
+                  - generic [ref=f6e641]: "135.364"
+                  - link "0x370A...12cF" [ref=f6e644] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x370A7E2d300c14D79d4A7ee07aACA46c4B3012cF
+                - generic [ref=f6e647]:
+                  - link "1h" [ref=f6e650] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x1c7d1e940e022abfa07385c149425e790dde647688b0ded12f4a34c31d82539c
+                    - generic [ref=f6e653]: 1h
+                  - generic [ref=f6e657]: Buy USDG
+                  - generic [ref=f6e660]: $89.69
+                  - generic [ref=f6e663]: "89.6914"
+                  - generic [ref=f6e666]: "89.6864"
+                  - link "0x331D...2466" [ref=f6e669] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x331D9a049D496385998067ABF6CBb6371C8D2466
+                - generic [ref=f6e672]:
+                  - link "1h" [ref=f6e675] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x96787412a1c55971ef86f937af27bb1f99608318a82b7da9729edeb634d7cf44
+                    - generic [ref=f6e678]: 1h
+                  - generic [ref=f6e682]: Buy USDG
+                  - generic [ref=f6e685]: $8.15
+                  - generic [ref=f6e688]: "8.14892"
+                  - generic [ref=f6e691]: "8.14847"
+                  - link "0xadA5...F7CB" [ref=f6e694] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xadA5bb90d0de0bD1b6F3938708F49295A8D1F7CB
+                - generic [ref=f6e697]:
+                  - link "1h" [ref=f6e700] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x580b29bb5f9127ea005d2485c7c6251432b7f2567bf37b98a6df2bd46112a702
+                    - generic [ref=f6e703]: 1h
+                  - generic [ref=f6e707]: Buy USDG
+                  - generic [ref=f6e710]: $89.66
+                  - generic [ref=f6e713]: "89.6636"
+                  - generic [ref=f6e716]: "89.6586"
+                  - link "0xca7d...4589" [ref=f6e719] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xca7ded7e4F4Ba8aB3B10009236Ae6d1b95094589
+                - generic [ref=f6e722]:
+                  - link "1h" [ref=f6e725] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x3e934f881d7df6ee3d1725d70adb9a7c1a2e6770835029aaf0ac1cfcab1081af
+                    - generic [ref=f6e728]: 1h
+                  - generic [ref=f6e732]: Buy USDG
+                  - generic [ref=f6e735]: $35.83
+                  - generic [ref=f6e738]: "35.8342"
+                  - generic [ref=f6e741]: "35.8321"
+                  - link "0xA5a5...A142" [ref=f6e744] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xA5a5491bCa93dD4C076e4906e79E7673F4A5A142
+                - generic [ref=f6e747]:
+                  - link "1h" [ref=f6e750] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x59962904660f60e2b1f0bf0bf72a34af64e3d9a065cea4f68f0c527bae053787
+                    - generic [ref=f6e753]: 1h
+                  - generic [ref=f6e757]: Buy USDG
+                  - generic [ref=f6e760]: $71.68
+                  - generic [ref=f6e763]: "71.6844"
+                  - generic [ref=f6e766]: "71.6803"
+                  - link "0xA5a5...A142" [ref=f6e769] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xA5a5491bCa93dD4C076e4906e79E7673F4A5A142
+                - generic [ref=f6e772]:
+                  - link "1h" [ref=f6e775] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x143cb102baf47c4bb924a48ab305d3dd9a6f7a3525801a480cd88cbde0074551
+                    - generic [ref=f6e778]: 1h
+                  - generic [ref=f6e782]: Buy USDG
+                  - generic [ref=f6e785]: $4.80
+                  - generic [ref=f6e788]: "4.8037"
+                  - generic [ref=f6e791]: "4.80343"
+                  - link "0xA5a5...A142" [ref=f6e794] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xA5a5491bCa93dD4C076e4906e79E7673F4A5A142
+                - generic [ref=f6e797]:
+                  - link "1h" [ref=f6e800] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x2562421e6387486e57ea91bb33c5a8683c2f2a7fef9af68c9033fe1a066c5290
+                    - generic [ref=f6e803]: 1h
+                  - generic [ref=f6e807]: Buy USDG
+                  - generic [ref=f6e810]: $35.83
+                  - generic [ref=f6e813]: "35.8312"
+                  - generic [ref=f6e816]: "35.8292"
+                  - link "0xa67D...3FBb" [ref=f6e819] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xa67D7Eb4dc68fa6ce8e34Ef8CaDaF075b9893FBb
+                - generic [ref=f6e822]:
+                  - link "1h" [ref=f6e825] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x871c0d675b80a4dba5a9f7badb259267c4b81dd25923ac2f28a805398ef21a24
+                    - generic [ref=f6e828]: 1h
+                  - generic [ref=f6e832]: Buy USDG
+                  - generic [ref=f6e835]: $35.92
+                  - generic [ref=f6e838]: "35.9189"
+                  - generic [ref=f6e841]: "35.9169"
+                  - link "0xca7d...4589" [ref=f6e844] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xca7ded7e4F4Ba8aB3B10009236Ae6d1b95094589
+                - generic [ref=f6e847]:
+                  - link "1h" [ref=f6e850] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x13164438df1c38dd9226c3c05d5e890e77e0ef33b839a9cb6eb07d204c5b3f2a
+                    - generic [ref=f6e853]: 1h
+                  - generic [ref=f6e857]: Buy USDG
+                  - generic [ref=f6e860]: $8.97
+                  - generic [ref=f6e863]: "8.97476"
+                  - generic [ref=f6e866]: "8.97425"
+                  - link "0xca7d...4589" [ref=f6e869] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xca7ded7e4F4Ba8aB3B10009236Ae6d1b95094589
+                - generic [ref=f6e872]:
+                  - link "1h" [ref=f6e875] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xb4932dd468e184a9e4f008cf6e9d8153f47449a42c59aa1c054dfa92e9c192f7
+                    - generic [ref=f6e878]: 1h
+                  - generic [ref=f6e882]: Buy USDG
+                  - generic [ref=f6e885]: $53.81
+                  - generic [ref=f6e888]: "53.8133"
+                  - generic [ref=f6e891]: "53.8102"
+                  - link "0xadA5...F7CB" [ref=f6e894] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xadA5bb90d0de0bD1b6F3938708F49295A8D1F7CB
+                - generic [ref=f6e897]:
+                  - link "1h" [ref=f6e900] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x16133d259d1df6551030d25dc405b262669e96a145322e8d5d5bb218ff31345a
+                    - generic [ref=f6e903]: 1h
+                  - generic [ref=f6e907]: Buy USDG
+                  - generic [ref=f6e910]: $17.94
+                  - generic [ref=f6e913]: "17.9378"
+                  - generic [ref=f6e916]: "17.9368"
+                  - link "0x18DD...8e25" [ref=f6e919] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0x18DD3C14e34c1BC379F7538068c59160D9F68e25
+                - generic [ref=f6e922]:
+                  - link "1h" [ref=f6e925] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x2e7a58a582c7cb7f47941903dfd2eb06a9c6e32da7544dbbe524f63b07fefeb0
+                    - generic [ref=f6e928]: 1h
+                  - generic [ref=f6e932]: Buy USDG
+                  - generic [ref=f6e935]: $141.43
+                  - generic [ref=f6e938]: "141.44"
+                  - generic [ref=f6e941]: "141.432"
+                  - link "0xca7d...4589" [ref=f6e944] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xca7ded7e4F4Ba8aB3B10009236Ae6d1b95094589
+                - generic [ref=f6e947]:
+                  - link "1h" [ref=f6e950] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x26535950b0779fa7f2a2d3f41b97e6da4bf3de6ae3d7f51b193f6a3619228760
+                    - generic [ref=f6e953]: 1h
+                  - generic [ref=f6e957]: Buy USDG
+                  - generic [ref=f6e960]: $80.65
+                  - generic [ref=f6e963]: "80.6544"
+                  - generic [ref=f6e966]: "80.6498"
+                  - link "0xabb2...cd10" [ref=f6e969] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xabb2aCD3BE814a80e502575d6c1Dc5F789e9cd10
+              - generic [ref=f6e174]:
+                - img [ref=f6e176]
+                - text: Loading
+        - generic [ref=f6e179]:
+          - generic [ref=f6e971]:
+            - button "Swap" [ref=f6e972] [cursor=pointer]:
+              - img [ref=f6e973]
+              - generic [ref=f6e975]: Swap
+            - button "Add liquidity" [ref=f6e976] [cursor=pointer]:
+              - img [ref=f6e977]
+              - generic [ref=f6e979]: Add liquidity
+          - generic [ref=f6e186]:
+            - generic [ref=f6e187]: Stats
+            - generic [ref=f6e980]:
+              - generic [ref=f6e981]: Pool balances
+              - generic [ref=f6e982]:
+                - generic [ref=f6e984]:
+                  - generic [ref=f6e985]: 395.1K
+                  - link "USDG" [ref=f6e986] [cursor=pointer]:
+                    - /url: /explore/tokens/ethereum/0xe343167631d89b6ffc58b88d6b7fb0228795491d
+                    - generic [ref=f6e987]: USDG
+                - generic [ref=f6e989]:
+                  - generic [ref=f6e990]: 28.2K
+                  - link "USDC" [ref=f6e991] [cursor=pointer]:
+                    - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                    - generic [ref=f6e992]: USDC
+            - generic [ref=f6e996]:
+              - generic [ref=f6e997]: Total APR
+              - generic [ref=f6e999]: 11.11%
+            - generic [ref=f6e1000]:
+              - generic [ref=f6e1001]: TVL
+              - generic [ref=f6e1002]:
+                - generic [ref=f6e1003]: $423.5K
+                - generic [ref=f6e1004]:
+                  - img "down" [ref=f6e1005]
+                  - generic [ref=f6e1007]: 73.64%
+            - generic [ref=f6e1008]:
+              - generic [ref=f6e1009]: 24H volume
+              - generic [ref=f6e1010]:
+                - generic [ref=f6e1011]: $1.3M
+                - generic [ref=f6e1012]:
+                  - img "down" [ref=f6e1013]
+                  - generic [ref=f6e1015]: 97.47%
+            - generic [ref=f6e1016]:
+              - generic [ref=f6e1017]: 24H fees
+              - generic [ref=f6e1019]: $128.86
+          - generic [ref=f6e210]:
+            - generic [ref=f6e211]: Links
+            - generic [ref=f6e212]:
+              - generic [ref=f6e218]:
+                - generic [ref=f6e1020] [cursor=pointer]:
+                  - img [ref=f6e1023]
+                  - generic [ref=f6e1030]:
+                    - text: USDC
+                    - img [ref=f6e1032]
+                - generic [ref=f6e1034]:
+                  - button "0xA0b8...eB48" [ref=f6e1035] [cursor=pointer]:
+                    - generic [ref=f6e1036]: 0xA0b8...eB48
+                    - img [ref=f6e1037]
+                  - link [ref=f6e1039] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                    - img [ref=f6e1041]
+              - generic [ref=f6e223]:
+                - generic [ref=f6e1044] [cursor=pointer]:
+                  - img [ref=f6e1047]
+                  - generic [ref=f6e1054]:
+                    - text: USDG
+                    - img [ref=f6e1056]
+                - generic [ref=f6e1058]:
+                  - button "0xe343...491D" [ref=f6e1059] [cursor=pointer]:
+                    - generic [ref=f6e1060]: 0xe343...491D
+                    - img [ref=f6e1061]
+                  - link [ref=f6e1063] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/0xe343167631d89b6ffc58b88d6b7fb0228795491d
+                    - img [ref=f6e1065]
+  - generic [ref=f6e228]:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: Connect a wallet
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Uniswap Mobile
+                        - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Other wallets
+                        - img
+                  - generic:
+                    - generic: or
+                  - generic:
+                    - generic:
+                      - button "Create account":
+                        - generic: Create account
+                    - button "Log in":
+                      - generic:
+                        - img
+                        - generic: Log in
+                  - generic:
+                    - generic:
+                      - generic:
+                        - text: By connecting a wallet, you agree to Uniswap Labs’
+                        - link "Terms of Service":
+                          - /url: https://uniswap.org/terms-of-service
+                        - text: and consent to its
+                        - link "Privacy Policy":
+                          - /url: https://uniswap.org/privacy-policy
+                        - text: .

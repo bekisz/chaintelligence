@@ -1,0 +1,762 @@
+- generic [ref=f2e1]:
+  - generic [ref=f2e4]:
+    - navigation [ref=f2e6]:
+      - generic [ref=f2e7]:
+        - generic [ref=f2e8]:
+          - generic [ref=f2e11] [cursor=pointer]:
+            - link [ref=f2e12]:
+              - /url: /?intro=true
+              - img [ref=f2e15]
+            - img [ref=f2e26]
+          - link "Trade" [ref=f2e30] [cursor=pointer]:
+            - /url: /swap
+          - link "Explore" [ref=f2e33] [cursor=pointer]:
+            - /url: /explore
+          - link "Pool" [ref=f2e36] [cursor=pointer]:
+            - /url: /positions
+          - link "Portfolio" [ref=f2e39] [cursor=pointer]:
+            - /url: /portfolio
+        - generic [ref=f2e40]:
+          - button "Search tokens, pools, and wallets" [ref=f2e41] [cursor=pointer]:
+            - img [ref=f2e45]
+          - button "Navigation button" [ref=f2e49] [cursor=pointer]:
+            - img [ref=f2e52]
+          - button "Get started" [ref=f2e61] [cursor=pointer]:
+            - generic [ref=f2e58]: Get started
+    - generic [ref=f2e62]:
+      - region "Notifications alt+T"
+      - button [ref=f2e66] [cursor=pointer]:
+        - img [ref=f2e67]
+      - generic "breadcrumb-nav" [ref=f2e69]:
+        - link "Tokens" [ref=f2e70] [cursor=pointer]:
+          - /url: /explore/tokens
+          - generic [ref=f2e71]:
+            - text: Tokens
+            - img [ref=f2e73]
+        - heading "USDG" [level=1] [ref=f2e76]
+      - generic [ref=f2e79]:
+        - generic [ref=f2e80]:
+          - img [ref=f2e83]
+          - generic [ref=f2e84]:
+            - generic [ref=f2e85]:
+              - heading "Global Dollar" [level=1] [ref=f2e86]
+              - heading "USDG" [level=2] [ref=f2e87]
+            - generic [ref=f2e88]:
+              - generic [ref=f2e91]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - img
+                                - generic:
+                                  - generic:
+                                    - textbox "Search networks"
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - button "5 networks":
+                                  - generic:
+                                    - generic:
+                                      - generic: 5 networks
+                                - button "Ethereum":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Ethereum
+                                    - generic:
+                                      - img
+                                - button "Unichain":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Unichain
+                                - button "Robinhood Chain New":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Robinhood Chain
+                                        - generic:
+                                          - generic:
+                                            - generic: New
+                                - button "Solana":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: Solana
+                                - button "X Layer":
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic: X Layer
+                - generic [ref=f2e116] [cursor=pointer]:
+                  - generic [ref=f2e121]: Ethereum
+                  - img [ref=f2e123]
+              - button "0xe343...491D" [ref=f2e127] [cursor=pointer]:
+                - generic [ref=f2e129]: 0xe343...491D
+        - generic [ref=f2e132]:
+          - button [ref=f2e135] [cursor=pointer]:
+            - img [ref=f2e137]
+          - generic [ref=f2e140]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Copy link":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Copy link
+                  - button "Share to Twitter":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Share to Twitter
+            - img [ref=f2e145] [cursor=pointer]
+          - generic [ref=f2e148]:
+            - generic:
+              - generic:
+                - generic:
+                  - button "Report data issue":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Report data issue
+                  - button "Report token":
+                    - generic:
+                      - img
+                      - generic:
+                        - generic: Report token
+            - img [ref=f2e153] [cursor=pointer]
+      - generic [ref=f2e157]:
+        - generic [ref=f2e158]:
+          - generic [ref=f2e159]:
+            - generic [ref=f2e160]:
+              - table [ref=f2e163]:
+                - row [ref=f2e164]:
+                  - cell
+                  - cell [ref=f2e165]
+                  - cell [ref=f2e169]
+                - row [ref=f2e173]:
+                  - cell
+                  - cell [ref=f2e174]
+                  - cell [ref=f2e178]
+              - generic:
+                - generic:
+                  - heading "$1.00" [level=2]
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img "down"
+                        - text: $0.00 (0.01%)
+            - generic [ref=f2e181]:
+              - generic [ref=f2e182]:
+                - tablist [ref=f2e184]:
+                  - button [ref=f2e187] [cursor=pointer]:
+                    - img [ref=f2e188]
+                  - button [ref=f2e192] [cursor=pointer]:
+                    - img [ref=f2e194]
+                - tablist [ref=f2e199]:
+                  - button "Price" [ref=f2e202] [cursor=pointer]:
+                    - generic [ref=f2e203]: Price
+                  - button "Volume" [ref=f2e206] [cursor=pointer]:
+                    - generic [ref=f2e207]: Volume
+                  - button "TVL" [ref=f2e210] [cursor=pointer]:
+                    - generic [ref=f2e211]: TVL
+              - tablist [ref=f2e215]:
+                - button "1H" [ref=f2e218] [cursor=pointer]:
+                  - generic [ref=f2e219]: 1H
+                - button "1D" [ref=f2e222] [cursor=pointer]:
+                  - generic [ref=f2e223]: 1D
+                - button "1W" [ref=f2e226] [cursor=pointer]:
+                  - generic [ref=f2e227]: 1W
+                - button "1M" [ref=f2e230] [cursor=pointer]:
+                  - generic [ref=f2e231]: 1M
+                - button "1Y" [ref=f2e234] [cursor=pointer]:
+                  - generic [ref=f2e235]: 1Y
+                - button "All" [ref=f2e238] [cursor=pointer]:
+                  - generic [ref=f2e239]: All
+          - generic [ref=f2e241]:
+            - heading "Stats" [level=3] [ref=f2e242]
+            - table [ref=f2e243]:
+              - row "TVL $707.2K" [ref=f2e244]:
+                - cell "TVL" [ref=f2e245]:
+                  - generic [ref=f2e248]: TVL
+                - cell "$707.2K" [ref=f2e249]:
+                  - heading "$707.2K" [level=3] [ref=f2e252]
+              - row "Market cap $3.1B" [ref=f2e253]:
+                - cell "Market cap" [ref=f2e254]:
+                  - generic [ref=f2e257]: Market cap
+                - cell "$3.1B" [ref=f2e258]:
+                  - heading "$3.1B" [level=3] [ref=f2e261]
+              - row "FDV $3.1B" [ref=f2e262]:
+                - cell "FDV" [ref=f2e263]:
+                  - generic [ref=f2e266]: FDV
+                - cell "$3.1B" [ref=f2e267]:
+                  - heading "$3.1B" [level=3] [ref=f2e270]
+              - row "1 day volume $1.7M" [ref=f2e271]:
+                - cell "1 day volume" [ref=f2e272]:
+                  - generic [ref=f2e275]: 1 day volume
+                - cell "$1.7M" [ref=f2e276]:
+                  - heading "$1.7M" [level=3] [ref=f2e279]
+              - row "52W High $1.002" [ref=f2e280]:
+                - cell "52W High" [ref=f2e281]
+                - cell "$1.002" [ref=f2e282]:
+                  - heading "$1.002" [level=3] [ref=f2e285]
+              - row "52W Low $0.999" [ref=f2e286]:
+                - cell "52W Low" [ref=f2e287]
+                - cell "$0.999" [ref=f2e288]:
+                  - heading "$0.999" [level=3] [ref=f2e291]
+          - generic [ref=f2e292]:
+            - heading "About" [level=3] [ref=f2e293]
+            - generic [ref=f2e294]:
+              - heading "Global Dollar (USDG) is a single-currency stablecoin pegged to the US dollar. USDG is fully redeemable from Paxos on a one-to-one basis for US dollars. Global Dollar (USDG) is issued by Paxos Digital Singapore (PDS), which is a Major Payments Institution supervised by the Monetary Authority of..." [level=2] [ref=f2e295]
+              - button "Show more" [ref=f2e296] [cursor=pointer]
+            - generic [ref=f2e297]:
+              - button "0xe343...491D" [ref=f2e298] [cursor=pointer]:
+                - generic [ref=f2e302]: 0xe343...491D
+                - img [ref=f2e306]
+              - link "Etherscan" [ref=f2e308] [cursor=pointer]:
+                - /url: https://etherscan.io/token/0xe343167631d89b6ffc58b88d6b7fb0228795491d
+                - img [ref=f2e309]
+                - generic [ref=f2e311]: Etherscan
+              - link "Website" [ref=f2e312] [cursor=pointer]:
+                - /url: https://globaldollar.com
+                - img [ref=f2e313]
+                - generic [ref=f2e315]: Website
+              - link "Twitter" [ref=f2e316] [cursor=pointer]:
+                - /url: https://x.com/global_dollar
+                - img [ref=f2e317]
+                - generic [ref=f2e319]: Twitter
+          - generic [ref=f2e320]:
+            - generic [ref=f2e321]:
+              - heading "Transactions" [level=3] [ref=f2e322] [cursor=pointer]
+              - heading "Pools" [level=3] [ref=f2e323] [cursor=pointer]
+            - generic [ref=f2e325]:
+              - generic [ref=f2e327]:
+                - generic [ref=f2e331]: Time
+                - generic [ref=f2e334] [cursor=pointer]:
+                  - img [ref=f2e335]
+                  - generic [ref=f2e337]: Type
+                - generic [ref=f2e340]: USDG
+                - generic [ref=f2e343]: For
+                - generic [ref=f2e347]: USD
+                - generic [ref=f2e350]: Wallet
+              - generic [ref=f2e352]:
+                - generic [ref=f2e355]:
+                  - link "27s" [ref=f2e358] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x0a0bcc1da959cac8a0696e822ac6f7fd6ba41f5dee2c2ef495794f97b52c3bd0
+                    - generic [ref=f2e361]: 27s
+                  - generic [ref=f2e364]: Sell
+                  - generic [ref=f2e367]: "15.92"
+                  - generic [ref=f2e371]:
+                    - generic [ref=f2e372]: "15.91"
+                    - link "USDC" [ref=f2e373] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e374]:
+                        - generic [ref=f2e375]: USDC
+                        - img [ref=f2e378]
+                  - generic [ref=f2e385]: $15.91
+                  - button "0xca7d...4589" [ref=f2e390] [cursor=pointer]:
+                    - button "0xca7d...4589" [ref=f2e391]:
+                      - generic [ref=f2e392]: 0xca7d...4589
+                - generic [ref=f2e395]:
+                  - link "2m" [ref=f2e398] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x33a1dc8f674c18e45fb74d79d9f345df89a833487824358ecb5afc86e8e46616
+                    - generic [ref=f2e401]: 2m
+                  - generic [ref=f2e404]: Buy
+                  - generic [ref=f2e407]: "17.96"
+                  - generic [ref=f2e411]:
+                    - generic [ref=f2e412]: "17.97"
+                    - link "USDT" [ref=f2e413] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e414]:
+                        - generic [ref=f2e415]: USDT
+                        - img [ref=f2e418]
+                  - generic [ref=f2e425]: $17.97
+                  - button "0xca7d...4589" [ref=f2e430] [cursor=pointer]:
+                    - button "0xca7d...4589" [ref=f2e431]:
+                      - generic [ref=f2e432]: 0xca7d...4589
+                - generic [ref=f2e435]:
+                  - link "3m" [ref=f2e438] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x2d5613b76be855d2e400a34259e9905990fbe917b7072749c2478d6f1121fc54
+                    - generic [ref=f2e441]: 3m
+                  - generic [ref=f2e444]: Buy
+                  - generic [ref=f2e447]: "17.97"
+                  - generic [ref=f2e451]:
+                    - generic [ref=f2e452]: "17.98"
+                    - link "USDT" [ref=f2e453] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e454]:
+                        - generic [ref=f2e455]: USDT
+                        - img [ref=f2e458]
+                  - generic [ref=f2e465]: $17.98
+                  - button "0x331D...2466" [ref=f2e470] [cursor=pointer]:
+                    - button "0x331D...2466" [ref=f2e471]:
+                      - generic [ref=f2e472]: 0x331D...2466
+                - generic [ref=f2e475]:
+                  - link "3m" [ref=f2e478] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x91772a7d4c59daece3c006074c7271d3c3046683ceb75c99f8dba72e6ad50dcb
+                    - generic [ref=f2e481]: 3m
+                  - generic [ref=f2e484]: Sell
+                  - generic [ref=f2e487]: "17.07"
+                  - generic [ref=f2e491]:
+                    - generic [ref=f2e492]: "17.07"
+                    - link "USDC" [ref=f2e493] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e494]:
+                        - generic [ref=f2e495]: USDC
+                        - img [ref=f2e498]
+                  - generic [ref=f2e505]: $17.07
+                  - button "0x331D...2466" [ref=f2e510] [cursor=pointer]:
+                    - button "0x331D...2466" [ref=f2e511]:
+                      - generic [ref=f2e512]: 0x331D...2466
+                - generic [ref=f2e515]:
+                  - link "4m" [ref=f2e518] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x78f2d916a49bd8a38497d352f7e5e9b0f41a4db0cdb179c328cbe8524b0961bf
+                    - generic [ref=f2e521]: 4m
+                  - generic [ref=f2e524]: Buy
+                  - generic [ref=f2e527]: "143.65"
+                  - generic [ref=f2e531]:
+                    - generic [ref=f2e532]: "143.73"
+                    - link "USDT" [ref=f2e533] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e534]:
+                        - generic [ref=f2e535]: USDT
+                        - img [ref=f2e538]
+                  - generic [ref=f2e545]: $143.73
+                  - button "0x370A...12cF" [ref=f2e550] [cursor=pointer]:
+                    - button "0x370A...12cF" [ref=f2e551]:
+                      - generic [ref=f2e552]: 0x370A...12cF
+                - generic [ref=f2e555]:
+                  - link "5m" [ref=f2e558] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x244de0fab90e9f004b478b1c5737fe74c6d20a667460de49973ad2784194a790
+                    - generic [ref=f2e561]: 5m
+                  - generic [ref=f2e564]: Buy
+                  - generic [ref=f2e567]: "25.54"
+                  - generic [ref=f2e571]:
+                    - generic [ref=f2e572]: "25.54"
+                    - link "USDC" [ref=f2e573] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e574]:
+                        - generic [ref=f2e575]: USDC
+                        - img [ref=f2e578]
+                  - generic [ref=f2e585]: $25.54
+                  - button "0xabb2...cd10" [ref=f2e590] [cursor=pointer]:
+                    - button "0xabb2...cd10" [ref=f2e591]:
+                      - generic [ref=f2e592]: 0xabb2...cd10
+                - generic [ref=f2e595]:
+                  - link "6m" [ref=f2e598] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x22babd821b84eaf6578ac55bde0f4b117202d34451c1e50da48923b6abfa17c7
+                    - generic [ref=f2e601]: 6m
+                  - generic [ref=f2e604]: Sell
+                  - generic [ref=f2e607]: "108.23"
+                  - generic [ref=f2e611]:
+                    - generic [ref=f2e612]: "108.21"
+                    - link "USDC" [ref=f2e613] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e614]:
+                        - generic [ref=f2e615]: USDC
+                        - img [ref=f2e618]
+                  - generic [ref=f2e625]: $108.21
+                  - button "0x18DD...8e25" [ref=f2e630] [cursor=pointer]:
+                    - button "0x18DD...8e25" [ref=f2e631]:
+                      - generic [ref=f2e632]: 0x18DD...8e25
+                - generic [ref=f2e635]:
+                  - link "6m" [ref=f2e638] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x2ba2ea5a27b2ce2b866d1487d8b26ab32ac15499ec15f6c844cbb6f9e500cba5
+                    - generic [ref=f2e641]: 6m
+                  - generic [ref=f2e644]: Buy
+                  - generic [ref=f2e647]: "17.92"
+                  - generic [ref=f2e651]:
+                    - generic [ref=f2e652]: "17.92"
+                    - link "USDC" [ref=f2e653] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e654]:
+                        - generic [ref=f2e655]: USDC
+                        - img [ref=f2e658]
+                  - generic [ref=f2e665]: $17.92
+                  - button "0x331D...2466" [ref=f2e670] [cursor=pointer]:
+                    - button "0x331D...2466" [ref=f2e671]:
+                      - generic [ref=f2e672]: 0x331D...2466
+                - generic [ref=f2e675]:
+                  - link "7m" [ref=f2e678] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xa6dabf26b2fc856a505e086ff77393c0b64a2eb290b7e0695839e449effead24
+                    - generic [ref=f2e681]: 7m
+                  - generic [ref=f2e684]: Sell
+                  - generic [ref=f2e687]: "52.54"
+                  - generic [ref=f2e691]:
+                    - generic [ref=f2e692]: "52.56"
+                    - link "USDT" [ref=f2e693] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e694]:
+                        - generic [ref=f2e695]: USDT
+                        - img [ref=f2e698]
+                  - generic [ref=f2e705]: $52.56
+                  - button "0xca7d...4589" [ref=f2e710] [cursor=pointer]:
+                    - button "0xca7d...4589" [ref=f2e711]:
+                      - generic [ref=f2e712]: 0xca7d...4589
+                - generic [ref=f2e715]:
+                  - link "7m" [ref=f2e718] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x6c45f0d93aa487aafb34ea4b15fca77b8491e8e40f1df05d671c6f8fc8ee17fe
+                    - generic [ref=f2e721]: 7m
+                  - generic [ref=f2e724]: Buy
+                  - generic [ref=f2e727]: "33.18"
+                  - generic [ref=f2e731]:
+                    - generic [ref=f2e732]: "33.20"
+                    - link "USDT" [ref=f2e733] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e734]:
+                        - generic [ref=f2e735]: USDT
+                        - img [ref=f2e738]
+                  - generic [ref=f2e745]: $33.20
+                  - button "0xA5a5...A142" [ref=f2e750] [cursor=pointer]:
+                    - button "0xA5a5...A142" [ref=f2e751]:
+                      - generic [ref=f2e752]: 0xA5a5...A142
+                - generic [ref=f2e755]:
+                  - link "9m" [ref=f2e758] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x1c7d1e940e022abfa07385c149425e790dde647688b0ded12f4a34c31d82539c
+                    - generic [ref=f2e761]: 9m
+                  - generic [ref=f2e764]: Buy
+                  - generic [ref=f2e767]: "89.69"
+                  - generic [ref=f2e771]:
+                    - generic [ref=f2e772]: "89.69"
+                    - link "USDC" [ref=f2e773] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e774]:
+                        - generic [ref=f2e775]: USDC
+                        - img [ref=f2e778]
+                  - generic [ref=f2e785]: $89.69
+                  - button "0x331D...2466" [ref=f2e790] [cursor=pointer]:
+                    - button "0x331D...2466" [ref=f2e791]:
+                      - generic [ref=f2e792]: 0x331D...2466
+                - generic [ref=f2e795]:
+                  - link "9m" [ref=f2e798] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xc4ab163f0ef82a49e4a86ebdbc6aa9c240ee2806c592c9d89be7f73b5bb7f05e
+                    - generic [ref=f2e801]: 9m
+                  - generic [ref=f2e804]: Buy
+                  - generic [ref=f2e807]: "0.574"
+                  - generic [ref=f2e811]:
+                    - generic [ref=f2e812]: "0.57"
+                    - link "USDC" [ref=f2e813] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e814]:
+                        - generic [ref=f2e815]: USDC
+                        - img [ref=f2e818]
+                  - generic [ref=f2e825]: $0.574
+                  - button "0xca7d...4589" [ref=f2e830] [cursor=pointer]:
+                    - button "0xca7d...4589" [ref=f2e831]:
+                      - generic [ref=f2e832]: 0xca7d...4589
+                - generic [ref=f2e835]:
+                  - link "10m" [ref=f2e838] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xa877ebb93d4161a993559e715bd95e19bb9557532d8e4390257e10fbeb910731
+                    - generic [ref=f2e841]: 10m
+                  - generic [ref=f2e844]: Buy
+                  - generic [ref=f2e847]: "1.98"
+                  - generic [ref=f2e851]:
+                    - generic [ref=f2e852]: "1.98"
+                    - link "USDC" [ref=f2e853] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e854]:
+                        - generic [ref=f2e855]: USDC
+                        - img [ref=f2e858]
+                  - generic [ref=f2e865]: $1.98
+                  - button "0x331D...2466" [ref=f2e870] [cursor=pointer]:
+                    - button "0x331D...2466" [ref=f2e871]:
+                      - generic [ref=f2e872]: 0x331D...2466
+                - generic [ref=f2e875]:
+                  - link "11m" [ref=f2e878] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xb75b773d38c6f76d62592fe2e7729a2f21331d6a36b3f761c7b580b179fb95f3
+                    - generic [ref=f2e881]: 11m
+                  - generic [ref=f2e884]: Buy
+                  - generic [ref=f2e887]: "35.88"
+                  - generic [ref=f2e891]:
+                    - generic [ref=f2e892]: "35.90"
+                    - link "USDT" [ref=f2e893] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e894]:
+                        - generic [ref=f2e895]: USDT
+                        - img [ref=f2e898]
+                  - generic [ref=f2e905]: $35.90
+                  - button "0xA5a5...A142" [ref=f2e910] [cursor=pointer]:
+                    - button "0xA5a5...A142" [ref=f2e911]:
+                      - generic [ref=f2e912]: 0xA5a5...A142
+                - generic [ref=f2e915]:
+                  - link "11m" [ref=f2e918] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x96787412a1c55971ef86f937af27bb1f99608318a82b7da9729edeb634d7cf44
+                    - generic [ref=f2e921]: 11m
+                  - generic [ref=f2e924]: Buy
+                  - generic [ref=f2e927]: "8.15"
+                  - generic [ref=f2e931]:
+                    - generic [ref=f2e932]: "8.15"
+                    - link "USDC" [ref=f2e933] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e934]:
+                        - generic [ref=f2e935]: USDC
+                        - img [ref=f2e938]
+                  - generic [ref=f2e945]: $8.15
+                  - button "0xadA5...F7CB" [ref=f2e950] [cursor=pointer]:
+                    - button "0xadA5...F7CB" [ref=f2e951]:
+                      - generic [ref=f2e952]: 0xadA5...F7CB
+                - generic [ref=f2e955]:
+                  - link "12m" [ref=f2e958] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x580b29bb5f9127ea005d2485c7c6251432b7f2567bf37b98a6df2bd46112a702
+                    - generic [ref=f2e961]: 12m
+                  - generic [ref=f2e964]: Buy
+                  - generic [ref=f2e967]: "89.66"
+                  - generic [ref=f2e971]:
+                    - generic [ref=f2e972]: "89.66"
+                    - link "USDC" [ref=f2e973] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e974]:
+                        - generic [ref=f2e975]: USDC
+                        - img [ref=f2e978]
+                  - generic [ref=f2e985]: $89.66
+                  - button "0xca7d...4589" [ref=f2e990] [cursor=pointer]:
+                    - button "0xca7d...4589" [ref=f2e991]:
+                      - generic [ref=f2e992]: 0xca7d...4589
+                - generic [ref=f2e995]:
+                  - link "12m" [ref=f2e998] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xb5ba3ab22f1e63f661c5ce716877852fa9e44a3fe3c529ad0f67285cd88918da
+                    - generic [ref=f2e1001]: 12m
+                  - generic [ref=f2e1004]: Sell
+                  - generic [ref=f2e1007]: "39.63"
+                  - generic [ref=f2e1011]:
+                    - generic [ref=f2e1012]: "39.63"
+                    - link "USDC" [ref=f2e1013] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e1014]:
+                        - generic [ref=f2e1015]: USDC
+                        - img [ref=f2e1018]
+                  - generic [ref=f2e1025]: $39.63
+                  - button "0x370A...12cF" [ref=f2e1030] [cursor=pointer]:
+                    - button "0x370A...12cF" [ref=f2e1031]:
+                      - generic [ref=f2e1032]: 0x370A...12cF
+                - generic [ref=f2e1035]:
+                  - link "13m" [ref=f2e1038] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x3e934f881d7df6ee3d1725d70adb9a7c1a2e6770835029aaf0ac1cfcab1081af
+                    - generic [ref=f2e1041]: 13m
+                  - generic [ref=f2e1044]: Buy
+                  - generic [ref=f2e1047]: "35.83"
+                  - generic [ref=f2e1051]:
+                    - generic [ref=f2e1052]: "35.83"
+                    - link "USDC" [ref=f2e1053] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e1054]:
+                        - generic [ref=f2e1055]: USDC
+                        - img [ref=f2e1058]
+                  - generic [ref=f2e1065]: $35.83
+                  - button "0xA5a5...A142" [ref=f2e1070] [cursor=pointer]:
+                    - button "0xA5a5...A142" [ref=f2e1071]:
+                      - generic [ref=f2e1072]: 0xA5a5...A142
+                - generic [ref=f2e1075]:
+                  - link "13m" [ref=f2e1078] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x5ddae8700599f68c0279b012980ae79d1555f03e5b7ba50c460982d36932cc25
+                    - generic [ref=f2e1081]: 13m
+                  - generic [ref=f2e1084]: Sell
+                  - generic [ref=f2e1087]: "315.13"
+                  - generic [ref=f2e1091]:
+                    - generic [ref=f2e1092]: "315.07"
+                    - link "USDC" [ref=f2e1093] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e1094]:
+                        - generic [ref=f2e1095]: USDC
+                        - img [ref=f2e1098]
+                  - generic [ref=f2e1105]: $315.07
+                  - button "0xabb2...cd10" [ref=f2e1110] [cursor=pointer]:
+                    - button "0xabb2...cd10" [ref=f2e1111]:
+                      - generic [ref=f2e1112]: 0xabb2...cd10
+                - generic [ref=f2e1115]:
+                  - link "14m" [ref=f2e1118] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x59962904660f60e2b1f0bf0bf72a34af64e3d9a065cea4f68f0c527bae053787
+                    - generic [ref=f2e1121]: 14m
+                  - generic [ref=f2e1124]: Buy
+                  - generic [ref=f2e1127]: "71.68"
+                  - generic [ref=f2e1131]:
+                    - generic [ref=f2e1132]: "71.68"
+                    - link "USDC" [ref=f2e1133] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e1134]:
+                        - generic [ref=f2e1135]: USDC
+                        - img [ref=f2e1138]
+                  - generic [ref=f2e1145]: $71.68
+                  - button "0xA5a5...A142" [ref=f2e1150] [cursor=pointer]:
+                    - button "0xA5a5...A142" [ref=f2e1151]:
+                      - generic [ref=f2e1152]: 0xA5a5...A142
+                - generic [ref=f2e1155]:
+                  - link "15m" [ref=f2e1158] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x143cb102baf47c4bb924a48ab305d3dd9a6f7a3525801a480cd88cbde0074551
+                    - generic [ref=f2e1161]: 15m
+                  - generic [ref=f2e1164]: Buy
+                  - generic [ref=f2e1167]: "4.80"
+                  - generic [ref=f2e1171]:
+                    - generic [ref=f2e1172]: "4.80"
+                    - link "USDC" [ref=f2e1173] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e1174]:
+                        - generic [ref=f2e1175]: USDC
+                        - img [ref=f2e1178]
+                  - generic [ref=f2e1185]: $4.80
+                  - button "0xA5a5...A142" [ref=f2e1190] [cursor=pointer]:
+                    - button "0xA5a5...A142" [ref=f2e1191]:
+                      - generic [ref=f2e1192]: 0xA5a5...A142
+                - generic [ref=f2e1195]:
+                  - link "15m" [ref=f2e1198] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x3eaf8b33c262877ca780412cb5eb5b5295540e80264ed3f4d0beb5b7de5dea59
+                    - generic [ref=f2e1201]: 15m
+                  - generic [ref=f2e1204]: Buy
+                  - generic [ref=f2e1207]: "8.61"
+                  - generic [ref=f2e1211]:
+                    - generic [ref=f2e1212]: "8.61"
+                    - link "USDC" [ref=f2e1213] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e1214]:
+                        - generic [ref=f2e1215]: USDC
+                        - img [ref=f2e1218]
+                  - generic [ref=f2e1225]: $8.61
+                  - button "0x18DD...8e25" [ref=f2e1230] [cursor=pointer]:
+                    - button "0x18DD...8e25" [ref=f2e1231]:
+                      - generic [ref=f2e1232]: 0x18DD...8e25
+                - generic [ref=f2e1235]:
+                  - link "15m" [ref=f2e1238] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x2562421e6387486e57ea91bb33c5a8683c2f2a7fef9af68c9033fe1a066c5290
+                    - generic [ref=f2e1241]: 15m
+                  - generic [ref=f2e1244]: Buy
+                  - generic [ref=f2e1247]: "35.83"
+                  - generic [ref=f2e1251]:
+                    - generic [ref=f2e1252]: "35.83"
+                    - link "USDC" [ref=f2e1253] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+                      - generic [ref=f2e1254]:
+                        - generic [ref=f2e1255]: USDC
+                        - img [ref=f2e1258]
+                  - generic [ref=f2e1265]: $35.83
+                  - button "0xa67D...3FBb" [ref=f2e1270] [cursor=pointer]:
+                    - button "0xa67D...3FBb" [ref=f2e1271]:
+                      - generic [ref=f2e1272]: 0xa67D...3FBb
+                - generic [ref=f2e1275]:
+                  - link "15m" [ref=f2e1278] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0xde9bc3033b73d437f2a2702e43af960e7ff42ae240bced657747e13a1bc95933
+                    - generic [ref=f2e1281]: 15m
+                  - generic [ref=f2e1284]: Buy
+                  - generic [ref=f2e1287]: "3.58"
+                  - generic [ref=f2e1291]:
+                    - generic [ref=f2e1292]: "3.59"
+                    - link "USDT" [ref=f2e1293] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e1294]:
+                        - generic [ref=f2e1295]: USDT
+                        - img [ref=f2e1298]
+                  - generic [ref=f2e1305]: $3.59
+                  - button "0x370A...12cF" [ref=f2e1310] [cursor=pointer]:
+                    - button "0x370A...12cF" [ref=f2e1311]:
+                      - generic [ref=f2e1312]: 0x370A...12cF
+                - generic [ref=f2e1315]:
+                  - link "16m" [ref=f2e1318] [cursor=pointer]:
+                    - /url: https://etherscan.io/tx/0x654101acf9685354425cbee108dcc248ff46e0eb219c3339e69f9a4b7da7a989
+                    - generic [ref=f2e1321]: 16m
+                  - generic [ref=f2e1324]: Buy
+                  - generic [ref=f2e1327]: "89.51"
+                  - generic [ref=f2e1331]:
+                    - generic [ref=f2e1332]: "89.56"
+                    - link "USDT" [ref=f2e1333] [cursor=pointer]:
+                      - /url: /explore/tokens/ethereum/0xdac17f958d2ee523a2206206994597c13d831ec7
+                      - generic [ref=f2e1334]:
+                        - generic [ref=f2e1335]: USDT
+                        - img [ref=f2e1338]
+                  - generic [ref=f2e1345]: $89.56
+                  - button "0x370A...12cF" [ref=f2e1350] [cursor=pointer]:
+                    - button "0x370A...12cF" [ref=f2e1351]:
+                      - generic [ref=f2e1352]: 0x370A...12cF
+        - generic [ref=f2e1359]:
+          - generic [ref=f2e1360]:
+            - tablist [ref=f2e1362]:
+              - button "Swap" [ref=f2e1365] [cursor=pointer]:
+                - generic [ref=f2e1366]: Swap
+              - button "Limit" [ref=f2e1369] [cursor=pointer]:
+                - generic [ref=f2e1370]: Limit
+              - button "Buy" [ref=f2e1373] [cursor=pointer]:
+                - generic [ref=f2e1374]: Buy
+              - button "Sell" [ref=f2e1377] [cursor=pointer]:
+                - generic [ref=f2e1378]: Sell
+            - button [ref=f2e1385] [cursor=pointer]:
+              - img [ref=f2e1389]
+          - generic [ref=f2e1395]:
+            - generic [ref=f2e1396]:
+              - button "Sell ETH $0" [ref=f2e1398] [cursor=pointer]:
+                - generic [ref=f2e1399]:
+                  - generic [ref=f2e1401]: Sell
+                  - generic [ref=f2e1402]:
+                    - textbox "0" [active] [ref=f2e1406]
+                    - button "ETH" [ref=f2e1408]:
+                      - generic [ref=f2e1409]:
+                        - img [ref=f2e1413]
+                        - generic [ref=f2e1418]: ETH
+                        - img [ref=f2e1420]
+                  - button "$0" [ref=f2e1424]:
+                    - generic [ref=f2e1426]: $0
+              - button [ref=f2e1428] [cursor=pointer]:
+                - img [ref=f2e1429]
+              - button "Buy USDG $0" [ref=f2e1432] [cursor=pointer]:
+                - generic [ref=f2e1433]:
+                  - generic [ref=f2e1435]: Buy
+                  - generic [ref=f2e1436]:
+                    - textbox "0" [ref=f2e1440]
+                    - button "USDG" [ref=f2e1442]:
+                      - generic [ref=f2e1443]:
+                        - img [ref=f2e1447]
+                        - generic [ref=f2e1452]: USDG
+                        - img [ref=f2e1454]
+                  - button "$0" [ref=f2e1458]:
+                    - generic [ref=f2e1460]: $0
+            - button "Get started" [ref=f2e1469] [cursor=pointer]:
+              - generic [ref=f2e1470]: Get started
+  - generic [ref=f2e59]:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: Connect a wallet
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Uniswap Mobile
+                        - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic: Other wallets
+                        - img
+                  - generic:
+                    - generic: or
+                  - generic:
+                    - generic:
+                      - button "Create account":
+                        - generic: Create account
+                    - button "Log in":
+                      - generic:
+                        - img
+                        - generic: Log in
+                  - generic:
+                    - generic:
+                      - generic:
+                        - text: By connecting a wallet, you agree to Uniswap Labs’
+                        - link "Terms of Service":
+                          - /url: https://uniswap.org/terms-of-service
+                        - text: and consent to its
+                        - link "Privacy Policy":
+                          - /url: https://uniswap.org/privacy-policy
+                        - text: .
