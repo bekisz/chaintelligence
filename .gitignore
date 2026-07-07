@@ -17,6 +17,7 @@ logs/
 
 # Test recordings and artifacts
 *.sqlite-wal
+*.sqlite
 recordings/
 test-results/
 
