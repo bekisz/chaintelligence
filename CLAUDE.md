@@ -11,7 +11,7 @@ Note: `README.md` and `docs/architecture.md` reference some legacy directory nam
 ## Architecture
 
 - **`api/main.py`** — the entire FastAPI application (single ~65KB file). All routes, auth middleware, business logic, and Airflow proxying live here. Run with `python api/main.py` (uvicorn on `:8000`). Imports routing logic from `chain-feeder/routing/` by inserting it onto `sys.path`, and loads DEX factory/init-hash config from `config/dex_config.yaml`.
-- **`chain-feeder/`** — Airflow ETL layer. `dags/` are the ingestion pipelines (CMC, CryptoCompare, The Graph V3/V4 swaps, Zapper LP, RPC claim/event backfills, daily history aggregation). `include/` holds API clients (`coinmarketcap_client.py`, `cryptocompare_client.py`, `zapper_client.py`, `graph_discovery_client.py`, `rpc_discovery_engine.py`, `uniswap_v*_range_fetcher.py`) and `sql/init_db.sql` (the warehouse schema, applied on first Postgres boot). `routing/` is shared business logic imported by **both** the DAGs and the API server.
+- **`chain-feeder/`** — Airflow ETL layer. `dags/` are the ingestion pipelines (CMC, CryptoCompare, The Graph V3/V4 swaps, RPC claim/event backfills, daily history aggregation). `include/` holds API clients (`coinmarketcap_client.py`, `cryptocompare_client.py`, `graph_discovery_client.py`, `rpc_discovery_engine.py`, `uniswap_v*_range_fetcher.py`) and `sql/init_db.sql` (the warehouse schema, applied on first Postgres boot). `routing/` is shared business logic imported by **both** the DAGs and the API server.
 - **`chain-feeder/routing/`** — the shared logic core. `postgres_fetcher.py` (swap-data queries, including V3+V4 `UNION ALL` branches), `route_analyzer.py` (reconstructs multi-hop routes by grouping swaps by tx hash and ordering by log index), `shortcut_finder.py`, and `config.py` (loads token registry from the `coin` table at import time; falls back to a static USDC/USDT/WETH/WBTC set if the DB is unreachable).
 - **`web/`** — pure presentation, no build step. `web/static/` is the main portal (`routing.html`+`app.js`, `lp.html`+`lp.js`, `pool.*`, `sps.*`, `api.html`, shared `nav.js`/`style.css`). `web/backtest/` is the standalone LP backtester mounted at `/backtester`.
 - **`config/dex_config.yaml`** — per-network factory addresses + init code hashes for V3-style DEXes (Uniswap V3, PancakeSwap V3). `get_factory_and_hash(protocol, network)` in `main.py` reads this; pool contract addresses are derived via CREATE2 and cached in module-level `POOL_ADDRESS_CACHE`/`FACTORY_HASH_CACHE`.
@@ -54,14 +54,14 @@ Postgres is exposed on host port **5433** (container 5432) so local dev can conn
 Two env files, both loaded via `env_file` in `docker-compose.yaml` and by `load_dotenv`:
 
 - **`.env.config`** — public, tracked in git (CMC tier tuning, `RPC_DISCOVERY_START_DATE`, `SKIP_CLAIM_NETWORKS`, etc.).
-- **`.env.secrets`** — gitignored secrets. Copy from `.env.secrets.example`. Holds `GRAPH_API_KEY`, `CMC_API_KEY`, `CRYPTOCOMPARE_API_KEY`, `ZAPPER_AUTH_HEADER`, `RPC_URL`, `DATA_WAREHOUSE_DB`, Airflow security keys, and `PORTAL_USERNAME`/`PORTAL_PASSWORD`.
+- **`.env.secrets`** — gitignored secrets. Copy from `.env.secrets.example`. Holds `GRAPH_API_KEY`, `CMC_API_KEY`, `CRYPTOCOMPARE_API_KEY`, `RPC_URL`, `DATA_WAREHOUSE_DB`, Airflow security keys, and `PORTAL_USERNAME`/`PORTAL_PASSWORD`.
 
 `.env` (a directory here) is also mounted into the container at `/app/.env`; `main.py` calls `load_dotenv(ROOT_DIR/.env)`.
 
 ## Conventions worth knowing
 
 - **Create CLI/testable solutions first, not UI-first** (`.agent/rules/implemantion-guide.md`, `trigger: always_on`). Prefer a script you can run from the shell over a frontend change when prototyping.
-- `.agent/rules/zapper-instructions.txt` is a large reference for the Zapper API integration — consult it when touching `chain-feeder/include/zapper_client.py` or the Zapper DAGs.
+
 - Schema lives in `chain-feeder/include/sql/init_db.sql`; incremental migrations are sibling `.sql` files (e.g. `add_pool_address.sql`, `create_position_events_table.sql`, `update_lp_view_price_calculation.sql`). `chain-feeder/docs/SCHEMA.md` documents the tables; `chain-feeder/docs/DAGS.md` documents the DAGs.
 - The repo root accumulates many throwaway scripts (`test_*.py`, `fix_*.py`, `debug_*.py`, `scratch/`). These are scratch/debugging artifacts, not part of the application — don't treat them as the source of truth and feel free to ignore them when reasoning about structure.
 

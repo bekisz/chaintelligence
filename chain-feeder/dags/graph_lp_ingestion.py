@@ -125,37 +125,55 @@ def ingest_snapshots(positions: list):
     logging.info(f"Ensured snapshots exist in database.")
 
 @task
-def update_prices():
-    """Updates prices in 'coin' table."""
-    # Reuse zapper logic or just fetch from include
-    from dags.zapper_lp_ingestion import update_prices
-    update_prices.function()
+def update_virtual_lp_family():
+    """Populates the virtual 'current-lp-tokens' family with all tokens currently in LP pools."""
+    pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
+    with pg_hook.get_conn() as conn:
+        cur = conn.cursor()
+        
+        # Insert or update coins from liquidity pools into coin_family "current-lp-tokens"
+        cur.execute("""
+            INSERT INTO coin_family (name, coin_id)
+            SELECT DISTINCT 'current-lp-tokens', c.coin_id
+            FROM coin c
+            JOIN liquidity_pool lp ON (lp.coin0_id = c.coin_id OR lp.coin1_id = c.coin_id)
+            ON CONFLICT (name, coin_id) DO NOTHING;
+        """)
+        
+        # Remove coins from "current-lp-tokens" that are NO LONGER in any LP pool
+        cur.execute("""
+            DELETE FROM coin_family
+            WHERE name = 'current-lp-tokens'
+            AND coin_id NOT IN (
+                SELECT coin0_id FROM liquidity_pool
+                UNION
+                SELECT coin1_id FROM liquidity_pool
+            );
+        """)
+        conn.commit()
+        cur.close()
+    logging.info("Virtual 'current-lp-tokens' family updated successfully.")
 
-@task
-def backfill_ranges():
-    """Reuses the logic to fetch detailed range data for new positions."""
-    # We call the same logic as the other DAG to keep them in sync
-    from dags.zapper_lp_ingestion import fetch_missing_ranges
-    fetch_missing_ranges.function()
+from dags.common.tasks import fetch_missing_ranges
 
 with DAG(
     'graph_lp_ingestion',
     default_args=default_args,
-    description='Native Discovery and Ingestion of LP data via The Graph (Zapper alternative)',
-    schedule='@hourly',
+    description='Native LP position discovery and ingestion via The Graph',
+    schedule='*/15 * * * *',
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
     max_active_runs=1,
-    tags=['defi', 'graph', 'native'],
+    tags=['defi', 'graph', 'lp'],
 ) as dag:
     
     raw_positions = discover_graph_positions()
     
     t_coins = ingest_coins(raw_positions)
-    t_prices = update_prices()
     t_pools = ingest_pools(raw_positions)
+    t_virtual_family = update_virtual_lp_family()
     t_positions = ingest_positions(raw_positions)
     t_snap = ingest_snapshots(raw_positions)
-    t_ranges = backfill_ranges()
+    t_ranges = fetch_missing_ranges()
     
-    raw_positions >> t_coins >> t_prices >> t_pools >> t_positions >> [t_snap, t_ranges]
+    raw_positions >> t_coins >> t_pools >> t_virtual_family >> t_positions >> [t_snap, t_ranges]

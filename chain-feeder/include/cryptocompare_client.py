@@ -9,6 +9,17 @@ load_dotenv()
 CRYPTOCOMPARE_API_KEY = os.getenv('CRYPTOCOMPARE_API_KEY')
 BASE_URL = "https://min-api.cryptocompare.com/data/pricemultifull"
 
+# Symbol mapping for CryptoCompare
+PRICE_SYMBOL_MAPPING = {
+    'WETH': 'ETH',
+    'WBTC': 'BTC',
+    'WSTETH': 'ETH',
+    'RETH': 'ETH',
+    'CBETH': 'ETH',
+    'SAVINGS USDS': 'USDS',
+    'SUSDS': 'USDS',
+}
+
 def fetch_crypto_prices(symbols: List[str], target_currency: str = 'USD') -> Dict[str, float]:
     """
     Fetch current prices for a list of symbols from CryptoCompare.

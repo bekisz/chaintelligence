@@ -32,7 +32,7 @@ chaintelligence/
 ├── chain-feeder/                 # Layer 1: ETL & Ingestion (Airflow)
 │   ├── dags/                     # Airflow DAG definitions
 │   │   ├── cmc_coin_map_sync.py
-│   │   ├── zapper_balance_loader_dag.py
+
 │   │   ├── the_graph_uniswap_v3_swaps_dag.py
 │   │   └── uniswap_v3_history_sync.py
 │   ├── routing/                  # Shared business logic
@@ -69,14 +69,14 @@ graph TD
         CMC[CoinMarketCap API]
         CC[CryptoCompare API]
         TG[The Graph - Uniswap Subgraphs]
-        ZP[Zapper API]
+
     end
 
     subgraph Ingestion_Layer [Layer 1: ETL & Ingestion - Airflow]
         DAG_CMC[CMC Sync DAG]
         DAG_Price[Price Update DAG]
         DAG_Swap[Swap Sync DAG]
-        DAG_Zapper[Zapper Portfolio DAG]
+
         DAG_Agg[History Aggregation DAG]
     end
 
@@ -105,13 +105,13 @@ graph TD
     CMC --> DAG_CMC
     CC --> DAG_Price
     TG --> DAG_Swap
-    ZP --> DAG_Zapper
+
 
     DAG_CMC --> T_Coin
     DAG_CMC --> T_Family
     DAG_Price --> T_Price
     DAG_Swap --> T_Swaps
-    DAG_Zapper --> T_Pools
+
     T_Swaps --> DAG_Agg
     DAG_Agg --> T_Stats
 
@@ -145,7 +145,7 @@ The central source of truth for all indexed blockchain and off-chain data.
 Located in `chain-feeder/dags/`, automated pipelines (DAGs) are responsible for keeping the Data Warehouse in sync with the physical world.
 
 - **cmc_coin_map_sync**: Discovers new tokens and updates market rankings from CoinMarketCap.
-- **zapper_lp_ingestion**: Regularly fetches active portfolio data from Zapper for a set of target addresses.
+- **graph_lp_ingestion**: Regularly fetches active portfolio data natively from The Graph for a set of target addresses.
 - **the_graph_uniswap_v3_swaps**: Successive indexing of on-chain swap events from The Graph.
 - **coin_price_update**: High-frequency price updates and a graduated historical backfill system:
   - **Top 100 Coins**: Full historical depth.
@@ -194,7 +194,7 @@ Chaintelligence integrates with several key infrastructure providers via the **I
 - **CoinMarketCap**: Source for authoritative token discovery, rankings, and Ethereum contract addresses.
 - **CryptoCompare**: Provides sub-minute price data and long-form historical OHLCV data.
 - **The Graph**: Used for querying distributed ledger events (Uniswap V3 subgraphs).
-- **Zapper**: Leveraged for cross-protocol portfolio tracking and position identification.
+
 
 ---
 

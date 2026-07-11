@@ -82,6 +82,20 @@ def check_tier3_condition(**context):
     logging.info(f"⏭️  Tier 3 ({family}): Fresh - skipping")
     return None
 
+@task.branch
+def check_virtual_lp_condition():
+    """Check if virtual 'current-lp-tokens' family needs update"""
+    family = 'current-lp-tokens'
+    interval = 30 # 30 minutes
+    count = get_stale_count_for_family(family, interval)
+    
+    if count > 0:
+        logging.info(f"✅ Virtual LP ({family}): {count} coins stale - triggering update")
+        return 'trigger_virtual_lp_update'
+        
+    logging.info(f"⏭️  Virtual LP ({family}): Fresh - skipping")
+    return None
+
 with DAG(
     'tiered_coin_price_ingestion',
     default_args=default_args,
@@ -114,6 +128,7 @@ with DAG(
     t1_check = check_tier1_condition()
     t2_check = check_tier2_condition()
     t3_check = check_tier3_condition()
+    lp_check = check_virtual_lp_condition()
     
     # 3. Trigger Workers (using the main coin_price_ingestion DAG)
     trigger_t1 = TriggerDagRunOperator(
@@ -145,10 +160,21 @@ with DAG(
         wait_for_completion=True,
         deferrable=False
     )
+    
+    trigger_lp = TriggerDagRunOperator(
+        task_id='trigger_virtual_lp_update',
+        trigger_dag_id='coin_price_ingestion',
+        conf={
+            'targets': "current-lp-tokens",
+        },
+        wait_for_completion=True,
+        deferrable=False
+    )
 
     # Dependencies
-    trigger_family_update >> [t1_check, t2_check, t3_check]
+    trigger_family_update >> [t1_check, t2_check, t3_check, lp_check]
     
     t1_check >> trigger_t1
     t2_check >> trigger_t2
     t3_check >> trigger_t3
+    lp_check >> trigger_lp

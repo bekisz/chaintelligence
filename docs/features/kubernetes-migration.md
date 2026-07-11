@@ -30,7 +30,7 @@ several ways:
    `docker-compose restart` with downtime.
 6. **Airflow runs `LocalExecutor`.** The scheduler process is the only
    concurrency boundary; DAGs that do heavy RPC backfills (claim scanning,
-   Zapper LP ingestion, V3/V4 history sync) cannot fan out across workers.
+   V3/V4 history sync) cannot fan out across workers.
 
 ### Scope
 
@@ -280,7 +280,7 @@ subchart key) configures:
 | `config/dex_config.yaml`, `config/chains.yaml` | `ConfigMap` `chaintelligence-files` mounted at `/app/config` |
 | `.env` directory mounted at `/app/.env` | `ConfigMap`+`Secret` projected to `/app/.env` (or replaced by env vars) |
 | Airflow FAB admin password | ExternalSecret (prod) / Secret (dev) |
-| `GRAPH_API_KEY`, `CMC_API_KEY`, `CRYPTOCOMPARE_API_KEY`, `ZAPPER_AUTH_HEADER`, `RPC_URL`, `DATA_WAREHOUSE_DB`, `PORTAL_*` | ExternalSecret keys, each materialized as env vars on the relevant Deployment |
+| `GRAPH_API_KEY`, `CMC_API_KEY`, `CRYPTOCOMPARE_API_KEY`, `RPC_URL`, `DATA_WAREHOUSE_DB`, `PORTAL_*` | ExternalSecret keys, each materialized as env vars on the relevant Deployment |
 
 ### 4.8 DAG delivery and DAG code
 
@@ -436,7 +436,7 @@ reversible. No phase cuts over until the previous one is verified.
 - [ ] `init_db.sql` applied — `\dt` in the `chaintelligence` DB shows the
   expected tables.
 - [ ] One DAG run per ingestion family completes: CMC price tier, The Graph
-  V3/V4 swap sync, Zapper LP, RPC claim backfill.
+  V3/V4 swap sync, RPC claim backfill.
 - [ ] `/api/routes/analyze` streams progress + result NDJSON for a known
   date range and reproduces a route previously seen in compose.
 
