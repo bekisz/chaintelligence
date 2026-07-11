@@ -351,8 +351,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 html += `
                     <div class="route-arrow-wrapper">
                         <span class="fee-pill">${cleanFee}${protocol}</span>
-                        <svg class="route-arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path d="M5 12h14M12 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <svg class="route-arrow-svg" viewBox="0 0 192 24" fill="none" stroke="currentColor">
+                            <path d="M5 12h182M175 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </div>
                 `;

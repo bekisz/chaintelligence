@@ -1341,10 +1341,47 @@ footer {
 }
 
 .route-arrow-svg {
-    width: 28px;
+    width: 112px;
     height: 14px;
     color: var(--text-secondary);
     opacity: 0.7;
+    transition: all 0.2s ease;
+}
+
+.fee-revert-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    z-index: 2;
+    margin-bottom: -2px;
+}
+
+.revert-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 200, 120, 0.12);
+    color: #00c878;
+    border: 1px solid rgba(0, 200, 120, 0.25);
+    border-radius: 4px;
+    padding: 2px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.revert-link:hover {
+    background: #00c878;
+    color: #000000;
+    transform: scale(1.15);
+    border-color: #00c878;
+    box-shadow: 0 0 10px rgba(0, 200, 120, 0.6);
+}
+
+.revert-icon {
+    display: block;
+    width: 11px;
+    height: 11px;
 }
 
 .route-arrow-wrapper.v3 .route-arrow-svg,

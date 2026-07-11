@@ -600,6 +600,41 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
+                let revertHtml = '';
+                if (item && typeof item === 'object' && item.pool_address) {
+                    const pool_addr = item.pool_address;
+                    const parsed = parseProtocol(item.fee);
+                    const protocolNameLower = parsed.protocolName.toLowerCase();
+                    const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
+                    
+                    let revertNet = 'mainnet';
+                    if (networkLower.includes('base')) revertNet = 'base';
+                    else if (networkLower.includes('arbitrum')) revertNet = 'arbitrum';
+                    else if (networkLower.includes('optimism')) revertNet = 'optimism';
+                    else if (networkLower.includes('polygon')) revertNet = 'polygon';
+                    
+                    let revertProto = 'uniswapv3';
+                    if (protocolNameLower.includes('uniswap v4') || protocolNameLower.includes('uniswap-v4') || protocolNameLower.includes('v4')) {
+                        revertProto = 'uniswapv4';
+                    } else if (protocolNameLower.includes('uniswap v2') || protocolNameLower.includes('uniswap-v2') || protocolNameLower.includes('v2')) {
+                        revertProto = 'uniswapv2';
+                    } else if (protocolNameLower.includes('pancake')) {
+                        revertProto = 'pancakeswapv3';
+                    }
+                    
+                    const revertUrl = `https://revert.finance/#/pool/${revertNet}/${revertProto}/${pool_addr}`;
+                    revertHtml = `
+                        <a href="${revertUrl}" target="_blank" class="revert-link" title="Analyze on Revert Finance" onclick="event.stopPropagation();">
+                            <svg class="revert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                                <path d="M21 3v5h-5"/>
+                                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                                <path d="M3 21v-5h5"/>
+                            </svg>
+                        </a>
+                    `;
+                }
+
                 if (!isClickable) {
                     tagStart = `<div`;
                     tagEnd = `</div>`;
@@ -607,9 +642,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 html += `
                         ${tagStart} class="route-arrow-wrapper ${protocolClass} ${isClickable ? 'clickable-route-segment' : ''}" data-tooltip="${tooltip}">
-                            <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
-                            <svg class="route-arrow-svg" viewBox="0 0 48 24" fill="none" stroke="currentColor">
-                                <path d="M5 12h38M36 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <div class="fee-revert-container">
+                                <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
+                                ${revertHtml}
+                            </div>
+                            <svg class="route-arrow-svg" viewBox="0 0 192 24" fill="none" stroke="currentColor">
+                                <path d="M5 12h182M175 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         ${tagEnd}
                     `;
