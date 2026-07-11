@@ -311,6 +311,141 @@ def fetch_unclaimed_fees_rpc(network, token_id):
         logger.warning(f"Failed to fetch unclaimed fees for token {token_id} on {network}: {e}")
         return 0, 0
 
+def fetch_unclaimed_fees_rpc_v4(network, token_id):
+    if not token_id:
+        return 0, 0
+        
+    pm_address = "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e"
+    state_view_map = {
+        "Ethereum": "0x7ffe42c4a5deea5b0fec41c94c136cf115597227",
+        "Arbitrum": "0x76fd297e2d437cd7f76d50f01afe6160f86e9990",
+        "Base": "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71"
+    }
+    
+    rpc = None
+    if network == "Ethereum":
+        rpc = os.getenv("RPC_URL") or os.getenv("RPC_URL_ETHEREUM")
+        if rpc and "," in rpc:
+            rpc = rpc.split(",")[0].strip()
+            
+    if not rpc:
+        rpc_map = {
+            "Ethereum": "https://eth.llamarpc.com",
+            "Arbitrum": "https://arb1.arbitrum.io/rpc",
+            "Base": "https://mainnet.base.org"
+        }
+        rpc = rpc_map.get(network)
+        
+    state_view = state_view_map.get(network)
+    if not state_view or not rpc:
+        return 0, 0
+        
+    try:
+        import requests
+        import eth_abi
+        from eth_utils import keccak
+        
+        # 1. Fetch pool key and ticks via getPoolAndPositionInfo
+        selector = "0x7ba03aad"
+        calldata = selector + format(int(token_id), '064x')
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [{"to": pm_address, "data": calldata}, "latest"],
+            "id": 1
+        }
+        
+        r = requests.post(rpc, json=payload, timeout=5)
+        res = r.json().get('result')
+        if not res or res == "0x" or len(res) < 384:
+            return 0, 0
+            
+        raw = res[2:]
+        words = [raw[i:i+64] for i in range(0, len(raw), 64)]
+        
+        t0 = "0x" + words[0][-40:]
+        t1 = "0x" + words[1][-40:]
+        fee = int(words[2], 16)
+        tick_spacing = int(words[3], 16)
+        hooks = "0x" + words[4][-40:]
+        
+        w5 = words[5]
+        def parse_i24(h):
+            v = int(h, 16)
+            return v - (1 << 24) if v >= (1 << 23) else v
+
+        tu = parse_i24(w5[50:56])
+        tl = parse_i24(w5[56:62])
+        
+        # 2. Calculate PoolId
+        encoded_pool_key = eth_abi.encode(
+            ['address', 'address', 'uint24', 'int24', 'address'],
+            [t0, t1, fee, tick_spacing, hooks]
+        )
+        pool_id = keccak(encoded_pool_key)
+        
+        # 3. Call getPositionInfo on StateView
+        salt_hex = format(int(token_id), '064x')
+        encoded_args_pos = eth_abi.encode(
+            ['bytes32', 'address', 'int24', 'int24', 'bytes32'],
+            [pool_id, pm_address, tl, tu, bytes.fromhex(salt_hex)]
+        )
+        calldata_pos = "0xdacf1d2f" + encoded_args_pos.hex()
+        payload_pos = {
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [{"to": state_view, "data": calldata_pos}, "latest"],
+            "id": 2
+        }
+        
+        r_pos = requests.post(rpc, json=payload_pos, timeout=5)
+        res_pos = r_pos.json().get('result')
+        if not res_pos or res_pos == "0x" or len(res_pos) < 194:
+            return 0, 0
+            
+        liq, growth0_last, growth1_last = eth_abi.decode(
+            ['uint128', 'uint256', 'uint256'],
+            bytes.fromhex(res_pos[2:])
+        )
+        
+        if liq == 0:
+            return 0, 0
+            
+        # 4. Call getFeeGrowthInside on StateView
+        encoded_args_growth = eth_abi.encode(
+            ['bytes32', 'int24', 'int24'],
+            [pool_id, tl, tu]
+        )
+        calldata_growth = "0x53e9c1fb" + encoded_args_growth.hex()
+        payload_growth = {
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [{"to": state_view, "data": calldata_growth}, "latest"],
+            "id": 3
+        }
+        
+        r_growth = requests.post(rpc, json=payload_growth, timeout=5)
+        res_growth = r_growth.json().get('result')
+        if not res_growth or res_growth == "0x" or len(res_growth) < 130:
+            return 0, 0
+            
+        growth0_current, growth1_current = eth_abi.decode(
+            ['uint256', 'uint256'],
+            bytes.fromhex(res_growth[2:])
+        )
+        
+        # 5. Compute unclaimed fees
+        delta0 = (growth0_current - growth0_last) % (2**256)
+        delta1 = (growth1_current - growth1_last) % (2**256)
+        
+        unclaimed0 = (delta0 * liq) // (2**128)
+        unclaimed1 = (delta1 * liq) // (2**128)
+        
+        return unclaimed0, unclaimed1
+    except Exception as e:
+        logger.warning(f"Failed to fetch unclaimed V4 fees for token {token_id} on {network}: {e}")
+        return 0, 0
+
 def ingest_snapshots_data(conn, positions: list):
     if not positions: return
     from include.uniswap_v3_range_fetcher import tick_to_price
@@ -385,8 +520,11 @@ def ingest_snapshots_data(conn, positions: list):
                     token_id = parts[-1]
 
             r0_raw, r1_raw = 0, 0
-            if token_id and p.get('protocol') == 'Uniswap V3':
-                r0_raw, r1_raw = fetch_unclaimed_fees_rpc(p.get('network'), token_id)
+            if token_id:
+                if p.get('protocol') == 'Uniswap V3':
+                    r0_raw, r1_raw = fetch_unclaimed_fees_rpc(p.get('network'), token_id)
+                elif p.get('protocol') == 'Uniswap V4':
+                    r0_raw, r1_raw = fetch_unclaimed_fees_rpc_v4(p.get('network'), token_id)
                 
             r0_amt = float(r0_raw) / (10**d0) if d0 else 0.0
             r1_amt = float(r1_raw) / (10**d1) if d1 else 0.0
