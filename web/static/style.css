@@ -285,7 +285,7 @@ header h1 {
     padding: 1.5rem 3.5rem 1.5rem 2rem;
     /* Increased right padding for icon */
     display: grid;
-    grid-template-columns: 2.5fr 1.2fr 1.2fr 1fr;
+    grid-template-columns: 2fr 3fr;
     gap: 2.5rem;
     align-items: flex-start;
     /* Better for variable content */
@@ -489,73 +489,74 @@ header h1 {
     opacity: 0.7;
 }
 
-.pos-assets {
-    background: rgba(255, 255, 255, 0.015);
-    padding: 0.9rem 1.1rem;
+.pos-table-container {
+    background: rgba(255, 255, 255, 0.012);
+    padding: 0.8rem 1.1rem;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.025);
+    overflow-x: auto;
+    width: 100%;
 }
 
-.asset-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+.compact-lp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
 }
 
-.asset-sym, .reward-sym {
+.compact-lp-table th, .compact-lp-table td {
+    padding: 0.35rem 0.5rem;
+    text-align: right;
+}
+
+.compact-lp-table th:first-child, .compact-lp-table td:first-child {
+    text-align: left;
+}
+
+.compact-lp-table th {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--text-secondary);
-    font-weight: 600;
+    font-weight: 700;
+    opacity: 0.7;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding-bottom: 0.4rem;
 }
 
-.asset-values, .reward-values {
-    display: flex;
-    gap: 0.4rem;
-    align-items: baseline;
-    justify-content: flex-end;
+.compact-lp-table td {
+    color: var(--text-primary);
+    font-weight: 500;
 }
 
-.asset-amt, .reward-val {
-    font-weight: 600;
+.compact-lp-table .token-sym {
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.compact-lp-table .token-total {
+    font-weight: 700;
     color: var(--text-primary);
 }
 
-.asset-usd, .reward-usd {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-    opacity: 0.85;
-}
-
-.pos-rewards {
-    background: rgba(59, 130, 246, 0.025);
-    padding: 0.9rem 1.1rem;
-    border-radius: 12px;
-    border: 1px solid rgba(59, 130, 246, 0.06);
-}
-
-.reward-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
-}
-
-.reward-footer {
-    margin-top: 0.75rem;
-    text-align: right;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    padding-top: 0.5rem;
-}
-
-.reward-total {
+.compact-lp-table .totals-row td {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
     font-weight: 700;
+    color: var(--text-primary);
+    padding-top: 0.55rem;
+}
+
+.compact-lp-table .totals-label {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.compact-lp-table .grand-total {
     color: var(--accent);
-    font-size: 1.1rem;
+    font-size: 0.9rem;
 }
 
 .accrual-tag {

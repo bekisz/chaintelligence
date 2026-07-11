@@ -294,6 +294,23 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
 
+            const asset0 = pos.assets[0] || { symbol: '---', balance: 0, balanceUSD: 0 };
+            const asset1 = pos.assets[1] || { symbol: '---', balance: 0, balanceUSD: 0 };
+            
+            const unclaimed0 = (pos.unclaimed && pos.unclaimed[0]) || { balance: 0, balanceUSD: 0 };
+            const unclaimed1 = (pos.unclaimed && pos.unclaimed[1]) || { balance: 0, balanceUSD: 0 };
+            
+            const claimed0 = (pos.claimed && pos.claimed[0]) || { balance: 0, balanceUSD: 0 };
+            const claimed1 = (pos.claimed && pos.claimed[1]) || { balance: 0, balanceUSD: 0 };
+            
+            const totalAmt0 = Number(asset0.balance || 0) + Number(unclaimed0.balance || 0) + Number(claimed0.balance || 0);
+            const totalAmt1 = Number(asset1.balance || 0) + Number(unclaimed1.balance || 0) + Number(claimed1.balance || 0);
+            
+            const pooledUSD = Number(asset0.balanceUSD || 0) + Number(asset1.balanceUSD || 0);
+            const claimableUSD = Number(unclaimed0.balanceUSD || 0) + Number(unclaimed1.balanceUSD || 0);
+            const claimedUSD = Number(claimed0.balanceUSD || 0) + Number(claimed1.balanceUSD || 0);
+            const grandTotalUSD = pooledUSD + claimableUSD + claimedUSD;
+
             row.innerHTML = `
                 <!-- Toggle Icon (Absolute Positioned) -->
                 <div class="expand-toggle">
@@ -317,40 +334,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${rangeHtml}
                 </div>
                 
-                <div class="pos-assets">
-                    <div class="column-title">Pooled Assets</div>
-                    ${pos.assets.filter(a => a.symbol).map(asset => `
-                        <div class="asset-item">
-                            <span class="asset-sym">${asset.symbol}</span>
-                            <div class="asset-values">
-                                <span class="asset-amt">${formatTokenAmount(asset.balance)}</span>
-                                <span class="asset-usd">(${asset.balanceUSD ? formatUSD(asset.balanceUSD) : '$0.00'})</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                
-                <div class="pos-rewards">
-                    <div class="column-title">Claimable Fees</div>
-                    <div class="reward-items">
-                        ${pos.unclaimed.filter(u => u.symbol).map(u => `
-                            <div class="reward-item">
-                                <span class="reward-sym">${u.symbol}</span>
-                                <div class="reward-values">
-                                    <span class="reward-val">${formatTokenAmount(u.balance)}</span>
-                                    <span class="reward-usd">(${u.balanceUSD ? formatUSD(u.balanceUSD) : '$0.00'})</span>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="reward-footer">
-                        ${accrualHtml}
-                        <span class="reward-total">${formatUSD(Number(pos.total_unclaimed_usd || 0))}</span>
-                    </div>
-                </div>
-                
-                <div class="pos-value">
-                    <span class="value-amt">${formatUSD(Number(pos.balance_usd || 0))}</span>
+                <div class="pos-table-container">
+                    <table class="compact-lp-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Pooled</th>
+                                <th>Claimable</th>
+                                <th>Claimed</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="token-sym">${asset0.symbol}</td>
+                                <td>${formatTokenAmount(asset0.balance)}</td>
+                                <td>${formatTokenAmount(unclaimed0.balance)}</td>
+                                <td>${formatTokenAmount(claimed0.balance)}</td>
+                                <td class="token-total">${formatTokenAmount(totalAmt0)}</td>
+                            </tr>
+                            <tr>
+                                <td class="token-sym">${asset1.symbol}</td>
+                                <td>${formatTokenAmount(asset1.balance)}</td>
+                                <td>${formatTokenAmount(unclaimed1.balance)}</td>
+                                <td>${formatTokenAmount(claimed1.balance)}</td>
+                                <td class="token-total">${formatTokenAmount(totalAmt1)}</td>
+                            </tr>
+                            <tr class="totals-row">
+                                <td class="totals-label">Total (USD)</td>
+                                <td class="pooled-val">${formatUSD(pooledUSD)}</td>
+                                <td class="claimable-val">${formatUSD(claimableUSD)}</td>
+                                <td class="claimed-val">${formatUSD(claimedUSD)}</td>
+                                <td class="grand-total">${formatUSD(grandTotalUSD)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
                 <!-- DRAWER (Hidden by default) -->

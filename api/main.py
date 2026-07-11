@@ -748,7 +748,8 @@ async def lp_summary():
                 id, timestamp, address, protocol, network, position_label, balance_usd,
                 assets, unclaimed, images, total_unclaimed_usd, position_key,
                 token_id, tick_lower, tick_upper, current_tick,
-                price_lower, price_upper, current_price, in_range, fee_tier, NULL as pool_id
+                price_lower, price_upper, current_price, in_range, fee_tier, NULL as pool_id,
+                coin0_claimed_amount, coin1_claimed_amount
             FROM v_lp_snapshots_summary
             WHERE LOWER(address) IN ({addr_placeholders})
             ORDER BY timestamp DESC
@@ -761,7 +762,8 @@ async def lp_summary():
                 id, timestamp, address, protocol, network, position_label, balance_usd,
                 assets, unclaimed, images, total_unclaimed_usd, position_key,
                 token_id, tick_lower, tick_upper, current_tick,
-                price_lower, price_upper, current_price, in_range, fee_tier, NULL as pool_id
+                price_lower, price_upper, current_price, in_range, fee_tier, NULL as pool_id,
+                coin0_claimed_amount, coin1_claimed_amount
             FROM v_lp_snapshots_summary
             ORDER BY timestamp DESC
             """
@@ -775,7 +777,7 @@ async def lp_summary():
                         pos.balance_usd, pos.assets, pos.unclaimed, pos.images, pos.total_unclaimed_usd,
                         pos.position_key, pos.token_id, lp.tick_lower, lp.tick_upper, lp.current_tick,
                         lp.price_lower, lp.price_upper, lp.current_price, lp.in_range, lp.fee_tier,
-                        lp.id AS pool_id
+                        lp.id AS pool_id, 0 as coin0_claimed_amount, 0 as coin1_claimed_amount
                     FROM liquidity_pool_position pos
                     JOIN liquidity_pool lp ON pos.pool_id = lp.id
                     ORDER BY pos.timestamp DESC LIMIT 100
@@ -842,6 +844,19 @@ async def lp_summary():
             assets = latest[7] if latest[7] else []
             unclaimed = latest[8] if latest[8] else []
             
+            import json
+            # Parse assets if string to get symbols
+            assets_parsed = assets
+            if isinstance(assets_parsed, str):
+                assets_parsed = json.loads(assets_parsed)
+                
+            claimed = []
+            if len(assets_parsed) >= 2:
+                claimed = [
+                    {"symbol": assets_parsed[0]["symbol"], "balance": float(latest[22]) if len(latest) > 22 and latest[22] else 0.0, "balanceUSD": 0.0},
+                    {"symbol": assets_parsed[1]["symbol"], "balance": float(latest[23]) if len(latest) > 23 and latest[23] else 0.0, "balanceUSD": 0.0}
+                ]
+            
             # Extract standard fields
             res_obj = {
                 "id": latest[0],
@@ -854,6 +869,7 @@ async def lp_summary():
                 "balance_usd": float(latest[6]) if latest[6] else 0,
                 "assets": assets,
                 "unclaimed": unclaimed,
+                "claimed": claimed,
                 "total_unclaimed_usd": float(latest[10]) if latest[10] else 0,
                 "images": latest[9],
                 "token_id": latest[12],
@@ -959,6 +975,12 @@ async def lp_summary():
                     unclaimed[1]['balanceUSD'] = float(unclaimed[1]['balance']) * current_snap['p1']
                     res_obj['unclaimed'] = unclaimed
 
+                claimed = res_obj.get('claimed', [])
+                if len(claimed) >= 2:
+                    claimed[0]['balanceUSD'] = float(claimed[0]['balance']) * current_snap['p0']
+                    claimed[1]['balanceUSD'] = float(claimed[1]['balance']) * current_snap['p1']
+                    res_obj['claimed'] = claimed
+
                 # Calculate Deltas for "Accrued" label (since last snapshot? Or 24h?)
                 # Existing logic used last snapshot delta. Let's keep that or standardize to 24h?
                 # User wants "1d APR". The "accrued" label usually implied "since last check".
@@ -997,6 +1019,14 @@ async def lp_summary():
                     unclaimed[0]['balanceUSD'] = float(unclaimed[0]['balance']) * p0
                     unclaimed[1]['balanceUSD'] = float(unclaimed[1]['balance']) * p1
                     res_obj['unclaimed'] = unclaimed
+
+                claimed = res_obj.get('claimed', [])
+                if len(claimed) >= 2:
+                    p0 = price_map.get(claimed[0]['symbol'], 0.0) if 'price_map' in locals() else 0.0
+                    p1 = price_map.get(claimed[1]['symbol'], 0.0) if 'price_map' in locals() else 0.0
+                    claimed[0]['balanceUSD'] = float(claimed[0]['balance']) * p0
+                    claimed[1]['balanceUSD'] = float(claimed[1]['balance']) * p1
+                    res_obj['claimed'] = claimed
 
             results.append(res_obj)
             
