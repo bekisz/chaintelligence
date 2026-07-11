@@ -318,24 +318,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 
                 <div class="pos-assets">
+                    <div class="column-title">Pooled Assets</div>
                     ${pos.assets.filter(a => a.symbol).map(asset => `
                         <div class="asset-item">
                             <span class="asset-sym">${asset.symbol}</span>
-                            <span class="asset-amt">${formatTokenAmount(asset.balance)}</span>
-                        </div>
-                        <div class="asset-item">
-                            <span class="asset-sym">${asset.symbol}</span>
-                            <span class="asset-amt">${asset.price ? asset.price.toFixed(2) : '0.00'}</span>
+                            <div class="asset-values">
+                                <span class="asset-amt">${formatTokenAmount(asset.balance)}</span>
+                                <span class="asset-usd">(${asset.balanceUSD ? formatUSD(asset.balanceUSD) : '$0.00'})</span>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
                 
                 <div class="pos-rewards">
+                    <div class="column-title">Claimable Fees</div>
                     <div class="reward-items">
                         ${pos.unclaimed.filter(u => u.symbol).map(u => `
                             <div class="reward-item">
-                                <span class="reward-label">${u.symbol}</span>
-                                <span class="reward-val">${formatTokenAmount(u.balance)}</span>
+                                <span class="reward-sym">${u.symbol}</span>
+                                <div class="reward-values">
+                                    <span class="reward-val">${formatTokenAmount(u.balance)}</span>
+                                    <span class="reward-usd">(${u.balanceUSD ? formatUSD(u.balanceUSD) : '$0.00'})</span>
+                                </div>
                             </div>
                         `).join('')}
                     </div>

@@ -132,7 +132,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/api/routes/date-range", "/api/routes/analyze", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp", "/routing"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/api/routes/date-range", "/api/routes/analyze", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp", "/routing", "/lp"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -951,6 +951,14 @@ async def lp_summary():
                     assets[1]['price'] = float(current_snap['p1'])
                     res_obj['assets'] = assets
 
+                unclaimed = res_obj.get('unclaimed', [])
+                if isinstance(unclaimed, str):
+                    unclaimed = json.loads(unclaimed)
+                if len(unclaimed) >= 2:
+                    unclaimed[0]['balanceUSD'] = float(unclaimed[0]['balance']) * current_snap['p0']
+                    unclaimed[1]['balanceUSD'] = float(unclaimed[1]['balance']) * current_snap['p1']
+                    res_obj['unclaimed'] = unclaimed
+
                 # Calculate Deltas for "Accrued" label (since last snapshot? Or 24h?)
                 # Existing logic used last snapshot delta. Let's keep that or standardize to 24h?
                 # User wants "1d APR". The "accrued" label usually implied "since last check".
@@ -979,6 +987,16 @@ async def lp_summary():
                     assets[1]['price'] = price_map.get(assets[1]['symbol'], 0.0)
                     assets[1]['balanceUSD'] = float(assets[1]['balance']) * assets[1]['price']
                     res_obj['assets'] = assets
+
+                unclaimed = res_obj.get('unclaimed', [])
+                if isinstance(unclaimed, str):
+                    unclaimed = json.loads(unclaimed)
+                if len(unclaimed) >= 2:
+                    p0 = price_map.get(unclaimed[0]['symbol'], 0.0) if 'price_map' in locals() else 0.0
+                    p1 = price_map.get(unclaimed[1]['symbol'], 0.0) if 'price_map' in locals() else 0.0
+                    unclaimed[0]['balanceUSD'] = float(unclaimed[0]['balance']) * p0
+                    unclaimed[1]['balanceUSD'] = float(unclaimed[1]['balance']) * p1
+                    res_obj['unclaimed'] = unclaimed
 
             results.append(res_obj)
             
