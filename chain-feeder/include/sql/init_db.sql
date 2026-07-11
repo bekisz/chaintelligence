@@ -106,9 +106,12 @@ CREATE TABLE IF NOT EXISTS liquidity_pool_position (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_lpp_wallet ON liquidity_pool_position(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_lpp_pool_id ON liquidity_pool_position(pool_id);
+
 -- 4. SNAPSHOT TABLE
 CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot (
-    id SERIAL PRIMARY KEY,
+    id SERIAL,
     position_id INT REFERENCES liquidity_pool_position(id),
     timestamp TIMESTAMP NOT NULL,
     balance_usd NUMERIC,
@@ -127,8 +130,56 @@ CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot (
     
     current_tick INTEGER,
     current_price NUMERIC,
-    in_range BOOLEAN
-);
+    in_range BOOLEAN,
+    
+    -- Partition key must be part of the primary key
+    PRIMARY KEY (timestamp, id)
+) PARTITION BY RANGE (timestamp);
+
+-- Monthly partitions for snapshots
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_01 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_02 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-02-01') TO ('2024-03-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_03 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-03-01') TO ('2024-04-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_04 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-04-01') TO ('2024-05-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_05 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-05-01') TO ('2024-06-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_06 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-06-01') TO ('2024-07-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_07 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-07-01') TO ('2024-08-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_08 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-08-01') TO ('2024-09-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_09 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-09-01') TO ('2024-10-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_10 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-10-01') TO ('2024-11-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_11 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-11-01') TO ('2024-12-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2024_12 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2024-12-01') TO ('2025-01-01');
+
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_01 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_02 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_03 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_04 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-04-01') TO ('2025-05-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_05 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-05-01') TO ('2025-06-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_06 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-06-01') TO ('2025-07-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_07 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-07-01') TO ('2025-08-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_08 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-08-01') TO ('2025-09-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_09 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-09-01') TO ('2025-10-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_10 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-10-01') TO ('2025-11-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_11 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-11-01') TO ('2025-12-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2025_12 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
+
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_01 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_02 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_03 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_04 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_05 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_06 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_07 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_08 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-08-01') TO ('2026-09-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_09 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_10 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-10-01') TO ('2026-11-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_11 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-11-01') TO ('2026-12-01');
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_2026_12 PARTITION OF liquidity_pool_position_snapshot FOR VALUES FROM ('2026-12-01') TO ('2027-01-01');
+
+CREATE TABLE IF NOT EXISTS liquidity_pool_position_snapshot_default PARTITION OF liquidity_pool_position_snapshot DEFAULT;
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_pos_time ON liquidity_pool_position_snapshot(position_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_snapshot_time ON liquidity_pool_position_snapshot(timestamp DESC);
 
 -- 4.5 LIQUIDITY POOL HISTORY TABLE
 CREATE TABLE IF NOT EXISTS liquidity_pool_history (
@@ -422,28 +473,28 @@ SELECT
     -- Reconstruct Assets
     c0.symbol as asset0_symbol,
     s.coin0_amount as asset0_amount,
-    0 as asset0_usd, 
+    COALESCE(s.coin0_usd, 0) as asset0_usd, 
     c1.symbol as asset1_symbol,
     s.coin1_amount as asset1_amount,
-    0 as asset1_usd,
+    COALESCE(s.coin1_usd, 0) as asset1_usd,
     
     -- Reconstruct Rewards (Use Claimable Columns)
     c0.symbol as reward0_symbol,
     s.coin0_claimable_amount as reward0_amount,
-    0 as reward0_usd,
+    COALESCE(s.coin0_claimable_usd, 0) as reward0_usd,
     c1.symbol as reward1_symbol,
     s.coin1_claimable_amount as reward1_amount,
-    0 as reward1_usd,
+    COALESCE(s.coin1_claimable_usd, 0) as reward1_usd,
 
     -- Reconstruct JSONs for legacy app
     jsonb_build_array(
-        jsonb_build_object('symbol', c0.symbol, 'balance', s.coin0_amount, 'balanceUSD', 0),
-        jsonb_build_object('symbol', c1.symbol, 'balance', s.coin1_amount, 'balanceUSD', 0)
+        jsonb_build_object('symbol', c0.symbol, 'balance', s.coin0_amount, 'balanceUSD', COALESCE(s.coin0_usd, 0)),
+        jsonb_build_object('symbol', c1.symbol, 'balance', s.coin1_amount, 'balanceUSD', COALESCE(s.coin1_usd, 0))
     ) as assets,
     
     jsonb_build_array(
-        jsonb_build_object('symbol', c0.symbol, 'balance', s.coin0_claimable_amount, 'balanceUSD', 0),
-        jsonb_build_object('symbol', c1.symbol, 'balance', s.coin1_claimable_amount, 'balanceUSD', 0)
+        jsonb_build_object('symbol', c0.symbol, 'balance', s.coin0_claimable_amount, 'balanceUSD', COALESCE(s.coin0_claimable_usd, 0)),
+        jsonb_build_object('symbol', c1.symbol, 'balance', s.coin1_claimable_amount, 'balanceUSD', COALESCE(s.coin1_claimable_usd, 0))
     ) as unclaimed,
      
     -- Images (From Coins)
@@ -453,7 +504,7 @@ SELECT
     ) as images,
     
     -- Total unclaimed (Approximation, no USD value stored yet)
-    0 as total_unclaimed_usd,
+    COALESCE(s.coin0_claimable_usd, 0) + COALESCE(s.coin1_claimable_usd, 0) as total_unclaimed_usd,
     
     -- Range data
     pos.token_id,
