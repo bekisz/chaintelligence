@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def normalize_symbol(sym):
     if not sym: return "UNKNOWN"
     s = sym.upper().strip()
-    mapping = {'WRAPPED ETHER': 'WETH', 'WRAPPED BITCOIN': 'WBTC'}
+    mapping = {'WRAPPED ETHER': 'WETH', 'WRAPPED BITCOIN': 'WBTC', 'EUROC': 'EURC'}
     s = mapping.get(s, s)
     return s[:8]
 
@@ -97,10 +97,7 @@ def ingest_coins_data(conn, positions: list):
             cur.execute("""
                 INSERT INTO coin_contract (coin_id, chain, contract_address, decimals, verified_at)
                 VALUES (%s, %s, %s, %s, NOW())
-                ON CONFLICT (coin_id, chain) DO UPDATE SET
-                    contract_address = EXCLUDED.contract_address,
-                    decimals = COALESCE(EXCLUDED.decimals, coin_contract.decimals),
-                    verified_at = EXCLUDED.verified_at
+                ON CONFLICT DO NOTHING
             """, (coin_id, net, data['address'].lower(), data['decimals']))
     conn.commit()
 
@@ -167,7 +164,7 @@ def ingest_pool_stats(conn, positions: list):
 
 def ingest_positions_data(conn, positions: list):
     if not positions: return
-    from uniswap_v3_range_fetcher import tick_to_price
+    from include.uniswap_v3_range_fetcher import tick_to_price
     
     with conn.cursor() as cur:
         cur.execute("SELECT symbol, hardness FROM coin")
@@ -180,13 +177,24 @@ def ingest_positions_data(conn, positions: list):
                 fee = str(int(fee))
             
             # Priority 1: Match by pool_address (most reliable for V4 and duplicates)
-            cur.execute("SELECT id, coin0_symbol, coin1_symbol FROM liquidity_pool WHERE pool_address = %s", (p['pool_address'],))
+            cur.execute("""
+                SELECT lp.id, c0.symbol, c1.symbol 
+                FROM liquidity_pool lp
+                JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                WHERE lp.pool_address = %s
+            """, (p['pool_address'],))
             res = cur.fetchone()
             
             # Priority 2: Fallback to name/fee matching if address not found
             if not res:
-                cur.execute("SELECT id, coin0_symbol, coin1_symbol FROM liquidity_pool WHERE network=%s AND protocol=%s AND pool_name=%s AND fee_tier=%s", 
-                           (p['network'], p['protocol'], pool_name, fee))
+                cur.execute("""
+                    SELECT lp.id, c0.symbol, c1.symbol 
+                    FROM liquidity_pool lp
+                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                    WHERE lp.network=%s AND lp.protocol=%s AND lp.pool_name=%s AND lp.fee_tier=%s
+                """, (p['network'], p['protocol'], pool_name, fee))
                 res = cur.fetchone()
                 
             if not res: continue
@@ -197,40 +205,74 @@ def ingest_positions_data(conn, positions: list):
             if match: token_id = match.group(1)
             
             p_lower, p_upper = None, None
-            if 'tick_lower' in p and 'tick_upper' in p:
-                d0, d1 = 18, 18
-                for a in p['assets']:
-                    if normalize_symbol(a['symbol']) == c0_sym: d0 = a['decimals']
-                    if normalize_symbol(a['symbol']) == c1_sym: d1 = a['decimals']
+            curr_p = None
+            if 'tick_lower' in p and 'tick_upper' in p and len(p['assets']) >= 2:
+                d0 = p['assets'][0]['decimals']
+                d1 = p['assets'][1]['decimals']
                 p_lower = tick_to_price(p['tick_lower'], d0, d1)
                 p_upper = tick_to_price(p['tick_upper'], d0, d1)
+                if p.get('current_tick') is not None:
+                    curr_p = tick_to_price(p['current_tick'], d0, d1)
+                
+                # Check for price inversion needed (if token0 is stablecoin/quote)
+                stablecoins = ["USDC", "USDT", "DAI", "USDBC"]
+                quote_currencies = ["WETH", "ETH"]
+                t0_sym = p['assets'][0]['symbol'].upper()
+                t1_sym = p['assets'][1]['symbol'].upper()
+                
+                should_invert = False
+                if any(s in t0_sym for s in stablecoins) and not any(s in t1_sym for s in stablecoins):
+                    should_invert = True
+                elif any(q in t0_sym for q in quote_currencies) and \
+                     not any(s in t1_sym for s in stablecoins) and \
+                     not any(q in t1_sym for q in quote_currencies):
+                    should_invert = True
+                    
+                if should_invert:
+                    p_l = p_lower
+                    p_u = p_upper
+                    p_lower = 1 / p_u if p_u != 0 else 0
+                    p_upper = 1 / p_l if p_l != 0 else 0
+                    if curr_p:
+                        curr_p = 1 / curr_p if curr_p != 0 else 0
 
             cur.execute("""
-                INSERT INTO liquidity_pool_position (pool_id, position_key, wallet_address, token_id, tick_lower, tick_upper, price_lower, price_upper)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO liquidity_pool_position (pool_id, position_key, wallet_address, token_id, tick_lower, tick_upper, price_lower, price_upper, current_tick, current_price)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (position_key) DO UPDATE SET 
                     pool_id = EXCLUDED.pool_id, 
                     token_id = EXCLUDED.token_id,
                     tick_lower = EXCLUDED.tick_lower,
                     tick_upper = EXCLUDED.tick_upper,
                     price_lower = EXCLUDED.price_lower,
-                    price_upper = EXCLUDED.price_upper
-            """, (pool_id, p['position_key'], p['address'], token_id, p.get('tick_lower'), p.get('tick_upper'), p_lower, p_upper))
+                    price_upper = EXCLUDED.price_upper,
+                    current_tick = EXCLUDED.current_tick,
+                    current_price = EXCLUDED.current_price
+            """, (pool_id, p['position_key'], p['address'], token_id, p.get('tick_lower'), p.get('tick_upper'), p_lower, p_upper, p.get('current_tick'), curr_p))
     conn.commit()
 
 def ingest_snapshots_data(conn, positions: list):
     if not positions: return
-    from uniswap_v3_range_fetcher import tick_to_price
+    from include.uniswap_v3_range_fetcher import tick_to_price
     
     with conn.cursor() as cur:
         cur.execute("SELECT symbol, price FROM coin")
         price_map = {row[0]: float(row[1]) if row[1] else 0.0 for row in cur.fetchall()}
         
         for p in positions:
-            cur.execute("SELECT id FROM liquidity_pool_position WHERE position_key = %s", (p['position_key'],))
+            cur.execute("""
+                SELECT pos.id, c0.symbol, c1.symbol 
+                FROM liquidity_pool_position pos
+                JOIN liquidity_pool pool ON pos.pool_id = pool.id
+                JOIN coin c0 ON pool.coin0_id = c0.coin_id
+                JOIN coin c1 ON pool.coin1_id = c1.coin_id
+                WHERE pos.position_key = %s
+            """, (p['position_key'],))
             res = cur.fetchone()
             if not res: continue
-            pos_id = res[0]
+            pos_id, db_c0_sym, db_c1_sym = res
+            db_c0_sym = normalize_symbol(db_c0_sym)
+            db_c1_sym = normalize_symbol(db_c1_sym)
             
             v0, v1 = 0, 0
             s0, s1 = None, None
@@ -248,12 +290,41 @@ def ingest_snapshots_data(conn, positions: list):
                     v0, v1 = calculate_v3_amounts(p['liquidity'], p['current_tick'], p['tick_lower'], p['tick_upper'], d0, d1)
                     curr_p = tick_to_price(p['current_tick'], d0, d1)
                     in_range = p['tick_lower'] <= p['current_tick'] <= p['tick_upper']
+                    
+                    # Apply inversion to snapshot current_price
+                    stablecoins = ["USDC", "USDT", "DAI", "USDBC"]
+                    quote_currencies = ["WETH", "ETH"]
+                    t0_sym = p['assets'][0]['symbol'].upper()
+                    t1_sym = p['assets'][1]['symbol'].upper()
+                    
+                    should_invert = False
+                    if any(s in t0_sym for s in stablecoins) and not any(s in t1_sym for s in stablecoins):
+                        should_invert = True
+                    elif any(q in t0_sym for q in quote_currencies) and \
+                         not any(s in t1_sym for s in stablecoins) and \
+                         not any(q in t1_sym for q in quote_currencies):
+                        should_invert = True
+                        
+                    if should_invert and curr_p:
+                        curr_p = 1 / curr_p if curr_p != 0 else 0
             
-            balance_usd = (v0 * price_map.get(s0, 0)) + (v1 * price_map.get(s1, 0)) if s0 and s1 else 0
+            coin0_usd = v0 * price_map.get(s0, 0) if s0 else 0
+            coin1_usd = v1 * price_map.get(s1, 0) if s1 else 0
+            balance_usd = coin0_usd + coin1_usd
+
+            # Align blockchain token order (v0, v1) to database coin order (db_c0_sym, db_c1_sym)
+            db_v0, db_v1 = v0, v1
+            db_usd0, db_usd1 = coin0_usd, coin1_usd
+            if db_c0_sym == s1:
+                db_v0, db_v1 = v1, v0
+                db_usd0, db_usd1 = coin1_usd, coin0_usd
 
             cur.execute("""
                 INSERT INTO liquidity_pool_position_snapshot
-                (position_id, timestamp, balance_usd, coin0_amount, coin1_amount, coin0_claimable_amount, coin1_claimable_amount, current_tick, current_price, in_range)
-                VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, 0, 0, %s, %s, %s)
-            """, (pos_id, balance_usd, v0, v1, p.get('current_tick'), curr_p, in_range))
+                (position_id, timestamp, balance_usd, coin0_amount, coin1_amount, 
+                 coin0_usd, coin1_usd, coin0_claimable_amount, coin1_claimable_amount, 
+                 coin0_claimable_usd, coin1_claimable_usd,
+                 current_tick, current_price, in_range)
+                VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s, 0, 0, 0, 0, %s, %s, %s)
+            """, (pos_id, balance_usd, db_v0, db_v1, db_usd0, db_usd1, p.get('current_tick'), curr_p, in_range))
     conn.commit()
