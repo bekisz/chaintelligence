@@ -251,6 +251,66 @@ def ingest_positions_data(conn, positions: list):
             """, (pool_id, p['position_key'], p['address'], token_id, p.get('tick_lower'), p.get('tick_upper'), p_lower, p_upper, p.get('current_tick'), curr_p))
     conn.commit()
 
+def fetch_unclaimed_fees_rpc(network, token_id):
+    if not token_id:
+        return 0, 0
+        
+    NPM_MAP = {
+        "Ethereum": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "Arbitrum": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "Base": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "Polygon": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+    }
+
+    # Fetch RPC url
+    rpc = None
+    if network == "Ethereum":
+        rpc = os.getenv("RPC_URL") or os.getenv("RPC_URL_ETHEREUM")
+        if rpc and "," in rpc:
+            rpc = rpc.split(",")[0].strip()
+    
+    if not rpc:
+        rpc_map = {
+            "Ethereum": "https://eth.llamarpc.com",
+            "Arbitrum": "https://arb1.arbitrum.io/rpc",
+            "Base": "https://mainnet.base.org",
+            "Polygon": "https://polygon-rpc.com"
+        }
+        rpc = rpc_map.get(network)
+        
+    npm = NPM_MAP.get(network)
+    if not npm or not rpc:
+        return 0, 0
+        
+    try:
+        import requests
+        token_id_hex = hex(int(token_id))[2:].zfill(64)
+        recipient_hex = "0".zfill(64)
+        amount0_max_hex = "ffffffffffffffffffffffffffffffff".zfill(64)
+        amount1_max_hex = "ffffffffffffffffffffffffffffffff".zfill(64)
+        
+        calldata = "0xfc6f7865" + token_id_hex + recipient_hex + amount0_max_hex + amount1_max_hex
+        
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [{"to": npm, "data": calldata}, "latest"],
+            "id": 1
+        }
+        
+        r = requests.post(rpc, json=payload, timeout=5)
+        res = r.json()
+        if 'result' in res:
+            res_hex = res['result']
+            if len(res_hex) >= 130:
+                amt0 = int(res_hex[2:66], 16)
+                amt1 = int(res_hex[66:130], 16)
+                return amt0, amt1
+        return 0, 0
+    except Exception as e:
+        logger.warning(f"Failed to fetch unclaimed fees for token {token_id} on {network}: {e}")
+        return 0, 0
+
 def ingest_snapshots_data(conn, positions: list):
     if not positions: return
     from include.uniswap_v3_range_fetcher import tick_to_price
@@ -277,9 +337,9 @@ def ingest_snapshots_data(conn, positions: list):
             v0, v1 = 0, 0
             s0, s1 = None, None
             curr_p, in_range = None, None
+            d0, d1 = 18, 18
             
             if (p['protocol'] == 'Uniswap V3' or p['protocol'] == 'Uniswap V4') and 'liquidity' in p:
-                d0, d1 = 18, 18
                 if len(p['assets']) >= 2:
                     s0 = normalize_symbol(p['assets'][0]['symbol'])
                     d0 = p['assets'][0]['decimals']
@@ -312,6 +372,28 @@ def ingest_snapshots_data(conn, positions: list):
             coin1_usd = v1 * price_map.get(s1, 0) if s1 else 0
             balance_usd = coin0_usd + coin1_usd
 
+            # Fetch unclaimed fees
+            token_id = None
+            label = p.get('position_label', '')
+            match = re.search(r'Token ID:\s*(\d+)', label)
+            if match:
+                token_id = match.group(1)
+            else:
+                pkey = p.get('position_key', '')
+                parts = pkey.split('-')
+                if len(parts) >= 3 and parts[-1].isdigit():
+                    token_id = parts[-1]
+
+            r0_raw, r1_raw = 0, 0
+            if token_id and p.get('protocol') == 'Uniswap V3':
+                r0_raw, r1_raw = fetch_unclaimed_fees_rpc(p.get('network'), token_id)
+                
+            r0_amt = float(r0_raw) / (10**d0) if d0 else 0.0
+            r1_amt = float(r1_raw) / (10**d1) if d1 else 0.0
+            
+            r0_usd = r0_amt * price_map.get(s0, 0) if s0 else 0.0
+            r1_usd = r1_amt * price_map.get(s1, 0) if s1 else 0.0
+
             # Align blockchain token order (v0, v1) to database coin order (db_c0_sym, db_c1_sym)
             db_v0, db_v1 = v0, v1
             db_usd0, db_usd1 = coin0_usd, coin1_usd
@@ -319,12 +401,18 @@ def ingest_snapshots_data(conn, positions: list):
                 db_v0, db_v1 = v1, v0
                 db_usd0, db_usd1 = coin1_usd, coin0_usd
 
+            db_r0, db_r1 = r0_amt, r1_amt
+            db_rusd0, db_rusd1 = r0_usd, r1_usd
+            if db_c0_sym == s1:
+                db_r0, db_r1 = r1_amt, r0_amt
+                db_rusd0, db_rusd1 = r1_usd, r0_usd
+
             cur.execute("""
                 INSERT INTO liquidity_pool_position_snapshot
                 (position_id, timestamp, balance_usd, coin0_amount, coin1_amount, 
                  coin0_usd, coin1_usd, coin0_claimable_amount, coin1_claimable_amount, 
                  coin0_claimable_usd, coin1_claimable_usd,
-                 current_tick, current_price, in_range)
-                VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s, 0, 0, 0, 0, %s, %s, %s)
-            """, (pos_id, balance_usd, db_v0, db_v1, db_usd0, db_usd1, p.get('current_tick'), curr_p, in_range))
+                  current_tick, current_price, in_range)
+                VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (pos_id, balance_usd, db_v0, db_v1, db_usd0, db_usd1, db_r0, db_r1, db_rusd0, db_rusd1, p.get('current_tick'), curr_p, in_range))
     conn.commit()
