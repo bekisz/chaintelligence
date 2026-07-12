@@ -516,17 +516,25 @@ class PostgresFetcher:
                 # we do not calculate APR (we set it to None, which displays as a dash '-' or 'N/A' in the UI).
                 is_unreliable_tvl = avg_tvl <= 1.0 or (total_vol > 0.0 and avg_tvl < (total_vol / days) * 0.05)
 
-                apr = None
-                if not is_unreliable_tvl:
-                    try:
-                        fee_db = meta['fee_db']
-                        if fee_db == 'Dynamic': fee_rate = 0.0002
-                        elif '%' in fee_db: fee_rate = float(fee_db.replace('%', '').strip()) / 100.0
-                        else: fee_rate = float(fee_db) / 1000000.0
+                # Calculate fee rate
+                fee_rate = None
+                try:
+                    fee_db = meta['fee_db']
+                    if fee_db == 'Dynamic': fee_rate = 0.0002
+                    elif '%' in fee_db: fee_rate = float(fee_db.replace('%', '').strip()) / 100.0
+                    else: fee_rate = float(fee_db) / 1000000.0
+                except:
+                    pass
 
+                apr = None
+                if fee_rate == 0.0:
+                    apr = 0.0
+                elif fee_rate is not None and not is_unreliable_tvl:
+                    try:
                         fees_earned = total_vol * fee_rate
                         apr = (fees_earned / avg_tvl) * (365.0 / days)
-                    except: pass
+                    except:
+                        pass
 
                 if apr is not None:
                     results[k] = apr
