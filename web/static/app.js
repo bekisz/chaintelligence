@@ -303,19 +303,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const toggleSwitch = document.getElementById('display-mode-toggle');
     const toggleWrapper = document.getElementById('display-wrapper');
 
-    toggleSwitch.addEventListener('change', (e) => {
-        const isApr = e.target.checked;
-        if (toggleWrapper) {
-            toggleWrapper.classList.toggle('mode-fee', !isApr);
-            toggleWrapper.classList.toggle('mode-apr', isApr);
-        }
-        if (currentRoutes && currentRoutes.length > 0) {
-            filterAndRenderRoutes();
-        }
-    });
+    if (toggleSwitch) {
+        toggleSwitch.addEventListener('change', (e) => {
+            const isApr = e.target.checked;
+            if (toggleWrapper) {
+                toggleWrapper.classList.toggle('mode-fee', !isApr);
+                toggleWrapper.classList.toggle('mode-apr', isApr);
+            }
+            if (currentRoutes && currentRoutes.length > 0) {
+                filterAndRenderRoutes();
+            }
+        });
+    }
 
     // Helper to allow clicking labels
     window.setMode = (mode) => {
+        if (!toggleSwitch) return;
         if (mode === 'fee') {
             toggleSwitch.checked = false;
         } else {
@@ -421,7 +424,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        const isAprMode = document.getElementById('display-mode-toggle').checked;
+        const toggleEl = document.getElementById('display-mode-toggle');
+        const isAprMode = toggleEl ? toggleEl.checked : false;
 
         const parseProtocol = (feeString) => {
             let cleanFee = feeString || '';
@@ -457,17 +461,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (idx < tokens.length - 1) {
                 const item = items[idx];
-                let displayVal = '?';
-                let tooltip = '';
+                let feeDisplay = '?';
+                let aprDisplay = '';
                 let protocolClass = '';
+                let tooltip = '';
+                let protocolName = 'Unknown';
+                let networkName = '';
 
                 if (item !== undefined && item !== null) {
                     if (typeof item === 'object') {
                         // Backend enriched object
                         const parsed = parseProtocol(item.fee);
                         let cleanFee = parsed.cleanFee;
-                        let protocolName = parsed.protocolName;
-                        let networkName = parsed.networkName;
+                        protocolName = parsed.protocolName;
+                        networkName = parsed.networkName;
                         protocolClass = parsed.protocolClass;
 
                         // Normalize Dynamic to dyn, and convert basis points to percentages
@@ -480,25 +487,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (cleanFee.toLowerCase() === 'dynamic') {
                             dispFee = 'dyn';
                         }
+                        feeDisplay = dispFee;
 
-                        if (isAprMode) {
-                            if (item.apr !== undefined && item.apr !== null && item.apr > 0) {
-                                // For very small APRs, show more precision
-                                const aprVal = item.apr * 100;
-                                displayVal = aprVal < 0.1 ? aprVal.toFixed(3) + '%' : aprVal.toFixed(1) + '%';
-                            } else {
-                                displayVal = dispFee + '*';
-                            }
-                        } else {
-                            displayVal = dispFee;
+                        if (item.apr !== undefined && item.apr !== null && item.apr > 0) {
+                            const aprVal = item.apr * 100;
+                            aprDisplay = aprVal < 0.1 ? aprVal.toFixed(3) + '%' : aprVal.toFixed(1) + '%';
                         }
 
                         tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: ${protocolName}\nNetwork: ${networkName || 'Ethereum'}`;
                     } else if (typeof item === 'string') {
                         const parsed = parseProtocol(item);
                         let cleanFee = parsed.cleanFee;
-                        let protocolName = parsed.protocolName;
-                        let networkName = parsed.networkName;
+                        protocolName = parsed.protocolName;
+                        networkName = parsed.networkName;
                         protocolClass = parsed.protocolClass;
 
                         let dispFee = cleanFee;
@@ -508,35 +509,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                             cleanFee = dispFee;
                         }
                         if (cleanFee.toLowerCase() === 'dynamic') {
-                            displayVal = 'dyn';
+                            feeDisplay = 'dyn';
                         } else {
-                            displayVal = dispFee;
+                            feeDisplay = dispFee;
                         }
                         tooltip = `APR: N/A\nTier: ${cleanFee}\nProtocol: ${protocolName}\nNetwork: ${networkName || 'Ethereum'}`;
                     } else {
                         const feeNum = parseFloat(item);
                         if (!isNaN(feeNum)) {
-                            displayVal = (feeNum / 10000) + '%';
+                            feeDisplay = (feeNum / 10000) + '%';
                         }
-                        tooltip = `APR: N/A\nTier: ${displayVal}\nProtocol: Unknown`;
+                        tooltip = `APR: N/A\nTier: ${feeDisplay}\nProtocol: Unknown`;
                     }
                 }
 
-                let tagStart = '';
-                let tagEnd = '';
                 let isClickable = false;
+                let uniLinkHtml = '';
+                let uniHref = '';
+                let uniProtocol = '';
 
                 if (item && typeof item === 'object' && item.pool_address) {
-                    let href = '';
                     const parsed = parseProtocol(item.fee);
                     const protocolNameLower = parsed.protocolName.toLowerCase();
                     const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
-
                     const pool_addr = item.pool_address;
 
                     if (protocolNameLower.includes('uniswap v4')) {
-                        // V4: link uses poolId (bytes32) in the same /explore/pools/<net>/<id> format
-                        // as V3, but with a 64-char hex (bytes32) instead of 40-char (address)
                         let uniNetwork = 'ethereum';
                         if (networkLower.includes('base')) {
                             uniNetwork = 'base';
@@ -549,7 +547,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else if (networkLower.includes('optimism')) {
                             uniNetwork = 'optimism';
                         }
-                        href = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
+                        uniHref = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
+                        uniProtocol = 'uniswap';
+                        isClickable = true;
                     } else if (protocolNameLower.includes('pancake')) {
                         let pChain = 'bsc';
                         if (networkLower.includes('base')) {
@@ -560,21 +560,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                             pChain = 'arb';
                         }
                         if (protocolNameLower.includes('v4')) {
-                            // PancakeSwap V4 (Infinity): pool_address is either the
-                            // canonical 32-byte poolId (66 hex chars) -> the pool's
-                            // /liquidity/pool page, or coin0's contract address (42
-                            // hex chars, when no explorer match) -> the token's pairs
-                            // page as a fallback.
                             if (pool_addr.length === 66) {
-                                href = `https://pancakeswap.finance/liquidity/pool/${pChain}/${pool_addr}`;
+                                uniHref = `https://pancakeswap.finance/liquidity/pool/${pChain}/${pool_addr}`;
                             } else {
-                                href = `https://pancakeswap.finance/info/infinity/pairs/tokens/${pool_addr}?chain=${pChain}`;
+                                uniHref = `https://pancakeswap.finance/info/infinity/pairs/tokens/${pool_addr}?chain=${pChain}`;
                             }
                         } else {
-                            href = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
+                            uniHref = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
                         }
-                    } else {
-                        // V3/V2: link uses contract address
+                        uniProtocol = 'pancakeswap';
+                        isClickable = true;
+                    } else if (protocolNameLower.includes('uniswap') || protocolNameLower.includes('v3') || protocolNameLower.includes('v2')) {
                         let uniNetwork = 'ethereum';
                         if (networkLower.includes('base')) {
                             uniNetwork = 'base';
@@ -589,15 +585,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else if (networkLower.includes('polygon')) {
                             uniNetwork = 'polygon';
                         }
-                        href = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
-                    }
-                    
-                    if (href) {
-                        tagStart = `<a href="${href}" target="_blank" style="text-decoration: none; color: inherit;"`;
-                        tagEnd = `</a>`;
+                        uniHref = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
+                        uniProtocol = 'uniswap';
                         isClickable = true;
-                        displayVal += ` <svg class="external-link-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 2px; vertical-align: middle; display: inline-block; opacity: 0.8; transition: opacity 0.2s ease;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
                     }
+                }
+
+                if (uniHref && uniProtocol) {
+                    // Uniswap unicorn icon (pink) - solid silhouette
+                    const uniswapIconSvg = `<svg class="proto-brand-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1.848 12.164a.823.823 0 0 1-.127-1.157L3.35 8.966a.823.823 0 0 1 1.284 1.026l-1.63 2.043a.823.823 0 0 1-1.156.129zm1.693-5.18l1.452.363a.823.823 0 0 1 .585.992.823.823 0 0 1-.992.585l-1.452-.363a.823.823 0 0 1 .407-1.577zm5.698-1.743c.454 0 .823.369.823.823v2.17c0 .454-.369.823-.823.823a.823.823 0 0 1-.823-.823v-2.17c0-.454.369-.823.823-.823zm2.463-3.86a.823.823 0 0 1 1.109-.297l1.884 1.088a.823.823 0 0 1-.823 1.425l-1.884-1.088a.823.823 0 0 1-.286-1.128zm10.15 10.78a9.49 9.49 0 0 1-5.704 8.708v-2.73a.823.823 0 0 0-.823-.823h-2.057a3.086 3.086 0 0 1-3.086-3.086v-.727a9.49 9.49 0 0 1 11.67-1.342z"/>
+                    </svg>`;
+
+                    // PancakeSwap bunny icon (CAKE cyan) - paths styled with currentColor/currentColor
+                    const pancakeIconSvg = `<svg class="proto-brand-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <ellipse cx="50" cy="72" rx="26" ry="18" fill="currentColor" opacity="0.9"/>
+                        <ellipse cx="50" cy="68" rx="22" ry="14" fill="currentColor"/>
+                        <ellipse cx="36" cy="32" rx="8" ry="20" fill="currentColor" opacity="0.9" transform="rotate(-15 36 32)"/>
+                        <ellipse cx="64" cy="32" rx="8" ry="20" fill="currentColor" opacity="0.9" transform="rotate(15 64 32)"/>
+                        <ellipse cx="50" cy="58" rx="22" ry="20" fill="currentColor"/>
+                        <ellipse cx="50" cy="60" rx="18" ry="16" fill="currentColor"/>
+                        <circle cx="42" cy="55" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <circle cx="58" cy="55" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                    </svg>`;
+
+                    const brandIcon = uniProtocol === 'pancakeswap' ? pancakeIconSvg : uniswapIconSvg;
+                    const linkTitle = uniProtocol === 'pancakeswap' ? 'View on PancakeSwap' : 'View on Uniswap';
+                    uniLinkHtml = `
+                        <a href="${uniHref}" target="_blank" class="pool-label-link pool-label-link--${uniProtocol}" data-tooltip="${linkTitle}" onclick="event.stopPropagation();">
+                            ${brandIcon}
+                        </a>
+                    `;
                 }
 
                 let revertHtml = '';
@@ -606,13 +624,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const parsed = parseProtocol(item.fee);
                     const protocolNameLower = parsed.protocolName.toLowerCase();
                     const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
-                    
+
                     let revertNet = 'mainnet';
                     if (networkLower.includes('base')) revertNet = 'base';
                     else if (networkLower.includes('arbitrum')) revertNet = 'arbitrum';
                     else if (networkLower.includes('optimism')) revertNet = 'optimism';
                     else if (networkLower.includes('polygon')) revertNet = 'polygon';
-                    
+
                     let revertProto = 'uniswapv3';
                     if (protocolNameLower.includes('uniswap v4') || protocolNameLower.includes('uniswap-v4') || protocolNameLower.includes('v4')) {
                         revertProto = 'uniswapv4';
@@ -621,10 +639,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } else if (protocolNameLower.includes('pancake')) {
                         revertProto = 'pancakeswapv3';
                     }
-                    
+
                     const revertUrl = `https://revert.finance/#/pool/${revertNet}/${revertProto}/${pool_addr}`;
                     revertHtml = `
-                        <a href="${revertUrl}" target="_blank" class="revert-link" title="Analyze on Revert Finance" onclick="event.stopPropagation();">
+                        <a href="${revertUrl}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();">
                             <svg class="revert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
                                 <path d="M21 3v5h-5"/>
@@ -635,22 +653,47 @@ document.addEventListener('DOMContentLoaded', async () => {
                     `;
                 }
 
-                if (!isClickable) {
-                    tagStart = `<div`;
-                    tagEnd = `</div>`;
+                // Render both Fee display and APR display in separate text spans (or combine them)
+                let labelContent = `
+                    <div class="label-pane fee-pane" data-tooltip="Fee Tier: ${feeDisplay}">
+                        <span class="fee-pill">${feeDisplay}</span>
+                    </div>
+                `;
+                if (aprDisplay) {
+                    labelContent += `
+                        <div class="label-pane apr-pane" data-tooltip="APR: ${aprDisplay}">
+                            <span class="apr-label">${aprDisplay}</span>
+                        </div>
+                    `;
                 }
 
-                html += `
-                        ${tagStart} class="route-arrow-wrapper ${protocolClass} ${isClickable ? 'clickable-route-segment' : ''}" data-tooltip="${tooltip}">
-                            <div class="fee-revert-container">
-                                <span class="fee-pill ${isAprMode ? 'apr-pill' : ''}">${displayVal}</span>
-                                ${revertHtml}
-                            </div>
-                            <svg class="route-arrow-svg" viewBox="0 0 192 24" fill="none" stroke="currentColor">
-                                <path d="M5 12h182M175 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        ${tagEnd}
+                let linksContent = '';
+                if (uniLinkHtml || revertHtml) {
+                    linksContent = `
+                        <div class="label-pane links-pane">
+                            ${uniLinkHtml}
+                            ${revertHtml}
+                        </div>
                     `;
+                }
+
+                const arrowTooltip = `${protocolName}${networkName ? ' (' + networkName + ')' : ''}`;
+
+                // New layout: arrow spans full width with floating label on top
+                html += `
+                    <div class="route-hop ${protocolClass} ${isClickable ? 'clickable-route-segment' : ''}">
+                        <div class="route-hop-arrow ${protocolClass}" data-tooltip="${arrowTooltip}">
+                            <div class="arrow-line"></div>
+                            <svg class="arrow-head" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1,1 7,7 1,13"/>
+                            </svg>
+                        </div>
+                        <div class="route-hop-label">
+                            ${labelContent}
+                            ${linksContent}
+                        </div>
+                    </div>
+                `;
             }
         });
 

@@ -1317,43 +1317,139 @@ footer {
     gap: 4px;
 }
 
-.route-arrow-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+/* ── Route Hop: full-width arrow with floating label ── */
+.route-hop {
     position: relative;
-    padding: 0 1px;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 60px;
+    margin: 0 3px;
+}
+
+.route-hop-arrow {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    pointer-events: auto;
+    color: var(--text-secondary);
+    opacity: 0.55;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+/* The stretchy line part */
+.route-hop-arrow .arrow-line {
+    flex: 1;
+    height: 0;
+    border-top: 1.5px solid currentColor;
+}
+
+/* The fixed-size arrowhead — never stretches */
+.route-hop-arrow .arrow-head {
+    width: 8px;
+    height: 14px;
+    flex-shrink: 0;
+    overflow: visible;
+}
+
+/* Floating label centred on top of arrow */
+.route-hop-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    display: flex;
+    align-items: stretch;
+    padding: 0;
+    border-radius: 6px;
+    background: rgba(20, 20, 30, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    white-space: nowrap;
+    pointer-events: auto;
+}
+
+/* Individual panes inside the label */
+.route-hop-label .label-pane {
+    display: flex;
+    align-items: center;
+    padding: 2.5px 8px;
+    gap: 6px;
+    height: 100%;
+}
+
+/* Border separator between panes */
+.route-hop-label .label-pane:not(:last-child) {
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .fee-pill {
-    font-size: 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 600;
     color: var(--text-secondary);
-    background: rgba(0, 0, 0, 0.3);
-    padding: 0px 3px;
-    border-radius: 4px;
-    margin-bottom: -2px;
-    z-index: 1;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
 }
 
-.apr-pill {
+.apr-label {
+    font-size: 0.72rem;
+    font-weight: 600;
     color: var(--success);
-    background: rgba(16, 185, 129, 0.15);
+    white-space: nowrap;
+    letter-spacing: 0.01em;
 }
 
-.route-arrow-svg {
-    width: 112px;
-    height: 14px;
-    color: var(--text-secondary);
-    opacity: 0.7;
-    transition: all 0.2s ease;
-}
-
-.fee-revert-container {
-    display: flex;
+/* Brand Link inside label: behaves like revert-link (reversed colors on hover) */
+.pool-label-link {
+    display: inline-flex;
     align-items: center;
-    gap: 5px;
-    z-index: 2;
-    margin-bottom: -2px;
+    justify-content: center;
+    border-radius: 4px;
+    padding: 2.5px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    opacity: 1;
+    line-height: 0;
+}
+
+.pool-label-link--uniswap {
+    background: rgba(255, 102, 178, 0.12);
+    color: #ff66b2;
+    border: 1px solid rgba(255, 102, 178, 0.25);
+}
+
+.pool-label-link--uniswap:hover {
+    background: #ff66b2;
+    color: #000000;
+    opacity: 1;
+    transform: scale(1.15);
+    border-color: #ff66b2;
+    box-shadow: 0 0 10px rgba(255, 102, 178, 0.6);
+}
+
+.pool-label-link--pancakeswap {
+    background: rgba(31, 199, 212, 0.12);
+    color: #1fc7d4;
+    border: 1px solid rgba(31, 199, 212, 0.25);
+}
+
+.pool-label-link--pancakeswap:hover {
+    background: #1fc7d4;
+    color: #000000;
+    opacity: 1;
+    transform: scale(1.15);
+    border-color: #1fc7d4;
+    box-shadow: 0 0 10px rgba(31, 199, 212, 0.6);
+}
+
+.proto-brand-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
 }
 
 .revert-link {
@@ -1364,7 +1460,7 @@ footer {
     color: #00c878;
     border: 1px solid rgba(0, 200, 120, 0.25);
     border-radius: 4px;
-    padding: 2px;
+    padding: 2.5px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -1384,67 +1480,68 @@ footer {
     height: 11px;
 }
 
-.route-arrow-wrapper.v3 .route-arrow-svg,
-.route-arrow-wrapper.uniswap-v3 .route-arrow-svg {
+/* Protocol-specific arrow colours — set on the arrow container */
+.route-hop.v3 .route-hop-arrow,
+.route-hop.uniswap-v3 .route-hop-arrow {
     color: #ff007a;
-    opacity: 0.95;
+    opacity: 0.85;
 }
 
-.route-arrow-wrapper.v4 .route-arrow-svg,
-.route-arrow-wrapper.uniswap-v4 .route-arrow-svg {
+.route-hop.v4 .route-hop-arrow,
+.route-hop.uniswap-v4 .route-hop-arrow {
     color: #9860f3;
-    opacity: 0.95;
+    opacity: 0.85;
 }
 
-.route-arrow-wrapper.pancakeswap-v3 .route-arrow-svg {
+.route-hop.pancakeswap-v3 .route-hop-arrow {
     color: #1fc7d4;
-    opacity: 0.95;
+    opacity: 0.85;
 }
 
-.route-arrow-wrapper.pancakeswap-v4 .route-arrow-svg {
+.route-hop.pancakeswap-v4 .route-hop-arrow {
     color: #4ade80;
-    opacity: 0.95;
+    opacity: 0.85;
 }
 
-.route-arrow-wrapper.uniswap-v2 .route-arrow-svg {
+.route-hop.uniswap-v2 .route-hop-arrow {
     color: #ff6ba6;
-    opacity: 0.95;
+    opacity: 0.85;
 }
 
-.route-arrow-wrapper.aerodrome .route-arrow-svg {
+.route-hop.aerodrome .route-hop-arrow {
     color: var(--accent);
-    opacity: 0.95;
+    opacity: 0.85;
 }
 
-.route-arrow-wrapper.clickable-route-segment {
+/* Clickable hop */
+.route-hop.clickable-route-segment {
     cursor: pointer;
-    text-decoration: none;
 }
 
-.route-arrow-wrapper.clickable-route-segment:hover .route-arrow-svg {
-    transform: scale(1.15);
-    filter: drop-shadow(0 0 5px currentColor);
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease;
+.route-hop.clickable-route-segment:hover .route-hop-arrow {
+    opacity: 1;
+    filter: drop-shadow(0 0 3px currentColor);
 }
 
-.route-arrow-wrapper.clickable-route-segment:hover .fee-pill {
-    background: rgba(255, 255, 255, 0.2) !important;
-    color: #ffffff !important;
-    transform: translateY(-1px);
-    transition: transform 0.2s ease, background 0.2s ease;
+.route-hop.clickable-route-segment:hover .route-hop-label {
+    background: rgba(40, 40, 60, 0.92);
+    border-color: rgba(255, 255, 255, 0.18);
 }
 
-.route-arrow-wrapper.clickable-route-segment:hover .external-link-icon {
-    opacity: 1 !important;
-    transform: translate(0.5px, -0.5px);
+.route-hop.clickable-route-segment:hover .label-pane:not(:last-child) {
+    border-right-color: rgba(255, 255, 255, 0.18);
+}
+
+.route-hop.clickable-route-segment:hover .fee-pill {
+    color: #ffffff;
 }
 
 /* Custom Tooltip Styling */
-.route-arrow-wrapper[data-tooltip] {
+[data-tooltip] {
     position: relative;
 }
 
-.route-arrow-wrapper[data-tooltip]::after {
+[data-tooltip]::after {
     content: attr(data-tooltip);
     position: absolute;
     bottom: 100%;
@@ -1468,7 +1565,7 @@ footer {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-.route-arrow-wrapper[data-tooltip]:hover::after {
+[data-tooltip]:hover::after {
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(-8px);

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
-    <link rel="stylesheet" href="/static/style.css?v=20.04">
+    <link rel="stylesheet" href="/static/style.css?v=21.0">
 </head>
 
 <body>
@@ -84,14 +84,7 @@
             <section id="results-section" class="results-container hidden">
                 <div class="table-container glass" style="padding: 16px;">
                     <div class="table-controls">
-                        <div class="display-toggle-wrapper mode-fee" id="display-wrapper">
-                            <span class="toggle-label" id="label-fee" onclick="setMode('fee')">Fee Tier</span>
-                            <label class="switch">
-                                <input type="checkbox" id="display-mode-toggle">
-                                <span class="slider"></span>
-                            </label>
-                            <span class="toggle-label" id="label-apr" onclick="setMode('apr')">Avg APR</span>
-                        </div>
+                        <!-- Removed toggle wrapper as both Fee Tier and APR are shown simultaneously -->
 
                         <!-- Real-time Filter inputs for APR, Market Size, TXs and Acyclicity -->
                         <div class="filter-controls-wrapper">
@@ -203,7 +196,7 @@
     </div>
 
     <script src="/static/nav.js"></script>
-    <script src="/static/app.js?v=4.13"></script>
+    <script src="/static/app.js?v=5.0"></script>
 </body>
 
 </html>

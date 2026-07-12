@@ -349,11 +349,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     protocol = proto ? ` (${proto.toUpperCase()})` : '';
                 }
                 html += `
-                    <div class="route-arrow-wrapper">
-                        <span class="fee-pill">${cleanFee}${protocol}</span>
-                        <svg class="route-arrow-svg" viewBox="0 0 192 24" fill="none" stroke="currentColor">
-                            <path d="M5 12h182M175 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
+                    <div class="route-hop">
+                        <div class="route-hop-arrow">
+                            <div class="arrow-line"></div>
+                            <svg class="arrow-head" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1,1 7,7 1,13"/>
+                            </svg>
+                        </div>
+                        <div class="route-hop-label">
+                            <div class="label-pane fee-pane">
+                                <span class="fee-pill">${cleanFee}${protocol}</span>
+                            </div>
+                        </div>
                     </div>
                 `;
             } else {
