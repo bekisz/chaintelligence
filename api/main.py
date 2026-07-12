@@ -539,21 +539,9 @@ async def analyze(
                     batch = await asyncio.to_thread(_derive_batch)
                     pool_addresses.update(batch)
 
-                # V4: batch-lookup pool_ids from the DB (stored by the ingestion DAG)
                 if v4_keys:
                     def _lookup_v4_pool_ids():
-                        """Fetch V4 pool identifiers from DB in one query.
-
-                        Uniswap V4: the value is the 32-byte poolId (lp.pool_id),
-                        used for the Uniswap explore pool link.
-
-                        PancakeSwap V4: the Infinity info site has no per-pool
-                        page keyed by the subgraph's 20-byte id, and the canonical
-                        32-byte poolId can't be derived without tickSpacing/hooks.
-                        So the value is coin0's contract address, and the frontend
-                        links to that token's Infinity pairs page (which lists the
-                        pool).
-                        """
+                        """Fetch V4 pool identifiers from DB in one query."""
                         v4_results = {}
                         try:
                             with get_conn() as conn:
@@ -573,13 +561,11 @@ async def analyze(
                                                 ELSE LOWER(lp.network) END
                                     WHERE (lp.protocol = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
                                        OR lp.protocol = 'PancakeSwap V4'
+                                    ORDER BY
+                                        CASE WHEN c0.symbol IN ('WETH', 'WBNB') OR c1.symbol IN ('WETH', 'WBNB') THEN 1 ELSE 0 END ASC
                                 """)
                                 for net, proto, fee_tier, pid, sym0, sym1, t0_addr in cur.fetchall():
                                     if proto == 'PancakeSwap V4':
-                                        # Prefer the canonical 32-byte poolId for the
-                                        # /liquidity/pool/<chain>/<poolId> link; fall back
-                                        # to coin0's contract address (token-page link)
-                                        # when no explorer match was stored.
                                         if pid and len(pid) == 66:
                                             value = pid
                                         elif t0_addr:
@@ -590,20 +576,21 @@ async def analyze(
                                         if not pid:
                                             continue
                                         value = pid
-                                    # Build ALL possible fee format keys so we match
-                                    # whatever format the route uses (fee_display from
-                                    # swaps is percentage like "0.05%", while DB
-                                    # stores Uniswap tier integers like "500").
-                                    fee_keys = {fee_tier}  # raw value
+                                    
+                                    # Normalize symbols for key mapping (so native ETH/BNB maps to the wrapped WETH/WBNB pool)
+                                    s0_norm = 'WETH' if sym0 == 'ETH' else ('WBNB' if sym0 == 'BNB' else sym0)
+                                    s1_norm = 'WETH' if sym1 == 'ETH' else ('WBNB' if sym1 == 'BNB' else sym1)
+
+                                    # Build ALL possible fee format keys
+                                    fee_keys = {fee_tier}
                                     if '%' in fee_tier:
                                         fee_keys.add(fee_tier.replace('%', '').strip())
                                     else:
                                         try:
-                                            val = int(fee_tier)  # e.g. 500 → 0.05%
+                                            val = int(fee_tier)
                                             pct = val / 10000
                                             pct_str = f'{pct:.6f}'.rstrip('0').rstrip('.')
                                             fee_keys.add(f'{pct_str}%')
-                                            # Also try with the Uniswap tier integer as string
                                             fee_keys.add(fee_tier)
                                             fee_keys.add(str(val))
                                         except ValueError:
@@ -611,11 +598,10 @@ async def analyze(
                                     for fk in fee_keys:
                                         if not fk:
                                             continue
-                                        key_fwd = f"{sym0}-{sym1}-{fk}|{proto}|{net}"
-                                        key_rev = f"{sym1}-{sym0}-{fk}|{proto}|{net}"
+                                        key_fwd = f"{s0_norm}-{s1_norm}-{fk}|{proto}|{net}"
+                                        key_rev = f"{s1_norm}-{s0_norm}-{fk}|{proto}|{net}"
                                         v4_results[key_fwd] = value
                                         v4_results[key_rev] = value
-                                    v4_results[key_rev] = value
                         except Exception as ex:
                             print(f"  Error looking up V4 pool_ids: {ex}")
                         return v4_results
@@ -635,14 +621,22 @@ async def analyze(
                         fee = item
                         t1 = path[i+1]
                     
-                        key = f"{t0}-{t1}-{fee}"
+                        t0_norm = t0.upper()
+                        t1_norm = t1.upper()
+                        if 'v4' in fee.lower():
+                            if t0_norm == 'ETH': t0_norm = 'WETH'
+                            if t0_norm == 'BNB': t0_norm = 'WBNB'
+                            if t1_norm == 'ETH': t1_norm = 'WETH'
+                            if t1_norm == 'BNB': t1_norm = 'WBNB'
+
+                        key = f"{t0_norm}-{t1_norm}-{fee}"
                         apr_val = aprs.get(key)
                     
                         # Also try reversed key just in case
                         if apr_val is None:
-                            apr_val = aprs.get(f"{t1}-{t0}-{fee}")
+                            apr_val = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
                     
-                        pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1}-{t0}-{fee}")
+                        pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1_norm}-{t0_norm}-{fee}")
                     
                         # Replace string fee with object
                         new_path.append({
@@ -1864,13 +1858,21 @@ async def sps_find(
                 pool_addresses.update(v4_batch)
 
             for (t0, t1, fee) in pools_to_fetch:
-                key = f"{t0}-{t1}-{fee}"
+                t0_norm = t0.upper()
+                t1_norm = t1.upper()
+                if 'v4' in fee.lower():
+                    if t0_norm == 'ETH': t0_norm = 'WETH'
+                    if t0_norm == 'BNB': t0_norm = 'WBNB'
+                    if t1_norm == 'ETH': t1_norm = 'WETH'
+                    if t1_norm == 'BNB': t1_norm = 'WBNB'
+
+                key = f"{t0_norm}-{t1_norm}-{fee}"
                 apr_val = aprs.get(key)
                 if apr_val is None:
-                    apr_val = aprs.get(f"{t1}-{t0}-{fee}")
-                pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1}-{t0}-{fee}")
+                    apr_val = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
+                pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1_norm}-{t0_norm}-{fee}")
                 apr_str = f"{apr_val:.2%}" if apr_val is not None else "N/A"
-                pool_stats[key] = {
+                pool_stats[f"{t0}-{t1}-{fee}"] = {
                     'apr': apr_val if apr_val is not None else 0.0,
                     'apr_str': apr_str,
                     'pool_address': pool_addr
