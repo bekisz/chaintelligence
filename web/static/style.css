@@ -378,6 +378,11 @@ header h1 {
     background: rgba(0, 82, 255, 0.1);
 }
 
+.badge.bnb, .badge.bnb-chain, .badge.bsc {
+    color: #f3ba2f;
+    background: rgba(243, 186, 47, 0.1);
+}
+
 .protocol-tag {
     color: var(--text-secondary);
     font-size: 0.8rem;
