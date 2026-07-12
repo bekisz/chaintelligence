@@ -386,7 +386,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const tokenIconHtml = (symbol) => {
-        const url = tokenImageMap[symbol.toUpperCase()];
+        let sym = symbol.toUpperCase();
+        if (sym === 'WBNB') sym = 'BNB';
+        else if (sym === 'WETH') sym = 'ETH';
+        else if (sym === 'WBTC') sym = 'BTC';
+        const url = tokenImageMap[sym];
         if (url) {
             return `<img class="token-icon" src="${url}" alt="${symbol}">`;
         }

@@ -22,7 +22,7 @@
 
     // Token icon URL helper (uses cryptocurrency-icons CDN with fallback)
     function tokenIconUrl(symbol) {
-        const s = symbol.toLowerCase().replace('weth', 'eth').replace('wbtc', 'btc');
+        const s = symbol.toLowerCase().replace('weth', 'eth').replace('wbtc', 'btc').replace('wbnb', 'bnb');
         return `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${s}.png`;
     }
     function tokenIconHtml(symbol, size = 32) {

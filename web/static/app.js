@@ -404,7 +404,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 'TBTC': 'BTC',
                 'KBTC': 'BTC',
                 'LBTC': 'BTC',
-                'FBTC': 'BTC'
+                'FBTC': 'BTC',
+                'WBNB': 'BNB'
             };
             
             let mappedSymbol = uppercaseSymbol;
