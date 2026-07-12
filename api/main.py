@@ -304,7 +304,7 @@ async def analyze(
 
                 print(f"[Anaylsis] Processing batch: {c_chunk_start} -> {c_chunk_end}")
                 batch_swaps = await asyncio.to_thread(
-                    fetcher.fetch_swaps, c_chunk_start, c_chunk_end, token_filter, network
+                    fetcher.fetch_swaps, c_chunk_start, c_chunk_end, token_filter, network, start_tokens_list, end_tokens_list
                 )
 
                 if batch_swaps:

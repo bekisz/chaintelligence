@@ -66,31 +66,56 @@ class PostgresFetcher:
         if self.verbose:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] [DB] {message}")
     
-    def fetch_swaps(self, start_date: datetime, end_date: datetime, token_filter: Optional[List[str]] = None, network: Optional[str] = None) -> List[Dict]:
+    def fetch_swaps(self, start_date: datetime, end_date: datetime,
+                    token_filter: Optional[List[str]] = None,
+                    network: Optional[str] = None,
+                    start_tokens: Optional[List[str]] = None,
+                    end_tokens: Optional[List[str]] = None) -> List[Dict]:
         """
         Fetch all swap events for tracked tokens within the date range from Postgres.
 
         Queries the unified `swaps` table with coin_id joins for symbol resolution.
         """
-        self._log(f"Fetching swaps from {start_date} to {end_date} (network={network}, tokens={token_filter})")
+        self._log(f"Fetching swaps from {start_date} to {end_date} (network={network}, tokens={token_filter}, start={start_tokens}, end={end_tokens})")
 
         try:
             with get_conn() as conn:
                 cur = conn.cursor()
 
-                upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
-
-                # Build the token filter condition using coin symbols
-                if token_filter and len(token_filter) == 2:
-                    t0, t1 = upper_symbols[0], upper_symbols[1]
-                    token_where = "(UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)"
-                    token_params = [t0, t1, t1, t0]
-                elif token_filter:
-                    token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
-                    token_params = [upper_symbols, upper_symbols]
+                # Determine the token query condition
+                if start_tokens and end_tokens:
+                    start_upper = [s.upper() for s in start_tokens]
+                    end_upper = [e.upper() for e in end_tokens]
+                    
+                    start_has_wildcard = '*' in start_upper
+                    end_has_wildcard = '*' in end_upper
+                    
+                    if start_has_wildcard and end_has_wildcard:
+                        token_where = ""
+                        token_params = []
+                    elif start_has_wildcard:
+                        token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
+                        token_params = [end_upper, end_upper]
+                    elif end_has_wildcard:
+                        token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
+                        token_params = [start_upper, start_upper]
+                    else:
+                        token_where = "(UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s)) OR (UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s))"
+                        token_params = [start_upper, end_upper, end_upper, start_upper]
                 else:
-                    token_where = ""
-                    token_params = []
+                    upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
+
+                    # Build the token filter condition using coin symbols
+                    if token_filter and len(token_filter) == 2:
+                        t0, t1 = upper_symbols[0], upper_symbols[1]
+                        token_where = "(UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)"
+                        token_params = [t0, t1, t1, t0]
+                    elif token_filter:
+                        token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
+                        token_params = [upper_symbols, upper_symbols]
+                    else:
+                        token_where = ""
+                        token_params = []
 
                 # Network filter
                 network_where = ""

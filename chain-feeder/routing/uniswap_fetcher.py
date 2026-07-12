@@ -176,7 +176,10 @@ class UniswapV3Fetcher:
                 
         return found_swaps
 
-    def fetch_swaps(self, start_date: datetime, end_date: datetime, token_filter: Optional[List[str]] = None) -> List[Dict]:
+    def fetch_swaps(self, start_date: datetime, end_date: datetime,
+                    token_filter: Optional[List[str]] = None,
+                    start_tokens: Optional[List[str]] = None,
+                    end_tokens: Optional[List[str]] = None) -> List[Dict]:
         """
         Fetch all swap events for tracked tokens within the date range using optimized queries
         """
