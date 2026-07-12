@@ -655,13 +655,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Render both Fee display and APR display in separate text spans (or combine them)
                 let labelContent = `
-                    <div class="label-pane fee-pane" data-tooltip="Fee Tier: ${feeDisplay}">
+                    <div class="label-pane fee-pane">
                         <span class="fee-pill">${feeDisplay}</span>
                     </div>
                 `;
                 if (aprDisplay) {
                     labelContent += `
-                        <div class="label-pane apr-pane" data-tooltip="APR: ${aprDisplay}">
+                        <div class="label-pane apr-pane">
                             <span class="apr-label">${aprDisplay}</span>
                         </div>
                     `;

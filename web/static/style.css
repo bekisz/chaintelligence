@@ -1573,6 +1573,13 @@ footer {
     transform: translateX(-50%) translateY(-8px);
 }
 
+/* Suppress route-hop-arrow tooltip when hovering on its nested label card */
+.route-hop-arrow:has(.route-hop-label:hover)::after {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: translateX(-50%) translateY(0) !important;
+}
+
 /* Table Text Utilities */
 .text-success {
     color: var(--success) !important;
