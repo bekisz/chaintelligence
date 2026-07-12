@@ -34,9 +34,11 @@ const cmcSlugs = {
     'USDG': 'global-dollar-usdg',
 };
 
+let tokenSlugMap = {};
+
 const getCmcUrl = (tokenSymbol) => {
     const symbol = (tokenSymbol || '').toUpperCase().trim();
-    const slug = cmcSlugs[symbol] || symbol.toLowerCase();
+    const slug = tokenSlugMap[symbol] || cmcSlugs[symbol] || symbol.toLowerCase();
     return `https://coinmarketcap.com/currencies/${slug}/`;
 };
 
@@ -118,8 +120,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         .then(response => response.json())
         .then(coins => {
             coins.forEach(coin => {
-                if (coin.symbol && coin.image) {
-                    tokenImageMap[coin.symbol.toUpperCase()] = coin.image;
+                if (coin.symbol) {
+                    const upperSymbol = coin.symbol.toUpperCase();
+                    if (coin.image) {
+                        tokenImageMap[upperSymbol] = coin.image;
+                    }
+                    if (coin.slug) {
+                        tokenSlugMap[upperSymbol] = coin.slug;
+                    }
                 }
             });
         })

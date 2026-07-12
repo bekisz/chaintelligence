@@ -34,9 +34,11 @@ const cmcSlugs = {
     'USDG': 'global-dollar-usdg',
 };
 
+let tokenSlugMap = {};
+
 const getCmcUrl = (tokenSymbol) => {
     const symbol = (tokenSymbol || '').toUpperCase().trim();
-    const slug = cmcSlugs[symbol] || symbol.toLowerCase();
+    const slug = tokenSlugMap[symbol] || cmcSlugs[symbol] || symbol.toLowerCase();
     return `https://coinmarketcap.com/currencies/${slug}/`;
 };
 
@@ -63,6 +65,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const statVolume = document.getElementById('sps-stat-volume');
     const statTxns = document.getElementById('sps-stat-txns');
     const statRevenue = document.getElementById('sps-stat-revenue');
+
+    // Fetch official token slugs from backend (non-blocking — populate map when ready)
+    fetch('/api/coin/list')
+        .then(response => response.json())
+        .then(coins => {
+            coins.forEach(coin => {
+                if (coin.symbol && coin.slug) {
+                    tokenSlugMap[coin.symbol.toUpperCase()] = coin.slug;
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching token slugs:', error);
+        });
 
     // Fetch available date range
     try {

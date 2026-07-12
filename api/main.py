@@ -1274,7 +1274,7 @@ async def get_coins():
         cur = conn.cursor()
         
         query = """
-        SELECT symbol, name, image_url as image, cmc_rank as market_cap_rank
+        SELECT symbol, name, image_url as image, cmc_rank as market_cap_rank, slug
         FROM coin
         ORDER BY cmc_rank ASC NULLS LAST;
         """
