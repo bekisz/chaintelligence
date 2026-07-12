@@ -31,6 +31,7 @@ const cmcSlugs = {
     'UST': 'terrausd',
     'USDY': 'ondo-us-dollar-yield',
     'USDM': 'mountain-protocol-usdm',
+    'USDG': 'global-dollar-usdg',
 };
 
 const getCmcUrl = (tokenSymbol) => {
