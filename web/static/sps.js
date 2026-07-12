@@ -533,6 +533,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const protocolNameLower = protocolName.toLowerCase();
                     const networkLower = (networkName || 'ethereum').toLowerCase();
 
+                    let showRevert = false;
                     let revertNet = 'mainnet';
                     if (networkLower.includes('base')) revertNet = 'base';
                     else if (networkLower.includes('arbitrum')) revertNet = 'arbitrum';
@@ -540,26 +541,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                     else if (networkLower.includes('polygon')) revertNet = 'polygon';
                     else if (networkLower.includes('bnb') || networkLower.includes('bsc')) revertNet = 'bnb';
 
-                    let revertProto = 'uniswapv3';
-                    if (protocolNameLower.includes('uniswap v4') || protocolNameLower.includes('uniswap-v4') || protocolNameLower.includes('v4')) {
+                    let revertProto = '';
+                    if (protocolNameLower.includes('uniswap v4') || (protocolNameLower.includes('uniswap') && protocolNameLower.includes('v4'))) {
                         revertProto = 'uniswapv4';
-                    } else if (protocolNameLower.includes('uniswap v2') || protocolNameLower.includes('uniswap-v2') || protocolNameLower.includes('v2')) {
-                        revertProto = 'uniswapv2';
-                    } else if (protocolNameLower.includes('pancake')) {
-                        revertProto = 'pancakeswapv3';
+                        showRevert = true;
+                    } else if (protocolNameLower.includes('uniswap v3') || protocolNameLower === 'uniswap' || (protocolNameLower.includes('uniswap') && protocolNameLower.includes('v3'))) {
+                        revertProto = 'uniswapv3';
+                        showRevert = true;
+                    } else if (protocolNameLower.includes('pancakeswap v3') || (protocolNameLower.includes('pancake') && protocolNameLower.includes('v3'))) {
+                        if (revertNet === 'bnb' || revertNet === 'arbitrum') {
+                            revertProto = 'pancakeswapv3';
+                            showRevert = true;
+                        }
+                    } else if (protocolNameLower.includes('aerodrome')) {
+                        if (revertNet === 'base') {
+                            revertProto = 'aerodrome';
+                            showRevert = true;
+                        }
                     }
 
-                    const revertUrl = `https://revert.finance/#/pool/${revertNet}/${revertProto}/${pool_addr.toLowerCase()}`;
-                    revertHtml = `
-                        <a href="${revertUrl}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();">
-                            <svg class="revert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
-                                <path d="M21 3v5h-5"/>
-                                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
-                                <path d="M3 21v-5h5"/>
-                            </svg>
-                        </a>
-                    `;
+                    if (showRevert) {
+                        const revertUrl = `https://revert.finance/#/pool/${revertNet}/${revertProto}/${pool_addr.toLowerCase()}`;
+                        revertHtml = `
+                            <a href="${revertUrl}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();">
+                                <svg class="revert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                                    <path d="M21 3v5h-5"/>
+                                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                                    <path d="M3 21v-5h5"/>
+                                </svg>
+                            </a>
+                        `;
+                    }
                 }
 
                 let labelContent = `
