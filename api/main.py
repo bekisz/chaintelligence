@@ -1631,6 +1631,247 @@ async def sps_find(
 
         results, period_days = await to_thread.run_sync(run_finder)
 
+        # Collect unique pools from opportunities paths to query stats and addresses
+        pools_to_fetch = set()
+        for opp in results:
+            dom = opp.get('dominant_route')
+            if dom and dom.get('path'):
+                parts = dom['path'].split()
+                for i in range(1, len(parts) - 1, 2):
+                    pools_to_fetch.add((parts[i-1], parts[i+1], parts[i]))
+            
+            for r in opp.get('multihop_routes', []):
+                if r.get('path'):
+                    parts = r['path'].split()
+                    for i in range(1, len(parts) - 1, 2):
+                        pools_to_fetch.add((parts[i-1], parts[i+1], parts[i]))
+            
+            for r in opp.get('direct_routes', []):
+                if r.get('path'):
+                    parts = r['path'].split()
+                    for i in range(1, len(parts) - 1, 2):
+                        pools_to_fetch.add((parts[i-1], parts[i+1], parts[i]))
+
+        pool_stats = {}
+        if pools_to_fetch:
+            fetcher = PostgresFetcher(verbose=False)
+            latest_prices = fetcher.fetch_latest_prices()
+            try:
+                aprs = await to_thread.run_sync(
+                    fetcher.fetch_pool_stats, list(pools_to_fetch), start_dt, end_dt, latest_prices
+                )
+            except Exception as e:
+                print(f"Error fetching pool stats in SPS: {e}")
+                aprs = {}
+
+            pool_addresses = {}
+            token_symbols = set()
+            needed_networks = set()
+            for (t0, t1, fee) in pools_to_fetch:
+                token_symbols.add(t0.upper())
+                token_symbols.add(t1.upper())
+                parts = str(fee).split('|')
+                pool_network = parts[2].strip() if len(parts) >= 3 else "Ethereum"
+                needed_networks.add(pool_network)
+
+            token_addresses = {}
+            for target_network in needed_networks:
+                token_addresses[target_network] = {}
+                if target_network not in TOKEN_ADDRESS_CACHE:
+                    TOKEN_ADDRESS_CACHE[target_network] = {}
+                for sym in token_symbols:
+                    if sym in TOKEN_ADDRESS_CACHE[target_network]:
+                        token_addresses[target_network][sym] = TOKEN_ADDRESS_CACHE[target_network][sym]
+                
+                missing_symbols = [sym for sym in token_symbols if sym not in token_addresses[target_network]]
+                if missing_symbols:
+                    try:
+                        with get_conn() as conn:
+                            cur = conn.cursor()
+                            db_chain = 'bsc' if target_network.lower() == 'bnb' else target_network.lower()
+                            cur.execute("""
+                                SELECT UPPER(c.symbol), cc.contract_address 
+                                FROM coin_contract cc
+                                JOIN coin c ON cc.coin_id = c.coin_id
+                                WHERE LOWER(cc.chain) = %s AND UPPER(c.symbol) = ANY(%s)
+                            """, (db_chain, missing_symbols))
+                            for row in cur.fetchall():
+                                if row[1]:
+                                    token_addresses[target_network][row[0]] = row[1]
+                                    TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
+                            cur.close()
+                    except Exception as e:
+                        print(f"Error fetching token addresses in SPS: {e}")
+
+            jobs = []
+            v4_keys = []
+            for (t0, t1, fee) in pools_to_fetch:
+                try:
+                    t0_sym, t1_sym = t0.upper(), t1.upper()
+                    parts = str(fee).split('|')
+                    pool_network = parts[2].strip() if len(parts) >= 3 else "Ethereum"
+                    proto_raw = parts[1].strip() if len(parts) >= 2 else "Uniswap V3"
+                    proto_lower = proto_raw.lower()
+
+                    if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4', 'pancakeswap v4', 'pancake v4', 'pancakeswap-v4', 'pancake-v4'):
+                        v4_proto = 'PancakeSwap V4' if 'pancake' in proto_lower else 'Uniswap V4'
+                        fee_clean_v4 = parts[0].replace('%', '').strip()
+                        fee_map_v4 = {'0.01': '100', '0.05': '500', '0.08': '800', '0.25': '2500', '0.3': '3000', '1.0': '10000'}
+                        fee_norm = fee_map_v4.get(fee_clean_v4)
+                        if not fee_norm:
+                            try:
+                                fv = float(fee_clean_v4)
+                                fee_norm = str(int(fv * 10000)) if (0 < fv < 5) else str(int(fv))
+                            except:
+                                fee_norm = parts[0]
+                        v4_keys.append(f"{t0_sym}-{t1_sym}-{fee_norm}|{v4_proto}|{pool_network}")
+                        continue
+
+                    if proto_lower in ('aerodrome',):
+                        continue
+
+                    is_v2 = (proto_lower in ('v2', 'uniswap v2', 'uniswap-v2'))
+                    protocol = 'Uniswap V2' if is_v2 else ('Uniswap V3' if proto_lower in ('v3', 'uniswap v3', 'uniswap-v3') else proto_raw)
+
+                    addr0 = token_addresses.get(pool_network, {}).get(t0_sym)
+                    addr1 = token_addresses.get(pool_network, {}).get(t1_sym)
+                    if not addr0 or not addr1:
+                        continue
+
+                    fee_clean = parts[0].replace('%', '').strip()
+                    fee_map = {'0.01': 100, '0.05': 500, '0.08': 800, '0.3': 3000, '1.0': 10000}
+                    fee_val = fee_map.get(fee_clean) or int(float(fee_clean) * 10000)
+
+                    tokens = sorted([addr0.lower(), addr1.lower()])
+                    t0_bytes = bytes.fromhex(tokens[0][2:])
+                    t1_bytes = bytes.fromhex(tokens[1][2:])
+                    key = f"{t0}-{t1}-{fee}"
+
+                    net_map = {"BNB": "bsc", "ETH": "ethereum"}
+                    cfg_network = net_map.get(pool_network, pool_network.lower())
+
+                    fh_key = (protocol, cfg_network)
+                    if fh_key in FACTORY_HASH_CACHE:
+                        factory_hex, init_hash_hex = FACTORY_HASH_CACHE[fh_key]
+                    else:
+                        try:
+                            factory_hex, init_hash_hex = get_factory_and_hash(protocol, cfg_network)
+                            FACTORY_HASH_CACHE[fh_key] = (factory_hex, init_hash_hex)
+                        except ValueError:
+                            continue
+
+                    pool_cache_key = (tokens[0], tokens[1], fee_val, protocol, pool_network)
+                    jobs.append({
+                        'key': key,
+                        'pool_cache_key': pool_cache_key,
+                        't0_bytes': t0_bytes,
+                        't1_bytes': t1_bytes,
+                        'fee_val': fee_val,
+                        'factory_hex': factory_hex,
+                        'init_hash_hex': init_hash_hex,
+                        'is_v2': is_v2,
+                    })
+                except:
+                    continue
+
+            if jobs:
+                def _derive_batch():
+                    batch_results = {}
+                    for j in jobs:
+                        pk = j['pool_cache_key']
+                        if pk in POOL_ADDRESS_CACHE:
+                            batch_results[j['key']] = POOL_ADDRESS_CACHE[pk]
+                        else:
+                            try:
+                                addr = _derive_address(
+                                    j['t0_bytes'], j['t1_bytes'], j['fee_val'],
+                                    j['factory_hex'], j['init_hash_hex'],
+                                    is_v2=j.get('is_v2', False)
+                                )
+                                batch_results[j['key']] = addr
+                                POOL_ADDRESS_CACHE[pk] = addr
+                            except Exception as ex:
+                                print(f"Error deriving address in SPS for {j['key']}: {ex}")
+                    return batch_results
+
+                batch = await to_thread.run_sync(_derive_batch)
+                pool_addresses.update(batch)
+
+            if v4_keys:
+                def _lookup_v4_pool_ids():
+                    v4_results = {}
+                    try:
+                        with get_conn() as conn:
+                            cur = conn.cursor()
+                            cur.execute("""
+                                SELECT lp.network, lp.protocol, lp.fee_tier, lp.pool_id,
+                                       UPPER(c0.symbol) AS s0,
+                                       UPPER(c1.symbol) AS s1,
+                                       cc0.contract_address AS t0_addr
+                                FROM liquidity_pool lp
+                                JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                                JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                                LEFT JOIN coin_contract cc0
+                                    ON cc0.coin_id = lp.coin0_id
+                                   AND LOWER(cc0.chain) =
+                                       CASE WHEN lp.network = 'BNB' THEN 'bsc'
+                                            ELSE LOWER(lp.network) END
+                                WHERE (lp.protocol = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
+                                   OR lp.protocol = 'PancakeSwap V4'
+                            """)
+                            for net, proto, fee_tier, pid, sym0, sym1, t0_addr in cur.fetchall():
+                                if proto == 'PancakeSwap V4':
+                                    if pid and len(pid) == 66:
+                                        value = pid
+                                    elif t0_addr:
+                                        value = t0_addr
+                                    else:
+                                        continue
+                                else:
+                                    if not pid:
+                                        continue
+                                    value = pid
+                                fee_keys = {fee_tier}
+                                if '%' in fee_tier:
+                                    fee_keys.add(fee_tier.replace('%', '').strip())
+                                else:
+                                    try:
+                                        val = int(fee_tier)
+                                        pct = val / 10000
+                                        pct_str = f'{pct:.6f}'.rstrip('0').rstrip('.')
+                                        fee_keys.add(f'{pct_str}%')
+                                        fee_keys.add(fee_tier)
+                                        fee_keys.add(str(val))
+                                    except ValueError:
+                                        pass
+                                for fk in fee_keys:
+                                    if not fk:
+                                        continue
+                                    key_fwd = f"{sym0}-{sym1}-{fk}|{proto}|{net}"
+                                    key_rev = f"{sym1}-{sym0}-{fk}|{proto}|{net}"
+                                    v4_results[key_fwd] = value
+                                    v4_results[key_rev] = value
+                            cur.close()
+                    except Exception as ex:
+                        print(f"Error looking up V4 pool_ids in SPS: {ex}")
+                    return v4_results
+
+                v4_batch = await to_thread.run_sync(_lookup_v4_pool_ids)
+                pool_addresses.update(v4_batch)
+
+            for (t0, t1, fee) in pools_to_fetch:
+                key = f"{t0}-{t1}-{fee}"
+                apr_val = aprs.get(key)
+                if apr_val is None:
+                    apr_val = aprs.get(f"{t1}-{t0}-{fee}")
+                pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1}-{t0}-{fee}")
+                apr_str = f"{apr_val:.2%}" if apr_val is not None else "N/A"
+                pool_stats[key] = {
+                    'apr': apr_val if apr_val is not None else 0.0,
+                    'apr_str': apr_str,
+                    'pool_address': pool_addr
+                }
+
         return {
             'period': {
                 'start': start_date,
@@ -1644,6 +1885,7 @@ async def sps_find(
                 'tvl_targets': tvl_list,
             },
             'opportunities': results,
+            'pool_stats': pool_stats,
         }
     except HTTPException:
         raise

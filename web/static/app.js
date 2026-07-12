@@ -507,7 +507,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                         feeDisplay = dispFee;
 
-                        if (item.apr !== undefined && item.apr !== null && item.apr > 0) {
+                        if (item.apr !== undefined && item.apr !== null && item.apr >= 0) {
                             const aprVal = item.apr * 100;
                             aprDisplay = aprVal < 0.1 ? aprVal.toFixed(3) + '%' : aprVal.toFixed(1) + '%';
                         }

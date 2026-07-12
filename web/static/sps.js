@@ -1,4 +1,6 @@
+let tokenImageMap = {};
 let tokenSlugMap = {};
+let poolStatsMap = {};
 
 const getCmcUrl = (tokenSymbol) => {
     const symbol = (tokenSymbol || '').toUpperCase().trim();
@@ -30,18 +32,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const statTxns = document.getElementById('sps-stat-txns');
     const statRevenue = document.getElementById('sps-stat-revenue');
 
-    // Fetch official token slugs from backend (non-blocking — populate map when ready)
+    // Fetch official token slugs and images from backend (non-blocking — populate map when ready)
     fetch('/api/coin/list')
         .then(response => response.json())
         .then(coins => {
             coins.forEach(coin => {
-                if (coin.symbol && coin.slug) {
-                    tokenSlugMap[coin.symbol.toUpperCase()] = coin.slug;
+                if (coin.symbol) {
+                    const upperSymbol = coin.symbol.toUpperCase();
+                    if (coin.image) {
+                        tokenImageMap[upperSymbol] = coin.image;
+                    }
+                    if (coin.slug) {
+                        tokenSlugMap[upperSymbol] = coin.slug;
+                    }
                 }
             });
         })
         .catch(error => {
-            console.error('Error fetching token slugs:', error);
+            console.error('Error fetching token list:', error);
         });
 
     // Fetch available date range
@@ -136,6 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const data = await response.json();
+            poolStatsMap = data.pool_stats || {};
             const opportunities = data.opportunities || [];
 
             if (opportunities.length === 0) {
@@ -349,9 +358,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
     };
 
+    const parseProtocol = (feeString) => {
+        let cleanFee = feeString || '';
+        let protocolName = 'Uniswap';
+        let protocolClass = 'v3';
+        let networkName = '';
+
+        if (feeString && feeString.includes('|')) {
+            const parts = feeString.split('|');
+            cleanFee = parts[0];
+            if (parts[1]) {
+                protocolName = parts[1].trim();
+                const rawProto = parts[1].trim().toLowerCase();
+                if (rawProto === 'uniswap v3' || rawProto === 'v3' || rawProto === 'uniswap-v3') {
+                    protocolClass = 'v3';
+                } else if (rawProto === 'uniswap v4' || rawProto === 'v4' || rawProto === 'uniswap-v4') {
+                    protocolClass = 'v4';
+                } else {
+                    protocolClass = rawProto.replace(/\s+/g, '-');
+                }
+            }
+            if (parts[2]) {
+                networkName = parts[2].trim();
+            }
+        }
+        return { cleanFee, protocolName, protocolClass, networkName };
+    };
+
+    const tokenIconHtml = (symbol) => {
+        const url = tokenImageMap[symbol.toUpperCase()];
+        if (url) {
+            return `<img class="token-icon" src="${url}" alt="${symbol}">`;
+        }
+        return '';
+    };
+
     const renderRoutePath = (pathStr) => {
         if (!pathStr) return '';
-        // Parse format: "USDC -- 0.05%|v3 --> WETH -- 0.3%|v3 --> DAI"
         const parts = pathStr.split(/\s+/);
         let html = '<div class="route-path-container">';
         let i = 0;
@@ -362,22 +405,189 @@ document.addEventListener('DOMContentLoaded', async () => {
                 continue;
             }
             if (token.includes('%') || token.includes('|')) {
-                // Fee pill
-                let cleanFee = token;
-                let protocol = '';
-                if (token.includes('|')) {
-                    const [fee, proto] = token.split('|');
-                    cleanFee = fee;
-                    protocol = proto ? ` (${proto.toUpperCase()})` : '';
+                const feeRawFull = token;
+                const prevToken = parts[i-2] || '';
+                const nextToken = parts[i+2] || '';
+
+                const keyFwd = `${prevToken}-${nextToken}-${feeRawFull}`;
+                const keyRev = `${nextToken}-${prevToken}-${feeRawFull}`;
+                const stats = poolStatsMap[keyFwd] || poolStatsMap[keyRev] || { apr: 0.0, apr_str: 'N/A', pool_address: null };
+
+                const parsed = parseProtocol(feeRawFull);
+                let cleanFee = parsed.cleanFee;
+                const protocolName = parsed.protocolName;
+                const networkName = parsed.networkName;
+                const protocolClass = parsed.protocolClass;
+
+                let dispFee = cleanFee;
+                const parsedFee = parseFloat(cleanFee);
+                if (!isNaN(parsedFee) && parsedFee >= 5) {
+                    dispFee = (parsedFee / 10000) + '%';
+                    cleanFee = dispFee;
                 }
+                if (cleanFee.toLowerCase() === 'dynamic') {
+                    dispFee = 'dyn';
+                }
+                const feeDisplay = dispFee;
+
+                let aprDisplay = '';
+                if (stats.apr !== undefined && stats.apr !== null && stats.apr >= 0) {
+                    const aprVal = stats.apr * 100;
+                    aprDisplay = aprVal < 0.1 ? aprVal.toFixed(3) + '%' : aprVal.toFixed(1) + '%';
+                }
+
+                const arrowTooltip = `${protocolName}${networkName ? ' on ' + networkName : ''}`;
+
+                let uniLinkHtml = '';
+                let uniHref = '';
+                let uniProtocol = '';
+                const pool_addr = stats.pool_address;
+
+                if (pool_addr) {
+                    const protocolNameLower = protocolName.toLowerCase();
+                    const networkLower = (networkName || 'ethereum').toLowerCase();
+
+                    if (protocolNameLower.includes('uniswap v4')) {
+                        let uniNetwork = 'ethereum';
+                        if (networkLower.includes('base')) {
+                            uniNetwork = 'base';
+                        } else if (networkLower.includes('eth')) {
+                            uniNetwork = 'ethereum';
+                        } else if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
+                            uniNetwork = 'bnb';
+                        } else if (networkLower.includes('arbitrum')) {
+                            uniNetwork = 'arbitrum';
+                        } else if (networkLower.includes('optimism')) {
+                            uniNetwork = 'optimism';
+                        }
+                        uniHref = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
+                        uniProtocol = 'uniswap';
+                    } else if (protocolNameLower.includes('pancake')) {
+                        let pChain = 'bsc';
+                        if (networkLower.includes('base')) {
+                            pChain = 'base';
+                        } else if (networkLower.includes('eth')) {
+                            pChain = 'eth';
+                        } else if (networkLower.includes('arbitrum')) {
+                            pChain = 'arb';
+                        }
+                        if (protocolNameLower.includes('v4')) {
+                            if (pool_addr.length === 66) {
+                                uniHref = `https://pancakeswap.finance/liquidity/pool/${pChain}/${pool_addr}`;
+                            } else {
+                                uniHref = `https://pancakeswap.finance/info/infinity/pairs/tokens/${pool_addr}?chain=${pChain}`;
+                            }
+                        } else {
+                            uniHref = `https://pancakeswap.finance/info/v3/pairs/${pool_addr}?chain=${pChain}`;
+                        }
+                        uniProtocol = 'pancakeswap';
+                    } else if (protocolNameLower.includes('uniswap') || protocolNameLower.includes('v3') || protocolNameLower.includes('v2')) {
+                        let uniNetwork = 'ethereum';
+                        if (networkLower.includes('base')) {
+                            uniNetwork = 'base';
+                        } else if (networkLower.includes('eth')) {
+                            uniNetwork = 'ethereum';
+                        } else if (networkLower.includes('bnb') || networkLower.includes('bsc')) {
+                            uniNetwork = 'bnb';
+                        } else if (networkLower.includes('arbitrum')) {
+                            uniNetwork = 'arbitrum';
+                        } else if (networkLower.includes('optimism')) {
+                            uniNetwork = 'optimism';
+                        } else if (networkLower.includes('polygon')) {
+                            uniNetwork = 'polygon';
+                        }
+                        uniHref = `https://app.uniswap.org/explore/pools/${uniNetwork}/${pool_addr}`;
+                        uniProtocol = 'uniswap';
+                    }
+                }
+
+                if (uniHref && uniProtocol) {
+                    const uniswapIconSvg = `<svg class="proto-brand-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1.848 12.164a.823.823 0 0 1-.127-1.157L3.35 8.966a.823.823 0 0 1 1.284 1.026l-1.63 2.043a.823.823 0 0 1-1.156.129zm1.693-5.18l1.452.363a.823.823 0 0 1 .585.992.823.823 0 0 1-.992.585l-1.452-.363a.823.823 0 0 1 .407-1.577zm5.698-1.743c.454 0 .823.369.823.823v2.17c0 .454-.369.823-.823.823a.823.823 0 0 1-.823-.823v-2.17c0-.454.369-.823.823-.823zm2.463-3.86a.823.823 0 0 1 1.109-.297l1.884 1.088a.823.823 0 0 1-.823 1.425l-1.884-1.088a.823.823 0 0 1-.286-1.128zm10.15 10.78a9.49 9.49 0 0 1-5.704 8.708v-2.73a.823.823 0 0 0-.823-.823h-2.057a3.086 3.086 0 0 1-3.086-3.086v-.727a9.49 9.49 0 0 1 11.67-1.342z"/>
+                    </svg>`;
+                    const pancakeIconSvg = `<svg class="proto-brand-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <ellipse cx="50" cy="72" rx="26" ry="18" fill="currentColor" opacity="0.9"/>
+                        <ellipse cx="50" cy="68" rx="22" ry="14" fill="currentColor"/>
+                        <ellipse cx="36" cy="32" rx="8" ry="20" fill="currentColor" opacity="0.9" transform="rotate(-15 36 32)"/>
+                        <ellipse cx="64" cy="32" rx="8" ry="20" fill="currentColor" opacity="0.9" transform="rotate(15 64 32)"/>
+                        <ellipse cx="50" cy="58" rx="22" ry="20" fill="currentColor"/>
+                        <ellipse cx="50" cy="60" rx="18" ry="16" fill="currentColor"/>
+                        <circle cx="42" cy="55" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <circle cx="58" cy="55" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                    </svg>`;
+                    const brandIcon = uniProtocol === 'pancakeswap' ? pancakeIconSvg : uniswapIconSvg;
+                    const linkTitle = uniProtocol === 'pancakeswap' ? 'View on PancakeSwap' : 'View on Uniswap';
+                    uniLinkHtml = `
+                        <a href="${uniHref}" target="_blank" class="pool-label-link pool-label-link--${uniProtocol}" data-tooltip="${linkTitle}" onclick="event.stopPropagation();">
+                            ${brandIcon}
+                        </a>
+                    `;
+                }
+
+                let revertHtml = '';
+                if (pool_addr) {
+                    const protocolNameLower = protocolName.toLowerCase();
+                    const networkLower = (networkName || 'ethereum').toLowerCase();
+
+                    let revertNet = 'mainnet';
+                    if (networkLower.includes('base')) revertNet = 'base';
+                    else if (networkLower.includes('arbitrum')) revertNet = 'arbitrum';
+                    else if (networkLower.includes('optimism')) revertNet = 'optimism';
+                    else if (networkLower.includes('polygon')) revertNet = 'polygon';
+
+                    let revertProto = 'uniswapv3';
+                    if (protocolNameLower.includes('uniswap v4') || protocolNameLower.includes('uniswap-v4') || protocolNameLower.includes('v4')) {
+                        revertProto = 'uniswapv4';
+                    } else if (protocolNameLower.includes('uniswap v2') || protocolNameLower.includes('uniswap-v2') || protocolNameLower.includes('v2')) {
+                        revertProto = 'uniswapv2';
+                    } else if (protocolNameLower.includes('pancake')) {
+                        revertProto = 'pancakeswapv3';
+                    }
+
+                    const revertUrl = `https://revert.finance/#/pool/${revertNet}/${revertProto}/${pool_addr}`;
+                    revertHtml = `
+                        <a href="${revertUrl}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();">
+                            <svg class="revert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                                <path d="M21 3v5h-5"/>
+                                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                                <path d="M3 21v-5h5"/>
+                            </svg>
+                        </a>
+                    `;
+                }
+
+                let labelContent = `
+                    <div class="label-pane fee-pane" data-tooltip="Tier">
+                        <span class="fee-pill">${feeDisplay}</span>
+                    </div>
+                `;
+                if (aprDisplay) {
+                    labelContent += `
+                        <div class="label-pane apr-pane" data-tooltip="APR">
+                            <span class="apr-label">${aprDisplay}</span>
+                        </div>
+                    `;
+                }
+
+                let linksContent = '';
+                if (uniLinkHtml || revertHtml) {
+                    linksContent = `
+                        <div class="label-pane links-pane">
+                            ${uniLinkHtml}
+                            ${revertHtml}
+                        </div>
+                    `;
+                }
+
+                const isClickable = !!uniHref;
                 html += `
-                    <div class="route-hop">
-                        <div class="route-hop-arrow">
+                    <div class="route-hop ${protocolClass} ${isClickable ? 'clickable-route-segment' : ''}">
+                        <div class="route-hop-arrow ${protocolClass}" data-tooltip="${arrowTooltip}">
                             <div class="arrow-line">
                                 <div class="route-hop-label">
-                                    <div class="label-pane fee-pane">
-                                        <span class="fee-pill">${cleanFee}${protocol}</span>
-                                    </div>
+                                    ${labelContent}
+                                    ${linksContent}
                                 </div>
                             </div>
                             <svg class="arrow-head" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -387,10 +597,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 `;
             } else {
-                // Token badge
                 html += `
                     <a href="${getCmcUrl(token)}" target="_blank" class="token-badge-link" onclick="event.stopPropagation();">
-                        <span class="token-badge">${token}</span>
+                        <span class="token-badge">${tokenIconHtml(token)} ${token}</span>
                     </a>
                 `;
             }
