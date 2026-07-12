@@ -1332,6 +1332,7 @@ footer {
     display: flex;
     align-items: center;
     pointer-events: auto;
+    cursor: help;
     color: var(--text-secondary);
     opacity: 0.55;
     transition: opacity 0.2s ease, filter 0.2s ease;
@@ -1385,6 +1386,10 @@ footer {
 /* Border separator between panes */
 .route-hop-label .label-pane:not(:last-child) {
     border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fee-pane, .apr-pane {
+    cursor: help;
 }
 
 .fee-pill {

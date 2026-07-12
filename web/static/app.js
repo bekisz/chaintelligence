@@ -655,13 +655,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Render both Fee display and APR display in separate text spans (or combine them)
                 let labelContent = `
-                    <div class="label-pane fee-pane">
+                    <div class="label-pane fee-pane" data-tooltip="Tier">
                         <span class="fee-pill">${feeDisplay}</span>
                     </div>
                 `;
                 if (aprDisplay) {
                     labelContent += `
-                        <div class="label-pane apr-pane">
+                        <div class="label-pane apr-pane" data-tooltip="APR">
                             <span class="apr-label">${aprDisplay}</span>
                         </div>
                     `;
@@ -677,7 +677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     `;
                 }
 
-                const arrowTooltip = `${protocolName}${networkName ? ' (' + networkName + ')' : ''}`;
+                const arrowTooltip = `${protocolName}${networkName ? ' on ' + networkName : ''}`;
 
                 // New layout: arrow spans full width with floating label on top
                 html += `
