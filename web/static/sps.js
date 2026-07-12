@@ -538,6 +538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     else if (networkLower.includes('arbitrum')) revertNet = 'arbitrum';
                     else if (networkLower.includes('optimism')) revertNet = 'optimism';
                     else if (networkLower.includes('polygon')) revertNet = 'polygon';
+                    else if (networkLower.includes('bnb') || networkLower.includes('bsc')) revertNet = 'bnb';
 
                     let revertProto = 'uniswapv3';
                     if (protocolNameLower.includes('uniswap v4') || protocolNameLower.includes('uniswap-v4') || protocolNameLower.includes('v4')) {
@@ -548,7 +549,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         revertProto = 'pancakeswapv3';
                     }
 
-                    const revertUrl = `https://revert.finance/#/pool/${revertNet}/${revertProto}/${pool_addr}`;
+                    const revertUrl = `https://revert.finance/#/pool/${revertNet}/${revertProto}/${pool_addr.toLowerCase()}`;
                     revertHtml = `
                         <a href="${revertUrl}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();">
                             <svg class="revert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">

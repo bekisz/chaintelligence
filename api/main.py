@@ -662,8 +662,12 @@ async def analyze(
                     apr_str = "-"
                 else:
                     leg_aprs = [p['apr'] for p in pool_nodes if 'apr' in p]
+                    leg_apr_strs = [p['apr_str'] for p in pool_nodes if 'apr_str' in p]
                     route_apr = leg_aprs[0] if leg_aprs else 0.0
-                    apr_str = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
+                    if leg_apr_strs and leg_apr_strs[0] == "N/A":
+                        apr_str = "N/A"
+                    else:
+                        apr_str = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
             
                 # Determine route-level network from path fee node
                 route_network = "Ethereum"

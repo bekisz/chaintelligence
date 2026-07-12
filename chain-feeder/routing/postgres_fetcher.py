@@ -537,7 +537,9 @@ class PostgresFetcher:
                 t0_sym, t1_sym = meta['t0_sym'], meta['t1_sym']
 
                 days = max(1, (end_date - start_date).days)
-                is_unreliable_tvl = avg_tvl <= 1.0
+                # If TVL is missing, zero, or unreasonably low (e.g. less than 5% of average daily volume),
+                # we do not calculate APR (we set it to None, which displays as a dash '-' or 'N/A' in the UI).
+                is_unreliable_tvl = avg_tvl <= 1.0 or (total_vol > 0.0 and avg_tvl < (total_vol / days) * 0.05)
 
                 # Calculate fee rate
                 fee_rate = None
