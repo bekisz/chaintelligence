@@ -1324,7 +1324,7 @@ footer {
     align-items: center;
     flex: 1;
     min-width: 60px;
-    margin: 0 3px;
+    margin: 0 8px;
 }
 
 .route-hop-arrow {
@@ -1342,6 +1342,8 @@ footer {
     flex: 1;
     height: 0;
     border-top: 1.5px solid currentColor;
+    position: relative;
+    min-width: 160px;
 }
 
 /* The fixed-size arrowhead — never stretches */

@@ -351,15 +351,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 html += `
                     <div class="route-hop">
                         <div class="route-hop-arrow">
-                            <div class="arrow-line"></div>
+                            <div class="arrow-line">
+                                <div class="route-hop-label">
+                                    <div class="label-pane fee-pane">
+                                        <span class="fee-pill">${cleanFee}${protocol}</span>
+                                    </div>
+                                </div>
+                            </div>
                             <svg class="arrow-head" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="1,1 7,7 1,13"/>
                             </svg>
-                        </div>
-                        <div class="route-hop-label">
-                            <div class="label-pane fee-pane">
-                                <span class="fee-pill">${cleanFee}${protocol}</span>
-                            </div>
                         </div>
                     </div>
                 `;
