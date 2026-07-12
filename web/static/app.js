@@ -1,3 +1,44 @@
+const cmcSlugs = {
+    'EURC': 'euro-coin',
+    'USDC': 'usd-coin',
+    'USDT': 'tether',
+    'ETH': 'ethereum',
+    'WETH': 'ethereum',
+    'BTC': 'bitcoin',
+    'WBTC': 'bitcoin',
+    'DAI': 'multi-collateral-dai',
+    'SOL': 'solana',
+    'LINK': 'chainlink',
+    'UNI': 'uniswap',
+    'AAVE': 'aave',
+    'OP': 'optimism-ethereum',
+    'ARB': 'arbitrum',
+    'MATIC': 'polygon',
+    'POL': 'polygon',
+    'BNB': 'bnb',
+    'FDUSD': 'first-digital-usd',
+    'PYUSD': 'paypal-usd',
+    'USDE': 'ethena-usde',
+    'USDP': 'paxos-standard',
+    'LUSD': 'liquity-usd',
+    'FRAX': 'frax',
+    'GHO': 'gho',
+    'CRVUSD': 'crvusd',
+    'MIM': 'magic-internet-money',
+    'TUSD': 'trueusd',
+    'BUSD': 'binance-usd',
+    'WUST': 'terrausd',
+    'UST': 'terrausd',
+    'USDY': 'ondo-us-dollar-yield',
+    'USDM': 'mountain-protocol-usdm',
+};
+
+const getCmcUrl = (tokenSymbol) => {
+    const symbol = (tokenSymbol || '').toUpperCase().trim();
+    const slug = cmcSlugs[symbol] || symbol.toLowerCase();
+    return `https://coinmarketcap.com/currencies/${slug}/`;
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const analyzeBtn = document.getElementById('analyze-btn');
     const startTokenInput = document.getElementById('start-token');
@@ -457,7 +498,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         let html = '<div class="route-path-container">';
 
         tokens.forEach((token, idx) => {
-            html += `<span class="token-badge">${tokenIconHtml(token)} ${token}</span>`;
+            html += `
+                <a href="${getCmcUrl(token)}" target="_blank" class="token-badge-link" onclick="event.stopPropagation();">
+                    <span class="token-badge">${tokenIconHtml(token)} ${token}</span>
+                </a>
+            `;
 
             if (idx < tokens.length - 1) {
                 const item = items[idx];

@@ -1315,6 +1315,22 @@ footer {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    transition: all 0.2s ease;
+}
+
+.token-badge-link {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+
+.token-badge-link:hover .token-badge {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.15);
 }
 
 /* ── Route Hop: full-width arrow with floating label ── */
