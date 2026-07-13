@@ -561,13 +561,12 @@ class PostgresFetcher:
                     except:
                         pass
 
-                if apr is not None:
-                    pool_stat = {'apr': apr, 'tvl': meta.get('avg_tvl', 0.0)}
-                    results[k] = pool_stat
-                    # Reverse-token-order key (preserves the old behavior without
-                    # the k.split('-') bug that broke on fees containing '-').
-                    t0, t1, f = k.split('-', 2)
-                    results[f"{t1}-{t0}-{f}"] = pool_stat
+                pool_stat = {'apr': apr, 'tvl': meta.get('avg_tvl', 0.0), 'volume': meta.get('total_vol', 0.0)}
+                results[k] = pool_stat
+                # Reverse-token-order key (preserves the old behavior without
+                # the k.split('-') bug that broke on fees containing '-').
+                t0, t1, f = k.split('-', 2)
+                results[f"{t1}-{t0}-{f}"] = pool_stat
 
             cur.close()
             try:

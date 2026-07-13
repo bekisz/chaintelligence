@@ -49,9 +49,10 @@ def sync_tvl_from_rpc():
         
     # 2. Fetch active pools
     cur.execute("""
-        SELECT id, network, pool_address, coin0_id, coin1_id
+        SELECT id, network, COALESCE(pool_address, pool_id) as addr, coin0_id, coin1_id
         FROM liquidity_pool
-        WHERE pool_address IS NOT NULL
+        WHERE COALESCE(pool_address, pool_id) IS NOT NULL 
+          AND length(COALESCE(pool_address, pool_id)) = 42
     """)
     pools = cur.fetchall()
     

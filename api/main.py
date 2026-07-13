@@ -192,6 +192,13 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
     
     if is_unreliable and pool_addr:
         ds_tvl = await asyncio.to_thread(fetch_dexscreener_tvl, pool_network, pool_addr)
+        
+        # Fallback to DeFi Llama TVL if DexScreener fails
+        if not ds_tvl or ds_tvl <= 1.0:
+            dl_tvl = get_defillama_pool_tvl(pool_addr)
+            if dl_tvl and dl_tvl > 1.0:
+                ds_tvl = dl_tvl
+                
         if ds_tvl and ds_tvl > 1.0:
             tvl_val = ds_tvl
             fee_rate = parse_fee_rate(fee_tier)
@@ -218,7 +225,7 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
 # map that address -> the record's stable UUID. UUIDs are stable, so the index
 # is cached with a TTL and rebuilt off the event-loop thread.
 # ---------------------------------------------------------------------------
-DEFILLAMA_INDEX: Dict[str, str] = {}
+DEFILLAMA_INDEX: Dict[str, dict] = {}
 DEFILLAMA_INDEX_BUILT_AT: float = 0.0
 DEFILLAMA_INDEX_TTL = 24 * 3600  # 24h
 _DEFILLAMA_LOCK = threading.Lock()
@@ -299,7 +306,7 @@ def _build_defillama_index() -> Dict[str, str]:
                 pool_id = _derive_v4_pool_id(tokens[0], tokens[1], fee, tick)
             except ValueError:
                 continue
-            index[pool_id.lower()] = uuid
+            index[pool_id.lower()] = {'uuid': uuid, 'tvl': p.get('tvlUsd')}
             continue
 
         # V2/V3: CREATE2 derivation
@@ -327,11 +334,11 @@ def _build_defillama_index() -> Dict[str, str]:
             if fee is None:
                 continue
             addr = _derive_address(t0b, t1b, fee, net_cfg['factory'], net_cfg['init_hash'], is_v2=False)
-        index[addr.lower()] = uuid
+        index[addr.lower()] = {'uuid': uuid, 'tvl': p.get('tvlUsd')}
     return index
 
 
-def get_defillama_index() -> Dict[str, str]:
+def get_defillama_index() -> Dict[str, dict]:
     """Return the cached pool_address->UUID index, rebuilding if stale.
     Thread-safe; safe to call from asyncio.to_thread on first use."""
     global DEFILLAMA_INDEX, DEFILLAMA_INDEX_BUILT_AT
@@ -355,7 +362,13 @@ def get_defillama_index() -> Dict[str, str]:
 def get_defillama_pool_uuid(pool_addr: Optional[str]) -> Optional[str]:
     if not pool_addr:
         return None
-    return get_defillama_index().get(pool_addr.lower())
+    return get_defillama_index().get(pool_addr.lower(), {}).get('uuid')
+
+
+def get_defillama_pool_tvl(pool_addr: Optional[str]) -> Optional[float]:
+    if not pool_addr:
+        return None
+    return get_defillama_index().get(pool_addr.lower(), {}).get('tvl')
 
 
 try:
