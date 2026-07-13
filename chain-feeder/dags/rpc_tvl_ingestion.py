@@ -118,17 +118,38 @@ def sync_tvl_from_rpc():
                 })
                 
             results = []
-            try:
-                rpc_endpoint = rpc_client.rpc_urls[0] if rpc_client.rpc_urls else None
-                if not rpc_endpoint: continue
-                
-                resp = requests.post(rpc_endpoint, json=batch_payload, timeout=30)
-                resp.raise_for_status()
-                for r in resp.json():
-                    results.append(r.get("result", "0x"))
-            except Exception as e:
-                logger.error(f"Multicall failed on {network}: {e}")
+            success = False
+            import time
+            for attempt in range(6):
+                rpc_endpoint = rpc_client._get_rpc_for_attempt(attempt)
+                if not rpc_endpoint:
+                    break
+                try:
+                    resp = requests.post(rpc_endpoint, json=batch_payload, timeout=30)
+                    if resp.status_code == 429:
+                        wait_time = 2 ** attempt
+                        logger.warning(f"Rate limited (429) on {rpc_endpoint}. Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    resp.raise_for_status()
+                    resp_json = resp.json()
+                    if isinstance(resp_json, list):
+                        for r in resp_json:
+                            results.append(r.get("result", "0x"))
+                    else:
+                        logger.warning(f"RPC returned dict instead of batch list on {rpc_endpoint}: {resp_json}")
+                        continue
+                    success = True
+                    break
+                except Exception as e:
+                    logger.warning(f"Batch failed on {rpc_endpoint}: {e}. Retrying next RPC...")
+                    time.sleep(1)
+            
+            if not success:
+                logger.error(f"Multicall failed on {network} after trying all endpoints.")
                 continue
+                
+            time.sleep(0.2)
                 
             # Process results
             for idx, ctx in enumerate(pool_ctx):
