@@ -591,6 +591,8 @@ class PostgresStorage:
         ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
         """
         data = []
+        from collections import defaultdict
+        tx_hash_counters = defaultdict(int)
         for s in swaps:
             t0_id = SYMBOL_TO_COIN_ID.get(s.get('token0_symbol', '').upper())
             t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
@@ -599,12 +601,22 @@ class PostgresStorage:
 
             # Extract log_index from the subgraph id
             swap_id = s.get('id', '')
+            log_index = None
             if '#' in swap_id:
-                # V3: tx_hash#logindex
-                log_index = int(swap_id.split('#')[1])
-            else:
-                # V4 (tx_hash-logindex) or V2 (v2-tx_hash-logindex)
-                log_index = int(swap_id.rsplit('-', 1)[1])
+                try:
+                    log_index = int(swap_id.split('#')[1])
+                except:
+                    pass
+            elif '-' in swap_id:
+                try:
+                    log_index = int(swap_id.rsplit('-', 1)[1])
+                except:
+                    pass
+            
+            if log_index is None:
+                tx_hash = s.get('tx_hash') or 'unknown'
+                log_index = tx_hash_counters[tx_hash]
+                tx_hash_counters[tx_hash] += 1
 
             ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
 

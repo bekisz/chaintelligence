@@ -30,7 +30,7 @@ def get_stale_count_for_family(family_name, interval_minutes):
     query = """
         SELECT COUNT(*) 
         FROM coin c
-        JOIN coin_family cf ON c.symbol = cf.symbol
+        JOIN coin_family cf ON c.coin_id = cf.coin_id
         WHERE LOWER(cf.name) = LOWER(%s)
         AND (c.price_timestamp IS NULL OR c.price_timestamp < %s)
     """
