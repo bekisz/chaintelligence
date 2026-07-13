@@ -4,7 +4,7 @@ This document provides a complete map of every ETL pipeline (Airflow DAG), its e
 
 ## System Overview
 
-`  ``mermaid
+`   ``mermaid
 graph LR
     subgraph External["External Data Sources"]
         CMC["CoinMarketCap API"]
