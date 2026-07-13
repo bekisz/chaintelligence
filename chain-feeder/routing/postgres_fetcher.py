@@ -332,6 +332,9 @@ class PostgresFetcher:
                 parts = str(fee_raw_full).split('|')
                 if len(parts) >= 3:
                     network = parts[2].strip()
+                
+                # Normalize network to lowercase for consistent indexing
+                network_lower = network.lower()
 
                 protocol = "Uniswap V3"
                 if len(parts) >= 2:
@@ -357,17 +360,17 @@ class PostgresFetcher:
 
                 key = f"{t0}-{t1}-{fee_raw_full}"
                 pool_meta[key] = {
-                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_db': fee_db, 'network': network,
+                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_db': fee_db, 'network': network_lower,
                     'protocol': protocol, 'fee_variants': fee_variants, 'fee_raw_full': fee_raw_full,
                     'pool_ids': [], 'total_vol': 0.0, 'avg_tvl': 0.0,
                 }
 
-                all_networks.add(network)
+                all_networks.add(network_lower)
                 all_protocols.add(protocol)
                 all_fee_variants.update(fee_variants)
                 all_symbols.add(t0_sym)
                 all_symbols.add(t1_sym)
-                pair_index.setdefault((network, protocol, frozenset((t0_sym, t1_sym))), []).append(key)
+                pair_index.setdefault((network_lower, protocol, frozenset((t0_sym, t1_sym))), []).append(key)
 
             # ------------------------------------------------------------------
             # Phase 1: resolve pool_id(s) for ALL requested pools in ONE query.
@@ -381,7 +384,7 @@ class PostgresFetcher:
                 FROM liquidity_pool lp
                 JOIN coin c0 ON lp.coin0_id = c0.coin_id
                 JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                WHERE lp.network = ANY(%s)
+                WHERE LOWER(lp.network) = ANY(%s)
                   AND lp.protocol = ANY(%s)
                   AND lp.fee_tier = ANY(%s)
                   AND UPPER(c0.symbol) = ANY(%s)
@@ -393,7 +396,7 @@ class PostgresFetcher:
             for pid, net, proto, fee_tier, c0, c1 in cur.fetchall():
                 if c0 is None or c1 is None:
                     continue
-                candidates = pair_index.get((net, proto, frozenset((c0, c1))))
+                candidates = pair_index.get((net.lower(), proto, frozenset((c0, c1))))
                 if not candidates:
                     continue
                 for k in candidates:
@@ -507,7 +510,7 @@ class PostgresFetcher:
                     FROM swaps s
                     JOIN coin c0 ON s.t0_coin_id = c0.coin_id
                     JOIN coin c1 ON s.t1_coin_id = c1.coin_id
-                    WHERE s.ts >= %s AND s.ts <= %s AND s.network = %s AND s.protocol = %s
+                    WHERE s.ts >= %s AND s.ts <= %s AND LOWER(s.network) = %s AND s.protocol = %s
                     AND ((UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s))
                     AND (s.fee_display = %s OR s.fee_display = %s)
                     GROUP BY c0.symbol, c1.symbol
@@ -561,13 +564,12 @@ class PostgresFetcher:
                     except:
                         pass
 
-                if apr is not None:
-                    pool_stat = {'apr': apr, 'tvl': meta.get('avg_tvl', 0.0)}
-                    results[k] = pool_stat
-                    # Reverse-token-order key (preserves the old behavior without
-                    # the k.split('-') bug that broke on fees containing '-').
-                    t0, t1, f = k.split('-', 2)
-                    results[f"{t1}-{t0}-{f}"] = pool_stat
+                pool_stat = {'apr': apr, 'tvl': meta.get('avg_tvl', 0.0), 'volume': meta.get('total_vol', 0.0)}
+                results[k] = pool_stat
+                # Reverse-token-order key (preserves the old behavior without
+                # the k.split('-') bug that broke on fees containing '-').
+                t0, t1, f = k.split('-', 2)
+                results[f"{t1}-{t0}-{f}"] = pool_stat
 
             cur.close()
             try:
