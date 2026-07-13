@@ -1,0 +1,347 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Chaintelligence Chaintelligence" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=e5]
+        - generic [ref=e6]: Chaintelligence
+      - navigation [ref=e7]:
+        - link "LP Positions" [ref=e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=e12] [cursor=pointer]:
+          - /url: /sps
+        - link "API" [ref=e13] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=e14]:
+    - main [ref=e15]:
+      - generic [ref=e16]:
+        - heading "Route Analysis" [level=1] [ref=e17]
+        - paragraph [ref=e18]: Discover swap routes across chains and protocols
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - textbox "Token" [ref=e22]: USDC
+          - generic [ref=e23]: →
+          - textbox "Token" [ref=e24]: WETH
+        - generic [ref=e25]:
+          - textbox [ref=e27]: 2026-06-12
+          - generic [ref=e28]: →
+          - textbox [ref=e30]: 2026-07-12
+        - combobox [ref=e31] [cursor=pointer]:
+          - option "All Chains"
+          - option "Ethereum" [selected]
+          - option "Arbitrum"
+          - option "Base"
+          - option "BNB Chain"
+        - button "Analyze Routes" [ref=e32] [cursor=pointer]
+      - generic [ref=e39]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]: Network
+            - combobox "Network" [ref=e44] [cursor=pointer]:
+              - option "All"
+              - option "Ethereum" [selected]
+              - option "Arbitrum" [disabled]
+              - option "Base" [disabled]
+              - option "BNB Chain" [disabled]
+          - generic [ref=e45]:
+            - generic [ref=e46]: Protocol
+            - combobox "Protocol" [ref=e47] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Uniswap"
+              - option "Uniswap V2"
+              - option "Uniswap V3"
+              - option "Uniswap V4"
+              - option "PancakeSwap"
+              - option "PancakeSwap V3"
+              - option "PancakeSwap V4"
+              - option "Aerodrome"
+          - generic [ref=e48]:
+            - generic [ref=e49]: Min APR %
+            - spinbutton "Min APR %" [ref=e50]
+          - generic [ref=e51]:
+            - generic [ref=e52]: Min Market Size $
+            - spinbutton "Min Market Size $" [ref=e53]
+          - generic [ref=e54]:
+            - generic [ref=e55]: Min TXs
+            - spinbutton "Min TXs" [ref=e56]
+          - button "Settings" [ref=e58] [cursor=pointer]
+        - table [ref=e63]:
+          - rowgroup [ref=e64]:
+            - row [ref=e65]:
+              - columnheader "Route Path" [ref=e66]
+              - columnheader "Network" [ref=e67]
+              - columnheader "TXs ↕" [ref=e68] [cursor=pointer]
+              - columnheader "APR ↕" [ref=e69] [cursor=pointer]
+              - columnheader "Volume ↕" [ref=e70] [cursor=pointer]
+              - columnheader "Fees ↕" [ref=e71] [cursor=pointer]
+          - rowgroup [ref=e72]:
+            - row [ref=e73]:
+              - cell "USDC 0.05% 2.1% WETH" [ref=e74]:
+                - generic [ref=e75]:
+                  - link [ref=e76] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e82]:
+                    - generic [ref=e83]: 0.05%
+                    - generic [ref=e85]: 2.1%
+                    - generic [ref=e87]:
+                      - link [ref=e88] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640
+                      - link [ref=e91] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640
+                      - link [ref=e97] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640
+                  - link [ref=e104] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e107]
+              - cell "34,152" [ref=e109]
+              - cell "2.1%" [ref=e110]
+              - cell "$428,627,518" [ref=e111]
+              - cell "$214,314" [ref=e112]
+            - row [ref=e113]:
+              - cell "USDC 0.01% 8.2% WETH" [ref=e114]:
+                - generic [ref=e115]:
+                  - link [ref=e116] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e122]:
+                    - generic [ref=e123]: 0.01%
+                    - generic [ref=e125]: 8.2%
+                    - generic [ref=e127]:
+                      - link [ref=e128] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xE0554a476A092703abdB3Ef35c80e0D76d32939F
+                      - link [ref=e131] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0xe0554a476a092703abdb3ef35c80e0d76d32939f
+                      - link [ref=e137] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0xE0554a476A092703abdB3Ef35c80e0D76d32939F
+                  - link [ref=e144] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e147]
+              - cell "134,895" [ref=e149]
+              - cell "8.2%" [ref=e150]
+              - cell "$253,306,256" [ref=e151]
+              - cell "$25,331" [ref=e152]
+            - row [ref=e153]:
+              - cell "USDC dyn 13.6% WETH" [ref=e154]:
+                - generic [ref=e155]:
+                  - link [ref=e156] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e162]:
+                    - generic [ref=e163]: dyn
+                    - generic [ref=e165]: 13.6%
+                    - generic [ref=e167]:
+                      - link [ref=e168] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x4f88f7c99022eace4740c6898f59ce6a2e798a1e64ce54589720b7153eb224a7
+                      - link [ref=e171] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x4f88f7c99022eace4740c6898f59ce6a2e798a1e64ce54589720b7153eb224a7
+                      - link [ref=e177] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0x4f88f7c99022eace4740c6898f59ce6a2e798a1e64ce54589720b7153eb224a7
+                  - link [ref=e184] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e187]
+              - cell "34,639" [ref=e189]
+              - cell "13.6%" [ref=e190]
+              - cell "$55,171,452" [ref=e191]
+              - cell "$11,034" [ref=e192]
+            - row [ref=e193]:
+              - cell "USDC 0.3% 1.1% WETH" [ref=e194]:
+                - generic [ref=e195]:
+                  - link [ref=e196] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e202]:
+                    - generic [ref=e203]: 0.3%
+                    - generic [ref=e205]: 1.1%
+                    - generic [ref=e207]:
+                      - link [ref=e208] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8
+                      - link [ref=e211] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8
+                      - link [ref=e217] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8
+                  - link [ref=e224] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e227]
+              - cell "3,282" [ref=e229]
+              - cell "1.1%" [ref=e230]
+              - cell "$27,976,718" [ref=e231]
+              - cell "$83,930" [ref=e232]
+            - row [ref=e233]:
+              - cell "USDC 0.30% 2.9% WETH" [ref=e234]:
+                - generic [ref=e235]:
+                  - link [ref=e236] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e242]:
+                    - generic [ref=e243]: 0.30%
+                    - generic [ref=e245]: 2.9%
+                    - generic [ref=e247]:
+                      - link [ref=e248] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc
+                      - link [ref=e251] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc
+                  - link [ref=e258] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e261]
+              - cell "4,770" [ref=e263]
+              - cell "2.9%" [ref=e264]
+              - cell "$6,917,104" [ref=e265]
+              - cell "$20,751" [ref=e266]
+            - row [ref=e267]:
+              - cell "USDC 0.05% 7.7% WETH" [ref=e268]:
+                - generic [ref=e269]:
+                  - link [ref=e270] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e276]:
+                    - generic [ref=e277]: 0.05%
+                    - generic [ref=e279]: 7.7%
+                    - generic [ref=e281]:
+                      - link [ref=e282] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x4f88f7c99022eace4740c6898f59ce6a2e798a1e64ce54589720b7153eb224a7
+                      - link [ref=e285] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x4f88f7c99022eace4740c6898f59ce6a2e798a1e64ce54589720b7153eb224a7
+                      - link [ref=e291] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0x4f88f7c99022eace4740c6898f59ce6a2e798a1e64ce54589720b7153eb224a7
+                  - link [ref=e298] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e301]
+              - cell "11,608" [ref=e303]
+              - cell "7.7%" [ref=e304]
+              - cell "$1,560,564" [ref=e305]
+              - cell "$780" [ref=e306]
+            - row [ref=e307]:
+              - cell "USDC 0.02% 0% WETH" [ref=e308]:
+                - generic [ref=e309]:
+                  - link [ref=e310] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e316]:
+                    - generic [ref=e317]: 0.02%
+                    - generic [ref=e319]: 0%
+                  - link [ref=e323] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e326]
+              - cell "2,853" [ref=e328]
+              - cell "N/A" [ref=e329]
+              - cell "$350,481" [ref=e330]
+              - cell "$70" [ref=e331]
+            - row [ref=e332]:
+              - cell "USDC 0.01% 6.8% WETH" [ref=e333]:
+                - generic [ref=e334]:
+                  - link [ref=e335] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e341]:
+                    - generic [ref=e342]: 0.01%
+                    - generic [ref=e344]: 6.8%
+                    - generic [ref=e346]:
+                      - link [ref=e347] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x55cd2060d9ad3c05fff7061604a332a29adcd0aa557efa63973f26d00553ec5f
+                      - link [ref=e350] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x55cd2060d9ad3c05fff7061604a332a29adcd0aa557efa63973f26d00553ec5f
+                      - link [ref=e356] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0x55cd2060d9ad3c05fff7061604a332a29adcd0aa557efa63973f26d00553ec5f
+                  - link [ref=e363] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e366]
+              - cell "721" [ref=e368]
+              - cell "6.8%" [ref=e369]
+              - cell "$170,413" [ref=e370]
+              - cell "$17" [ref=e371]
+            - row [ref=e372]:
+              - cell "USDC 1.0% 0.3% WETH" [ref=e373]:
+                - generic [ref=e374]:
+                  - link [ref=e375] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e381]:
+                    - generic [ref=e382]: 1.0%
+                    - generic [ref=e384]: 0.3%
+                    - generic [ref=e386]:
+                      - link [ref=e387] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x7BeA39867e4169DBe237d55C8242a8f2fcDcc387
+                      - link [ref=e390] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0x7bea39867e4169dbe237d55c8242a8f2fcdcc387
+                      - link [ref=e396] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0x7BeA39867e4169DBe237d55C8242a8f2fcDcc387
+                  - link [ref=e403] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e406]
+              - cell "163" [ref=e408]
+              - cell "0.3%" [ref=e409]
+              - cell "$78,462" [ref=e410]
+              - cell "$785" [ref=e411]
+            - row [ref=e412]:
+              - cell "USDC 0.3% 11.1% WETH" [ref=e413]:
+                - generic [ref=e414]:
+                  - link [ref=e415] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e421]:
+                    - generic [ref=e422]: 0.3%
+                    - generic [ref=e424]: 11.1%
+                    - generic [ref=e426]:
+                      - link [ref=e427] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xb9fd8b8b6580b80432037a379071b6fb22bbceff6bafbd57390889c01d8757b9
+                      - link [ref=e430] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0xb9fd8b8b6580b80432037a379071b6fb22bbceff6bafbd57390889c01d8757b9
+                      - link [ref=e436] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0xb9fd8b8b6580b80432037a379071b6fb22bbceff6bafbd57390889c01d8757b9
+                  - link [ref=e443] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e446]
+              - cell "608" [ref=e448]
+              - cell "11.1%" [ref=e449]
+              - cell "$75,557" [ref=e450]
+              - cell "$227" [ref=e451]
+            - row [ref=e452]:
+              - cell "USDC 0.036% 3.4% WETH" [ref=e453]:
+                - generic [ref=e454]:
+                  - link [ref=e455] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e461]:
+                    - generic [ref=e462]: 0.036%
+                    - generic [ref=e464]: 3.4%
+                  - link [ref=e468] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e471]
+              - cell "696" [ref=e473]
+              - cell "3.4%" [ref=e474]
+              - cell "$49,219" [ref=e475]
+              - cell "$18" [ref=e476]
+            - row [ref=e477]:
+              - cell "USDC 0.005% 0% WETH" [ref=e478]:
+                - generic [ref=e479]:
+                  - link [ref=e480] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e486]:
+                    - generic [ref=e487]: 0.005%
+                    - generic [ref=e489]: 0%
+                    - generic [ref=e491]:
+                      - link [ref=e492] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x9b3c4e921936d4dcee135fda01aa8256ebe46f91505b61ef21f3bfdf3dd9de97
+                      - link [ref=e495] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x9b3c4e921936d4dcee135fda01aa8256ebe46f91505b61ef21f3bfdf3dd9de97
+                      - link [ref=e501] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0x9b3c4e921936d4dcee135fda01aa8256ebe46f91505b61ef21f3bfdf3dd9de97
+                  - link [ref=e508] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e511]
+              - cell "205" [ref=e513]
+              - cell "N/A" [ref=e514]
+              - cell "$38,270" [ref=e515]
+              - cell "$1.91" [ref=e516]
+            - row [ref=e517]:
+              - cell "USDC 0.09% 0% WETH" [ref=e518]:
+                - generic [ref=e519]:
+                  - link [ref=e520] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e526]:
+                    - generic [ref=e527]: 0.09%
+                    - generic [ref=e529]: 0%
+                  - link [ref=e533] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/weth/
+              - cell "Ethereum" [ref=e536]
+              - cell "47" [ref=e538]
+              - cell "N/A" [ref=e539]
+              - cell "$1,579" [ref=e540]
+              - cell "$1.42" [ref=e541]
+    - contentinfo [ref=e33]

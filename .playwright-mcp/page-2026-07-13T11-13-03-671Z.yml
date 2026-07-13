@@ -1,0 +1,143 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Chaintelligence Chaintelligence" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=e5]
+        - generic [ref=e6]: Chaintelligence
+      - navigation [ref=e7]:
+        - link "LP Positions" [ref=e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=e12] [cursor=pointer]:
+          - /url: /sps
+        - link "API" [ref=e13] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=e14]:
+    - main [ref=e15]:
+      - generic [ref=e16]:
+        - heading "Route Analysis" [level=1] [ref=e17]
+        - paragraph [ref=e18]: Discover swap routes across chains and protocols
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - textbox "Token" [ref=e22]: AAVE
+          - generic [ref=e23]: →
+          - textbox "Token" [ref=e24]: USDC
+        - generic [ref=e25]:
+          - textbox [ref=e27]: 2026-06-12
+          - generic [ref=e28]: →
+          - textbox [ref=e30]: 2026-07-12
+        - combobox [ref=e31] [cursor=pointer]:
+          - option "All Chains"
+          - option "Ethereum" [selected]
+          - option "Arbitrum"
+          - option "Base"
+          - option "BNB Chain"
+        - button "Analyze Routes" [ref=e32] [cursor=pointer]
+      - generic [ref=e35]:
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - generic [ref=e39]: Network
+            - combobox "Network" [ref=e40] [cursor=pointer]:
+              - option "All"
+              - option "Ethereum" [selected]
+              - option "Arbitrum" [disabled]
+              - option "Base" [disabled]
+              - option "BNB Chain" [disabled]
+          - generic [ref=e41]:
+            - generic [ref=e42]: Protocol
+            - combobox "Protocol" [ref=e43] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Uniswap"
+              - option "Uniswap V2"
+              - option "Uniswap V3"
+              - option "Uniswap V4"
+              - option "PancakeSwap"
+              - option "PancakeSwap V3"
+              - option "PancakeSwap V4"
+              - option "Aerodrome"
+          - generic [ref=e44]:
+            - generic [ref=e45]: Min APR %
+            - spinbutton "Min APR %" [ref=e46]
+          - generic [ref=e47]:
+            - generic [ref=e48]: Min Market Size $
+            - spinbutton "Min Market Size $" [ref=e49]
+          - generic [ref=e50]:
+            - generic [ref=e51]: Min TXs
+            - spinbutton "Min TXs" [ref=e52]
+          - button "Settings" [ref=e54] [cursor=pointer]
+        - table [ref=e59]:
+          - rowgroup [ref=e60]:
+            - row [ref=e61]:
+              - columnheader "Route Path" [ref=e62]
+              - columnheader "Network" [ref=e63]
+              - columnheader "TXs ↕" [ref=e64] [cursor=pointer]
+              - columnheader "APR ↕" [ref=e65] [cursor=pointer]
+              - columnheader "Volume ↕" [ref=e66] [cursor=pointer]
+              - columnheader "Fees ↕" [ref=e67] [cursor=pointer]
+          - rowgroup [ref=e68]:
+            - row [ref=e69]:
+              - cell "AAVE 0.3% 35.1% USDC" [ref=e70]:
+                - generic [ref=e71]:
+                  - link [ref=e72] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/aave/
+                  - generic [ref=e78]:
+                    - generic [ref=e79]: 0.3%
+                    - generic [ref=e81]: 35.1%
+                    - generic [ref=e83]:
+                      - link [ref=e84] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x2187d779d9b173dd7202b38b54dca6eb04d1b32ca261980869195b5b9fa97ef8
+                      - link [ref=e87] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x2187d779d9b173dd7202b38b54dca6eb04d1b32ca261980869195b5b9fa97ef8
+                      - link [ref=e93] [cursor=pointer]:
+                        - /url: https://defillama.com/yields/pool/e6602ff7-7ada-4120-84f0-65adeb389c1b
+                  - link [ref=e102] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+              - cell "Ethereum" [ref=e105]
+              - cell "5,604" [ref=e107]
+              - cell "35.1%" [ref=e108]
+              - cell "$8,836,541" [ref=e109]
+              - cell "$26,510" [ref=e110]
+            - row [ref=e111]:
+              - cell "AAVE 0.25% 27.9% USDC" [ref=e112]:
+                - generic [ref=e113]:
+                  - link [ref=e114] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/aave/
+                  - generic [ref=e120]:
+                    - generic [ref=e121]: 0.25%
+                    - generic [ref=e123]: 27.9%
+                  - link [ref=e127] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+              - cell "Ethereum" [ref=e130]
+              - cell "3,088" [ref=e132]
+              - cell "27.9%" [ref=e133]
+              - cell "$1,095,890" [ref=e134]
+              - cell "$2,740" [ref=e135]
+            - row [ref=e136]:
+              - cell "AAVE 0.3% 9% USDC" [ref=e137]:
+                - generic [ref=e138]:
+                  - link [ref=e139] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/aave/
+                  - generic [ref=e145]:
+                    - generic [ref=e146]: 0.3%
+                    - generic [ref=e148]: 9%
+                    - generic [ref=e150]:
+                      - link [ref=e151] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xdceaf5d0E5E0dB9596A47C0c4120654e80B1d706
+                      - link [ref=e154] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0xdceaf5d0e5e0db9596a47c0c4120654e80b1d706
+                      - link [ref=e160] [cursor=pointer]:
+                        - /url: https://defillama.com/yields/pool/2738d44a-6272-4a67-8f11-dce41600c36f
+                  - link [ref=e169] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+              - cell "Ethereum" [ref=e172]
+              - cell "1,190" [ref=e174]
+              - cell "9%" [ref=e175]
+              - cell "$349,043" [ref=e176]
+              - cell "$1,047" [ref=e177]
+    - contentinfo [ref=e33]

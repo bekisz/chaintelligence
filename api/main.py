@@ -2158,7 +2158,8 @@ async def sps_find(
                     'apr': apr_val if apr_val is not None else 0.0,
                     'apr_str': apr_str,
                     'pool_address': pool_addr,
-                    'tvl': tvl_val
+                    'tvl': tvl_val,
+                    'defillama_uuid': get_defillama_pool_uuid(pool_addr)
                 }
 
         return {

@@ -1,0 +1,276 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Chaintelligence Chaintelligence" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=e5]
+        - generic [ref=e6]: Chaintelligence
+      - navigation [ref=e7]:
+        - link "LP Positions" [ref=e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=e12] [cursor=pointer]:
+          - /url: /sps
+        - link "API" [ref=e13] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=e14]:
+    - main [ref=e15]:
+      - generic [ref=e16]:
+        - heading "Route Analysis" [level=1] [ref=e17]
+        - paragraph [ref=e18]: Discover swap routes across chains and protocols
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - textbox "Token" [ref=e22]: USDC
+          - generic [ref=e23]: →
+          - textbox "Token" [ref=e24]: USDT
+        - generic [ref=e25]:
+          - textbox [ref=e27]: 2026-07-09
+          - generic [ref=e28]: →
+          - textbox [ref=e30]: 2026-07-12
+        - combobox [ref=e31] [cursor=pointer]:
+          - option "All Chains" [selected]
+          - option "Ethereum"
+          - option "Arbitrum"
+          - option "Base"
+          - option "BNB Chain"
+        - button "Analyze Routes" [ref=e32] [cursor=pointer]
+      - generic [ref=e35]:
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - generic [ref=e39]: Network
+            - combobox "Network" [disabled] [ref=e40] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Ethereum"
+              - option "Arbitrum"
+              - option "Base"
+              - option "BNB Chain"
+          - generic [ref=e41]:
+            - generic [ref=e42]: Protocol
+            - combobox "Protocol" [ref=e43] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Uniswap"
+              - option "Uniswap V2"
+              - option "Uniswap V3"
+              - option "Uniswap V4"
+              - option "PancakeSwap"
+              - option "PancakeSwap V3"
+              - option "PancakeSwap V4"
+              - option "Aerodrome"
+          - generic [ref=e44]:
+            - generic [ref=e45]: Min APR %
+            - spinbutton "Min APR %" [ref=e46]
+          - generic [ref=e47]:
+            - generic [ref=e48]: Min Market Size $
+            - spinbutton "Min Market Size $" [ref=e49]
+          - generic [ref=e50]:
+            - generic [ref=e51]: Min TXs
+            - spinbutton "Min TXs" [ref=e52]
+          - generic [ref=e54] [cursor=pointer]:
+            - text: Acyclic Only
+            - checkbox "Acyclic Only" [checked] [ref=e55]
+          - button "Select visible columns" [ref=e57] [cursor=pointer]
+        - table [ref=e62]:
+          - rowgroup [ref=e63]:
+            - row [ref=e64]:
+              - columnheader "Route Path" [ref=e65]
+              - columnheader "Network" [ref=e66]
+              - columnheader "TXs ↕" [ref=e67] [cursor=pointer]
+              - columnheader "APR ↕" [ref=e68] [cursor=pointer]
+              - columnheader "Volume ↕" [ref=e69] [cursor=pointer]
+              - columnheader "Market Size ↕" [ref=e70] [cursor=pointer]
+          - rowgroup [ref=e71]:
+            - row [ref=e72]:
+              - cell "USDC 0.0007% 0% USDT" [ref=e73]:
+                - generic [ref=e74]:
+                  - link [ref=e75] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e81]:
+                    - generic [ref=e82]: 0.0007%
+                    - generic [ref=e84]: 0%
+                    - generic [ref=e86]:
+                      - link [ref=e87] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x0fb0e40cec3bb23e13abc585958a93c796fbea56955e19a23727a716a0423239
+                      - link [ref=e90] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x0fb0e40cec3bb23e13abc585958a93c796fbea56955e19a23727a716a0423239
+                  - link [ref=e98] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Ethereum" [ref=e101]
+              - cell "4,973" [ref=e103]
+              - cell "0%" [ref=e104]
+              - cell "$217,145,468" [ref=e105]
+              - cell "$1,520" [ref=e106]
+            - row [ref=e107]:
+              - cell "USDC 0.0008% 0% USDT" [ref=e108]:
+                - generic [ref=e109]:
+                  - link [ref=e110] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e116]:
+                    - generic [ref=e117]: 0.0008%
+                    - generic [ref=e119]: 0%
+                    - generic [ref=e121]:
+                      - link [ref=e122] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x395f91b34aa34a477ce3bc6505639a821b286a62b1a164fc1887fa3a5ef713a5
+                      - link [ref=e125] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x395f91b34aa34a477ce3bc6505639a821b286a62b1a164fc1887fa3a5ef713a5
+                  - link [ref=e133] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Ethereum" [ref=e136]
+              - cell "1,460" [ref=e138]
+              - cell "0%" [ref=e139]
+              - cell "$45,345,310" [ref=e140]
+              - cell "$363" [ref=e141]
+            - row [ref=e142]:
+              - cell "USDC 0.01% 0% USDT" [ref=e143]:
+                - generic [ref=e144]:
+                  - link [ref=e145] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e151]:
+                    - generic [ref=e152]: 0.01%
+                    - generic [ref=e154]: 0%
+                  - link [ref=e158] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Base" [ref=e161]
+              - cell "8,715" [ref=e163]
+              - cell "N/A" [ref=e164]
+              - cell "$8,429,614" [ref=e165]
+              - cell "$843" [ref=e166]
+            - row [ref=e167]:
+              - cell "USDC 0.001% 0% USDT" [ref=e168]:
+                - generic [ref=e169]:
+                  - link [ref=e170] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e176]:
+                    - generic [ref=e177]: 0.001%
+                    - generic [ref=e179]: 0%
+                    - generic [ref=e181]:
+                      - link [ref=e182] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x8aa4e11cbdf30eedc92100f4c8a31ff748e201d44712cc8c90d189edaa8e4e47
+                      - link [ref=e185] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x8aa4e11cbdf30eedc92100f4c8a31ff748e201d44712cc8c90d189edaa8e4e47
+                  - link [ref=e193] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Ethereum" [ref=e196]
+              - cell "1,135" [ref=e198]
+              - cell "0%" [ref=e199]
+              - cell "$6,504,464" [ref=e200]
+              - cell "$65" [ref=e201]
+            - row [ref=e202]:
+              - cell "USDC 0.01% 0% USDT" [ref=e203]:
+                - generic [ref=e204]:
+                  - link [ref=e205] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e211]:
+                    - generic [ref=e212]: 0.01%
+                    - generic [ref=e214]: 0%
+                    - link [ref=e217] [cursor=pointer]:
+                      - /url: https://pancakeswap.finance/liquidity/pool/bsc/0xa859b22e97f32d4c7b1d9788044697712cb7183d294ed7aa1832799c1739e5cf
+                  - link [ref=e229] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "BNB" [ref=e232]
+              - cell "533" [ref=e234]
+              - cell "N/A" [ref=e235]
+              - cell "$113,269" [ref=e236]
+              - cell "$11" [ref=e237]
+            - row [ref=e238]:
+              - cell "USDC 0.01% 0% USDT" [ref=e239]:
+                - generic [ref=e240]:
+                  - link [ref=e241] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e247]:
+                    - generic [ref=e248]: 0.01%
+                    - generic [ref=e250]: 0%
+                    - generic [ref=e252]:
+                      - link [ref=e253] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xe018f09af38956affdfeab72c2cefbcd4e6fee44d09df7525ec9dba3e51356a5
+                      - link [ref=e256] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0xe018f09af38956affdfeab72c2cefbcd4e6fee44d09df7525ec9dba3e51356a5
+                  - link [ref=e264] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Ethereum" [ref=e267]
+              - cell "209" [ref=e269]
+              - cell "0%" [ref=e270]
+              - cell "$110,215" [ref=e271]
+              - cell "$11" [ref=e272]
+            - row [ref=e273]:
+              - cell "USDC 0.0035% 0% USDT" [ref=e274]:
+                - generic [ref=e275]:
+                  - link [ref=e276] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e282]:
+                    - generic [ref=e283]: 0.0035%
+                    - generic [ref=e285]: 0%
+                    - generic [ref=e287]:
+                      - link [ref=e288] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xd49b419ced7700b88756e5c576f7a6fc165d8b4b140970ec4e6f468784c8385c
+                      - link [ref=e291] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0xd49b419ced7700b88756e5c576f7a6fc165d8b4b140970ec4e6f468784c8385c
+                  - link [ref=e299] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Ethereum" [ref=e302]
+              - cell "138" [ref=e304]
+              - cell "0%" [ref=e305]
+              - cell "$29,954" [ref=e306]
+              - cell "$1.05" [ref=e307]
+            - row [ref=e308]:
+              - cell "USDC 0.05% 0% USDT" [ref=e309]:
+                - generic [ref=e310]:
+                  - link [ref=e311] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e317]:
+                    - generic [ref=e318]: 0.05%
+                    - generic [ref=e320]: 0%
+                    - link [ref=e323] [cursor=pointer]:
+                      - /url: https://pancakeswap.finance/info/infinity/pairs/tokens/0x55d398326f99059ff775485246999027b3197955?chain=bsc
+                  - link [ref=e335] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "BNB" [ref=e338]
+              - cell "5" [ref=e340]
+              - cell "N/A" [ref=e341]
+              - cell "$2,851" [ref=e342]
+              - cell "$1.43" [ref=e343]
+            - row [ref=e344]:
+              - cell "USDC 0.0005% 0% USDT" [ref=e345]:
+                - generic [ref=e346]:
+                  - link [ref=e347] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e353]:
+                    - generic [ref=e354]: 0.0005%
+                    - generic [ref=e356]: 0%
+                    - generic [ref=e358]:
+                      - link [ref=e359] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x77b480a635c038223de17d7eb3860bc8c12beb2a2b29dbfc59a3d35fd17e617f
+                      - link [ref=e362] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x77b480a635c038223de17d7eb3860bc8c12beb2a2b29dbfc59a3d35fd17e617f
+                  - link [ref=e370] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Ethereum" [ref=e373]
+              - cell "4" [ref=e375]
+              - cell "0%" [ref=e376]
+              - cell "$498" [ref=e377]
+              - cell "$0.00" [ref=e378]
+            - row [ref=e379]:
+              - cell "USDC 0.05% 4.3% USDT" [ref=e380]:
+                - generic [ref=e381]:
+                  - link [ref=e382] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                  - generic [ref=e388]:
+                    - generic [ref=e389]: 0.05%
+                    - generic [ref=e391]: 4.3%
+                    - generic [ref=e393]:
+                      - link [ref=e394] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0x3ad280c97568a027da5e10bf3e757886fc4e2fa301959d7bb6c296d3e39f30b5
+                      - link [ref=e397] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv4/0x3ad280c97568a027da5e10bf3e757886fc4e2fa301959d7bb6c296d3e39f30b5
+                  - link [ref=e405] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/bridged-tether/
+              - cell "Ethereum" [ref=e408]
+              - cell "2" [ref=e410]
+              - cell "4.3%" [ref=e411]
+              - cell "$70" [ref=e412]
+              - cell "$0.03" [ref=e413]
+    - contentinfo [ref=e33]
