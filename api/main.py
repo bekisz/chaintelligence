@@ -2,6 +2,8 @@ import sys
 import os
 import base64
 import secrets
+import time
+import threading
 import psycopg2
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
@@ -106,6 +108,254 @@ def _derive_address(t0_bytes: bytes, t1_bytes: bytes, fee_val: int, factory_hex:
     ih_bytes = bytes.fromhex(init_hash_hex.removeprefix('0x'))
     derived = '0x' + keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
     return to_checksum_address(derived)
+
+
+def format_apr(apr_val):
+    if apr_val is None:
+        return "N/A"
+    pct = apr_val * 100
+    rounded = round(pct + 1e-9, 1)
+    if rounded == 0.0:
+        return "0%"
+    if rounded == int(rounded):
+        return f"{int(rounded)}%"
+    return f"{rounded}%"
+
+
+import requests
+import asyncio
+
+# In-memory cache for DEX Screener TVL to avoid duplicate/rate-limited API calls
+# key: (chainId, pool_addr_or_id) -> tvl_usd (float)
+DEX_SCREENER_CACHE = {}
+
+def fetch_dexscreener_tvl(network: str, pool_addr: str) -> Optional[float]:
+    if not pool_addr:
+        return None
+        
+    net_map = {
+        'ethereum': 'ethereum',
+        'arbitrum': 'arbitrum',
+        'base': 'base',
+        'bnb': 'bsc',
+        'bsc': 'bsc'
+    }
+    chain_id = net_map.get(network.lower())
+    if not chain_id:
+        return None
+        
+    cache_key = (chain_id, pool_addr.lower())
+    if cache_key in DEX_SCREENER_CACHE:
+        return DEX_SCREENER_CACHE[cache_key]
+        
+    url = f"https://api.dexscreener.com/latest/dex/pairs/{chain_id}/{pool_addr.lower()}"
+    try:
+        resp = requests.get(url, timeout=3.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            pair = data.get('pair')
+            if pair:
+                liq_usd = pair.get('liquidity', {}).get('usd')
+                if liq_usd is not None:
+                    val = float(liq_usd)
+                    DEX_SCREENER_CACHE[cache_key] = val
+                    return val
+    except Exception as e:
+        print(f"Error querying DexScreener for {chain_id}/{pool_addr}: {e}")
+        
+    return None
+
+
+def parse_fee_rate(fee_str: str) -> Optional[float]:
+    try:
+        f_clean = fee_str.split('|')[0].replace('%', '').strip()
+        if f_clean == 'Dynamic':
+            return 0.0002
+        val = float(f_clean)
+        if val >= 5:
+            return val / 1000000.0
+        return val / 100.0
+    except Exception:
+        return None
+
+
+async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: str, pool_network: str, period_days: float, fee_tier: str) -> dict:
+    pool_stat = aprs.get(key) or aprs.get(rev_key)
+    if pool_stat is None:
+        pool_stat = {'apr': None, 'tvl': 0.0, 'volume': 0.0}
+        
+    tvl_val = pool_stat.get('tvl') or 0.0
+    vol_val = pool_stat.get('volume') or 0.0
+    apr_val = pool_stat.get('apr')
+    
+    is_unreliable = tvl_val <= 1.0 or (vol_val > 0.0 and tvl_val < (vol_val / period_days) * 0.05)
+    
+    if is_unreliable and pool_addr:
+        ds_tvl = await asyncio.to_thread(fetch_dexscreener_tvl, pool_network, pool_addr)
+        if ds_tvl and ds_tvl > 1.0:
+            tvl_val = ds_tvl
+            fee_rate = parse_fee_rate(fee_tier)
+            if fee_rate is not None:
+                fees_earned = vol_val * fee_rate
+                apr_val = (fees_earned / tvl_val) * (365.0 / period_days)
+                
+    return {
+        'apr': apr_val,
+        'tvl': tvl_val,
+        'volume': vol_val
+    }
+
+
+# ---------------------------------------------------------------------------
+# DeFi Llama yields index: pool_address(lower) -> yields UUID slug.
+#
+# The slug in https://defillama.com/yields/pool/<uuid> is a random UUID v4
+# assigned by DeFi Llama — it cannot be derived from a pool address. The
+# yields.llama.fi/pools record identifies a pool by (chain, project, fee tier
+# poolMeta, underlying token addresses) and does NOT carry the pool contract
+# address. So we build a reverse index: for each yields record we recompute
+# the pool address via the SAME CREATE2 formula used by _derive_address, and
+# map that address -> the record's stable UUID. UUIDs are stable, so the index
+# is cached with a TTL and rebuilt off the event-loop thread.
+# ---------------------------------------------------------------------------
+DEFILLAMA_INDEX: Dict[str, str] = {}
+DEFILLAMA_INDEX_BUILT_AT: float = 0.0
+DEFILLAMA_INDEX_TTL = 24 * 3600  # 24h
+_DEFILLAMA_LOCK = threading.Lock()
+
+# DeFi Llama chain name -> dex_config network key
+_DL_CHAIN_TO_NET = {
+    'Ethereum': 'ethereum', 'Arbitrum': 'arbitrum', 'Base': 'base',
+    'OP Mainnet': 'optimism', 'Polygon': 'polygon', 'BSC': 'bsc',
+    'Avalanche': 'avalanche', 'Celo': 'celo',
+}
+
+# DeFi Llama project slug -> (dex_config protocol key, is_v2)
+_DL_PROJECT_TO_PROTO = {
+    'uniswap-v3': ('uniswap_v3', False),
+    'pancakeswap-amm-v3': ('pancakeswap_v3', False),
+    'uniswap-v2': ('uniswap_v2', True),
+}
+
+
+def _dl_fee_to_bips(pool_meta: Optional[str]) -> Optional[int]:
+    """'0.05%' -> 500, '1%' -> 10000, '0.3%' -> 3000 (Uniswap fee units)."""
+    if not pool_meta or '%' not in pool_meta:
+        return None
+    try:
+        return round(float(pool_meta.replace('%', '').strip()) * 10000)
+    except ValueError:
+        return None
+
+
+# Standard Uniswap V4 mainnet fee -> tickSpacing (only the four canonical tiers).
+# Non-standard fees (0.25%, dynamic, etc.) are skipped — their tickSpacing/hooks
+# aren't knowable from DeFi Llama's data, so we don't risk a wrong derivation.
+_V4_TICK_SPACING = {100: 1, 500: 10, 3000: 60, 10000: 200}
+_NATIVE_ZERO = '0x0000000000000000000000000000000000000000'
+
+
+def _derive_v4_pool_id(c0_hex: str, c1_hex: str, fee: int, tick_spacing: int) -> str:
+    """V4 poolId = keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks)),
+    assuming hooks = address(0). currency0 < currency1 (sorted)."""
+    a = bytes.fromhex(c0_hex.lower().removeprefix('0x').rjust(40, '0'))
+    b = bytes.fromhex(c1_hex.lower().removeprefix('0x').rjust(40, '0'))
+    if b < a:
+        a, b = b, a
+    hooks = b'\x00' * 32
+    enc = (a.rjust(32, b'\x00') + b.rjust(32, b'\x00') +
+           fee.to_bytes(32, 'big') + tick_spacing.to_bytes(32, 'big', signed=True) + hooks)
+    return '0x' + keccak(enc).hex()
+
+
+def _build_defillama_index() -> Dict[str, str]:
+    resp = requests.get('https://yields.llama.fi/pools', timeout=30.0)
+    resp.raise_for_status()
+    pools = resp.json().get('data', [])
+    index: Dict[str, str] = {}
+    for p in pools:
+        project = p.get('project')
+        uuid = p.get('pool')
+        if not uuid:
+            continue
+        tokens = p.get('underlyingTokens') or []
+        if len(tokens) != 2:
+            continue
+
+        # Uniswap V4: derive the poolId (what Chaintelligence carries) and map
+        # it to the UUID. Only non-ETH, standard-fee, no-hook pools — ETH pools
+        # use native 0x0 on DeFi Llama but WETH in Chaintelligence (different
+        # poolIds), and non-standard fees have unknown tickSpacing/hooks.
+        if project == 'uniswap-v4':
+            if any(t.lower() == _NATIVE_ZERO for t in tokens):
+                continue
+            fee = _dl_fee_to_bips(p.get('poolMeta'))
+            if fee is None:
+                continue
+            tick = _V4_TICK_SPACING.get(fee)
+            if tick is None:
+                continue
+            try:
+                pool_id = _derive_v4_pool_id(tokens[0], tokens[1], fee, tick)
+            except ValueError:
+                continue
+            index[pool_id.lower()] = uuid
+            continue
+
+        # V2/V3: CREATE2 derivation
+        mapping = _DL_PROJECT_TO_PROTO.get(project)
+        if not mapping:
+            continue
+        proto_key, is_v2 = mapping
+        net = _DL_CHAIN_TO_NET.get(p.get('chain'))
+        if not net:
+            continue
+        cfg = DEX_CONFIG.get(proto_key) or {}
+        # pancakeswap_v3 uses 'eth' instead of 'ethereum'
+        net_cfg = cfg.get(net) or (cfg.get('eth') if net == 'ethereum' else None)
+        if not net_cfg or 'factory' not in net_cfg:
+            continue
+        try:
+            t0b = bytes.fromhex(tokens[0].lower().removeprefix('0x'))
+            t1b = bytes.fromhex(tokens[1].lower().removeprefix('0x'))
+        except ValueError:
+            continue
+        if is_v2:
+            addr = _derive_address(t0b, t1b, 0, net_cfg['factory'], net_cfg['init_hash'], is_v2=True)
+        else:
+            fee = _dl_fee_to_bips(p.get('poolMeta'))
+            if fee is None:
+                continue
+            addr = _derive_address(t0b, t1b, fee, net_cfg['factory'], net_cfg['init_hash'], is_v2=False)
+        index[addr.lower()] = uuid
+    return index
+
+
+def get_defillama_index() -> Dict[str, str]:
+    """Return the cached pool_address->UUID index, rebuilding if stale.
+    Thread-safe; safe to call from asyncio.to_thread on first use."""
+    global DEFILLAMA_INDEX, DEFILLAMA_INDEX_BUILT_AT
+    now = time.time()
+    if DEFILLAMA_INDEX and (now - DEFILLAMA_INDEX_BUILT_AT < DEFILLAMA_INDEX_TTL):
+        return DEFILLAMA_INDEX
+    with _DEFILLAMA_LOCK:
+        if DEFILLAMA_INDEX and (time.time() - DEFILLAMA_INDEX_BUILT_AT < DEFILLAMA_INDEX_TTL):
+            return DEFILLAMA_INDEX
+        try:
+            idx = _build_defillama_index()
+            if idx:
+                DEFILLAMA_INDEX = idx
+                DEFILLAMA_INDEX_BUILT_AT = time.time()
+                print(f"[DeFiLlama] yields index built: {len(idx)} pools")
+        except Exception as e:
+            print(f"[DeFiLlama] yields index build failed: {e}")
+    return DEFILLAMA_INDEX
+
+
+def get_defillama_pool_uuid(pool_addr: Optional[str]) -> Optional[str]:
+    if not pool_addr:
+        return None
+    return get_defillama_index().get(pool_addr.lower())
 
 
 try:
@@ -608,7 +858,11 @@ async def analyze(
 
                     v4_batch = await asyncio.to_thread(_lookup_v4_pool_ids)
                     pool_addresses.update(v4_batch)
-            
+
+            # Warm the DeFi Llama yields index off the event loop (one-time per TTL).
+            if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
+                await asyncio.to_thread(get_defillama_index)
+
             # 3. Inject into routes
             for route_idx, route in enumerate(analysis.get('routes', [])):
                 path = route.get('path_tokens', [])
@@ -630,20 +884,34 @@ async def analyze(
                             if t1_norm == 'BNB': t1_norm = 'WBNB'
 
                         key = f"{t0_norm}-{t1_norm}-{fee}"
-                        apr_val = aprs.get(key)
-                    
-                        # Also try reversed key just in case
-                        if apr_val is None:
-                            apr_val = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
-                    
-                        pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1_norm}-{t0_norm}-{fee}")
-                    
+                        rev_key = f"{t1_norm}-{t0_norm}-{fee}"
+                        pool_addr = pool_addresses.get(key) or pool_addresses.get(rev_key)
+                        
+                        fee_parts = fee.split('|')
+                        pool_network = fee_parts[2].strip() if len(fee_parts) >= 3 else "Ethereum"
+                        days = max(1, (end_dt - start_dt).days)
+                        
+                        enriched = await get_enriched_pool_stat(
+                            key=key,
+                            rev_key=rev_key,
+                            aprs=aprs,
+                            pool_addr=pool_addr,
+                            pool_network=pool_network,
+                            period_days=days,
+                            fee_tier=fee
+                        )
+                        
+                        apr_val = enriched['apr']
+                        tvl_val = enriched['tvl']
+
                         # Replace string fee with object
                         new_path.append({
                             'fee': fee,
                             'apr': apr_val if apr_val is not None else 0.0,
-                            'apr_str': f"{apr_val:.2%}" if apr_val is not None else "N/A",
-                            'pool_address': pool_addr
+                            'apr_str': format_apr(apr_val),
+                            'pool_address': pool_addr,
+                            'tvl': tvl_val,
+                            'defillama_uuid': get_defillama_pool_uuid(pool_addr)
                         })
                     else:
                         new_path.append(item)
@@ -661,7 +929,7 @@ async def analyze(
                     if leg_apr_strs and leg_apr_strs[0] == "N/A":
                         apr_str = "N/A"
                     else:
-                        apr_str = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
+                        apr_str = format_apr(route_apr) if route_apr > 0 else "0%"
             
                 # Determine route-level network from path fee node
                 route_network = "Ethereum"
@@ -1867,15 +2135,30 @@ async def sps_find(
                     if t1_norm == 'BNB': t1_norm = 'WBNB'
 
                 key = f"{t0_norm}-{t1_norm}-{fee}"
-                apr_val = aprs.get(key)
-                if apr_val is None:
-                    apr_val = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
-                pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1_norm}-{t0_norm}-{fee}")
-                apr_str = f"{apr_val:.2%}" if apr_val is not None else "N/A"
+                rev_key = f"{t1_norm}-{t0_norm}-{fee}"
+                pool_addr = pool_addresses.get(key) or pool_addresses.get(rev_key)
+                
+                fee_parts = fee.split('|')
+                pool_network = fee_parts[2].strip() if len(fee_parts) >= 3 else "Ethereum"
+                
+                enriched = await get_enriched_pool_stat(
+                    key=key,
+                    rev_key=rev_key,
+                    aprs=aprs,
+                    pool_addr=pool_addr,
+                    pool_network=pool_network,
+                    period_days=period_days,
+                    fee_tier=fee
+                )
+                
+                apr_val = enriched['apr']
+                tvl_val = enriched['tvl']
+                apr_str = format_apr(apr_val)
                 pool_stats[f"{t0}-{t1}-{fee}"] = {
                     'apr': apr_val if apr_val is not None else 0.0,
                     'apr_str': apr_str,
-                    'pool_address': pool_addr
+                    'pool_address': pool_addr,
+                    'tvl': tvl_val
                 }
 
         return {
