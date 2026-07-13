@@ -382,7 +382,7 @@ def sync_tvl_from_graph():
                 INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd, tvl_usd)
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (pool_id, date) DO UPDATE 
-                SET tvl_usd = EXCLUDED.tvl_usd,
+                SET tvl_usd = COALESCE(liquidity_pool_history.tvl_usd, EXCLUDED.tvl_usd),
                     volume_usd = EXCLUDED.volume_usd,
                     tx_count = EXCLUDED.tx_count;
             """, (pool_id, d['date'], d['tx_count'], d['volume_usd'], d['tvl_usd']))
