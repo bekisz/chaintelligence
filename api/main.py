@@ -248,13 +248,62 @@ def _dl_fee_to_bips(pool_meta: Optional[str]) -> Optional[int]:
         return None
 
 
+# Standard Uniswap V4 mainnet fee -> tickSpacing (only the four canonical tiers).
+# Non-standard fees (0.25%, dynamic, etc.) are skipped — their tickSpacing/hooks
+# aren't knowable from DeFi Llama's data, so we don't risk a wrong derivation.
+_V4_TICK_SPACING = {100: 1, 500: 10, 3000: 60, 10000: 200}
+_NATIVE_ZERO = '0x0000000000000000000000000000000000000000'
+
+
+def _derive_v4_pool_id(c0_hex: str, c1_hex: str, fee: int, tick_spacing: int) -> str:
+    """V4 poolId = keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks)),
+    assuming hooks = address(0). currency0 < currency1 (sorted)."""
+    a = bytes.fromhex(c0_hex.lower().removeprefix('0x').rjust(40, '0'))
+    b = bytes.fromhex(c1_hex.lower().removeprefix('0x').rjust(40, '0'))
+    if b < a:
+        a, b = b, a
+    hooks = b'\x00' * 32
+    enc = (a.rjust(32, b'\x00') + b.rjust(32, b'\x00') +
+           fee.to_bytes(32, 'big') + tick_spacing.to_bytes(32, 'big', signed=True) + hooks)
+    return '0x' + keccak(enc).hex()
+
+
 def _build_defillama_index() -> Dict[str, str]:
     resp = requests.get('https://yields.llama.fi/pools', timeout=30.0)
     resp.raise_for_status()
     pools = resp.json().get('data', [])
     index: Dict[str, str] = {}
     for p in pools:
-        mapping = _DL_PROJECT_TO_PROTO.get(p.get('project'))
+        project = p.get('project')
+        uuid = p.get('pool')
+        if not uuid:
+            continue
+        tokens = p.get('underlyingTokens') or []
+        if len(tokens) != 2:
+            continue
+
+        # Uniswap V4: derive the poolId (what Chaintelligence carries) and map
+        # it to the UUID. Only non-ETH, standard-fee, no-hook pools — ETH pools
+        # use native 0x0 on DeFi Llama but WETH in Chaintelligence (different
+        # poolIds), and non-standard fees have unknown tickSpacing/hooks.
+        if project == 'uniswap-v4':
+            if any(t.lower() == _NATIVE_ZERO for t in tokens):
+                continue
+            fee = _dl_fee_to_bips(p.get('poolMeta'))
+            if fee is None:
+                continue
+            tick = _V4_TICK_SPACING.get(fee)
+            if tick is None:
+                continue
+            try:
+                pool_id = _derive_v4_pool_id(tokens[0], tokens[1], fee, tick)
+            except ValueError:
+                continue
+            index[pool_id.lower()] = uuid
+            continue
+
+        # V2/V3: CREATE2 derivation
+        mapping = _DL_PROJECT_TO_PROTO.get(project)
         if not mapping:
             continue
         proto_key, is_v2 = mapping
@@ -265,9 +314,6 @@ def _build_defillama_index() -> Dict[str, str]:
         # pancakeswap_v3 uses 'eth' instead of 'ethereum'
         net_cfg = cfg.get(net) or (cfg.get('eth') if net == 'ethereum' else None)
         if not net_cfg or 'factory' not in net_cfg:
-            continue
-        tokens = p.get('underlyingTokens') or []
-        if len(tokens) != 2:
             continue
         try:
             t0b = bytes.fromhex(tokens[0].lower().removeprefix('0x'))
@@ -281,9 +327,7 @@ def _build_defillama_index() -> Dict[str, str]:
             if fee is None:
                 continue
             addr = _derive_address(t0b, t1b, fee, net_cfg['factory'], net_cfg['init_hash'], is_v2=False)
-        uuid = p.get('pool')
-        if uuid:
-            index[addr.lower()] = uuid
+        index[addr.lower()] = uuid
     return index
 
 
