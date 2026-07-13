@@ -1539,6 +1539,37 @@ footer {
     flex-shrink: 0;
 }
 
+/* DeFi Llama yields link */
+.defillama-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(56, 97, 251, 0.14);
+    color: #3861fb;
+    border: 1px solid rgba(56, 97, 251, 0.25);
+    border-radius: 4px;
+    padding: 2.5px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    line-height: 0;
+}
+
+.defillama-link:hover {
+    background: #3861fb;
+    color: #ffffff;
+    transform: scale(1.15);
+    border-color: #3861fb;
+    box-shadow: 0 0 10px rgba(56, 97, 251, 0.6);
+}
+
+.defillama-icon {
+    display: block;
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+}
+
 /* Protocol-specific arrow colours — set on the arrow container */
 .route-hop.v3 .route-hop-arrow,
 .route-hop.uniswap-v3 .route-hop-arrow {
@@ -2460,8 +2491,11 @@ input:focus+.slider {
 .hide-lp-dexscreener .dexscreener-link {
     display: none !important;
 }
+.hide-lp-defillama .defillama-link {
+    display: none !important;
+}
 /* Collapse the links pane entirely when all of its children are hidden */
-.hide-lp-dex.hide-lp-revert.hide-lp-dexscreener .links-pane {
+.hide-lp-dex.hide-lp-revert.hide-lp-dexscreener.hide-lp-defillama .links-pane {
     display: none !important;
 }
 

@@ -769,6 +769,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                     `;
                 }
 
+                // DeFi Llama yields link — UUID is looked up on the backend
+                // (random slug, not derivable from the address); off by default.
+                let defillamaHtml = '';
+                if (item && typeof item === 'object' && item.defillama_uuid) {
+                    const defillamaUrl = `https://defillama.com/yields/pool/${item.defillama_uuid}`;
+                    defillamaHtml = `
+                        <a href="${defillamaUrl}" target="_blank" class="lp-link defillama-link" data-tooltip="View on DeFi Llama" onclick="event.stopPropagation();">
+                            <svg class="lp-link-icon defillama-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 13c2-1 4-1 6 0s4 1 6 0 4-1 6 0"/>
+                                <path d="M3 18c2-1 4-1 6 0s4 1 6 0 4-1 6 0"/>
+                                <path d="M5 8c1.5-2 3-3 5-3s3.5 1 5 3"/>
+                                <circle cx="10" cy="9" r="1.1" fill="currentColor" stroke="none"/>
+                                <circle cx="14" cy="9" r="1.1" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </a>
+                    `;
+                }
+
                 // Render both Fee display and APR display in separate text spans (or combine them)
                 let labelContent = `
                     <div class="label-pane fee-pane" data-tooltip="Tier">
@@ -784,12 +802,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 let linksContent = '';
-                if (uniLinkHtml || revertHtml || dexscreenerHtml) {
+                if (uniLinkHtml || revertHtml || dexscreenerHtml || defillamaHtml) {
                     linksContent = `
                         <div class="label-pane links-pane">
                             ${uniLinkHtml}
                             ${revertHtml}
                             ${dexscreenerHtml}
+                            ${defillamaHtml}
                         </div>
                     `;
                 }
