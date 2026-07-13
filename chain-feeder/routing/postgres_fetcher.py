@@ -267,7 +267,7 @@ class PostgresFetcher:
                 pass
             conn.close()
 
-    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None) -> Dict[str, Dict[str, float]]:
         """
         Fetch stats (APR) for a list of pools [(t0, t1, fee), ...] within date range.
         Returns dict: { "T0-T1-FEE": apr_float }
@@ -562,11 +562,12 @@ class PostgresFetcher:
                         pass
 
                 if apr is not None:
-                    results[k] = apr
+                    pool_stat = {'apr': apr, 'tvl': meta.get('avg_tvl', 0.0)}
+                    results[k] = pool_stat
                     # Reverse-token-order key (preserves the old behavior without
                     # the k.split('-') bug that broke on fees containing '-').
                     t0, t1, f = k.split('-', 2)
-                    results[f"{t1}-{t0}-{f}"] = apr
+                    results[f"{t1}-{t0}-{f}"] = pool_stat
 
             cur.close()
             try:

@@ -6,6 +6,16 @@ const getCmcUrl = (tokenSymbol) => {
     return `https://coinmarketcap.com/currencies/${slug}/`;
 };
 
+const formatAprPercent = (pct) => {
+    if (pct === null || pct === undefined || isNaN(pct)) return 'N/A';
+    const rounded = pct.toFixed(1);
+    if (rounded === '0.0') return '0%';
+    if (rounded.endsWith('.0')) {
+        return rounded.substring(0, rounded.length - 2) + '%';
+    }
+    return rounded + '%';
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const analyzeBtn = document.getElementById('analyze-btn');
     const startTokenInput = document.getElementById('start-token');
@@ -123,6 +133,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         return hopCount === 1 ? totalApr : 0;
     };
 
+    const getRouteTvl = (route) => {
+        let totalTvl = 0;
+        let hopCount = 0;
+        if (route.path_tokens) {
+            route.path_tokens.forEach((item, idx) => {
+                if (idx % 2 === 1 && typeof item === 'object') {
+                    totalTvl += (item.tvl || 0);
+                    hopCount++;
+                }
+            });
+        }
+        // TVL is only meaningful for single-pool routes; multi-hop sorts as 0
+        return hopCount === 1 ? totalTvl : 0;
+    };
+
     const filterAndRenderRoutes = () => {
         if (!currentRoutes) return;
 
@@ -130,6 +155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const minMktInput = document.getElementById('min-mkt-filter');
         const minTxsInput = document.getElementById('min-txs-filter');
         const acyclicCheckbox = document.getElementById('acyclic-filter');
+        const directOnlyCheckbox = document.getElementById('direct-only-filter');
         const networkFilter = document.getElementById('network-filter');
         const protocolFilter = document.getElementById('protocol-filter');
 
@@ -137,6 +163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const minMktVal = minMktInput ? parseFloat(minMktInput.value) || 0 : 0;
         const minTxsVal = minTxsInput ? parseInt(minTxsInput.value) || 0 : 0;
         const acyclicOnly = acyclicCheckbox ? acyclicCheckbox.checked : false;
+        const directOnly = directOnlyCheckbox ? directOnlyCheckbox.checked : false;
         const selectedNetwork = networkFilter ? networkFilter.value : 'all';
         const selectedProtocol = protocolFilter ? protocolFilter.value : 'all';
 
@@ -179,6 +206,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 const isAcyclic = new Set(tokens).size === tokens.length;
                 if (!isAcyclic) return false;
+            }
+
+            // Direct-only filter: keep only single-hop routes (one LP between start and end token)
+            if (directOnly) {
+                let tokenCount = 0;
+                if (route.path_tokens) {
+                    for (let i = 0; i < route.path_tokens.length; i++) {
+                        if (i % 2 === 0) tokenCount++;
+                    }
+                } else {
+                    const parts = route.path.split(' ');
+                    for (let i = 0; i < parts.length; i++) {
+                        if (i % 4 === 0) tokenCount++;
+                    }
+                }
+                if (tokenCount !== 2) return false;
             }
 
             return true;
@@ -285,12 +328,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentRoutes = data.routes;
             filterAndRenderRoutes();
 
-            // Sync the post-hoc network filter to the queried network
-            // so the user can't filter to a network that wasn't queried.
+            // Restrict the post-hoc network filter to the networks actually
+            // queried: if a single network was queried, lock the filter to it
+            // (disable the other options); if "All Chains" was queried, leave
+            // every network selectable.
             const posthocNetwork = document.getElementById('network-filter');
             if (posthocNetwork) {
-                posthocNetwork.value = selectedNetwork;
-                posthocNetwork.disabled = true;
+                const isAllQuery = !selectedNetwork || selectedNetwork === 'all';
+                [...posthocNetwork.options].forEach(opt => {
+                    opt.disabled = !isAllQuery && opt.value !== 'all' && opt.value !== selectedNetwork;
+                });
+                posthocNetwork.disabled = false;
+                posthocNetwork.value = isAllQuery ? 'all' : selectedNetwork;
             }
 
             // Show results
@@ -310,7 +359,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         volume: 'desc',
         mkt: 'desc',
         avg: 'desc',
-        pct: 'desc'
+        pct: 'desc',
+        tvl: 'desc'
     };
 
     // Event listener for display toggle
@@ -345,13 +395,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const renderRoutes = (routes) => {
         routesBody.innerHTML = '';
         routes.forEach((route, idx) => {
-            // Calculate Route APR (only valid for single-hop)
+            // Calculate Route APR (only valid for single-hop) and TVL (only meaningful for single-pool routes)
             let totalApr = 0;
             let hopCount = 0;
+            let routeTvl = 0;
             if (route.path_tokens) {
                 route.path_tokens.forEach((item, idx) => {
                     if (idx % 2 === 1 && typeof item === 'object') {
                         totalApr += (item.apr || 0);
+                        routeTvl += (item.tvl || 0);
                         hopCount++;
                     }
                 });
@@ -360,7 +412,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const aprClass = hopCount > 1 ? 'text-muted' : (avgApr > 0.5 ? 'text-success font-bold' : (avgApr > 0 ? 'text-success' : 'text-muted'));
 
             // Use backend pre-calculated string if available, otherwise format locally
-            const aprDisplay = hopCount > 1 ? '-' : (route.apr_str || (hopCount === 1 ? (avgApr * 100).toFixed(1) + '%' : 'N/A'));
+            const aprDisplay = hopCount > 1 ? '-' : (route.apr_str || (hopCount === 1 ? formatAprPercent(avgApr * 100) : 'N/A'));
+
+            // TVL is only shown for single-pool (direct) routes; multi-hop shows '-'
+            const tvlDisplay = (hopCount === 1 && routeTvl > 0) ? formatUSD(routeTvl) : '-';
 
             const networkVal = route.network || 'Ethereum';
             const networkClass = networkVal.toLowerCase();
@@ -376,6 +431,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
                 <td class="col-volume font-bold">${formatUSD(route.volume)}</td>
                 <td class="col-market-size">${formatUSD(route.market_size || 0)}</td>
+                <td class="col-tvl">${tvlDisplay}</td>
                 <td class="col-avg-volume">${formatUSD(route.avg_volume)}</td>
                 <td class="col-pct-volume accent-text">${route.pct_volume.toFixed(1)}%</td>
             `;
@@ -510,7 +566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                         if (item.apr !== undefined && item.apr !== null && item.apr >= 0) {
                             const aprVal = item.apr * 100;
-                            aprDisplay = aprVal < 0.1 ? aprVal.toFixed(3) + '%' : aprVal.toFixed(1) + '%';
+                            aprDisplay = formatAprPercent(aprVal);
                         }
 
                         tooltip = `APR: ${item.apr_str || 'N/A'}\nTier: ${cleanFee}\nProtocol: ${protocolName}\nNetwork: ${networkName || 'Ethereum'}`;
@@ -686,6 +742,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
+                // DexScreener chart link — reuses the same pool_address as the
+                // Uniswap/PancakeSwap links; off by default via the data-lp toggle.
+                let dexscreenerHtml = '';
+                if (item && typeof item === 'object' && item.pool_address) {
+                    const pool_addr = item.pool_address;
+                    const parsed = parseProtocol(item.fee);
+                    const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
+                    let dsNet = 'ethereum';
+                    if (networkLower.includes('base')) dsNet = 'base';
+                    else if (networkLower.includes('arbitrum')) dsNet = 'arbitrum';
+                    else if (networkLower.includes('optimism')) dsNet = 'optimism';
+                    else if (networkLower.includes('polygon')) dsNet = 'polygon';
+                    else if (networkLower.includes('bnb') || networkLower.includes('bsc')) dsNet = 'bsc';
+                    else if (networkLower.includes('avalanche')) dsNet = 'avalanche';
+
+                    const dexscreenerUrl = `https://dexscreener.com/${dsNet}/${pool_addr}`;
+                    dexscreenerHtml = `
+                        <a href="${dexscreenerUrl}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();">
+                            <svg class="lp-link-icon dexscreener-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="4" y="10" width="3" height="10" rx="1"/>
+                                <rect x="10.5" y="4" width="3" height="16" rx="1"/>
+                                <rect x="17" y="12" width="3" height="8" rx="1"/>
+                            </svg>
+                        </a>
+                    `;
+                }
+
                 // Render both Fee display and APR display in separate text spans (or combine them)
                 let labelContent = `
                     <div class="label-pane fee-pane" data-tooltip="Tier">
@@ -701,11 +784,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 let linksContent = '';
-                if (uniLinkHtml || revertHtml) {
+                if (uniLinkHtml || revertHtml || dexscreenerHtml) {
                     linksContent = `
                         <div class="label-pane links-pane">
                             ${uniLinkHtml}
                             ${revertHtml}
+                            ${dexscreenerHtml}
                         </div>
                     `;
                 }
@@ -771,6 +855,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (key === 'mkt') {
                 valA = a.market_size || 0;
                 valB = b.market_size || 0;
+            } else if (key === 'tvl') {
+                valA = getRouteTvl(a);
+                valB = getRouteTvl(b);
             } else if (key === 'avg') {
                 valA = a.avg_volume;
                 valB = b.avg_volume;
@@ -787,18 +874,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const updateColumnVisibility = () => {
         const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"]');
+        // Scope LP-element toggles to the routes body so they survive re-renders
+        const lpScope = routesBody;
         checkboxes.forEach(cb => {
-            const colClass = `col-${cb.dataset.col}`;
             const isVisible = cb.checked;
-            
-            // Toggle visibility for headers and cells
-            document.querySelectorAll(`.${colClass}`).forEach(el => {
-                if (isVisible) {
-                    el.classList.remove('hidden-column');
-                } else {
-                    el.classList.add('hidden-column');
-                }
-            });
+
+            // Table columns (data-col) — toggle header + cells
+            if (cb.dataset.col) {
+                const colClass = `col-${cb.dataset.col}`;
+                document.querySelectorAll(`.${colClass}`).forEach(el => {
+                    el.classList.toggle('hidden-column', !isVisible);
+                });
+            }
+
+            // Liquidity-pool elements on the arrow (data-lp) — toggle via CSS hooks
+            if (cb.dataset.lp) {
+                lpScope.classList.toggle(`hide-lp-${cb.dataset.lp}`, !isVisible);
+            }
         });
     };
 
@@ -807,6 +899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sort-apr').addEventListener('click', () => sortRoutes('apr', 'sort-apr'));
     document.getElementById('sort-vol').addEventListener('click', () => sortRoutes('volume', 'sort-vol'));
     document.getElementById('sort-mkt').addEventListener('click', () => sortRoutes('mkt', 'sort-mkt'));
+    document.getElementById('sort-tvl').addEventListener('click', () => sortRoutes('tvl', 'sort-tvl'));
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
 
@@ -859,6 +952,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const acyclicCheckbox = document.getElementById('acyclic-filter');
     if (acyclicCheckbox) {
         acyclicCheckbox.addEventListener('change', () => {
+            filterAndRenderRoutes();
+        });
+    }
+
+    const directOnlyCheckbox = document.getElementById('direct-only-filter');
+    if (directOnlyCheckbox) {
+        directOnlyCheckbox.addEventListener('change', () => {
             filterAndRenderRoutes();
         });
     }

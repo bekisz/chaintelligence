@@ -1508,6 +1508,37 @@ footer {
     height: 11px;
 }
 
+/* DexScreener chart link */
+.dexscreener-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(124, 219, 40, 0.12);
+    color: #7cdb28;
+    border: 1px solid rgba(124, 219, 40, 0.25);
+    border-radius: 4px;
+    padding: 2.5px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    line-height: 0;
+}
+
+.dexscreener-link:hover {
+    background: #7cdb28;
+    color: #000000;
+    transform: scale(1.15);
+    border-color: #7cdb28;
+    box-shadow: 0 0 10px rgba(124, 219, 40, 0.6);
+}
+
+.dexscreener-icon {
+    display: block;
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+}
+
 /* Protocol-specific arrow colours — set on the arrow container */
 .route-hop.v3 .route-hop-arrow,
 .route-hop.uniswap-v3 .route-hop-arrow {
@@ -2372,15 +2403,8 @@ input:focus+.slider {
     gap: 12px;
 }
 
-.table-controls .display-toggle-wrapper {
-    padding: 0;
-    border: none;
-    order: 1;
-}
-
 .column-selector-container {
     position: relative;
-    order: 2;
 }
 
 .column-dropdown {
@@ -2392,12 +2416,53 @@ input:focus+.slider {
     border: 1px solid var(--uniswap-border);
     border-radius: 12px;
     padding: 12px;
-    min-width: 160px;
+    min-width: 175px;
     box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.6);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     z-index: 100;
+}
+
+.dropdown-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dropdown-section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+    opacity: 0.7;
+}
+
+.dropdown-divider {
+    border-top: 1px solid var(--uniswap-border);
+    margin: 2px 0;
+}
+
+.hide-lp-tier .fee-pane {
+    display: none !important;
+}
+.hide-lp-apr .apr-pane {
+    display: none !important;
+}
+.hide-lp-dex .pool-label-link {
+    display: none !important;
+}
+.hide-lp-revert .revert-link {
+    display: none !important;
+}
+.hide-lp-dexscreener .dexscreener-link {
+    display: none !important;
+}
+/* Collapse the links pane entirely when all of its children are hidden */
+.hide-lp-dex.hide-lp-revert.hide-lp-dexscreener .links-pane {
+    display: none !important;
 }
 
 .column-dropdown.hidden {

@@ -108,6 +108,18 @@ def _derive_address(t0_bytes: bytes, t1_bytes: bytes, fee_val: int, factory_hex:
     return to_checksum_address(derived)
 
 
+def format_apr(apr_val):
+    if apr_val is None:
+        return "N/A"
+    pct = apr_val * 100
+    rounded = round(pct + 1e-9, 1)
+    if rounded == 0.0:
+        return "0%"
+    if rounded == int(rounded):
+        return f"{int(rounded)}%"
+    return f"{rounded}%"
+
+
 try:
     from postgres_fetcher import PostgresFetcher, get_conn
     from route_analyzer import RouteAnalyzer
@@ -630,20 +642,24 @@ async def analyze(
                             if t1_norm == 'BNB': t1_norm = 'WBNB'
 
                         key = f"{t0_norm}-{t1_norm}-{fee}"
-                        apr_val = aprs.get(key)
-                    
+                        pool_stat = aprs.get(key)
+
                         # Also try reversed key just in case
-                        if apr_val is None:
-                            apr_val = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
-                    
+                        if pool_stat is None:
+                            pool_stat = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
+
+                        apr_val = pool_stat.get('apr') if pool_stat else None
+                        tvl_val = pool_stat.get('tvl') if pool_stat else 0.0
+
                         pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1_norm}-{t0_norm}-{fee}")
-                    
+
                         # Replace string fee with object
                         new_path.append({
                             'fee': fee,
                             'apr': apr_val if apr_val is not None else 0.0,
-                            'apr_str': f"{apr_val:.2%}" if apr_val is not None else "N/A",
-                            'pool_address': pool_addr
+                            'apr_str': format_apr(apr_val),
+                            'pool_address': pool_addr,
+                            'tvl': tvl_val
                         })
                     else:
                         new_path.append(item)
@@ -661,7 +677,7 @@ async def analyze(
                     if leg_apr_strs and leg_apr_strs[0] == "N/A":
                         apr_str = "N/A"
                     else:
-                        apr_str = f"{route_apr:.2%}" if route_apr > 0 else "0.0%"
+                        apr_str = format_apr(route_apr) if route_apr > 0 else "0%"
             
                 # Determine route-level network from path fee node
                 route_network = "Ethereum"
@@ -1867,15 +1883,18 @@ async def sps_find(
                     if t1_norm == 'BNB': t1_norm = 'WBNB'
 
                 key = f"{t0_norm}-{t1_norm}-{fee}"
-                apr_val = aprs.get(key)
-                if apr_val is None:
-                    apr_val = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
+                pool_stat = aprs.get(key)
+                if pool_stat is None:
+                    pool_stat = aprs.get(f"{t1_norm}-{t0_norm}-{fee}")
+                apr_val = pool_stat.get('apr') if pool_stat else None
+                tvl_val = pool_stat.get('tvl') if pool_stat else 0.0
                 pool_addr = pool_addresses.get(key) or pool_addresses.get(f"{t1_norm}-{t0_norm}-{fee}")
-                apr_str = f"{apr_val:.2%}" if apr_val is not None else "N/A"
+                apr_str = format_apr(apr_val)
                 pool_stats[f"{t0}-{t1}-{fee}"] = {
                     'apr': apr_val if apr_val is not None else 0.0,
                     'apr_str': apr_str,
-                    'pool_address': pool_addr
+                    'pool_address': pool_addr,
+                    'tvl': tvl_val
                 }
 
         return {
