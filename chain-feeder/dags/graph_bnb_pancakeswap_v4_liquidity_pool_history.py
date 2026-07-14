@@ -153,6 +153,7 @@ def sync_v4_pool_ids():
         JOIN coin c0 ON lp.coin0_id = c0.coin_id
         JOIN coin c1 ON lp.coin1_id = c1.coin_id
         WHERE lp.protocol = %s
+        LIMIT 500
     """, (PROTOCOL,))
     pools = cur.fetchall()
     logging.info(f"Resolving pool_ids for {len(pools)} PancakeSwap V4 pools")
@@ -280,7 +281,7 @@ def build_daily_history():
 
 
 with DAG(
-    'pancakeswap_v4_history_sync',
+    'graph_bnb_pancakeswap_v4_liquidity_pool_history',
     default_args=default_args,
     description='Derived daily history for PancakeSwap V4 (Infinity) pools',
     schedule='0 1 * * *',  # Daily at 1 AM

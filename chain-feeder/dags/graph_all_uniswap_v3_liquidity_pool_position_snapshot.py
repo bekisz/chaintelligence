@@ -157,7 +157,7 @@ def update_virtual_lp_family():
 from dags.common.tasks import fetch_missing_ranges
 
 with DAG(
-    'graph_lp_ingestion',
+    'graph_all_uniswap_v3_liquidity_pool_position_snapshot',
     default_args=default_args,
     description='Native LP position discovery and ingestion via The Graph',
     schedule='*/15 * * * *',

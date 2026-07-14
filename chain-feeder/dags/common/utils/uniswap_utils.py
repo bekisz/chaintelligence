@@ -601,17 +601,24 @@ class PostgresStorage:
 
             # Extract log_index from the subgraph id
             swap_id = s.get('id', '')
+            if not swap_id:
+                continue  # skip swaps with no id
+
             log_index = None
             if '#' in swap_id:
-                try:
-                    log_index = int(swap_id.split('#')[1])
-                except:
-                    pass
+                parts = swap_id.split('#')
+                if len(parts) > 1 and parts[1]:
+                    try:
+                        log_index = int(parts[1])
+                    except ValueError:
+                        pass
             elif '-' in swap_id:
-                try:
-                    log_index = int(swap_id.rsplit('-', 1)[1])
-                except:
-                    pass
+                parts = swap_id.rsplit('-', 1)
+                if len(parts) > 1 and parts[1]:
+                    try:
+                        log_index = int(parts[1])
+                    except ValueError:
+                        pass
             
             if log_index is None:
                 tx_hash = s.get('tx_hash') or 'unknown'

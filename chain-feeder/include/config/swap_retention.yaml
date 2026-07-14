@@ -1,0 +1,32 @@
+# Swap retention policy — how many days of swap data to keep per (network, protocol).
+# The DAG `config_global_swap_retention` reads this and deletes older rows.
+#
+# default_days: applied when no matching rule exists
+# rules: per-network/protocol overrides
+#   - network: chain name as stored in the swaps table (Ethereum, Arbitrum, Base, BNB)
+#     protocol: protocol name as stored in the swaps table (Uniswap V3, Uniswap V4, PancakeSwap V3, PancakeSwap V4, Aerodrome, Uniswap V2)
+#     days: number of days to retain
+
+default_days: 32
+
+rules:
+  - network: "BNB"
+    protocol: "PancakeSwap V3"
+    days: 8
+
+  - network: "BNB"
+    protocol: "PancakeSwap V4"
+    days: 8
+  - network: "BNB"
+    protocol: "Uniswap V3"
+    days: 8
+  - network: "BNB"
+    protocol: "Uniswap V4"
+    days: 8
+  - network: "Ethereum"
+    protocol: "Uniswap V3"
+    days: 180
+  - network: "Ethereum"
+    protocol: "Uniswap V4"
+    days: 180
+

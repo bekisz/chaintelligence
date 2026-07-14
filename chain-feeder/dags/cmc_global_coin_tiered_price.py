@@ -97,7 +97,7 @@ def check_virtual_lp_condition():
     return None
 
 with DAG(
-    'tiered_coin_price_ingestion',
+    'cmc_global_coin_tiered_price',
     default_args=default_args,
     description='Orchestrator for tiered coin price updates',
     schedule='*/15 * * * *',
@@ -115,7 +115,7 @@ with DAG(
     # 1. Update Coin Families
     trigger_family_update = TriggerDagRunOperator(
         task_id='trigger_family_update',
-        trigger_dag_id='coin_family_ingestion',
+        trigger_dag_id='yaml_global_coin_family',
         conf={'bypass_sensor': True, 'force_coin_ingestion': True},
         wait_for_completion=True,
         poke_interval=20,
@@ -133,7 +133,7 @@ with DAG(
     # 3. Trigger Workers (using the main coin_price_ingestion DAG)
     trigger_t1 = TriggerDagRunOperator(
         task_id='trigger_tier1_update',
-        trigger_dag_id='coin_price_ingestion',
+        trigger_dag_id='cmc_global_coin_price',
         conf={
             'targets': "{{ params.tier_1_coin_family }}",
         },
@@ -143,7 +143,7 @@ with DAG(
 
     trigger_t2 = TriggerDagRunOperator(
         task_id='trigger_tier2_update',
-        trigger_dag_id='coin_price_ingestion',
+        trigger_dag_id='cmc_global_coin_price',
         conf={
             'targets': "{{ params.tier_2_coin_family }}",
         },
@@ -153,7 +153,7 @@ with DAG(
 
     trigger_t3 = TriggerDagRunOperator(
         task_id='trigger_tier3_update',
-        trigger_dag_id='coin_price_ingestion',
+        trigger_dag_id='cmc_global_coin_price',
         conf={
             'targets': "{{ params.tier_3_coin_family }}",
         },
@@ -163,7 +163,7 @@ with DAG(
     
     trigger_lp = TriggerDagRunOperator(
         task_id='trigger_virtual_lp_update',
-        trigger_dag_id='coin_price_ingestion',
+        trigger_dag_id='cmc_global_coin_price',
         conf={
             'targets': "current-lp-tokens",
         },

@@ -62,7 +62,7 @@ def enrich_positions_task():
 from airflow.sdk import Param
 
 with DAG(
-    'rpc_lp_ingestion',
+    'rpc_ethereum_uniswap_v3_liquidity_pool_position',
     default_args=default_args,
     description='Discover and Ingest LP Positions via RPC Logs',
     schedule=timedelta(hours=1),

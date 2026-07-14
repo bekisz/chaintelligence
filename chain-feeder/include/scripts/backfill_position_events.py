@@ -617,16 +617,20 @@ def run_backfill(target_network="Ethereum", target_pos_id=None, target_pool_id=N
     cur = conn.cursor()
     
     sql = """
-        SELECT p.id, p.token_id, pool.network, pool.protocol, 
-               (SELECT decimals FROM coin WHERE symbol=pool.coin0_symbol LIMIT 1) as d0,
-               (SELECT decimals FROM coin WHERE symbol=pool.coin1_symbol LIMIT 1) as d1,
-               pool.id, pool.pool_name, pool.coin0_symbol, pool.coin1_symbol,
-               (SELECT ethereum_address FROM coin WHERE symbol=pool.coin0_symbol LIMIT 1) as addr0,
-               (SELECT ethereum_address FROM coin WHERE symbol=pool.coin1_symbol LIMIT 1) as addr1,
+        SELECT p.id, p.token_id, pool.network, pool.protocol,
+               c0.decimals as d0,
+               c1.decimals as d1,
+               pool.id, pool.pool_name, c0.symbol as coin0_symbol, c1.symbol as coin1_symbol,
+               COALESCE(cc0.contract_address, '') as addr0,
+               COALESCE(cc1.contract_address, '') as addr1,
                p.wallet_address
         FROM liquidity_pool_position p
         JOIN liquidity_pool pool ON p.pool_id = pool.id
-        WHERE p.token_id IS NOT NULL 
+        JOIN coin c0 ON pool.coin0_id = c0.coin_id
+        JOIN coin c1 ON pool.coin1_id = c1.coin_id
+        LEFT JOIN coin_contract cc0 ON c0.coin_id = cc0.coin_id AND LOWER(cc0.chain) = LOWER(pool.network)
+        LEFT JOIN coin_contract cc1 ON c1.coin_id = cc1.coin_id AND LOWER(cc1.chain) = LOWER(pool.network)
+        WHERE p.token_id IS NOT NULL
     """
     params = []
     

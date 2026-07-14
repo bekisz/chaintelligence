@@ -206,6 +206,7 @@ def sync_v4_pool_ids():
         JOIN coin c1 ON lp.coin1_id = c1.coin_id
         WHERE lp.protocol = 'Uniswap V4'
           AND lp.pool_id IS NULL
+        LIMIT 500
     """)
     missing = cur.fetchall()
     logging.info(f"Found {len(missing)} V4 pools without pool_id")
@@ -329,6 +330,7 @@ def sync_tvl_from_graph():
         JOIN coin c0 ON lp.coin0_id = c0.coin_id
         JOIN coin c1 ON lp.coin1_id = c1.coin_id
         WHERE lp.protocol = 'Uniswap V4'
+        LIMIT 500
     """)
     pools = cur.fetchall()
     
@@ -393,7 +395,7 @@ def sync_tvl_from_graph():
     conn.close()
 
 with DAG(
-    'uniswap_v4_history_sync',
+    'graph_ethereum_uniswap_v4_liquidity_pool_history',
     default_args=default_args,
     description='Derived daily history for Uniswap V4 Pools',
     schedule='0 1 * * *', # Daily at 1 AM

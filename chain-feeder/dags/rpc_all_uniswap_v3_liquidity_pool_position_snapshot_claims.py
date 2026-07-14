@@ -13,7 +13,7 @@ default_args = {
 }
 
 with DAG(
-    'backfill_claims_history',
+    'rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims',
     default_args=default_args,
     description='Fetch historical claim events from RPC logs and update snapshots',
     schedule='@daily',
@@ -24,7 +24,7 @@ with DAG(
 
     run_backfill = BashOperator(
         task_id='run_backfill_claims_script',
-        bash_command='python /opt/airflow/dags/backfill_claims_rpc.py',
+        bash_command='python /opt/airflow/include/scripts/fetch_claim_history.py',
         env={
             'PYTHONPATH': '/opt/airflow/dags:/opt/airflow/include',
             'DATA_WAREHOUSE_DB': os.getenv('DATA_WAREHOUSE_DB', 'postgresql://airflow:airflow@postgres/chaintelligence'),

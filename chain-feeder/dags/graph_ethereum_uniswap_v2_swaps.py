@@ -278,7 +278,7 @@ class PostgresStorageV2:
 # ---------------------------------------------------------------------------
 
 with DAG(
-    'the_graph_uniswap_v2_swaps',
+    'graph_ethereum_uniswap_v2_swaps',
     default_args=default_args,
     description='Fetch Uniswap V2 swaps for tracked tokens on Ethereum (Airflow 3)',
     schedule='@hourly',
@@ -303,7 +303,7 @@ with DAG(
 
         pg_hook = PostgresHook(postgres_conn_id='postgres_default')
         last_ts_row = pg_hook.get_first(
-            "SELECT MAX(timestamp) FROM uniswap_v2_swaps WHERE network = %s AND protocol = %s",
+            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = %s",
             parameters=(network, protocol)
         )
         last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None

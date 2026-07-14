@@ -380,6 +380,55 @@ Shows which tables are **written** by which pipeline groups and **read** by whic
 
 ---
 
+## Naming Convention (July 2026)
+
+All DAGs follow: `<source>_<chain>_<protocol>_<version>_<output_table>_<fields>`
+
+| Source | Values |
+|--------|--------|
+| `graph` | The Graph subgraph |
+| `rpc` | EVM RPC node |
+| `cmc` | CoinMarketCap API |
+| `defillama` | DeFi Llama API |
+| `yaml` | Static YAML config |
+
+### Complete DAG List (25 total)
+
+**Coin Pipeline (5):**
+- `cmc_global_coin_tiered_price` — orchestrator (triggers `yaml_global_coin_family`, `cmc_global_coin_price`)
+- `cmc_global_coin_metadata` — writes `coin`, `coin_contract`
+- `cmc_global_coin_price` — updates `coin.price`
+- `yaml_global_coin_family` — writes `coin_family`
+- `defillama_global_coin_price_history` — writes `coin_price_history`
+
+**Swap Pipeline (11):**
+- `graph_ethereum_uniswap_v2_swaps` — writes `swaps`
+- `graph_ethereum_uniswap_v3_swaps` — writes `swaps`
+- `graph_arbitrum_uniswap_v3_swaps` — writes `swaps`
+- `graph_base_uniswap_v3_swaps` — writes `swaps`
+- `graph_base_aerodrome_v3_swaps` — writes `swaps`
+- `graph_bnb_uniswap_v3_swaps` — writes `swaps` (protocol='Uniswap V3')
+- `graph_bnb_pancakeswap_v3_swaps` — writes `swaps` (protocol='PancakeSwap V3')
+- `graph_ethereum_uniswap_v4_swaps` — writes `swaps`
+- `graph_arbitrum_uniswap_v4_swaps` — writes `swaps`
+- `graph_base_uniswap_v4_swaps` — writes `swaps`
+- `graph_bnb_pancakeswap_v4_swaps` — writes `swaps`
+
+**History Pipeline (5):**
+- `graph_ethereum_uniswap_v3_liquidity_pool_history` — writes `liquidity_pool`, `liquidity_pool_history`
+- `graph_arbitrum_uniswap_v3_liquidity_pool_history` — writes `liquidity_pool`, `liquidity_pool_history`
+- `graph_base_uniswap_v3_liquidity_pool_history` — writes `liquidity_pool`, `liquidity_pool_history`
+- `graph_ethereum_uniswap_v4_liquidity_pool_history` — writes `liquidity_pool`, `liquidity_pool_history`
+- `graph_bnb_pancakeswap_v4_liquidity_pool_history` — writes `liquidity_pool`, `liquidity_pool_history`
+
+**LP Pipeline (4):**
+- `graph_all_uniswap_v3_liquidity_pool_position_snapshot` — writes `coin`, `liquidity_pool`, `liquidity_pool_position`, `liquidity_pool_position_snapshot`
+- `rpc_ethereum_uniswap_v3_liquidity_pool_position` — writes `liquidity_pool_position`
+- `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` — writes `liquidity_pool_position_snapshot`, `liquidity_pool_position`
+- `rpc_all_uniswap_v3_liquidity_pool_position_event` — writes `liquidity_pool_position_event`
+
+All using `schedule='@hourly'` (swap/LP discovery) or `'0 1 * * *'` (history) or `'*/15 * * * *'` (coin prices). All set `catchup=False`.
+
 ## Cross-DAG Dependencies
 
 ```mermaid

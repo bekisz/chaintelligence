@@ -113,9 +113,9 @@ def resolve_targets(target_list=None):
         if search_terms:
             val_list = ",".join([f"'{s}'" for s in search_terms])
             sql = f"""
-                SELECT c.cmc_id, c.symbol, cf.name 
+                SELECT c.cmc_id, c.symbol, cf.name
                 FROM coin c
-                JOIN coin_family cf ON c.symbol = cf.symbol
+                JOIN coin_family cf ON c.coin_id = cf.coin_id
                 WHERE LOWER(cf.name) IN ({val_list}) AND c.cmc_id IS NOT NULL
             """
             rows = pg_hook.get_records(sql)
@@ -231,7 +231,7 @@ def create_price_ingestion_dag(
         # Always trigger, the mapping DAG itself handles freshness check
         mapping_step = TriggerDagRunOperator(
             task_id="trigger_coin_family_ingestion",
-            trigger_dag_id="coin_family_ingestion",
+            trigger_dag_id="yaml_global_coin_family",
             conf={"bypass_sensor": True},
             wait_for_completion=True,
             poke_interval=30,
@@ -250,7 +250,7 @@ def create_price_ingestion_dag(
 
 # 1. Standard On-Demand DAG (No schedule, no default targets)
 dag_manual = create_price_ingestion_dag(
-    dag_id='coin_price_ingestion',
+    dag_id='cmc_global_coin_price',
     schedule=None,
     description='Update specific coin prices on-demand (with auto mapping sync)',
     default_targets=""

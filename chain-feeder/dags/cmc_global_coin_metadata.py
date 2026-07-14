@@ -511,7 +511,7 @@ def cmc_upsert_to_db(fetch_result: dict):
                 
                 if not symbol:
                     continue
-                
+
                 cur.execute("""
                     INSERT INTO coin (
                         symbol, name, slug, cmc_id, cmc_rank,
@@ -590,7 +590,7 @@ def skip_sync():
     logging.info("⏭️ Mapping is already fresh. Skipping.")
 
 with DAG(
-    dag_id='coin_ingestion',
+    dag_id='cmc_global_coin_metadata',
     default_args=default_args,
     description='Sync CoinMarketCap coin-to-address mapping',
     schedule='@weekly',

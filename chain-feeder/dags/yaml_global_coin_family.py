@@ -8,7 +8,7 @@ import pendulum
 from datetime import timedelta
 
 @dag(
-    'coin_family_ingestion',
+    'yaml_global_coin_family',
     schedule='@weekly',
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
@@ -24,7 +24,7 @@ from datetime import timedelta
         'retries': 0,
     }
 )
-def coin_family_ingestion_dag():
+def yaml_global_coin_family_dag():
     
     @task.sensor(poke_interval=30, timeout=3600, mode='reschedule', soft_fail=True)
     def wait_for_config_change(bypass_sensor: bool = False):
@@ -98,7 +98,7 @@ def coin_family_ingestion_dag():
 
     trigger_ingestion = TriggerDagRunOperator(
         task_id="trigger_coin_ingestion",
-        trigger_dag_id="coin_ingestion",
+        trigger_dag_id="cmc_global_coin_metadata",
         conf={
             "force_update": "{{ params.force_coin_ingestion }}",
             "max_rank": "{{ params.max_rank }}"
@@ -115,4 +115,4 @@ def coin_family_ingestion_dag():
     mtime >> trigger_ingestion >> wait_for_coin_table() >> update_coin_families(mtime)
 
 # Initialize the DAG and assign to variable for Airflow discovery
-dag = coin_family_ingestion_dag()
+dag = yaml_global_coin_family_dag()
