@@ -113,38 +113,40 @@ def enforce_retention(**context):
             logging.info(f"    (dry-run, skipping delete)")
             continue
 
-        # Delete in batches
-        deleted = 0
-        while True:
-            conn = pg_hook.get_conn()
-            cur = conn.cursor()
-            try:
-                cur.execute("""
-                    DELETE FROM swaps
-                    WHERE ctid IN (
-                        SELECT ctid FROM swaps
-                        WHERE network = %s AND protocol = %s AND ts < %s
-                        LIMIT %s
-                    )
-                """, (network, protocol, cutoff, BATCH_SIZE))
-                batch = cur.rowcount
-                conn.commit()
-                deleted += batch
-                total_deleted += batch
-                if batch > 0:
-                    logging.info(f"    deleted {deleted}/{to_delete} rows")
-                if batch < BATCH_SIZE:
+        # Delete in batches — reuse the same connection across all batches
+        # to avoid exhausting the Postgres connection pool.
+        conn = pg_hook.get_conn()
+        cur = conn.cursor()
+        try:
+            deleted = 0
+            while True:
+                try:
+                    cur.execute("""
+                        DELETE FROM swaps
+                        WHERE ctid IN (
+                            SELECT ctid FROM swaps
+                            WHERE network = %s AND protocol = %s AND ts < %s
+                            LIMIT %s
+                        )
+                    """, (network, protocol, cutoff, BATCH_SIZE))
+                    batch = cur.rowcount
+                    conn.commit()
+                    deleted += batch
+                    total_deleted += batch
+                    if batch > 0:
+                        logging.info(f"    deleted {deleted}/{to_delete} rows")
+                    if batch < BATCH_SIZE:
+                        break
+                except Exception as e:
+                    logging.error(f"    batch delete failed: {e}")
+                    conn.rollback()
                     break
-            except Exception as e:
-                logging.error(f"    batch delete failed: {e}")
-                conn.rollback()
-                break
-            finally:
-                cur.close()
-                conn.close()
 
-            if SLEEP_BETWEEN_BATCHES > 0:
-                time.sleep(SLEEP_BETWEEN_BATCHES)
+                if SLEEP_BETWEEN_BATCHES > 0:
+                    time.sleep(SLEEP_BETWEEN_BATCHES)
+        finally:
+            cur.close()
+            conn.close()
 
         logging.info(f"    finished: deleted {deleted} rows for {network} / {protocol}")
 
