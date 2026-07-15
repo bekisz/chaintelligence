@@ -22,6 +22,7 @@ with DAG(
     schedule='@hourly',
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
+    max_active_runs=1,
     tags=['pancakeswap', 'swaps', 'defi', 'v3', 'bnb'],
 ) as dag:
     @task

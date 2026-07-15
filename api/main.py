@@ -1549,23 +1549,18 @@ async def get_dag_run_status(dag_id: str, dag_run_id: str):
 async def get_coins():
     """Get list of active indexed coins for the backtester."""
     try:
-        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-        cur = conn.cursor()
-        
-        query = """
-        SELECT symbol, name, image_url as image, cmc_rank as market_cap_rank, slug
-        FROM coin
-        ORDER BY cmc_rank ASC NULLS LAST;
-        """
-        cur.execute(query)
-        colnames = [desc[0] for desc in cur.description]
-        rows = cur.fetchall()
-        
-        coins = [dict(zip(colnames, row)) for row in rows]
-        
-        cur.close()
-        conn.close()
-        return coins
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                query = """
+                SELECT symbol, name, image_url as image, cmc_rank as market_cap_rank, slug
+                FROM coin
+                ORDER BY cmc_rank ASC NULLS LAST;
+                """
+                cur.execute(query)
+                colnames = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                coins = [dict(zip(colnames, row)) for row in rows]
+                return coins
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1574,45 +1569,42 @@ async def get_coins():
 async def list_pools():
     """List all available liquidity pools with latest stats."""
     try:
-        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-        cur = conn.cursor()
-        
-        query = """
-        SELECT
-            p.id, p.network, p.protocol, p.pool_name, p.fee_tier, p.pool_address,
-            h.tvl_usd, h.volume_usd, h.tx_count, c0.symbol, c1.symbol
-        FROM liquidity_pool p
-        JOIN coin c0 ON p.coin0_id = c0.coin_id
-        JOIN coin c1 ON p.coin1_id = c1.coin_id
-        LEFT JOIN (
-            SELECT DISTINCT ON (pool_id) pool_id, tvl_usd, volume_usd, tx_count
-            FROM liquidity_pool_history
-            ORDER BY pool_id, date DESC
-        ) h ON p.id = h.pool_id
-        WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
-        ORDER BY h.tvl_usd DESC NULLS LAST
-        """
-        cur.execute(query)
-        rows = cur.fetchall()
-        
-        pools = []
-        for r in rows:
-            pools.append({
-                "id": r[0],
-                "network": r[1],
-                "protocol": r[2],
-                "pool_name": r[3],
-                "fee_tier": r[4],
-                "pool_address": r[5],
-                "tvl_usd": float(r[6]) if r[6] else 0.0,
-                "volume_24h": float(r[7]) if r[7] else 0.0,
-                "tx_count": r[8] if r[8] else 0,
-                "tokens": [r[9], r[10]]
-            })
-            
-        cur.close()
-        conn.close()
-        return pools
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                query = """
+                SELECT
+                    p.id, p.network, p.protocol, p.pool_name, p.fee_tier, p.pool_address,
+                    h.tvl_usd, h.volume_usd, h.tx_count, c0.symbol, c1.symbol
+                FROM liquidity_pool p
+                JOIN coin c0 ON p.coin0_id = c0.coin_id
+                JOIN coin c1 ON p.coin1_id = c1.coin_id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (pool_id) pool_id, tvl_usd, volume_usd, tx_count
+                    FROM liquidity_pool_history
+                    ORDER BY pool_id, date DESC
+                ) h ON p.id = h.pool_id
+                WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
+                ORDER BY h.tvl_usd DESC NULLS LAST
+                """
+                cur.execute(query)
+                rows = cur.fetchall()
+                
+                pools = []
+                for r in rows:
+                    pools.append({
+                        "id": r[0],
+                        "network": r[1],
+                        "protocol": r[2],
+                        "pool_name": r[3],
+                        "fee_tier": r[4],
+                        "pool_address": r[5],
+                        "tvl_usd": float(r[6]) if r[6] else 0.0,
+                        "volume_24h": float(r[7]) if r[7] else 0.0,
+                        "tx_count": r[8] if r[8] else 0,
+                        "tokens": [r[9], r[10]]
+                    })
+                    
+                return pools
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
