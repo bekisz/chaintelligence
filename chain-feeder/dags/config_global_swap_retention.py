@@ -98,10 +98,26 @@ def enforce_retention(**context):
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         logging.info(f"  {network} / {protocol}: retention={days}d, cutoff={cutoff.date()}")
 
+        # Resolve pool_ids for this network / protocol combo
+        with pg_hook.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT lp.id 
+                    FROM liquidity_pool lp
+                    JOIN chain ch ON lp.chain_id = ch.id
+                    JOIN protocol pr ON lp.protocol_id = pr.id
+                    WHERE LOWER(ch.name) = LOWER(%s) AND LOWER(pr.name) = LOWER(%s)
+                """, (network, protocol))
+                pool_ids = [row[0] for row in cur.fetchall()]
+
+        if not pool_ids:
+            logging.info(f"    -> 0 pools found for {network} / {protocol}")
+            continue
+
         # Count what would be deleted
         count_row = pg_hook.get_first(
-            "SELECT COUNT(*) FROM swaps WHERE network = %s AND protocol = %s AND ts < %s",
-            parameters=(network, protocol, cutoff)
+            "SELECT COUNT(*) FROM swaps WHERE pool_id = ANY(%s) AND ts < %s",
+            parameters=(pool_ids, cutoff)
         )
         to_delete = count_row[0] if count_row else 0
         logging.info(f"    -> {to_delete} rows to delete")
@@ -125,10 +141,10 @@ def enforce_retention(**context):
                         DELETE FROM swaps
                         WHERE ctid IN (
                             SELECT ctid FROM swaps
-                            WHERE network = %s AND protocol = %s AND ts < %s
+                            WHERE pool_id = ANY(%s) AND ts < %s
                             LIMIT %s
                         )
-                    """, (network, protocol, cutoff, BATCH_SIZE))
+                    """, (pool_ids, cutoff, BATCH_SIZE))
                     batch = cur.rowcount
                     conn.commit()
                     deleted += batch
