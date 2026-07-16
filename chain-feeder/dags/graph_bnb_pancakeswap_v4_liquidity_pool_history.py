@@ -77,6 +77,27 @@ def sync_pools_from_swaps():
     rows = cur.fetchall()
 
     new_pools = 0
+    # Load contract addresses map
+    cur.execute("""
+        SELECT cc.coin_id, LOWER(ch.name) AS chain_name, cc.contract_address 
+        FROM coin_contract cc
+        JOIN chain ch ON cc.chain_id = ch.id
+    """)
+    token_addr_map = {}
+    for r in cur.fetchall():
+        token_addr_map[(r[0], r[1])] = r[2]
+
+    # Load dex_config.yaml
+    import os
+    import yaml
+    dags_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(dags_dir, '..', '..'))
+    config_path = os.path.join(repo_root, 'config', 'dex_config.yaml')
+    with open(config_path, 'r') as f:
+        dex_config = yaml.safe_load(f)
+
+    from common.utils.uniswap_utils import derive_pool_identifiers
+
     for network, s0, s1, fee_display in rows:
         if not s0 or not s1:
             continue
@@ -91,14 +112,24 @@ def sync_pools_from_swaps():
         if not row0 or not row1:
             continue
 
+        derived_addr, derived_id = None, None
+        chain_key = network.lower()
+        t0_addr = token_addr_map.get((row0[0], chain_key))
+        t1_addr = token_addr_map.get((row1[0], chain_key))
+        if t0_addr and t1_addr:
+            fee_int = int(fee_bips) if fee_bips and fee_bips.isdigit() else None
+            derived_addr, derived_id = derive_pool_identifiers(PROTOCOL, network, t0_addr, t1_addr, fee_int, dex_config)
+
         try:
             cur.execute("""
                 INSERT INTO liquidity_pool
-                    (network, protocol, pool_name, coin0_id, coin1_id, fee_tier)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (network, protocol, pool_name, fee_tier) DO NOTHING
-            """, (network, PROTOCOL, pool_name, row0[0], row1[0], fee_bips))
-            if cur.statusmessage.startswith("INSERT 0 1"):
+                    (network, protocol, pool_name, coin0_id, coin1_id, fee_tier, pool_address, pool_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (network, protocol, pool_name, fee_tier) DO UPDATE
+                SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
+                    pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
+            """, (network, PROTOCOL, pool_name, row0[0], row1[0], fee_bips, derived_addr, derived_id))
+            if cur.statusmessage.startswith("INSERT 0 1") or cur.statusmessage.startswith("UPDATE 1"):
                 new_pools += 1
         except Exception as e:
             conn.rollback()

@@ -697,3 +697,98 @@ class PostgresStorageV4(PostgresStorage):
     """
     def save_swaps(self, swaps: List[Dict], network: str = "Ethereum", protocol: str = "Uniswap V4"):
         return super().save_swaps(swaps, network=network, protocol=protocol)
+
+
+def to_checksum_address(address: str) -> str:
+    from eth_hash.auto import keccak
+    addr_lower = address.lower().replace('0x', '')
+    if len(addr_lower) != 40:
+        return address
+    address_hash = keccak(addr_lower.encode('ascii')).hex()
+    checksum_address = '0x' + ''.join(
+        c.upper() if int(address_hash[i], 16) >= 8 else c 
+        for i, c in enumerate(addr_lower)
+    )
+    return checksum_address
+
+
+def derive_pool_identifiers(protocol: str, network: str, token0_addr: str, token1_addr: str, fee_bps: Optional[int], dex_config: dict) -> tuple:
+    """Derive pool_address and pool_id for a pool.
+
+    Returns (pool_address, pool_id) or (None, None).
+    """
+    from eth_hash.auto import keccak
+
+    # Normalization keys
+    chain_key = network.lower()
+    if chain_key == 'bnb':
+        chain_key = 'bsc'
+
+    # Native token wrapped mapping
+    WRAPPED_MAP = {
+        ('ethereum', '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'): '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        ('arbitrum', '0x0000000000000000000000000000000000000000'): '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
+        ('base', '0x0000000000000000000000000000000000000000'): '0x4200000000000000000000000000000000000006',
+        ('bnb', '0xa05ccd2f8ac92afe092a7240e948aa3e17cef843'): '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
+    }
+
+    t0_addr = token0_addr.lower()
+    t1_addr = token1_addr.lower()
+
+    if (chain_key, t0_addr) in WRAPPED_MAP:
+        t0_addr = WRAPPED_MAP[(chain_key, t0_addr)]
+    if (chain_key, t1_addr) in WRAPPED_MAP:
+        t1_addr = WRAPPED_MAP[(chain_key, t1_addr)]
+
+    # Validate EVM address formats
+    def is_valid(addr):
+        addr_clean = addr.removeprefix('0x')
+        if len(addr_clean) != 40:
+            return False
+        try:
+            int(addr_clean, 16)
+            return True
+        except ValueError:
+            return False
+
+    if not is_valid(t0_addr) or not is_valid(t1_addr):
+        return None, None
+
+    # CREATE2 bytes parsing
+    t0_bytes = bytes.fromhex(t0_addr.removeprefix('0x'))
+    t1_bytes = bytes.fromhex(t1_addr.removeprefix('0x'))
+    if t1_bytes < t0_bytes:
+        t0_bytes, t1_bytes = t1_bytes, t0_bytes
+
+    if protocol == 'Uniswap V2':
+        cfg = dex_config.get('uniswap_v2', {}).get(chain_key)
+        if cfg:
+            salt = keccak(t0_bytes + t1_bytes)
+            f_bytes = bytes.fromhex(cfg['factory'].removeprefix('0x'))
+            ih_bytes = bytes.fromhex(cfg['init_hash'].removeprefix('0x'))
+            derived = '0x' + keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
+            addr = to_checksum_address(derived)
+            return addr, addr
+    elif protocol in ('Uniswap V3', 'PancakeSwap V3'):
+        proto_key = 'uniswap_v3' if protocol == 'Uniswap V3' else 'pancakeswap_v3'
+        cfg = dex_config.get(proto_key, {}).get(chain_key)
+        if cfg:
+            fee_val = int(fee_bps) if fee_bps is not None else 3000
+            salt = keccak(b'\x00' * 12 + t0_bytes + b'\x00' * 12 + t1_bytes + fee_val.to_bytes(32, 'big'))
+            f_bytes = bytes.fromhex(cfg['factory'].removeprefix('0x'))
+            ih_bytes = bytes.fromhex(cfg['init_hash'].removeprefix('0x'))
+            derived = '0x' + keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
+            addr = to_checksum_address(derived)
+            return addr, addr
+    elif 'V4' in protocol:
+        # V4 default hookless pool ID derivation
+        fee_val = int(fee_bps) if fee_bps is not None else 100
+        _V4_TICK_SPACING = {100: 1, 500: 10, 3000: 60, 10000: 200}
+        tick_spacing = _V4_TICK_SPACING.get(fee_val, 10)
+        hooks = b'\x00' * 32
+        enc = (t0_bytes.rjust(32, b'\x00') + t1_bytes.rjust(32, b'\x00') +
+               fee_val.to_bytes(32, 'big') + tick_spacing.to_bytes(32, 'big', signed=True) + hooks)
+        derived_id = '0x' + keccak(enc).hex()
+        return None, derived_id
+
+    return None, None
