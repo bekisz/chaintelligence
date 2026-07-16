@@ -131,7 +131,7 @@ class PostgresFetcher:
                            s.amount0, s.amount1, s.amount_usd,
                            CASE 
                                WHEN lp.fee_bps IS NULL THEN 'Dynamic' 
-                               ELSE (lp.fee_bps / 100.0)::text || '%' 
+                               ELSE (lp.fee_bps / 100.0)::text || '%%' 
                            END AS fee_display,
                            lp.fee_bps
                     FROM swaps s
@@ -227,7 +227,7 @@ class PostgresFetcher:
                    s.amount0, s.amount1, s.amount_usd,
                    CASE 
                        WHEN lp.fee_bps IS NULL THEN 'Dynamic' 
-                       ELSE (lp.fee_bps / 100.0)::text || '%' 
+                       ELSE (lp.fee_bps / 100.0)::text || '%%' 
                    END AS fee_display
             FROM swaps s
             JOIN liquidity_pool lp ON s.pool_id = lp.id

@@ -395,7 +395,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/api/routes/date-range", "/api/routes/analyze", "/backtester", "/pool", "/favicon.ico", "/static", "/api/sps", "/sps", "/api/lp", "/routing", "/lp"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -1771,6 +1771,7 @@ async def sync_pool(pool_id: int):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/api/assets/price-by-cmc-id", tags=["Assets"])
 async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated CMC IDs (max 100)")):
     """
     Get coin price data by CoinMarketCap IDs.
@@ -1805,7 +1806,7 @@ async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated 
             c.market_cap, c.tvl, c.cmc_rank, c.image_url,
             eth.contract_address AS ethereum_address
         FROM coin c
-        LEFT JOIN coin_contract eth ON c.coin_id = eth.coin_id AND eth.chain = 'ethereum'
+        LEFT JOIN coin_contract eth ON c.coin_id = eth.coin_id AND eth.chain_id = 1
         WHERE c.cmc_id = ANY(%s)
         """
         cur.execute(query, (cmc_ids,))
@@ -1813,9 +1814,12 @@ async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated 
         
         # Fetch all other contracts for these coins
         cur.execute("""
-            SELECT cc.coin_id, cc.chain, cc.contract_address, cc.decimals, cc.is_native
+            SELECT cc.coin_id, 
+                   CASE WHEN LOWER(ch.name) = 'bnb' THEN 'bsc' ELSE LOWER(ch.name) END AS chain, 
+                   cc.contract_address, cc.decimals, cc.is_native
             FROM coin_contract cc
             JOIN coin c ON cc.coin_id = c.coin_id
+            JOIN chain ch ON cc.chain_id = ch.id
             WHERE c.cmc_id = ANY(%s)
         """, (cmc_ids,))
         contract_rows = cur.fetchall()

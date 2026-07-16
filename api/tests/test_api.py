@@ -60,13 +60,23 @@ class TestChaintelligenceAPI(unittest.TestCase):
 
     def test_05_analyze_routes(self):
         """Test protected endpoint: /api/routes/analyze"""
+        import json
         # Test a common pair
         url = f"{BASE_URL}/api/routes/analyze?start_token=ETH&end_token=USDC&days=1"
         response = requests.get(url, auth=self.auth)
         self.assertEqual(response.status_code, 200, f"Analysis failed: {response.text}")
-        data = response.json()
-        self.assertIn("routes", data)
-        self.assertIn("total_volume", data)
+        
+        result_data = None
+        for line in response.iter_lines():
+            if line:
+                chunk = json.loads(line.decode('utf-8'))
+                if chunk.get("type") == "result":
+                    result_data = chunk.get("data")
+                    break
+                    
+        self.assertIsNotNone(result_data, "No result block found in analyze stream")
+        self.assertIn("routes", result_data)
+        self.assertIn("total_volume", result_data)
 
     def test_06_price_by_cmc_id_single(self):
         """Test new endpoint: /api/assets/price-by-cmc-id with single ID"""
