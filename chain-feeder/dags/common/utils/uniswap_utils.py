@@ -153,15 +153,15 @@ class UniswapV3Fetcher:
                 id
                 hash
                 timestamp
-                tokenIn {{ id symbol }}
-                tokenOut {{ id symbol }}
+                tokenIn {{ id symbol decimals }}
+                tokenOut {{ id symbol decimals }}
                 amountIn
                 amountOut
                 amountInUSD
                 pool {{
                   id
                   name
-                  inputTokens {{ id symbol }}
+                  inputTokens {{ id symbol decimals }}
                   fees {{ feePercentage }}
                 }}
               }}
@@ -184,8 +184,8 @@ class UniswapV3Fetcher:
             id
             timestamp
             transaction {{ id }}
-            token0 {{ id symbol }}
-            token1 {{ id symbol }}
+            token0 {{ id symbol decimals }}
+            token1 {{ id symbol decimals }}
             amount0
             amount1
             amountUSD
@@ -277,6 +277,13 @@ class UniswapV3Fetcher:
                     amount_in_val = to_float(swap.get('amountIn'))
                     amount_out_val = to_float(swap.get('amountOut'))
 
+                    p0_dec = to_int(pool_tokens[0].get('decimals')) if len(pool_tokens) >= 1 else None
+                    if p0_dec is None:
+                        p0_dec = to_int(token0.get('decimals')) if t0_addr == p0_addr else to_int(token1.get('decimals'))
+                    p1_dec = to_int(pool_tokens[1].get('decimals')) if len(pool_tokens) >= 2 else None
+                    if p1_dec is None:
+                        p1_dec = to_int(token1.get('decimals')) if t1_addr == p1_addr else to_int(token0.get('decimals'))
+
                     normalized = {
                         'id': swap_id,
                         'timestamp': to_int(swap.get('timestamp')),
@@ -285,6 +292,8 @@ class UniswapV3Fetcher:
                         'token1_address': p1_addr,
                         'token0_symbol': addr_to_sym.get(p0_addr, pool_tokens[0].get('symbol') if len(pool_tokens) >= 1 else 'UNKNOWN').upper(),
                         'token1_symbol': addr_to_sym.get(p1_addr, pool_tokens[1].get('symbol') if len(pool_tokens) >= 2 else 'UNKNOWN').upper(),
+                        'token0_decimals': p0_dec or 18,
+                        'token1_decimals': p1_dec or 18,
                         'amount0': amount_in_val if t0_addr == p0_addr else -amount_out_val,
                         'amount1': amount_out_val if t1_addr == p1_addr else -amount_in_val,
                         'amountUSD': to_float(swap.get('amountInUSD')),
@@ -311,6 +320,8 @@ class UniswapV3Fetcher:
                         'token1_address': t1_addr,
                         'token0_symbol': addr_to_sym.get(t0_addr, token0.get('symbol') or 'UNKNOWN').upper(),
                         'token1_symbol': addr_to_sym.get(t1_addr, token1.get('symbol') or 'UNKNOWN').upper(),
+                        'token0_decimals': to_int(token0.get('decimals')) or 18,
+                        'token1_decimals': to_int(token1.get('decimals')) or 18,
                         'amount0': to_float(swap.get('amount0')),
                         'amount1': to_float(swap.get('amount1')),
                         'amountUSD': to_float(swap.get('amountUSD')),
@@ -607,6 +618,16 @@ class PostgresStorage:
                 pool_id_map = {row[1].lower(): row[0] for row in rows if row[1]}
                 pool_tokens_map = {(row[2], row[3], frozenset({row[4], row[5]}), row[6]): row[0] for row in rows}
 
+                # Load existing contract addresses and addresses map for this chain to prevent duplicates
+                cur.execute("""
+                    SELECT coin_id, LOWER(contract_address)
+                    FROM coin_contract
+                    WHERE chain_id = %s
+                """, (chain_id,))
+                contract_rows = cur.fetchall()
+                existing_contracts = {r[0]: r[1] for r in contract_rows}
+                existing_addresses = {r[1] for r in contract_rows}
+
                 insert_query = """
                 INSERT INTO swaps (
                     tx_hash, log_index, ts, pool_id,
@@ -623,6 +644,30 @@ class PostgresStorage:
                     t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
                     if t0_id is None or t1_id is None:
                         continue  # skip swaps for untracked tokens
+
+                    # Self-healing: Dynamically register missing token contract addresses for this chain
+                    t0_addr = s.get('token0_address', '').lower()
+                    t1_addr = s.get('token1_address', '').lower()
+                    
+                    if t0_addr and t0_id not in existing_contracts and t0_addr not in existing_addresses:
+                        t0_dec = s.get('token0_decimals', 18)
+                        cur.execute("""
+                            INSERT INTO coin_contract (coin_id, chain_id, contract_address, decimals, is_native)
+                            VALUES (%s, %s, %s, %s, false)
+                            ON CONFLICT (coin_id, chain_id) DO NOTHING
+                        """, (t0_id, chain_id, t0_addr, t0_dec))
+                        existing_contracts[t0_id] = t0_addr
+                        existing_addresses.add(t0_addr)
+
+                    if t1_addr and t1_id not in existing_contracts and t1_addr not in existing_addresses:
+                        t1_dec = s.get('token1_decimals', 18)
+                        cur.execute("""
+                            INSERT INTO coin_contract (coin_id, chain_id, contract_address, decimals, is_native)
+                            VALUES (%s, %s, %s, %s, false)
+                            ON CONFLICT (coin_id, chain_id) DO NOTHING
+                        """, (t1_id, chain_id, t1_addr, t1_dec))
+                        existing_contracts[t1_id] = t1_addr
+                        existing_addresses.add(t1_addr)
 
                     # Extract log_index from the subgraph id
                     swap_id = s.get('id', '')
