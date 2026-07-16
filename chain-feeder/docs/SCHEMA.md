@@ -282,7 +282,6 @@ Unified swap event log across all protocols and chains. Monthly range-partitione
 | `amount0` | DOUBLE PRECISION | Signed amount of token0. |
 | `amount1` | DOUBLE PRECISION | Signed amount of token1. |
 | `amount_usd` | DOUBLE PRECISION | Normalized USD value of the swap. |
-| `fee_display` | VARCHAR(20) | Original display string (e.g. `0.05%`). |
 
 Schema source: [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql)
 

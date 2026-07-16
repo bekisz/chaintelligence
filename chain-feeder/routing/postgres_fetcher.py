@@ -128,7 +128,12 @@ class PostgresFetcher:
                 query = f"""
                     SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
                            c0.symbol, c1.symbol,
-                           s.amount0, s.amount1, s.amount_usd, s.fee_display, lp.fee_bps
+                           s.amount0, s.amount1, s.amount_usd,
+                           CASE 
+                               WHEN lp.fee_bps IS NULL THEN 'Dynamic' 
+                               ELSE (lp.fee_bps / 100.0)::text || '%' 
+                           END AS fee_display,
+                           lp.fee_bps
                     FROM swaps s
                     JOIN liquidity_pool lp ON s.pool_id = lp.id
                     JOIN chain ch ON lp.chain_id = ch.id
@@ -219,7 +224,11 @@ class PostgresFetcher:
         query = f"""
             SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
                    c0.symbol, c1.symbol,
-                   s.amount0, s.amount1, s.amount_usd, s.fee_display
+                   s.amount0, s.amount1, s.amount_usd,
+                   CASE 
+                       WHEN lp.fee_bps IS NULL THEN 'Dynamic' 
+                       ELSE (lp.fee_bps / 100.0)::text || '%' 
+                   END AS fee_display
             FROM swaps s
             JOIN liquidity_pool lp ON s.pool_id = lp.id
             JOIN chain ch ON lp.chain_id = ch.id

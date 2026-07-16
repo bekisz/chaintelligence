@@ -611,8 +611,8 @@ class PostgresStorage:
                 insert_query = """
                 INSERT INTO swaps (
                     tx_hash, log_index, ts, pool_id,
-                    amount0, amount1, amount_usd, fee_display
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    amount0, amount1, amount_usd
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
                 """
                 
@@ -666,7 +666,6 @@ class PostgresStorage:
                         s.get('amount0'),
                         s.get('amount1'),
                         s.get('amountUSD'),
-                        s.get('fee_tier', ''),
                     ))
 
                 if data:
