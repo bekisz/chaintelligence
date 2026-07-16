@@ -104,6 +104,11 @@ def ingest_coins_data(conn, positions: list):
 def ingest_pools_data(conn, positions: list):
     if not positions: return
     with conn.cursor() as cur:
+        cur.execute("SELECT id, name FROM chain")
+        chain_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+        cur.execute("SELECT id, name FROM protocol")
+        protocol_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+
         cur.execute("SELECT symbol, hardness FROM coin")
         hardness_map = {row[0].upper(): row[1] for row in cur.fetchall()}
         
@@ -114,6 +119,19 @@ def ingest_pools_data(conn, positions: list):
             if fee and str(fee).isdigit() and int(fee) >= 10:
                 fee = str(int(fee))
             
+            # Calculate fee_bps
+            fee_bps = None
+            if fee and str(fee).lower() != 'dynamic':
+                fee_str = str(fee).strip()
+                if '%' in fee_str:
+                    try:
+                        fee_bps = float(fee_str.replace('%', '')) * 100.0
+                    except: pass
+                elif fee_str.isdigit():
+                    try:
+                        fee_bps = float(fee_str) / 100.0
+                    except: pass
+
             cur.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0,))
             row0 = cur.fetchone()
             coin0_id = row0[0] if row0 else None
@@ -125,13 +143,19 @@ def ingest_pools_data(conn, positions: list):
             if coin0_id is None or coin1_id is None:
                 continue
 
+            chain_id = chain_map.get(p['network'].lower())
+            protocol_id = protocol_map.get(p['protocol'].lower())
+            if chain_id is None or protocol_id is None:
+                continue
+
             cur.execute("""
-                INSERT INTO liquidity_pool (network, protocol, pool_name, fee_tier, coin0_id, coin1_id, pool_address, reverted)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (network, protocol, pool_name, fee_tier) DO UPDATE
+                INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_tier, fee_bps, coin0_id, coin1_id, pool_address, reverted)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (chain_id, protocol_id, pool_name, fee_tier) DO UPDATE
                 SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
-                    reverted = EXCLUDED.reverted
-            """, (p['network'], p['protocol'], pool_name, fee, coin0_id, coin1_id, p['pool_address'], rev))
+                    reverted = EXCLUDED.reverted,
+                    fee_bps = EXCLUDED.fee_bps
+            """, (chain_id, protocol_id, pool_name, fee, fee_bps, coin0_id, coin1_id, p['pool_address'], rev))
     conn.commit()
 
 def ingest_pool_stats(conn, positions: list):

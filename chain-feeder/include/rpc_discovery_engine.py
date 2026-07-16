@@ -163,16 +163,39 @@ class DbManager:
             c0_sym = self._resolve_symbol(c0_addr, cursor)
             c1_sym = self._resolve_symbol(c1_addr, cursor)
             
+            cursor.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0_sym,))
+            c0_id = cursor.fetchone()[0]
+            cursor.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c1_sym,))
+            c1_id = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT id FROM chain WHERE LOWER(name) = LOWER(%s)", (self.network,))
+            chain_id = cursor.fetchone()[0]
+            cursor.execute("SELECT id FROM protocol WHERE LOWER(name) = LOWER(%s)", (proto,))
+            proto_id = cursor.fetchone()[0]
+
+            # Calculate fee_bps
+            fee_bps = None
+            if fee and str(fee).lower() != 'dynamic':
+                fee_str = str(fee).strip()
+                if '%' in fee_str:
+                    try:
+                        fee_bps = float(fee_str.replace('%', '')) * 100.0
+                    except: pass
+                elif fee_str.isdigit():
+                    try:
+                        fee_bps = float(fee_str) / 100.0
+                    except: pass
+
             pool_name = f"{c0_sym} - {c1_sym}"
             pool_addr = f"rpc-derived-{c0_sym}-{c1_sym}"
             
             insert_pool = """
-            INSERT INTO liquidity_pool (network, protocol, pool_name, fee_tier, coin0_symbol, coin1_symbol, pool_address, reverted)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (network, protocol, pool_name, fee_tier) DO UPDATE SET pool_address = EXCLUDED.pool_address
+            INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_tier, fee_bps, coin0_id, coin1_id, pool_address, reverted)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (chain_id, protocol_id, pool_name, fee_tier) DO UPDATE SET pool_address = EXCLUDED.pool_address, fee_bps = EXCLUDED.fee_bps
             RETURNING id;
             """
-            cursor.execute(insert_pool, (self.network, proto, pool_name, str(fee), c0_sym, c1_sym, pool_addr, False))
+            cursor.execute(insert_pool, (chain_id, proto_id, pool_name, str(fee), fee_bps, c0_id, c1_id, pool_addr, False))
             pid = cursor.fetchone()[0]
             
             update_pos = """
@@ -232,20 +255,47 @@ class DbManager:
         cursor = conn.cursor()
         try:
             for tid, d in details_map.items():
-                c0_sym = self._resolve_symbol(d['token0'], cursor)
-                c1_sym = self._resolve_symbol(d['token1'], cursor)
-                pool_name = f"{c0_sym} - {c1_sym}"
-                pool_addr = f"rpc-derived-{c0_sym}-{c1_sym}"
-                
-                sql = """
-                INSERT INTO liquidity_pool (network, protocol, pool_name, fee_tier, coin0_symbol, coin1_symbol, pool_address, reverted)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (network, protocol, pool_name, fee_tier) DO UPDATE SET pool_address = EXCLUDED.pool_address
-                RETURNING id;
-                """
-                cursor.execute(sql, (self.network, d.get('protocol', 'Uniswap V3'), pool_name, str(d['fee']), c0_sym, c1_sym, pool_addr, False))
-                pid = cursor.fetchone()[0]
-                d['pool_id'] = pid 
+                 c0_sym = self._resolve_symbol(d['token0'], cursor)
+                 c1_sym = self._resolve_symbol(d['token1'], cursor)
+                 
+                 cursor.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c0_sym,))
+                 c0_id = cursor.fetchone()[0]
+                 cursor.execute("SELECT coin_id FROM coin WHERE symbol = %s", (c1_sym,))
+                 c1_id = cursor.fetchone()[0]
+                 
+                 cursor.execute("SELECT id FROM chain WHERE LOWER(name) = LOWER(%s)", (self.network,))
+                 chain_id = cursor.fetchone()[0]
+                 
+                 proto = d.get('protocol', 'Uniswap V3')
+                 cursor.execute("SELECT id FROM protocol WHERE LOWER(name) = LOWER(%s)", (proto,))
+                 proto_id = cursor.fetchone()[0]
+
+                 # Calculate fee_bps
+                 fee = d['fee']
+                 fee_bps = None
+                 if fee and str(fee).lower() != 'dynamic':
+                     fee_str = str(fee).strip()
+                     if '%' in fee_str:
+                         try:
+                             fee_bps = float(fee_str.replace('%', '')) * 100.0
+                         except: pass
+                     elif fee_str.isdigit():
+                         try:
+                             fee_bps = float(fee_str) / 100.0
+                         except: pass
+
+                 pool_name = f"{c0_sym} - {c1_sym}"
+                 pool_addr = f"rpc-derived-{c0_sym}-{c1_sym}"
+                 
+                 sql = """
+                 INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_tier, fee_bps, coin0_id, coin1_id, pool_address, reverted)
+                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 ON CONFLICT (chain_id, protocol_id, pool_name, fee_tier) DO UPDATE SET pool_address = EXCLUDED.pool_address, fee_bps = EXCLUDED.fee_bps
+                 RETURNING id;
+                 """
+                 cursor.execute(sql, (chain_id, proto_id, pool_name, str(fee), fee_bps, c0_id, c1_id, pool_addr, False))
+                 pid = cursor.fetchone()[0]
+                 d['pool_id'] = pid 
             conn.commit()
         finally:
             cursor.close()
