@@ -459,6 +459,9 @@ def cmc_upsert_to_db(fetch_result: dict):
     # Upsert to DB
     with pg_hook.get_conn() as conn:
         with conn.cursor() as cur:
+             cur.execute("SELECT id, name FROM chain")
+             chain_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+             chain_map['bsc'] = chain_map.get('bnb')
              for cmc_id_str, info in sorted_items:
                 try:
                     cmc_id = int(cmc_id_str)
@@ -569,14 +572,16 @@ def cmc_upsert_to_db(fetch_result: dict):
                             is_native = True
                             break
                     
-                    cur.execute("""
-                        INSERT INTO coin_contract (coin_id, chain, contract_address, decimals, is_native, verified_at)
-                        VALUES (%s, %s, %s, %s, %s, NOW())
-                        ON CONFLICT (coin_id, chain) DO UPDATE SET
-                            contract_address = EXCLUDED.contract_address,
-                            decimals = COALESCE(EXCLUDED.decimals, coin_contract.decimals),
-                            verified_at = EXCLUDED.verified_at
-                    """, (coin_id, chain_name, contract_addr.lower(), ch_decimals, is_native))
+                    chain_id = chain_map.get(chain_name.lower())
+                    if chain_id is not None:
+                        cur.execute("""
+                            INSERT INTO coin_contract (coin_id, chain_id, contract_address, decimals, is_native, verified_at)
+                            VALUES (%s, %s, %s, %s, %s, NOW())
+                            ON CONFLICT (coin_id, chain_id) DO UPDATE SET
+                                contract_address = EXCLUDED.contract_address,
+                                decimals = COALESCE(EXCLUDED.decimals, coin_contract.decimals),
+                                verified_at = EXCLUDED.verified_at
+                        """, (coin_id, chain_id, contract_addr.lower(), ch_decimals, is_native))
                 
                 upsert_count += 1
         conn.commit()

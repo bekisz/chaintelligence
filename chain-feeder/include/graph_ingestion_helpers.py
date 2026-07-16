@@ -84,6 +84,10 @@ def ingest_coins_data(conn, positions: list):
                     coins_data[key] = {'address': addr, 'decimals': dec}
             
     with conn.cursor() as cur:
+        cur.execute("SELECT id, name FROM chain")
+        chain_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+        chain_map['bsc'] = chain_map.get('bnb')
+
         for (sym, net), data in coins_data.items():
             cur.execute("""
                 INSERT INTO coin (symbol, decimals, hardness) 
@@ -94,11 +98,13 @@ def ingest_coins_data(conn, positions: list):
             """, (sym, data['decimals']))
             coin_id = cur.fetchone()[0]
 
-            cur.execute("""
-                INSERT INTO coin_contract (coin_id, chain, contract_address, decimals, verified_at)
-                VALUES (%s, %s, %s, %s, NOW())
-                ON CONFLICT DO NOTHING
-            """, (coin_id, net, data['address'].lower(), data['decimals']))
+            chain_id = chain_map.get(net.lower())
+            if chain_id is not None:
+                cur.execute("""
+                    INSERT INTO coin_contract (coin_id, chain_id, contract_address, decimals, verified_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (coin_id, chain_id) DO NOTHING
+                """, (coin_id, chain_id, data['address'].lower(), data['decimals']))
     conn.commit()
 
 def ingest_pools_data(conn, positions: list):
