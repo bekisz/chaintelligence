@@ -189,7 +189,7 @@ class UniswapV3Fetcher:
             amount0
             amount1
             amountUSD
-            pool {{ feeTier }}
+            pool {{ id feeTier }}
           }}
         }}
         """
@@ -598,15 +598,14 @@ class PostgresStorage:
                 if chain_id is None or protocol_id is None:
                     raise ValueError(f"Invalid network ({network}) or protocol ({protocol}) for lookup mappings")
 
-                # Load pool lookup map: (chain_id, protocol_id, frozenset({coin0_id, coin1_id}), fee_bps) -> pool_id
+                # Load pool lookup maps
                 cur.execute("""
-                    SELECT id, chain_id, protocol_id, coin0_id, coin1_id, fee_bps
+                    SELECT id, pool_id, chain_id, protocol_id, coin0_id, coin1_id, fee_bps
                     FROM liquidity_pool
                 """)
-                pool_map = {}
-                for row in cur.fetchall():
-                    pid, ch_id, pr_id, c0_id, c1_id, fbps = row
-                    pool_map[(ch_id, pr_id, frozenset({c0_id, c1_id}), fbps)] = pid
+                rows = cur.fetchall()
+                pool_id_map = {row[1].lower(): row[0] for row in rows if row[1]}
+                pool_tokens_map = {(row[2], row[3], frozenset({row[4], row[5]}), row[6]): row[0] for row in rows}
 
                 insert_query = """
                 INSERT INTO swaps (
@@ -654,7 +653,17 @@ class PostgresStorage:
                     ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
 
                     fbps = _compute_fee_bps(s.get('fee_tier'))
-                    pool_id = pool_map.get((chain_id, protocol_id, frozenset({t0_id, t1_id}), fbps))
+                    
+                    # 1. Match by on-chain pool ID
+                    sg_pool_id = (s.get('pool') or {}).get('id')
+                    pool_id = None
+                    if sg_pool_id:
+                        pool_id = pool_id_map.get(sg_pool_id.lower())
+                    
+                    # 2. Fall back to tokens/fee matching
+                    if pool_id is None:
+                        pool_id = pool_tokens_map.get((chain_id, protocol_id, frozenset({t0_id, t1_id}), fbps))
+                        
                     if pool_id is None:
                         continue
 

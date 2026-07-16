@@ -77,6 +77,12 @@ def sync_pools_from_swaps():
     rows = cur.fetchall()
 
     new_pools = 0
+    # Load lookups
+    cur.execute("SELECT id, LOWER(name) FROM chain")
+    chain_map = {r[1]: r[0] for r in cur.fetchall()}
+    cur.execute("SELECT id, LOWER(name) FROM protocol")
+    protocol_map = {r[1]: r[0] for r in cur.fetchall()}
+
     # Load contract addresses map
     cur.execute("""
         SELECT cc.coin_id, LOWER(ch.name) AS chain_name, cc.contract_address 
@@ -112,23 +118,30 @@ def sync_pools_from_swaps():
         if not row0 or not row1:
             continue
 
+        ch_id = chain_map.get(network.lower())
+        pr_id = protocol_map.get(PROTOCOL.lower())
+        if ch_id is None or pr_id is None:
+            continue
+
+        fee_val = float(fee_bips) if fee_bips and fee_bips.isdigit() else None
+
         derived_addr, derived_id = None, None
         chain_key = network.lower()
         t0_addr = token_addr_map.get((row0[0], chain_key))
         t1_addr = token_addr_map.get((row1[0], chain_key))
         if t0_addr and t1_addr:
-            fee_int = int(fee_bips) if fee_bips and fee_bips.isdigit() else None
+            fee_int = int(fee_val) if fee_val is not None else None
             derived_addr, derived_id = derive_pool_identifiers(PROTOCOL, network, t0_addr, t1_addr, fee_int, dex_config)
 
         try:
             cur.execute("""
                 INSERT INTO liquidity_pool
-                    (network, protocol, pool_name, coin0_id, coin1_id, fee_tier, pool_address, pool_id)
+                    (chain_id, protocol_id, pool_name, coin0_id, coin1_id, fee_bps, pool_address, pool_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (network, protocol, pool_name, fee_tier) DO UPDATE
+                ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
                 SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
                     pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
-            """, (network, PROTOCOL, pool_name, row0[0], row1[0], fee_bips, derived_addr, derived_id))
+            """, (ch_id, pr_id, pool_name, row0[0], row1[0], fee_val, derived_addr, derived_id))
             if cur.statusmessage.startswith("INSERT 0 1") or cur.statusmessage.startswith("UPDATE 1"):
                 new_pools += 1
         except Exception as e:
