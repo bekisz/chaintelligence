@@ -192,7 +192,7 @@ class DbManager:
             insert_pool = """
             INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps) DO UPDATE SET pool_address = EXCLUDED.pool_address
+            ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE SET pool_address = EXCLUDED.pool_address
             RETURNING id;
             """
             cursor.execute(insert_pool, (chain_id, proto_id, pool_name, fee_bps, c0_id, c1_id, pool_addr, False))
@@ -290,7 +290,7 @@ class DbManager:
                  sql = """
                  INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                 ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps) DO UPDATE SET pool_address = EXCLUDED.pool_address
+                 ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE SET pool_address = EXCLUDED.pool_address
                  RETURNING id;
                  """
                  cursor.execute(sql, (chain_id, proto_id, pool_name, fee_bps, c0_id, c1_id, pool_addr, False))

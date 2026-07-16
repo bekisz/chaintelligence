@@ -37,7 +37,14 @@ with DAG(
         protocol = 'PancakeSwap V3'
         pg_hook = PostgresHook(postgres_conn_id='postgres_default')
         last_ts_row = pg_hook.get_first(
-            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = %s",
+            """
+            SELECT MAX(s.ts) 
+            FROM swaps s
+            JOIN liquidity_pool lp ON s.pool_id = lp.id
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            WHERE ch.name = %s AND pr.name = %s
+            """,
             parameters=(network, protocol))
         last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
         end_date = datetime.now(timezone.utc)
