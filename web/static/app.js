@@ -11,6 +11,24 @@ const formatAprPercent = (pct) => {
     return Number(pct.toFixed(1)) + '%';
 };
 
+/**
+ * Format a fee tier number (as a fraction, not percent) to at most 3 significant
+ * digits after the first non-zero decimal digit.
+ * e.g. 0.000069999... => "0.00352%", 0.003 => "0.3%", 0.05 => "5%"
+ * Handles both fractional values (<1) and already-formatted percent strings.
+ */
+const formatFeeTier = (value) => {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return value;
+    if (num === 0) return '0%';
+    // Find position of first non-zero digit after decimal point
+    const absNum = Math.abs(num);
+    if (absNum >= 1) return num.toFixed(2).replace(/\.?0+$/, '') + '%';
+    const magnitude = Math.floor(Math.log10(absNum)); // e.g. -3 for 0.001
+    const decimalPlaces = -magnitude + 2; // 3 sig figs after first non-zero
+    return parseFloat(num.toFixed(decimalPlaces)) + '%';
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const analyzeBtn = document.getElementById('analyze-btn');
     const startTokenInput = document.getElementById('start-token');
@@ -551,7 +569,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         let dispFee = cleanFee;
                         const parsedFee = parseFloat(cleanFee);
                         if (!isNaN(parsedFee) && parsedFee >= 5) {
-                            dispFee = (parsedFee / 10000) + '%';
+                            // bps value — convert to percent fraction then format
+                            dispFee = formatFeeTier(parsedFee / 10000);
+                            cleanFee = dispFee;
+                        } else if (!isNaN(parsedFee) && cleanFee.includes('%')) {
+                            // Already a percent string — re-format to trim long decimals
+                            dispFee = formatFeeTier(parsedFee);
                             cleanFee = dispFee;
                         }
                         if (cleanFee.toLowerCase() === 'dynamic') {
@@ -575,7 +598,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         let dispFee = cleanFee;
                         const parsedFee = parseFloat(cleanFee);
                         if (!isNaN(parsedFee) && parsedFee >= 5) {
-                            dispFee = (parsedFee / 10000) + '%';
+                            dispFee = formatFeeTier(parsedFee / 10000);
+                            cleanFee = dispFee;
+                        } else if (!isNaN(parsedFee) && cleanFee.includes('%')) {
+                            dispFee = formatFeeTier(parsedFee);
                             cleanFee = dispFee;
                         }
                         if (cleanFee.toLowerCase() === 'dynamic') {
@@ -587,7 +613,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } else {
                         const feeNum = parseFloat(item);
                         if (!isNaN(feeNum)) {
-                            feeDisplay = (feeNum / 10000) + '%';
+                            feeDisplay = formatFeeTier(feeNum / 10000);
                         }
                         tooltip = `APR: N/A\nTier: ${feeDisplay}\nProtocol: Unknown`;
                     }
