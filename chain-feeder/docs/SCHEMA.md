@@ -278,14 +278,10 @@ Unified swap event log across all protocols and chains. Monthly range-partitione
 | `tx_hash` | VARCHAR(80) | Transaction hash (part of PK). |
 | `log_index` | INT | Log index within the tx (part of PK). |
 | `ts` | TIMESTAMPTZ | Block timestamp (partition key, part of PK). |
-| `chain_id` | SMALLINT (FK → chain) | Blockchain network lookup ID. |
-| `protocol_id` | SMALLINT (FK → protocol) | DEX protocol lookup ID. |
-| `t0_coin_id` | SMALLINT (FK → coin) | `coin.coin_id` for token0. |
-| `t1_coin_id` | SMALLINT (FK → coin) | `coin.coin_id` for token1. |
+| `pool_id` | INT (FK → liquidity_pool) | The pool this swap belongs to. |
 | `amount0` | DOUBLE PRECISION | Signed amount of token0. |
 | `amount1` | DOUBLE PRECISION | Signed amount of token1. |
 | `amount_usd` | DOUBLE PRECISION | Normalized USD value of the swap. |
-| `fee_bps` | DOUBLE PRECISION | Fee in basis points (5 = 0.05%); NULL = dynamic fee. |
 | `fee_display` | VARCHAR(20) | Original display string (e.g. `0.05%`). |
 
 Schema source: [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql)

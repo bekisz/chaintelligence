@@ -598,11 +598,21 @@ class PostgresStorage:
                 if chain_id is None or protocol_id is None:
                     raise ValueError(f"Invalid network ({network}) or protocol ({protocol}) for lookup mappings")
 
+                # Load pool lookup map: (chain_id, protocol_id, frozenset({coin0_id, coin1_id}), fee_bps) -> pool_id
+                cur.execute("""
+                    SELECT id, chain_id, protocol_id, coin0_id, coin1_id, fee_bps
+                    FROM liquidity_pool
+                """)
+                pool_map = {}
+                for row in cur.fetchall():
+                    pid, ch_id, pr_id, c0_id, c1_id, fbps = row
+                    pool_map[(ch_id, pr_id, frozenset({c0_id, c1_id}), fbps)] = pid
+
                 insert_query = """
                 INSERT INTO swaps (
-                    tx_hash, log_index, ts, chain_id, protocol_id,
-                    t0_coin_id, t1_coin_id, amount0, amount1, amount_usd, fee_bps, fee_display
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    tx_hash, log_index, ts, pool_id,
+                    amount0, amount1, amount_usd, fee_display
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
                 """
                 
@@ -643,18 +653,19 @@ class PostgresStorage:
 
                     ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
 
+                    fbps = _compute_fee_bps(s.get('fee_tier'))
+                    pool_id = pool_map.get((chain_id, protocol_id, frozenset({t0_id, t1_id}), fbps))
+                    if pool_id is None:
+                        continue
+
                     data.append((
                         s['tx_hash'],
                         log_index,
                         ts_val,
-                        chain_id,
-                        protocol_id,
-                        t0_id,
-                        t1_id,
+                        pool_id,
                         s.get('amount0'),
                         s.get('amount1'),
                         s.get('amountUSD'),
-                        _compute_fee_bps(s.get('fee_tier')),
                         s.get('fee_tier', ''),
                     ))
 
@@ -668,8 +679,9 @@ class PostgresStorage:
                 cur.execute("""
                     SELECT MAX(s.ts)
                     FROM swaps s
-                    JOIN chain c ON s.chain_id = c.id
-                    JOIN protocol p ON s.protocol_id = p.id
+                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                    JOIN chain c ON lp.chain_id = c.id
+                    JOIN protocol p ON lp.protocol_id = p.id
                     WHERE LOWER(c.name) = LOWER(%s) AND LOWER(p.name) = LOWER(%s)
                 """, (network, protocol))
                 res = cur.fetchone()

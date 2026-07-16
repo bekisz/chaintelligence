@@ -11,8 +11,8 @@ from typing import List, Dict, Optional, Callable
 
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
-# Import the shared coin_id mapping and fee_bps helper from the common utils
-from common.utils.uniswap_utils import SYMBOL_TO_COIN_ID, _compute_fee_bps
+# Import the shared coin_id mapping, fee_bps helper and storage from the common utils
+from common.utils.uniswap_utils import SYMBOL_TO_COIN_ID, _compute_fee_bps, PostgresStorage
 
 # Asset for metadata tracking
 uniswap_v2_swaps_asset = Asset("postgres://postgres/chaintelligence/public/uniswap_v2_swaps")
@@ -215,62 +215,7 @@ class UniswapV2Fetcher:
 # V2 storage
 # ---------------------------------------------------------------------------
 
-class PostgresStorageV2:
-    def __init__(self):
-        self.conn_str = os.getenv('DATA_WAREHOUSE_DB', '')
-
-    def save_swaps(self, swaps: List[Dict], network: str = "Ethereum", protocol: str = "Uniswap V2"):
-        if not swaps:
-            return
-
-        conn_str = self.conn_str or os.getenv('DATA_WAREHOUSE_DB', '')
-        if not conn_str:
-            # Fallback: build from Airflow connection
-            from airflow.providers.postgres.hooks.postgres import PostgresHook
-            pg_hook = PostgresHook(postgres_conn_id='postgres_default')
-            conn_str = pg_hook.get_uri()
-
-        insert_query = """
-        INSERT INTO swaps (
-            tx_hash, log_index, ts, network, protocol,
-            t0_coin_id, t1_coin_id, amount0, amount1, amount_usd, fee_bps, fee_display
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
-        """
-        data = []
-        for s in swaps:
-            t0_id = SYMBOL_TO_COIN_ID.get(s.get('token0_symbol', '').upper())
-            t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
-            if t0_id is None or t1_id is None:
-                continue
-
-            # V2 id format: "v2-{tx_hash}-{log_index}"
-            log_index = int(s.get('id', '').rsplit('-', 1)[1])
-
-            ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
-
-            data.append((
-                s['tx_hash'],
-                log_index,
-                ts_val,
-                network,
-                protocol,
-                t0_id,
-                t1_id,
-                s.get('amount0'),
-                s.get('amount1'),
-                s.get('amountUSD'),
-                _compute_fee_bps(s.get('fee_tier')),
-                s.get('fee_tier', ''),
-            ))
-
-        if not data:
-            return
-
-        with psycopg2.connect(conn_str) as conn:
-            with conn.cursor() as cur:
-                cur.executemany(insert_query, data)
-            conn.commit()
+# Standard PostgresStorage is imported from common.utils.uniswap_utils
 
 
 # ---------------------------------------------------------------------------
@@ -301,12 +246,9 @@ with DAG(
         network = 'Ethereum'
         protocol = 'Uniswap V2'
 
-        pg_hook = PostgresHook(postgres_conn_id='postgres_default')
-        last_ts_row = pg_hook.get_first(
-            "SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = %s",
-            parameters=(network, protocol)
-        )
-        last_ts = last_ts_row[0] if last_ts_row and last_ts_row[0] else None
+        storage = PostgresStorage()
+        last_ts_timestamp = storage.get_last_swap_timestamp(network, protocol)
+        last_ts = datetime.fromtimestamp(last_ts_timestamp, timezone.utc) if last_ts_timestamp else None
 
         end_date = datetime.now(timezone.utc)
         if last_ts is not None and not force_backfill:
@@ -318,7 +260,6 @@ with DAG(
 
         logging.info(f"Fetching {network} {protocol} swaps from {start_date} to {end_date}")
         fetcher = UniswapV2Fetcher(verbose=True)
-        storage = PostgresStorageV2()
 
         def save_batch(batch):
             storage.save_swaps(batch, network=network, protocol=protocol)

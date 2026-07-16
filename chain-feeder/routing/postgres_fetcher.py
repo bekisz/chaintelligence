@@ -128,12 +128,13 @@ class PostgresFetcher:
                 query = f"""
                     SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
                            c0.symbol, c1.symbol,
-                           s.amount0, s.amount1, s.amount_usd, s.fee_display, s.fee_bps
+                           s.amount0, s.amount1, s.amount_usd, s.fee_display, lp.fee_bps
                     FROM swaps s
-                    JOIN chain ch ON s.chain_id = ch.id
-                    JOIN protocol pr ON s.protocol_id = pr.id
-                    JOIN coin c0 ON s.t0_coin_id = c0.coin_id
-                    JOIN coin c1 ON s.t1_coin_id = c1.coin_id
+                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                    JOIN chain ch ON lp.chain_id = ch.id
+                    JOIN protocol pr ON lp.protocol_id = pr.id
+                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
                     WHERE s.ts >= %s AND s.ts <= %s
                       AND s.amount_usd >= 10.0
                 """
@@ -220,10 +221,11 @@ class PostgresFetcher:
                    c0.symbol, c1.symbol,
                    s.amount0, s.amount1, s.amount_usd, s.fee_display
             FROM swaps s
-            JOIN chain ch ON s.chain_id = ch.id
-            JOIN protocol pr ON s.protocol_id = pr.id
-            JOIN coin c0 ON s.t0_coin_id = c0.coin_id
-            JOIN coin c1 ON s.t1_coin_id = c1.coin_id
+            JOIN liquidity_pool lp ON s.pool_id = lp.id
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            JOIN coin c0 ON lp.coin0_id = c0.coin_id
+            JOIN coin c1 ON lp.coin1_id = c1.coin_id
             WHERE s.ts >= %s AND s.ts <= %s
               AND s.amount_usd >= 10.0
         """
@@ -503,31 +505,23 @@ class PostgresFetcher:
             pool_queries_swaps = []
             params_swaps = []
             for k, meta in pool_meta.items():
-                if meta.get('total_vol', 0) == 0:
-                    fee_bps = meta['fee_bps']
-
-                    chain_id = chain_map.get(meta['network'].lower())
-                    protocol_id = protocol_map.get(meta['protocol'].lower())
-                    if chain_id is None or protocol_id is None:
-                        continue
-
+                if meta.get('total_vol', 0) == 0 and meta['pool_ids']:
                     pool_queries_swaps.append("""
                     SELECT %s, c0.symbol, c1.symbol, SUM(s.amount_usd), SUM(ABS(s.amount0)), SUM(ABS(s.amount1))
                     FROM swaps s
-                    JOIN coin c0 ON s.t0_coin_id = c0.coin_id
-                    JOIN coin c1 ON s.t1_coin_id = c1.coin_id
-                    WHERE s.ts >= %s AND s.ts <= %s AND s.chain_id = %s AND s.protocol_id = %s
-                    AND ((UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s))
-                    AND (s.fee_bps = %s OR (s.fee_bps IS NULL AND %s IS NULL))
+                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                    WHERE s.ts >= %s AND s.ts <= %s AND s.pool_id = ANY(%s)
                     GROUP BY c0.symbol, c1.symbol
                     """)
-                    params_swaps.extend([k, start_date, end_date, chain_id, protocol_id, meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_bps, fee_bps])
+                    params_swaps.extend([k, start_date, end_date, meta['pool_ids']])
 
             if pool_queries_swaps:
                 batch_size = 20
                 for i in range(0, len(pool_queries_swaps), batch_size):
                     batch_queries = pool_queries_swaps[i:i+batch_size]
-                    batch_params = params_swaps[i*11:(i+batch_size)*11]
+                    batch_params = params_swaps[i*4:(i+batch_size)*4]
                     cur.execute(" UNION ALL ".join(batch_queries), tuple(batch_params))
                     for row in cur.fetchall():
                         k = row[0]

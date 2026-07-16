@@ -983,17 +983,21 @@ async def get_date_range(network: Optional[str] = Query(None, description="Filte
             if network and network.lower() != 'all':
                 # Per-network: return the exact date range for that network
                 cur.execute("""
-                    SELECT MIN(ts)::date, MAX(ts)::date
-                    FROM swaps
-                    WHERE network = %s
+                    SELECT MIN(s.ts)::date, MAX(s.ts)::date
+                    FROM swaps s
+                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                    JOIN chain ch ON lp.chain_id = ch.id
+                    WHERE LOWER(ch.name) = LOWER(%s)
                 """, (network,))
             else:
                 # "All" mode: return the tightest range that has data for every network
                 cur.execute("""
                     SELECT MAX(min_date)::date, MAX(max_date)::date FROM (
-                        SELECT network, MIN(ts) as min_date, MAX(ts) as max_date
-                        FROM swaps
-                        GROUP BY network
+                        SELECT ch.name as network, MIN(s.ts) as min_date, MAX(s.ts) as max_date
+                        FROM swaps s
+                        JOIN liquidity_pool lp ON s.pool_id = lp.id
+                        JOIN chain ch ON lp.chain_id = ch.id
+                        GROUP BY ch.name
                     ) as per_network
                 """)
             row = cur.fetchone()
