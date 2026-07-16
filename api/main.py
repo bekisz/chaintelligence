@@ -810,7 +810,9 @@ async def analyze(
                             with get_conn() as conn:
                                 cur = conn.cursor()
                                 cur.execute("""
-                                     SELECT ch.name AS network, pr.name AS protocol, lp.fee_tier, lp.pool_id,
+                                     SELECT ch.name AS network, pr.name AS protocol,
+                                            CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier,
+                                            lp.pool_id,
                                             UPPER(c0.symbol) AS s0,
                                             UPPER(c1.symbol) AS s1,
                                             cc0.contract_address AS t0_addr
@@ -1055,7 +1057,8 @@ async def lp_summary():
                         pos.id, pos.timestamp, pos.address, pos.protocol, pos.network, pos.position_label,
                         pos.balance_usd, pos.assets, pos.unclaimed, pos.images, pos.total_unclaimed_usd,
                         pos.position_key, pos.token_id, lp.tick_lower, lp.tick_upper, lp.current_tick,
-                        lp.price_lower, lp.price_upper, lp.current_price, lp.in_range, lp.fee_tier,
+                        lp.price_lower, lp.price_upper, lp.current_price, lp.in_range,
+                        CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier,
                         lp.id AS pool_id, 0 as coin0_claimed_amount, 0 as coin1_claimed_amount
                     FROM liquidity_pool_position pos
                     JOIN liquidity_pool lp ON pos.pool_id = lp.id
@@ -1573,7 +1576,9 @@ async def list_pools():
             with conn.cursor() as cur:
                 query = """
                 SELECT
-                    p.id, ch.name AS network, pr.name AS protocol, p.pool_name, p.fee_tier, p.pool_address,
+                    p.id, ch.name AS network, pr.name AS protocol, p.pool_name,
+                    CASE WHEN p.fee_bps IS NULL THEN 'Dynamic' ELSE (p.fee_bps / 100.0)::text || '%' END AS fee_tier,
+                    p.pool_address,
                     h.tvl_usd, h.volume_usd, h.tx_count, c0.symbol, c1.symbol
                 FROM liquidity_pool p
                 JOIN chain ch ON p.chain_id = ch.id
@@ -1679,7 +1684,8 @@ async def sync_pool(pool_id: int):
         
         # 1. Get pool details
         cur.execute("""
-            SELECT ch.name AS network, lp.pool_address, pr.name AS protocol, c0.symbol, c1.symbol, lp.fee_tier 
+            SELECT ch.name AS network, lp.pool_address, pr.name AS protocol, c0.symbol, c1.symbol,
+                   CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier
             FROM liquidity_pool lp
             JOIN chain ch ON lp.chain_id = ch.id
             JOIN protocol pr ON lp.protocol_id = pr.id
@@ -2079,7 +2085,9 @@ async def sps_find(
                         with get_conn() as conn:
                             cur = conn.cursor()
                             cur.execute("""
-                                 SELECT ch.name AS network, pr.name AS protocol, lp.fee_tier, lp.pool_id,
+                                 SELECT ch.name AS network, pr.name AS protocol, 
+                                        CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier, 
+                                        lp.pool_id,
                                         UPPER(c0.symbol) AS s0,
                                         UPPER(c1.symbol) AS s1,
                                         cc0.contract_address AS t0_addr

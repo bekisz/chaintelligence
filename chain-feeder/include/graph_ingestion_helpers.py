@@ -149,13 +149,12 @@ def ingest_pools_data(conn, positions: list):
                 continue
 
             cur.execute("""
-                INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_tier, fee_bps, coin0_id, coin1_id, pool_address, reverted)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chain_id, protocol_id, pool_name, fee_tier) DO UPDATE
+                INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps) DO UPDATE
                 SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
-                    reverted = EXCLUDED.reverted,
-                    fee_bps = EXCLUDED.fee_bps
-            """, (chain_id, protocol_id, pool_name, fee, fee_bps, coin0_id, coin1_id, p['pool_address'], rev))
+                    reverted = EXCLUDED.reverted
+            """, (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, p['pool_address'], rev))
     conn.commit()
 
 def ingest_pool_stats(conn, positions: list):

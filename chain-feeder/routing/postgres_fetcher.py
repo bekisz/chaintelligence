@@ -296,30 +296,29 @@ class PostgresFetcher:
             results = {}
             pool_meta = {}
 
-            # Helper to normalize fee string to bips or whatever DB uses
-            def normalize_fee(f):
-                f_str = str(f).split('|')[0].replace('%', '').strip()
-                if f_str == 'Dynamic':
-                    return 'Dynamic'
-                fee_map = {'0.01': '100', '0.05': '500', '0.08': '800', '0.3': '3000', '1.0': '10000'}
-                if f_str in fee_map: return fee_map[f_str]
-
+            # Helper to parse fee string to basis points
+            def parse_fee_bps(f):
+                f_str = str(f).split('|')[0].strip()
+                if f_str == 'Dynamic' or not f_str:
+                    return None
                 try:
-                    val = float(f_str)
-                    if val > 100:
-                        return 'Dynamic'
-                    if val > 0 and val < 5:
-                        return str(int(val * 10000))
-                    return str(int(val))
+                    val = float(f_str.replace('%', ''))
+                    if '%' in f_str:
+                        return val * 100.0
+                    elif val >= 10.0:
+                        return val / 100.0
+                    else:
+                        return val * 100.0
                 except:
-                    return f_str
+                    return None
 
             # ------------------------------------------------------------------
             # Phase 0: normalize every requested pool into pool_meta[key].
             # ------------------------------------------------------------------
             all_networks = set()
             all_protocols = set()
-            all_fee_variants = set()
+            all_fee_bps = set()
+            has_dynamic_fees = False
             all_symbols = set()
             # (network, protocol, frozenset({t0,t1})) -> list of keys that could
             # match a pool row; used to fan out Phase 1 results without rescanning.
@@ -329,8 +328,7 @@ class PostgresFetcher:
                 t0, t1, fee_raw_full = p
                 t0_sym, t1_sym = t0.upper(), t1.upper()
                 fee_raw = str(fee_raw_full).split('|')[0].strip()
-                fee_db = normalize_fee(fee_raw_full)
-                f_clean = fee_raw.replace('%', '').strip()
+                fee_val = parse_fee_bps(fee_raw_full)
 
                 network = "Ethereum"
                 parts = str(fee_raw_full).split('|')
@@ -353,25 +351,19 @@ class PostgresFetcher:
                     else:
                         protocol = proto_raw
 
-                fee_variants = [fee_db, f_clean, fee_raw]
-                try:
-                    if fee_db.isdigit():
-                        val = float(fee_db) / 10000.0
-                        fee_variants.append(f"{val:g}%")
-                        fee_variants.append(f"{val:g}")
-                except: pass
-                fee_variants = list(set([v for v in fee_variants if v]))
-
                 key = f"{t0}-{t1}-{fee_raw_full}"
                 pool_meta[key] = {
-                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_db': fee_db, 'network': network_lower,
-                    'protocol': protocol, 'fee_variants': fee_variants, 'fee_raw_full': fee_raw_full,
+                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_bps': fee_val, 'network': network_lower,
+                    'protocol': protocol, 'fee_raw_full': fee_raw_full,
                     'pool_ids': [], 'total_vol': 0.0, 'avg_tvl': 0.0,
                 }
 
                 all_networks.add(network_lower)
                 all_protocols.add(protocol)
-                all_fee_variants.update(fee_variants)
+                if fee_val is None:
+                    has_dynamic_fees = True
+                else:
+                    all_fee_bps.add(fee_val)
                 all_symbols.add(t0_sym)
                 all_symbols.add(t1_sym)
                 pair_index.setdefault((network_lower, protocol, frozenset((t0_sym, t1_sym))), []).append(key)
@@ -389,7 +381,7 @@ class PostgresFetcher:
             # in Python via pair_index.
             # ------------------------------------------------------------------
             cur.execute("""
-                SELECT lp.id, ch.name AS network, pr.name AS protocol, lp.fee_tier,
+                SELECT lp.id, ch.name AS network, pr.name AS protocol, lp.fee_bps,
                        UPPER(c0.symbol), UPPER(c1.symbol)
                 FROM liquidity_pool lp
                 JOIN chain ch ON lp.chain_id = ch.id
@@ -398,14 +390,14 @@ class PostgresFetcher:
                 JOIN coin c1 ON lp.coin1_id = c1.coin_id
                 WHERE LOWER(ch.name) = ANY(%s)
                   AND pr.name = ANY(%s)
-                  AND lp.fee_tier = ANY(%s)
+                  AND (lp.fee_bps = ANY(%s) OR (lp.fee_bps IS NULL AND %s))
                   AND UPPER(c0.symbol) = ANY(%s)
                   AND UPPER(c1.symbol) = ANY(%s)
             """, (
-                list(all_networks), list(all_protocols), list(all_fee_variants),
+                list(all_networks), list(all_protocols), list(all_fee_bps), has_dynamic_fees,
                 list(all_symbols), list(all_symbols),
             ))
-            for pid, net, proto, fee_tier, c0, c1 in cur.fetchall():
+            for pid, net, proto, lp_fee_bps, c0, c1 in cur.fetchall():
                 if c0 is None or c1 is None:
                     continue
                 candidates = pair_index.get((net.lower(), proto, frozenset((c0, c1))))
@@ -413,10 +405,13 @@ class PostgresFetcher:
                     continue
                 for k in candidates:
                     meta = pool_meta[k]
-                    # Symbol-pair order must match one direction; fee_tier must be
-                    # in this pool's normalized variants.
-                    if fee_tier not in meta['fee_variants']:
-                        continue
+                    meta_fee = meta['fee_bps']
+                    if meta_fee is None:
+                        if lp_fee_bps is not None:
+                            continue
+                    else:
+                        if lp_fee_bps is None or abs(lp_fee_bps - meta_fee) > 1e-6:
+                            continue
                     if (meta['t0_sym'], meta['t1_sym']) in ((c0, c1), (c1, c0)):
                         meta['pool_ids'].append(pid)
 
@@ -509,13 +504,7 @@ class PostgresFetcher:
             params_swaps = []
             for k, meta in pool_meta.items():
                 if meta.get('total_vol', 0) == 0:
-                    fee_pct = str(meta['fee_raw_full']).split('|')[0]
-                    fee_db = meta['fee_db']
-                    if fee_db == 'Dynamic':
-                        fee_tier_pct, fee_tier_bips = 'Dynamic', 'Dynamic'
-                    else:
-                        fee_tier_pct = fee_pct if '%' in fee_pct else {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}.get(fee_db, fee_pct)
-                        fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
+                    fee_bps = meta['fee_bps']
 
                     chain_id = chain_map.get(meta['network'].lower())
                     protocol_id = protocol_map.get(meta['protocol'].lower())
@@ -529,10 +518,10 @@ class PostgresFetcher:
                     JOIN coin c1 ON s.t1_coin_id = c1.coin_id
                     WHERE s.ts >= %s AND s.ts <= %s AND s.chain_id = %s AND s.protocol_id = %s
                     AND ((UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s))
-                    AND (s.fee_display = %s OR s.fee_display = %s)
+                    AND (s.fee_bps = %s OR (s.fee_bps IS NULL AND %s IS NULL))
                     GROUP BY c0.symbol, c1.symbol
                     """)
-                    params_swaps.extend([k, start_date, end_date, chain_id, protocol_id, meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_tier_pct, fee_tier_bips])
+                    params_swaps.extend([k, start_date, end_date, chain_id, protocol_id, meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_bps, fee_bps])
 
             if pool_queries_swaps:
                 batch_size = 20

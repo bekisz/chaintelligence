@@ -146,18 +146,18 @@ Written by the `coin_price_history_feeder` DAG (daily at 1 AM).
 Represents a unique liquidity pool on a specific network and protocol. Coin ordering follows the hardness convention.
 
 **Primary Key**: `id` (SERIAL)
-**Unique Constraint**: (`network`, `protocol`, `pool_name`)
+**Unique Constraint**: (`chain_id`, `protocol_id`, `pool_name`, `fee_bps`)
 
 | Column | Type | Description |
 |:---|:---|:---|
 | `id` | SERIAL (PK) | Unique pool ID. |
-| `network` | VARCHAR(20) | Blockchain network (`Ethereum`, `Arbitrum`, `Base`, `BNB`). |
-| `protocol` | VARCHAR(20) | DEX protocol (`Uniswap V3`, `Uniswap V4`, `PancakeSwap V4`). |
+| `chain_id` | SMALLINT (FK → chain) | Blockchain network lookup ID. |
+| `protocol_id` | SMALLINT (FK → protocol) | DEX protocol lookup ID. |
 | `pool_name` | VARCHAR(255) | Canonical name: `{coin0} - {coin1}` (e.g. `ETH - USDC`). |
-| `fee_tier` | VARCHAR(10) | Fee tier in basis points as string (e.g. `500` = 0.05%). |
+| `fee_bps` | DOUBLE PRECISION | Fee in basis points (5 = 0.05%); NULL = dynamic fee. |
 | `coin0_id` | SMALLINT (FK → coin) | Softer asset. CASCADE on delete. |
 | `coin1_id` | SMALLINT (FK → coin) | Harder asset. CASCADE on delete. |
-| `pool_address` | VARCHAR(42) | On-chain pool contract address (V2/V3). |
+| `pool_address` | VARCHAR(100) | On-chain pool contract address (V2/V3) or compound ID (V4). |
 | `pool_id` | VARCHAR(66) | V4 poolId (bytes32 hex). NULL for V2/V3. |
 | `reverted` | BOOLEAN | True if coin ordering is reversed vs on-chain token0/token1. |
 | `created_at` | TIMESTAMP | Row creation timestamp. |
@@ -278,8 +278,8 @@ Unified swap event log across all protocols and chains. Monthly range-partitione
 | `tx_hash` | VARCHAR(80) | Transaction hash (part of PK). |
 | `log_index` | INT | Log index within the tx (part of PK). |
 | `ts` | TIMESTAMPTZ | Block timestamp (partition key, part of PK). |
-| `network` | VARCHAR(20) | Chain: `Ethereum`, `Arbitrum`, `Base`, `BNB`. |
-| `protocol` | VARCHAR(50) | DEX: `Uniswap V2`, `Uniswap V3`, `Uniswap V4`, `PancakeSwap V3`, `PancakeSwap V4`, `Aerodrome`. |
+| `chain_id` | SMALLINT (FK → chain) | Blockchain network lookup ID. |
+| `protocol_id` | SMALLINT (FK → protocol) | DEX protocol lookup ID. |
 | `t0_coin_id` | SMALLINT (FK → coin) | `coin.coin_id` for token0. |
 | `t1_coin_id` | SMALLINT (FK → coin) | `coin.coin_id` for token1. |
 | `amount0` | DOUBLE PRECISION | Signed amount of token0. |

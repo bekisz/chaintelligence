@@ -190,12 +190,12 @@ class DbManager:
             pool_addr = f"rpc-derived-{c0_sym}-{c1_sym}"
             
             insert_pool = """
-            INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_tier, fee_bps, coin0_id, coin1_id, pool_address, reverted)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (chain_id, protocol_id, pool_name, fee_tier) DO UPDATE SET pool_address = EXCLUDED.pool_address, fee_bps = EXCLUDED.fee_bps
+            INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps) DO UPDATE SET pool_address = EXCLUDED.pool_address
             RETURNING id;
             """
-            cursor.execute(insert_pool, (chain_id, proto_id, pool_name, str(fee), fee_bps, c0_id, c1_id, pool_addr, False))
+            cursor.execute(insert_pool, (chain_id, proto_id, pool_name, fee_bps, c0_id, c1_id, pool_addr, False))
             pid = cursor.fetchone()[0]
             
             update_pos = """
@@ -288,12 +288,12 @@ class DbManager:
                  pool_addr = f"rpc-derived-{c0_sym}-{c1_sym}"
                  
                  sql = """
-                 INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_tier, fee_bps, coin0_id, coin1_id, pool_address, reverted)
-                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                 ON CONFLICT (chain_id, protocol_id, pool_name, fee_tier) DO UPDATE SET pool_address = EXCLUDED.pool_address, fee_bps = EXCLUDED.fee_bps
+                 INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
+                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                 ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps) DO UPDATE SET pool_address = EXCLUDED.pool_address
                  RETURNING id;
                  """
-                 cursor.execute(sql, (chain_id, proto_id, pool_name, str(fee), fee_bps, c0_id, c1_id, pool_addr, False))
+                 cursor.execute(sql, (chain_id, proto_id, pool_name, fee_bps, c0_id, c1_id, pool_addr, False))
                  pid = cursor.fetchone()[0]
                  d['pool_id'] = pid 
             conn.commit()

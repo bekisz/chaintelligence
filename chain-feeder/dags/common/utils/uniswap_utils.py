@@ -566,12 +566,15 @@ def _load_symbol_to_coin_id() -> Dict[str, int]:
 SYMBOL_TO_COIN_ID = _load_symbol_to_coin_id()
 
 def _compute_fee_bps(fee_tier: Optional[str]) -> Optional[float]:
-    """Convert a fee tier string like '0.05%' to fee_bps (5.0)."""
+    """Convert a fee tier string like '0.05%' or '3000' to fee_bps (5.0 or 30.0)."""
     if not fee_tier or fee_tier == 'Dynamic':
         return None
     try:
-        fee_pct = float(fee_tier.replace('%', '').strip())
-        return fee_pct * 100.0
+        fee_str = str(fee_tier).strip()
+        fee_val = float(fee_str.replace('%', ''))
+        if '%' not in fee_str and fee_val >= 10.0:
+            return fee_val / 100.0
+        return fee_val * 100.0
     except (ValueError, AttributeError):
         return None
 
