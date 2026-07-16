@@ -121,15 +121,17 @@ class PostgresFetcher:
                 network_where = ""
                 network_param = None
                 if network and network.lower() != 'all':
-                    network_where = " AND s.network = %s"
+                    network_where = " AND LOWER(ch.name) = LOWER(%s)"
                     network_param = network
 
                 # Query the unified swaps table
                 query = f"""
-                    SELECT s.tx_hash, s.log_index, s.ts, s.network, s.protocol,
+                    SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
                            c0.symbol, c1.symbol,
                            s.amount0, s.amount1, s.amount_usd, s.fee_display, s.fee_bps
                     FROM swaps s
+                    JOIN chain ch ON s.chain_id = ch.id
+                    JOIN protocol pr ON s.protocol_id = pr.id
                     JOIN coin c0 ON s.t0_coin_id = c0.coin_id
                     JOIN coin c1 ON s.t1_coin_id = c1.coin_id
                     WHERE s.ts >= %s AND s.ts <= %s
@@ -209,15 +211,17 @@ class PostgresFetcher:
         network_where = ""
         network_param = None
         if network and network.lower() != 'all':
-            network_where = " AND s.network = %s"
+            network_where = " AND LOWER(ch.name) = LOWER(%s)"
             network_param = network
 
         # Single query against the unified swaps table
         query = f"""
-            SELECT s.tx_hash, s.log_index, s.ts, s.network, s.protocol,
+            SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
                    c0.symbol, c1.symbol,
                    s.amount0, s.amount1, s.amount_usd, s.fee_display
             FROM swaps s
+            JOIN chain ch ON s.chain_id = ch.id
+            JOIN protocol pr ON s.protocol_id = pr.id
             JOIN coin c0 ON s.t0_coin_id = c0.coin_id
             JOIN coin c1 ON s.t1_coin_id = c1.coin_id
             WHERE s.ts >= %s AND s.ts <= %s
@@ -372,6 +376,12 @@ class PostgresFetcher:
                 all_symbols.add(t1_sym)
                 pair_index.setdefault((network_lower, protocol, frozenset((t0_sym, t1_sym))), []).append(key)
 
+            # Get chain and protocol ID lookup maps
+            cur.execute("SELECT id, name FROM chain")
+            chain_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+            cur.execute("SELECT id, name FROM protocol")
+            protocol_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+
             # ------------------------------------------------------------------
             # Phase 1: resolve pool_id(s) for ALL requested pools in ONE query.
             # We over-fetch by the union of symbols/fees/networks (liquidity_pool
@@ -379,13 +389,15 @@ class PostgresFetcher:
             # in Python via pair_index.
             # ------------------------------------------------------------------
             cur.execute("""
-                SELECT lp.id, lp.network, lp.protocol, lp.fee_tier,
+                SELECT lp.id, ch.name AS network, pr.name AS protocol, lp.fee_tier,
                        UPPER(c0.symbol), UPPER(c1.symbol)
                 FROM liquidity_pool lp
+                JOIN chain ch ON lp.chain_id = ch.id
+                JOIN protocol pr ON lp.protocol_id = pr.id
                 JOIN coin c0 ON lp.coin0_id = c0.coin_id
                 JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                WHERE LOWER(lp.network) = ANY(%s)
-                  AND lp.protocol = ANY(%s)
+                WHERE LOWER(ch.name) = ANY(%s)
+                  AND pr.name = ANY(%s)
                   AND lp.fee_tier = ANY(%s)
                   AND UPPER(c0.symbol) = ANY(%s)
                   AND UPPER(c1.symbol) = ANY(%s)
@@ -505,17 +517,22 @@ class PostgresFetcher:
                         fee_tier_pct = fee_pct if '%' in fee_pct else {'100': '0.01%', '500': '0.05%', '800': '0.08%', '3000': '0.3%', '10000': '1.0%'}.get(fee_db, fee_pct)
                         fee_tier_bips = fee_db if fee_db.isdigit() else str(int(float(fee_pct.strip('%')) * 10000))
 
+                    chain_id = chain_map.get(meta['network'].lower())
+                    protocol_id = protocol_map.get(meta['protocol'].lower())
+                    if chain_id is None or protocol_id is None:
+                        continue
+
                     pool_queries_swaps.append("""
                     SELECT %s, c0.symbol, c1.symbol, SUM(s.amount_usd), SUM(ABS(s.amount0)), SUM(ABS(s.amount1))
                     FROM swaps s
                     JOIN coin c0 ON s.t0_coin_id = c0.coin_id
                     JOIN coin c1 ON s.t1_coin_id = c1.coin_id
-                    WHERE s.ts >= %s AND s.ts <= %s AND LOWER(s.network) = %s AND s.protocol = %s
+                    WHERE s.ts >= %s AND s.ts <= %s AND s.chain_id = %s AND s.protocol_id = %s
                     AND ((UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s))
                     AND (s.fee_display = %s OR s.fee_display = %s)
                     GROUP BY c0.symbol, c1.symbol
                     """)
-                    params_swaps.extend([k, start_date, end_date, meta['network'], meta['protocol'], meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_tier_pct, fee_tier_bips])
+                    params_swaps.extend([k, start_date, end_date, chain_id, protocol_id, meta['t0_sym'], meta['t1_sym'], meta['t1_sym'], meta['t0_sym'], fee_tier_pct, fee_tier_bips])
 
             if pool_queries_swaps:
                 batch_size = 20

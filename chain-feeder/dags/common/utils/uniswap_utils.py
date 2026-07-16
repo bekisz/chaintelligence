@@ -583,77 +583,92 @@ class PostgresStorage:
         if not swaps:
             return
 
-        insert_query = """
-        INSERT INTO swaps (
-            tx_hash, log_index, ts, network, protocol,
-            t0_coin_id, t1_coin_id, amount0, amount1, amount_usd, fee_bps, fee_display
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
-        """
-        data = []
-        from collections import defaultdict
-        tx_hash_counters = defaultdict(int)
-        for s in swaps:
-            t0_id = SYMBOL_TO_COIN_ID.get(s.get('token0_symbol', '').upper())
-            t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
-            if t0_id is None or t1_id is None:
-                continue  # skip swaps for untracked tokens
-
-            # Extract log_index from the subgraph id
-            swap_id = s.get('id', '')
-            if not swap_id:
-                continue  # skip swaps with no id
-
-            log_index = None
-            if '#' in swap_id:
-                parts = swap_id.split('#')
-                if len(parts) > 1 and parts[1]:
-                    try:
-                        log_index = int(parts[1])
-                    except ValueError:
-                        pass
-            elif '-' in swap_id:
-                parts = swap_id.rsplit('-', 1)
-                if len(parts) > 1 and parts[1]:
-                    try:
-                        log_index = int(parts[1])
-                    except ValueError:
-                        pass
-            
-            if log_index is None:
-                tx_hash = s.get('tx_hash') or 'unknown'
-                log_index = tx_hash_counters[tx_hash]
-                tx_hash_counters[tx_hash] += 1
-
-            ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
-
-            data.append((
-                s['tx_hash'],
-                log_index,
-                ts_val,
-                network,
-                protocol,
-                t0_id,
-                t1_id,
-                s.get('amount0'),
-                s.get('amount1'),
-                s.get('amountUSD'),
-                _compute_fee_bps(s.get('fee_tier')),
-                s.get('fee_tier', ''),
-            ))
-
-        if not data:
-            return
-
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                cur.executemany(insert_query, data)
+                cur.execute("SELECT id, name FROM chain")
+                chain_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+                cur.execute("SELECT id, name FROM protocol")
+                protocol_map = {row[1].lower(): row[0] for row in cur.fetchall()}
+                
+                chain_id = chain_map.get(network.lower())
+                protocol_id = protocol_map.get(protocol.lower())
+                if chain_id is None or protocol_id is None:
+                    raise ValueError(f"Invalid network ({network}) or protocol ({protocol}) for lookup mappings")
+
+                insert_query = """
+                INSERT INTO swaps (
+                    tx_hash, log_index, ts, chain_id, protocol_id,
+                    t0_coin_id, t1_coin_id, amount0, amount1, amount_usd, fee_bps, fee_display
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
+                """
+                
+                data = []
+                from collections import defaultdict
+                tx_hash_counters = defaultdict(int)
+                for s in swaps:
+                    t0_id = SYMBOL_TO_COIN_ID.get(s.get('token0_symbol', '').upper())
+                    t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
+                    if t0_id is None or t1_id is None:
+                        continue  # skip swaps for untracked tokens
+
+                    # Extract log_index from the subgraph id
+                    swap_id = s.get('id', '')
+                    if not swap_id:
+                        continue  # skip swaps with no id
+
+                    log_index = None
+                    if '#' in swap_id:
+                        parts = swap_id.split('#')
+                        if len(parts) > 1 and parts[1]:
+                            try:
+                                log_index = int(parts[1])
+                            except ValueError:
+                                pass
+                    elif '-' in swap_id:
+                        parts = swap_id.rsplit('-', 1)
+                        if len(parts) > 1 and parts[1]:
+                            try:
+                                log_index = int(parts[1])
+                            except ValueError:
+                                pass
+                    
+                    if log_index is None:
+                        tx_hash = s.get('tx_hash') or 'unknown'
+                        log_index = tx_hash_counters[tx_hash]
+                        tx_hash_counters[tx_hash] += 1
+
+                    ts_val = datetime.fromtimestamp(s['timestamp'], timezone.utc)
+
+                    data.append((
+                        s['tx_hash'],
+                        log_index,
+                        ts_val,
+                        chain_id,
+                        protocol_id,
+                        t0_id,
+                        t1_id,
+                        s.get('amount0'),
+                        s.get('amount1'),
+                        s.get('amountUSD'),
+                        _compute_fee_bps(s.get('fee_tier')),
+                        s.get('fee_tier', ''),
+                    ))
+
+                if data:
+                    cur.executemany(insert_query, data)
             conn.commit()
 
     def get_last_swap_timestamp(self, network: str = "Ethereum", protocol: str = "Uniswap V3") -> Optional[int]:
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT MAX(ts) FROM swaps WHERE network = %s AND protocol = %s", (network, protocol))
+                cur.execute("""
+                    SELECT MAX(s.ts)
+                    FROM swaps s
+                    JOIN chain c ON s.chain_id = c.id
+                    JOIN protocol p ON s.protocol_id = p.id
+                    WHERE LOWER(c.name) = LOWER(%s) AND LOWER(p.name) = LOWER(%s)
+                """, (network, protocol))
                 res = cur.fetchone()
                 if res and res[0]:
                     return int(res[0].timestamp())

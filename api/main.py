@@ -810,23 +810,23 @@ async def analyze(
                             with get_conn() as conn:
                                 cur = conn.cursor()
                                 cur.execute("""
-                                    SELECT lp.network, lp.protocol, lp.fee_tier, lp.pool_id,
-                                           UPPER(c0.symbol) AS s0,
-                                           UPPER(c1.symbol) AS s1,
-                                           cc0.contract_address AS t0_addr
-                                    FROM liquidity_pool lp
-                                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                                    LEFT JOIN coin_contract cc0
-                                        ON cc0.coin_id = lp.coin0_id
-                                       AND LOWER(cc0.chain) =
-                                           CASE WHEN lp.network = 'BNB' THEN 'bsc'
-                                                ELSE LOWER(lp.network) END
-                                    WHERE (lp.protocol = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
-                                       OR lp.protocol = 'PancakeSwap V4'
-                                    ORDER BY
-                                        CASE WHEN c0.symbol IN ('WETH', 'WBNB') OR c1.symbol IN ('WETH', 'WBNB') THEN 1 ELSE 0 END ASC
-                                """)
+                                     SELECT ch.name AS network, pr.name AS protocol, lp.fee_tier, lp.pool_id,
+                                            UPPER(c0.symbol) AS s0,
+                                            UPPER(c1.symbol) AS s1,
+                                            cc0.contract_address AS t0_addr
+                                     FROM liquidity_pool lp
+                                     JOIN chain ch ON lp.chain_id = ch.id
+                                     JOIN protocol pr ON lp.protocol_id = pr.id
+                                     JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                                     JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                                     LEFT JOIN coin_contract cc0
+                                         ON cc0.coin_id = lp.coin0_id
+                                        AND cc0.chain_id = lp.chain_id
+                                     WHERE (pr.name = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
+                                        OR pr.name = 'PancakeSwap V4'
+                                     ORDER BY
+                                         CASE WHEN c0.symbol IN ('WETH', 'WBNB') OR c1.symbol IN ('WETH', 'WBNB') THEN 1 ELSE 0 END ASC
+                                 """)
                                 for net, proto, fee_tier, pid, sym0, sym1, t0_addr in cur.fetchall():
                                     if proto == 'PancakeSwap V4':
                                         if pid and len(pid) == 66:
@@ -1573,9 +1573,11 @@ async def list_pools():
             with conn.cursor() as cur:
                 query = """
                 SELECT
-                    p.id, p.network, p.protocol, p.pool_name, p.fee_tier, p.pool_address,
+                    p.id, ch.name AS network, pr.name AS protocol, p.pool_name, p.fee_tier, p.pool_address,
                     h.tvl_usd, h.volume_usd, h.tx_count, c0.symbol, c1.symbol
                 FROM liquidity_pool p
+                JOIN chain ch ON p.chain_id = ch.id
+                JOIN protocol pr ON p.protocol_id = pr.id
                 JOIN coin c0 ON p.coin0_id = c0.coin_id
                 JOIN coin c1 ON p.coin1_id = c1.coin_id
                 LEFT JOIN (
@@ -1583,7 +1585,7 @@ async def list_pools():
                     FROM liquidity_pool_history
                     ORDER BY pool_id, date DESC
                 ) h ON p.id = h.pool_id
-                WHERE p.reverted = FALSE OR p.protocol IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
+                WHERE p.reverted = FALSE OR pr.name IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
                 ORDER BY h.tvl_usd DESC NULLS LAST
                 """
                 cur.execute(query)
@@ -1677,8 +1679,10 @@ async def sync_pool(pool_id: int):
         
         # 1. Get pool details
         cur.execute("""
-            SELECT lp.network, lp.pool_address, lp.protocol, c0.symbol, c1.symbol, lp.fee_tier 
+            SELECT ch.name AS network, lp.pool_address, pr.name AS protocol, c0.symbol, c1.symbol, lp.fee_tier 
             FROM liquidity_pool lp
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
             JOIN coin c0 ON lp.coin0_id = c0.coin_id
             JOIN coin c1 ON lp.coin1_id = c1.coin_id
             WHERE lp.id = %s
@@ -1697,7 +1701,7 @@ async def sync_pool(pool_id: int):
                 SELECT c.symbol, cc.contract_address 
                 FROM coin_contract cc
                 JOIN coin c ON cc.coin_id = c.coin_id
-                WHERE c.symbol IN (%s, %s) AND LOWER(cc.chain) = %s
+                WHERE c.symbol IN (%s, %s) AND cc.chain_id = (SELECT id FROM chain WHERE LOWER(name) = LOWER(%s))
             """, (c0, c1, network.lower()))
             coin_rows = cur.fetchall()
             coin_map = {row[0]: row[1] for row in coin_rows}
@@ -2075,21 +2079,21 @@ async def sps_find(
                         with get_conn() as conn:
                             cur = conn.cursor()
                             cur.execute("""
-                                SELECT lp.network, lp.protocol, lp.fee_tier, lp.pool_id,
-                                       UPPER(c0.symbol) AS s0,
-                                       UPPER(c1.symbol) AS s1,
-                                       cc0.contract_address AS t0_addr
-                                FROM liquidity_pool lp
-                                JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                                JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                                LEFT JOIN coin_contract cc0
-                                    ON cc0.coin_id = lp.coin0_id
-                                   AND LOWER(cc0.chain) =
-                                       CASE WHEN lp.network = 'BNB' THEN 'bsc'
-                                            ELSE LOWER(lp.network) END
-                                WHERE (lp.protocol = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
-                                   OR lp.protocol = 'PancakeSwap V4'
-                            """)
+                                 SELECT ch.name AS network, pr.name AS protocol, lp.fee_tier, lp.pool_id,
+                                        UPPER(c0.symbol) AS s0,
+                                        UPPER(c1.symbol) AS s1,
+                                        cc0.contract_address AS t0_addr
+                                 FROM liquidity_pool lp
+                                 JOIN chain ch ON lp.chain_id = ch.id
+                                 JOIN protocol pr ON lp.protocol_id = pr.id
+                                 JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                                 JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                                 LEFT JOIN coin_contract cc0
+                                     ON cc0.coin_id = lp.coin0_id
+                                    AND cc0.chain_id = lp.chain_id
+                                 WHERE (pr.name = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
+                                    OR pr.name = 'PancakeSwap V4'
+                             """)
                             for net, proto, fee_tier, pid, sym0, sym1, t0_addr in cur.fetchall():
                                 if proto == 'PancakeSwap V4':
                                     if pid and len(pid) == 66:

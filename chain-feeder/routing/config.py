@@ -26,7 +26,8 @@ def load_tokens_from_db():
             SELECT c.symbol, cc.contract_address, cc.decimals 
             FROM coin_contract cc
             JOIN coin c ON cc.coin_id = c.coin_id
-            WHERE cc.chain IN ('ethereum', 'base')
+            JOIN chain ch ON cc.chain_id = ch.id
+            WHERE LOWER(ch.name) IN ('ethereum', 'base')
         """)
         rows = cur.fetchall()
         for row in rows:
