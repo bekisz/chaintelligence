@@ -2956,3 +2956,64 @@ table tbody tr.fade-in {
         height: 34px;
     }
 }
+
+/* Ensure tbody rows are relative positioned so absolute children align relative to the row end */
+table tbody tr {
+    position: relative;
+}
+
+/* Gmail-style hover action wrapper at the end of the row */
+.row-action-wrapper {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 14px;
+    pointer-events: none;
+    /* Fades from transparent to card bg color, hiding any text underneath */
+    background: linear-gradient(90deg, rgba(33, 36, 41, 0) 0%, rgba(33, 36, 41, 0.95) 30%, rgba(33, 36, 41, 1) 100%);
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 10;
+}
+
+tr:hover .row-action-wrapper {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.row-action-btn {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.3);
+    white-space: nowrap;
+    transform: scale(0.95);
+    transition: transform 0.15s ease;
+}
+
+tr:hover .row-action-btn {
+    transform: scale(1);
+}
+
+.row-action-btn:hover {
+    background: linear-gradient(135deg, #b55fe6 0%, #8b5cf6 100%);
+    box-shadow: 0 3px 8px rgba(124, 58, 237, 0.5);
+}
+
+.row-action-btn svg {
+    stroke: currentColor;
+    flex-shrink: 0;
+}

@@ -705,7 +705,6 @@ async function updateAllCharts() {
     });
 
     try {
-        const apiKey = CONFIG.CRYPTOCOMPARE_API_KEY;
         const startDatePoints = new Date(startDateInput.value).getTime();
         let endDatePoints = Date.now();
         if (endDateInput && endDateInput.value) {

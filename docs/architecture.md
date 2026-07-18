@@ -67,7 +67,6 @@ chaintelligence/
 graph TD
     subgraph External_Data_Sources [Layer 0: External APIs]
         CMC[CoinMarketCap API]
-        CC[CryptoCompare API]
         TG[The Graph - Uniswap Subgraphs]
 
     end
@@ -192,7 +191,6 @@ Located in `web/`, a modern web-based interface for data visualization. **Strict
 Chaintelligence integrates with several key infrastructure providers via the **Ingestion Layer** (for bulk data) or **Logic Layer** (for just-in-time metadata):
 
 - **CoinMarketCap**: Source for authoritative token discovery, rankings, and Ethereum contract addresses.
-- **CryptoCompare**: Provides sub-minute price data and long-form historical OHLCV data.
 - **The Graph**: Used for querying distributed ledger events (Uniswap V3 subgraphs).
 
 
@@ -200,7 +198,7 @@ Chaintelligence integrates with several key infrastructure providers via the **I
 
 ## ⚡ Reliability & Performance Patterns
 
-- **API Batching**: Outbound requests to providers (like CryptoCompare) are automatically batched (e.g., 50 symbols per batch) to maximize throughput and avoid URL limit constraints.
+- **API Batching**: Outbound requests to providers are automatically batched (e.g., 50 symbols per batch) to maximize throughput and avoid URL limit constraints.
 - **Database Triggers**: Automatic normalization (e.g., forcing uppercase symbols) via PL/pgSQL triggers ensures data consistency regardless of the ingestion source.
 - **Asset-Based Scheduling**: Airflow tasks are linked via Assets/Datasets to ensure downstream daily history aggregations only run when the raw swap data is ready.
 - **Micro-Batch Processing**: Large-scale swap analysis is chunked by time-windows to maintain responsive API performance under load.

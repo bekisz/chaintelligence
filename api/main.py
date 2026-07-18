@@ -433,15 +433,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 async def favicon():
     return FileResponse(os.path.join(STATIC_DIR, 'favicon.png'))
 
-@app.get("/backtester/config.js", include_in_schema=False)
-async def get_backtester_config():
-    """Dynamically serve CryptoCompare API key to the backtester."""
-    api_key = os.getenv("CRYPTOCOMPARE_API_KEY", "")
-    content = f"const CONFIG = {{ CRYPTOCOMPARE_API_KEY: '{api_key}' }};\n"
-    if "typeof module !== 'undefined'" not in content: # Just to be safe with format
-         content += "if (typeof module !== 'undefined') { module.exports = CONFIG; }\n"
-    return Response(content=content, media_type="application/javascript")
-
 # Serve LP Backtester as a separate static site
 BACKTESTER_DIR = os.path.join(WEB_DIR, 'backtest')
 app.mount("/backtester", StaticFiles(directory=BACKTESTER_DIR, html=True), name="backtester")
@@ -664,8 +655,10 @@ async def analyze(
                                         SELECT UPPER(c.symbol), cc.contract_address 
                                         FROM coin_contract cc
                                         JOIN coin c ON cc.coin_id = c.coin_id
-                                        WHERE LOWER(cc.chain) = %s AND UPPER(c.symbol) = ANY(%s)
-                                    """, (db_chain, missing_symbols))
+                                        JOIN chain ch ON cc.chain_id = ch.id
+                                        WHERE (LOWER(ch.name) = %s OR (LOWER(ch.name) = 'bnb' AND %s = 'bsc'))
+                                          AND UPPER(c.symbol) = ANY(%s)
+                                    """, (db_chain, db_chain, missing_symbols))
                                     for row in cur.fetchall():
                                         if row[1]:
                                             token_addresses[target_network][row[0]] = row[1]
@@ -785,7 +778,7 @@ async def analyze(
                         for j in jobs:
                             pk = j['pool_cache_key']
                             if pk in POOL_ADDRESS_CACHE:
-                                batch_results[j['key']] = POOL_ADDRESS_CACHE[pk]
+                                addr = POOL_ADDRESS_CACHE[pk]
                             else:
                                 try:
                                     addr = _derive_address(
@@ -793,86 +786,91 @@ async def analyze(
                                         j['factory_hex'], j['init_hash_hex'],
                                         is_v2=j.get('is_v2', False)
                                     )
-                                    batch_results[j['key']] = addr
                                     POOL_ADDRESS_CACHE[pk] = addr
                                 except Exception as ex:
                                     print(f"  Error deriving address for {j['key']}: {ex}")
+                                    continue
+                            batch_results[j['key']] = {
+                                "pool_address": addr,
+                                "pool_id": addr
+                            }
                         return batch_results
 
                     batch = await asyncio.to_thread(_derive_batch)
                     pool_addresses.update(batch)
 
-                if v4_keys:
-                    def _lookup_v4_pool_ids():
-                        """Fetch V4 pool identifiers from DB in one query."""
-                        v4_results = {}
-                        try:
-                            with get_conn() as conn:
-                                cur = conn.cursor()
-                                cur.execute("""
-                                     SELECT ch.name AS network, pr.name AS protocol,
-                                            CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier,
-                                            lp.pool_id,
-                                            UPPER(c0.symbol) AS s0,
-                                            UPPER(c1.symbol) AS s1,
-                                            cc0.contract_address AS t0_addr
-                                     FROM liquidity_pool lp
-                                     JOIN chain ch ON lp.chain_id = ch.id
-                                     JOIN protocol pr ON lp.protocol_id = pr.id
-                                     JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                                     JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                                     LEFT JOIN coin_contract cc0
-                                         ON cc0.coin_id = lp.coin0_id
-                                        AND cc0.chain_id = lp.chain_id
-                                     WHERE (pr.name = 'Uniswap V4' AND lp.pool_id IS NOT NULL)
-                                        OR pr.name = 'PancakeSwap V4'
-                                     ORDER BY
-                                         CASE WHEN c0.symbol IN ('WETH', 'WBNB') OR c1.symbol IN ('WETH', 'WBNB') THEN 1 ELSE 0 END ASC
-                                 """)
-                                for net, proto, fee_tier, pid, sym0, sym1, t0_addr in cur.fetchall():
-                                    if proto == 'PancakeSwap V4':
-                                        if pid and len(pid) == 66:
-                                            value = pid
-                                        elif t0_addr:
-                                            value = t0_addr
-                                        else:
-                                            continue
-                                    else:
-                                        if not pid:
-                                            continue
-                                        value = pid
-                                    
-                                    # Normalize symbols for key mapping (so native ETH/BNB maps to the wrapped WETH/WBNB pool)
-                                    s0_norm = 'WETH' if sym0 == 'ETH' else ('WBNB' if sym0 == 'BNB' else sym0)
-                                    s1_norm = 'WETH' if sym1 == 'ETH' else ('WBNB' if sym1 == 'BNB' else sym1)
+                def _lookup_db_pools():
+                    """Fetch pool identifiers and IDs from DB in one query."""
+                    db_results = {}
+                    try:
+                        with get_conn() as conn:
+                            cur = conn.cursor()
+                            cur.execute("""
+                                 SELECT ch.name AS network, pr.name AS protocol,
+                                        CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier,
+                                        lp.pool_id,
+                                        UPPER(c0.symbol) AS s0,
+                                        UPPER(c1.symbol) AS s1,
+                                        cc0.contract_address AS t0_addr,
+                                        lp.pool_address,
+                                        lp.id AS cid
+                                 FROM liquidity_pool lp
+                                 JOIN chain ch ON lp.chain_id = ch.id
+                                 JOIN protocol pr ON lp.protocol_id = pr.id
+                                 JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                                 JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                                 LEFT JOIN coin_contract cc0
+                                     ON cc0.coin_id = lp.coin0_id
+                                    AND cc0.chain_id = lp.chain_id
+                             """)
+                            for net, proto, fee_tier, pid, sym0, sym1, t0_addr, lp_addr, cid in cur.fetchall():
+                                v4_pool_id = pid
+                                v4_pool_addr = lp_addr
+                                if proto == 'PancakeSwap V4':
+                                    if pid and len(pid) == 66:
+                                        pass
+                                    elif t0_addr:
+                                        v4_pool_addr = t0_addr
+                                        v4_pool_id = t0_addr
+                                
+                                if not v4_pool_addr and proto != 'Uniswap V4':
+                                    v4_pool_addr = pid
+                                
+                                value = {
+                                    "pool_address": v4_pool_addr or "",
+                                    "pool_id": v4_pool_id or v4_pool_addr or "",
+                                    "cid": cid
+                                }
+                                
+                                s0_norm = 'WETH' if sym0 == 'ETH' else ('WBNB' if sym0 == 'BNB' else sym0)
+                                s1_norm = 'WETH' if sym1 == 'ETH' else ('WBNB' if sym1 == 'BNB' else sym1)
 
-                                    # Build ALL possible fee format keys
-                                    fee_keys = {fee_tier}
-                                    if '%' in fee_tier:
-                                        fee_keys.add(fee_tier.replace('%', '').strip())
-                                    else:
-                                        try:
-                                            val = int(fee_tier)
-                                            pct = val / 10000
-                                            pct_str = f'{pct:.6f}'.rstrip('0').rstrip('.')
-                                            fee_keys.add(f'{pct_str}%')
-                                            fee_keys.add(fee_tier)
-                                            fee_keys.add(str(val))
-                                        except ValueError:
-                                            pass
-                                    for fk in fee_keys:
-                                        if not fk:
-                                            continue
-                                        key_fwd = f"{s0_norm}-{s1_norm}-{fk}|{proto}|{net}"
-                                        key_rev = f"{s1_norm}-{s0_norm}-{fk}|{proto}|{net}"
-                                        v4_results[key_fwd] = value
-                                        v4_results[key_rev] = value
-                        except Exception as ex:
-                            print(f"  Error looking up V4 pool_ids: {ex}")
-                        return v4_results
+                                fee_keys = {fee_tier}
+                                if '%' in fee_tier:
+                                    fee_keys.add(fee_tier.replace('%', '').strip())
+                                else:
+                                    try:
+                                        val = int(fee_tier)
+                                        pct = val / 10000
+                                        pct_str = f'{pct:.6f}'.rstrip('0').rstrip('.')
+                                        fee_keys.add(f'{pct_str}%')
+                                        fee_keys.add(fee_tier)
+                                        fee_keys.add(str(val))
+                                    except ValueError:
+                                        pass
+                                for fk in fee_keys:
+                                    if not fk:
+                                        continue
+                                    key_fwd = f"{s0_norm}-{s1_norm}-{fk}|{proto}|{net}"
+                                    key_rev = f"{s1_norm}-{s0_norm}-{fk}|{proto}|{net}"
+                                    db_results[key_fwd] = value
+                                    db_results[key_rev] = value
+                    except Exception as ex:
+                        print(f"  Error looking up DB pools: {ex}")
+                    return db_results
 
-                    v4_batch = await asyncio.to_thread(_lookup_v4_pool_ids)
-                    pool_addresses.update(v4_batch)
+                db_batch = await asyncio.to_thread(_lookup_db_pools)
+                pool_addresses.update(db_batch)
 
             # Warm the DeFi Llama yields index off the event loop (one-time per TTL).
             if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
@@ -900,7 +898,12 @@ async def analyze(
 
                         key = f"{t0_norm}-{t1_norm}-{fee}"
                         rev_key = f"{t1_norm}-{t0_norm}-{fee}"
-                        pool_addr = pool_addresses.get(key) or pool_addresses.get(rev_key)
+                        pool_info = pool_addresses.get(key) or pool_addresses.get(rev_key) or {}
+                        if isinstance(pool_info, str):
+                            pool_info = {"pool_address": pool_info, "pool_id": pool_info, "cid": None}
+                        pool_addr = pool_info.get("pool_address")
+                        pool_id = pool_info.get("pool_id")
+                        cid = pool_info.get("cid")
                         
                         fee_parts = fee.split('|')
                         pool_network = fee_parts[2].strip() if len(fee_parts) >= 3 else "Ethereum"
@@ -925,6 +928,8 @@ async def analyze(
                             'apr': apr_val if apr_val is not None else 0.0,
                             'apr_str': format_apr(apr_val),
                             'pool_address': pool_addr,
+                            'pool_id': pool_id,
+                            'cid': cid,
                             'tvl': tvl_val,
                             'defillama_uuid': get_defillama_pool_uuid(pool_addr)
                         })
@@ -967,6 +972,460 @@ async def analyze(
             await asyncio.sleep(0.01)
 
             yield json.dumps({"type": "result", "data": analysis}) + "\n"
+
+        return StreamingResponse(generate(), media_type="application/x-ndjson")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/pools/analyze", tags=["Liquidity Pools"])
+async def analyze_pools(
+    start_token: str,
+    end_token: str,
+    days: Optional[float] = Query(None, description="Lookback period in days"),
+    start_date: Optional[str] = Query(None, description="ISO format start date"),
+    end_date: Optional[str] = Query(None, description="ISO format end date"),
+    network: Optional[str] = Query(None, description="Filter swaps by network")
+):
+    """Analyze liquidity pools matching start and end tokens over a date range."""
+    try:
+        now = datetime.now()
+        if days is not None:
+            end_dt = now
+            start_dt = end_dt - timedelta(days=days)
+        elif start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if end_date:
+                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                if end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
+                    end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            else:
+                end_dt = now
+        else:
+            end_dt = now
+            start_dt = end_dt - timedelta(days=1)
+
+        start_tokens_list = resolve_token_input(start_token)
+        end_tokens_list = resolve_token_input(end_token)
+        
+        if not start_tokens_list: start_tokens_list = [start_token]
+        if not end_tokens_list: end_tokens_list = [end_token]
+
+        fetcher = PostgresFetcher(verbose=True)
+
+        token_filter = []
+        if "*" not in start_tokens_list:
+            token_filter.extend(start_tokens_list)
+        if "*" not in end_tokens_list:
+            token_filter.extend(end_tokens_list)
+        if not token_filter:
+            token_filter = None
+
+        latest_prices = fetcher.fetch_latest_prices(token_filter)
+
+        from fastapi.responses import StreamingResponse
+        import json
+        import asyncio
+        import psycopg2
+
+        pool_stats = {}
+        total_tx = 0
+        total_volume = 0.0
+
+        async def generate():
+            nonlocal total_tx, total_volume
+            c_chunk_start = start_dt
+            has_data = False
+            total_seconds = (end_dt - start_dt).total_seconds()
+            
+            while c_chunk_start < end_dt:
+                c_chunk_end = min(c_chunk_start + timedelta(days=1), end_dt)
+                progress_sec = (c_chunk_start - start_dt).total_seconds()
+                pct = (progress_sec / total_seconds) * 75 if total_seconds > 0 else 0
+                yield json.dumps({"type": "progress", "pct": round(pct, 1), "message": f"Fetching swaps for {c_chunk_start.strftime('%Y-%m-%d')} → {c_chunk_end.strftime('%Y-%m-%d')}..."}) + "\n"
+                await asyncio.sleep(0.01)
+
+                print(f"[Pool Analysis] Processing batch: {c_chunk_start} -> {c_chunk_end}")
+                batch_swaps = await asyncio.to_thread(
+                    fetcher.fetch_swaps, c_chunk_start, c_chunk_end, token_filter, network, start_tokens_list, end_tokens_list
+                )
+
+                if batch_swaps:
+                    has_data = True
+                    for s in batch_swaps:
+                        t0 = s['token0_symbol'].upper()
+                        t1 = s['token1_symbol'].upper()
+                        t_sorted = sorted([t0, t1])
+                        
+                        fee_disp = s.get('fee_tier') or 'Dynamic'
+                        protocol = s.get('protocol') or 'Uniswap V3'
+                        net_val = s.get('network') or 'Ethereum'
+                        fee_bps = s.get('fee_bps')
+                        
+                        fee_full = f"{fee_disp}|{protocol}|{net_val}"
+                        key = (t_sorted[0], fee_full, t_sorted[1])
+                        
+                        vol_usd = s.get('amount_usd') or 0.0
+                        total_volume += vol_usd
+                        total_tx += 1
+                        
+                        if key not in pool_stats:
+                            pool_stats[key] = {
+                                'count': 0,
+                                'volume': 0.0,
+                                'market_size': 0.0,
+                                'fee_bps': fee_bps,
+                                'protocol': protocol,
+                                'network': net_val,
+                                'token0': t_sorted[0],
+                                'token1': t_sorted[1],
+                            }
+                        
+                        pool_stats[key]['count'] += 1
+                        pool_stats[key]['volume'] += vol_usd
+                        
+                        if fee_bps is not None:
+                            pool_stats[key]['market_size'] += vol_usd * (fee_bps / 10000.0)
+                        else:
+                            pool_stats[key]['market_size'] += vol_usd * 0.003
+
+                batch_swaps = []
+                c_chunk_start = c_chunk_end
+
+            yield json.dumps({"type": "progress", "pct": 75.0, "message": "Analyzing active liquidity pools..."}) + "\n"
+            await asyncio.sleep(0.01)
+            
+            if not has_data:
+                conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+                cur = conn.cursor()
+                cur.execute("SELECT MIN(ts), MAX(ts) FROM swaps")
+                row = cur.fetchone()
+                db_min = row[0].isoformat() if row[0] else None
+                db_max = row[1].isoformat() if row[1] else None
+                cur.close()
+                conn.close()
+                
+                yield json.dumps({"type": "result", "data": {"routes": [], "total_tx": 0, "total_volume": 0, "db_range": {"min": db_min, "max": db_max}}}) + "\n"
+                return
+
+            pools_to_fetch = set()
+            for key in pool_stats.keys():
+                t0, fee_full, t1 = key
+                pools_to_fetch.add((t0, t1, fee_full))
+
+            aprs = {}
+            if pools_to_fetch:
+                yield json.dumps({"type": "progress", "pct": 80.0, "message": "Querying pool stats & APRs..."}) + "\n"
+                await asyncio.sleep(0.01)
+                try:
+                    aprs = await asyncio.to_thread(
+                        fetcher.fetch_pool_stats, list(pools_to_fetch), start_dt, end_dt, latest_prices
+                    )
+                except Exception as e:
+                    print(f"Error fetching pool stats: {e}")
+
+            pool_addresses = {}
+            if pools_to_fetch:
+                yield json.dumps({"type": "progress", "pct": 90.0, "message": "Generating pool smart contract addresses..."}) + "\n"
+                await asyncio.sleep(0.01)
+                token_symbols = set()
+                needed_networks = set()
+                for (t0, t1, fee_full) in pools_to_fetch:
+                    token_symbols.add(t0.upper())
+                    token_symbols.add(t1.upper())
+                    parts = str(fee_full).split('|')
+                    pool_network = parts[2].strip() if len(parts) >= 3 else "Ethereum"
+                    needed_networks.add(pool_network)
+
+                token_addresses = {}
+                if token_symbols:
+                    for target_network in needed_networks:
+                        token_addresses[target_network] = {}
+                        if target_network not in TOKEN_ADDRESS_CACHE:
+                            TOKEN_ADDRESS_CACHE[target_network] = {}
+                        for sym in token_symbols:
+                            if sym in TOKEN_ADDRESS_CACHE[target_network]:
+                                token_addresses[target_network][sym] = TOKEN_ADDRESS_CACHE[target_network][sym]
+                        
+                        missing_symbols = [sym for sym in token_symbols if sym not in token_addresses[target_network]]
+                        if missing_symbols:
+                            try:
+                                with get_conn() as conn:
+                                    cur = conn.cursor()
+                                    db_chain = 'bsc' if target_network.lower() == 'bnb' else target_network.lower()
+                                    cur.execute("""
+                                        SELECT UPPER(c.symbol), cc.contract_address 
+                                        FROM coin_contract cc
+                                        JOIN coin c ON cc.coin_id = c.coin_id
+                                        JOIN chain ch ON cc.chain_id = ch.id
+                                        WHERE (LOWER(ch.name) = %s OR (LOWER(ch.name) = 'bnb' AND %s = 'bsc'))
+                                          AND UPPER(c.symbol) = ANY(%s)
+                                    """, (db_chain, db_chain, missing_symbols))
+                                    for row in cur.fetchall():
+                                        if row[1]:
+                                            token_addresses[target_network][row[0]] = row[1]
+                                            TOKEN_ADDRESS_CACHE[target_network][row[0]] = row[1]
+                                    cur.close()
+                            except Exception as e:
+                                print(f"Error fetching token addresses from DB: {e}")
+
+                jobs = []
+                v4_keys = []
+                for (t0, t1, fee_full) in pools_to_fetch:
+                    try:
+                        t0_sym, t1_sym = t0.upper(), t1.upper()
+                        parts = str(fee_full).split('|')
+                        pool_network = parts[2].strip() if len(parts) >= 3 else "Ethereum"
+                        proto_raw = parts[1].strip() if len(parts) >= 2 else "Uniswap V3"
+                        proto_lower = proto_raw.lower()
+
+                        if proto_lower in ('v4', 'uniswap v4', 'uniswap-v4',
+                                           'pancakeswap v4', 'pancake v4',
+                                           'pancakeswap-v4', 'pancake-v4'):
+                            v4_proto = 'PancakeSwap V4' if 'pancake' in proto_lower else 'Uniswap V4'
+                            fee_clean_v4 = parts[0].replace('%', '').strip()
+                            fee_map_v4 = {'0.01': '100', '0.05': '500', '0.08': '800',
+                                          '0.25': '2500', '0.3': '3000', '1.0': '10000'}
+                            if fee_clean_v4 in fee_map_v4:
+                                fee_norm = fee_map_v4[fee_clean_v4]
+                            else:
+                                try:
+                                    fv = float(fee_clean_v4)
+                                    if fv > 0 and fv < 5:
+                                        fee_norm = str(int(fv * 10000))
+                                    else:
+                                        fee_norm = str(int(fv))
+                                except:
+                                    fee_norm = parts[0]
+                            v4_keys.append(f"{t0_sym}-{t1_sym}-{fee_norm}|{v4_proto}|{pool_network}")
+                            continue
+
+                        if proto_lower in ('aerodrome',):
+                            continue
+
+                        if proto_lower in ('v2', 'uniswap v2', 'uniswap-v2'):
+                            protocol = 'Uniswap V2'
+                        else:
+                            protocol = 'Uniswap V3' if proto_lower in ('v3', 'uniswap v3', 'uniswap-v3') else proto_raw
+
+                        addr0 = token_addresses.get(pool_network, {}).get(t0_sym)
+                        addr1 = token_addresses.get(pool_network, {}).get(t1_sym)
+                        if not addr0 or not addr1:
+                            continue
+
+                        fee_clean = parts[0].replace('%', '').strip()
+                        fee_map = {'0.01': 100, '0.05': 500, '0.08': 800, '0.3': 3000, '1.0': 10000}
+                        fee_val = fee_map.get(fee_clean) or int(float(fee_clean) * 10000)
+
+                        tokens = sorted([addr0.lower(), addr1.lower()])
+                        t0_bytes = bytes.fromhex(tokens[0][2:])
+                        t1_bytes = bytes.fromhex(tokens[1][2:])
+                        key = f"{t0}-{t1}-{fee_full}"
+
+                        net_map = {"BNB": "bsc", "ETH": "ethereum"}
+                        cfg_network = net_map.get(pool_network, pool_network.lower())
+
+                        fh_key = (protocol, cfg_network)
+                        if fh_key in FACTORY_HASH_CACHE:
+                            factory_hex, init_hash_hex = FACTORY_HASH_CACHE[fh_key]
+                        else:
+                            try:
+                                factory_hex, init_hash_hex = get_factory_and_hash(protocol, cfg_network)
+                                FACTORY_HASH_CACHE[fh_key] = (factory_hex, init_hash_hex)
+                            except ValueError as ex:
+                                print(f"  Skipping {key}: {ex}")
+                                continue
+
+                        is_v2 = (protocol == 'Uniswap V2')
+                        pool_cache_key = (tokens[0], tokens[1], fee_val, protocol, pool_network)
+                        jobs.append({
+                            'key': key,
+                            'pool_cache_key': pool_cache_key,
+                            't0_bytes': t0_bytes,
+                            't1_bytes': t1_bytes,
+                            'fee_val': fee_val,
+                            'factory_hex': factory_hex,
+                            'init_hash_hex': init_hash_hex,
+                            'is_v2': is_v2,
+                        })
+                    except Exception as ex:
+                        print(f"  Skipping pool ({t0},{t1},{fee_full}): {ex}")
+                        continue
+
+                if jobs:
+                    def _derive_batch():
+                        batch_results = {}
+                        for j in jobs:
+                            pk = j['pool_cache_key']
+                            if pk in POOL_ADDRESS_CACHE:
+                                addr = POOL_ADDRESS_CACHE[pk]
+                            else:
+                                try:
+                                    addr = _derive_address(
+                                        j['t0_bytes'], j['t1_bytes'], j['fee_val'],
+                                        j['factory_hex'], j['init_hash_hex'],
+                                        is_v2=j.get('is_v2', False)
+                                    )
+                                    POOL_ADDRESS_CACHE[pk] = addr
+                                except Exception as ex:
+                                    print(f"  Error deriving address for {j['key']}: {ex}")
+                                    continue
+                            batch_results[j['key']] = {
+                                "pool_address": addr,
+                                "pool_id": addr
+                            }
+                        return batch_results
+
+                    batch = await asyncio.to_thread(_derive_batch)
+                    pool_addresses.update(batch)
+
+                def _lookup_db_pools():
+                    """Fetch pool identifiers and IDs from DB in one query."""
+                    db_results = {}
+                    try:
+                        with get_conn() as conn:
+                            cur = conn.cursor()
+                            cur.execute("""
+                                 SELECT ch.name AS network, pr.name AS protocol,
+                                        CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier,
+                                        lp.pool_id,
+                                        UPPER(c0.symbol) AS s0,
+                                        UPPER(c1.symbol) AS s1,
+                                        cc0.contract_address AS t0_addr,
+                                        lp.pool_address,
+                                        lp.id AS cid
+                                 FROM liquidity_pool lp
+                                 JOIN chain ch ON lp.chain_id = ch.id
+                                 JOIN protocol pr ON lp.protocol_id = pr.id
+                                 JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                                 JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                                 LEFT JOIN coin_contract cc0
+                                     ON cc0.coin_id = lp.coin0_id
+                                    AND cc0.chain_id = lp.chain_id
+                             """)
+                            for net, proto, fee_tier, pid, sym0, sym1, t0_addr, lp_addr, cid in cur.fetchall():
+                                v4_pool_id = pid
+                                v4_pool_addr = lp_addr
+                                if proto == 'PancakeSwap V4':
+                                    if pid and len(pid) == 66:
+                                        pass
+                                    elif t0_addr:
+                                        v4_pool_addr = t0_addr
+                                        v4_pool_id = t0_addr
+                                
+                                if not v4_pool_addr and proto != 'Uniswap V4':
+                                    v4_pool_addr = pid
+                                
+                                value = {
+                                    "pool_address": v4_pool_addr or "",
+                                    "pool_id": v4_pool_id or v4_pool_addr or "",
+                                    "cid": cid
+                                }
+                                
+                                s0_norm = 'WETH' if sym0 == 'ETH' else ('WBNB' if sym0 == 'BNB' else sym0)
+                                s1_norm = 'WETH' if sym1 == 'ETH' else ('WBNB' if sym1 == 'BNB' else sym1)
+
+                                fee_keys = {fee_tier}
+                                if '%' in fee_tier:
+                                    fee_keys.add(fee_tier.replace('%', '').strip())
+                                else:
+                                    try:
+                                        val = int(fee_tier)
+                                        pct = val / 10000
+                                        pct_str = f'{pct:.6f}'.rstrip('0').rstrip('.')
+                                        fee_keys.add(f'{pct_str}%')
+                                        fee_keys.add(fee_tier)
+                                        fee_keys.add(str(val))
+                                    except ValueError:
+                                        pass
+                                for fk in fee_keys:
+                                    if not fk:
+                                        continue
+                                    key_fwd = f"{s0_norm}-{s1_norm}-{fk}|{proto}|{net}"
+                                    key_rev = f"{s1_norm}-{s0_norm}-{fk}|{proto}|{net}"
+                                    db_results[key_fwd] = value
+                                    db_results[key_rev] = value
+                    except Exception as ex:
+                        print(f"  Error looking up DB pools: {ex}")
+                    return db_results
+
+                db_batch = await asyncio.to_thread(_lookup_db_pools)
+                pool_addresses.update(db_batch)
+
+            if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
+                await asyncio.to_thread(get_defillama_index)
+
+            routes = []
+            for key, stats in pool_stats.items():
+                t0, fee_full, t1 = key
+                key_str = f"{t0.upper()}-{t1.upper()}-{fee_full}"
+                rev_key_str = f"{t1.upper()}-{t0.upper()}-{fee_full}"
+                pool_info = pool_addresses.get(key_str) or pool_addresses.get(rev_key_str) or {}
+                if isinstance(pool_info, str):
+                    pool_info = {"pool_address": pool_info, "pool_id": pool_info, "cid": None}
+                pool_addr = pool_info.get("pool_address")
+                pool_id = pool_info.get("pool_id")
+                cid = pool_info.get("cid")
+                period_days = max(1.0, (end_dt - start_dt).total_seconds() / 86400.0)
+                
+                enriched = await get_enriched_pool_stat(
+                    key=key_str,
+                    rev_key=rev_key_str,
+                    aprs=aprs,
+                    pool_addr=pool_addr,
+                    pool_network=stats['network'],
+                    period_days=period_days,
+                    fee_tier=fee_full
+                )
+                
+                apr_val = enriched['apr']
+                tvl_val = enriched['tvl']
+                
+                path_tokens = [
+                    t0,
+                    {
+                        'fee': fee_full,
+                        'apr': apr_val if apr_val is not None else 0.0,
+                        'apr_str': format_apr(apr_val),
+                        'pool_address': pool_addr,
+                        'pool_id': pool_id,
+                        'cid': cid,
+                        'tvl': tvl_val,
+                        'defillama_uuid': get_defillama_pool_uuid(pool_addr)
+                    },
+                    t1
+                ]
+                
+                pct_vol = (stats['volume'] / total_volume * 100.0) if total_volume > 0 else 0.0
+                
+                routes.append({
+                    'path_tokens': path_tokens,
+                    'path': f"{t0} -- {fee_full} --> {t1}",
+                    'network': stats['network'],
+                    'protocol': stats['protocol'],
+                    'count': stats['count'],
+                    'volume': stats['volume'],
+                    'market_size': stats['market_size'],
+                    'apr': apr_val if apr_val is not None else 0.0,
+                    'apr_str': format_apr(apr_val),
+                    'avg_volume': stats['volume'] / period_days if period_days > 0 else stats['volume'],
+                    'pct_volume': pct_vol,
+                })
+
+            routes.sort(key=lambda x: x['volume'], reverse=True)
+
+            yield json.dumps({"type": "progress", "pct": 98.0, "message": "Formatting pool analysis results..."}) + "\n"
+            await asyncio.sleep(0.01)
+            
+            yield json.dumps({"type": "progress", "pct": 100.0, "message": "Analysis complete!"}) + "\n"
+            await asyncio.sleep(0.01)
+
+            yield json.dumps({"type": "result", "data": {
+                "routes": routes,
+                "total_tx": total_tx,
+                "total_volume": total_volume,
+            }}) + "\n"
 
         return StreamingResponse(generate(), media_type="application/x-ndjson")
     except Exception as e:
@@ -1398,29 +1857,128 @@ async def lp_history(position_key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/coin/price-history", tags=["Assets"])
-async def price_history(symbol: str):
-    """Get historical daily prices for a coin from Postgres."""
+async def price_history(symbol: str, start: Optional[int] = None, end: Optional[int] = None):
+    """Get historical daily prices for a coin from Postgres.
+
+    If a date range is provided and the cached data has gaps, missing ranges are
+    fetched on demand from DeFi Llama (resolved via coin_contract) and upserted
+    into coin_price_history before being returned.
+    """
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
-        
-        # We join with coin table via coin_id
+
+        # Resolve coin_id so we can check coverage and fetch gaps.
+        cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = %s", (symbol.upper(),))
+        coin_row = cur.fetchone()
+        coin_id = coin_row[0] if coin_row else None
+
+        if coin_id is not None and start is not None and end is not None:
+            start_s = start / 1000.0
+            end_s = end / 1000.0
+
+            # Check how much of the requested range is already cached.
+            cur.execute(
+                """
+                SELECT COUNT(*), MIN(timestamp), MAX(timestamp)
+                FROM coin_price_history
+                WHERE coin_id = %s
+                  AND timestamp >= to_timestamp(%s)
+                  AND timestamp <= to_timestamp(%s)
+                """,
+                (coin_id, start_s, end_s),
+            )
+            count, min_ts, max_ts = cur.fetchone()
+
+            has_gap = (
+                count == 0
+                or (max_ts is not None and max_ts.timestamp() * 1000 < end)
+                or (min_ts is not None and min_ts.timestamp() * 1000 > start)
+            )
+
+            if has_gap:
+                # Resolve a chain + contract address for this coin.
+                cur.execute(
+                    """
+                    SELECT ch.name, cc.contract_address
+                    FROM coin_contract cc
+                    JOIN chain ch ON ch.id = cc.chain_id
+                    WHERE cc.coin_id = %s AND cc.contract_address IS NOT NULL
+                    ORDER BY cc.chain_id
+                    LIMIT 1
+                    """,
+                    (coin_id,),
+                )
+                contract_row = cur.fetchone()
+                if contract_row:
+                    chain_name, address = contract_row
+                    from defillama_client import fetch_historical_prices
+                    from psycopg2.extras import execute_values
+
+                    # DeFi Llama rejects start+end together, so we walk forward from
+                    # `start` in <=500-day batches. Overlap with cached data is
+                    # deduplicated by the ON CONFLICT clause below.
+                    fetch_start = int(start_s)
+                    fetch_end = int(end_s)
+                    MAX_BATCHES = 10
+                    for _ in range(MAX_BATCHES):
+                        if fetch_start >= fetch_end:
+                            break
+                        history = await asyncio.to_thread(
+                            fetch_historical_prices,
+                            address,
+                            chain_name,
+                            fetch_start,  # start_timestamp
+                            None,          # end_timestamp must be None (API rejects both)
+                            500,
+                        )
+                        if not history:
+                            break
+                        batch = [
+                            (coin_id, datetime.fromtimestamp(p["timestamp"]), p["price"])
+                            for p in history
+                        ]
+                        execute_values(
+                            cur,
+                            """
+                            INSERT INTO coin_price_history (coin_id, timestamp, price)
+                            VALUES %s
+                            ON CONFLICT (coin_id, timestamp) DO UPDATE SET price = EXCLUDED.price
+                            """,
+                            batch,
+                        )
+                        conn.commit()
+
+                        last_ts = history[-1]["timestamp"]
+                        if last_ts + 1 >= fetch_end:
+                            break
+                        fetch_start = last_ts + 1
+
+        # Return cached (now possibly filled) data for the requested range.
         query = """
-        SELECT h.timestamp, h.price 
+        SELECT h.timestamp, h.price
         FROM coin_price_history h
         JOIN coin c ON h.coin_id = c.coin_id
         WHERE UPPER(c.symbol) = %s
-        ORDER BY h.timestamp ASC
         """
-        cur.execute(query, (symbol.upper(),))
+        params = [symbol.upper()]
+        if start is not None:
+            query += " AND h.timestamp >= to_timestamp(%s)"
+            params.append(start / 1000.0)
+        if end is not None:
+            query += " AND h.timestamp <= to_timestamp(%s)"
+            params.append(end / 1000.0)
+        query += " ORDER BY h.timestamp ASC"
+
+        cur.execute(query, params)
         rows = cur.fetchall()
-        
+
         # Format as [ [unix_ms, price], ... ] for the frontend
         history = [[int(row[0].timestamp() * 1000), float(row[1])] for row in rows]
-        
+
         cur.close()
         conn.close()
-        
+
         return {
             "symbol": symbol.upper(),
             "data": history
@@ -1431,14 +1989,14 @@ async def price_history(symbol: str):
 @app.post("/api/coin/dag/coin-history-feeder")
 async def trigger_history_feeder(payload: HistoryFeederRequest):
     """
-    Trigger the coin_price_history_feeder DAG in Airflow.
+    Trigger the defillama_global_coin_price_history DAG in Airflow.
     Handles Airflow 3 JWT-based authentication.
     """
     import requests
     from anyio import to_thread
     from datetime import datetime
     
-    dag_id = "coin_price_history_feeder"
+    dag_id = "defillama_global_coin_price_history"
     
     # Airflow 3 Auth: Get JWT Token
     # The token endpoint is usually at /auth/token
@@ -1982,8 +2540,10 @@ async def sps_find(
                                 SELECT UPPER(c.symbol), cc.contract_address 
                                 FROM coin_contract cc
                                 JOIN coin c ON cc.coin_id = c.coin_id
-                                WHERE LOWER(cc.chain) = %s AND UPPER(c.symbol) = ANY(%s)
-                            """, (db_chain, missing_symbols))
+                                JOIN chain ch ON cc.chain_id = ch.id
+                                WHERE (LOWER(ch.name) = %s OR (LOWER(ch.name) = 'bnb' AND %s = 'bsc'))
+                                  AND UPPER(c.symbol) = ANY(%s)
+                            """, (db_chain, db_chain, missing_symbols))
                             for row in cur.fetchall():
                                 if row[1]:
                                     token_addresses[target_network][row[0]] = row[1]

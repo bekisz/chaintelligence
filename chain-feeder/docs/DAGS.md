@@ -183,7 +183,7 @@ graph TD
    - Backfills tick ranges (tick_lower, tick_upper, current_tick) via Graph or RPC.
 
    - Fetches positions from Zapper API, ingests coins/pools/positions/snapshots.
-   - Contains shared tasks: `update_prices` (CryptoCompare), `fetch_missing_ranges` (Graph/RPC), `update_claims_batch` (RPC claim scan).
+   - Contains shared tasks: `update_prices`, `fetch_missing_ranges` (Graph/RPC), `update_claims_batch` (RPC claim scan).
    - Scheduled for removal — see [Zapper Deprecation PRD](file:///Users/szabi/git/chaintelligence/docs/features/zapper-deprecation-prd.md).
 
 3. **`rpc_lp_ingestion_v2`** is the on-chain fallback discovery:
