@@ -157,9 +157,11 @@ def main():
     
     # Get all active positions
     cur.execute("""
-        SELECT p.id, p.token_id, pool.network, pool.protocol, pool.pool_name, p.wallet_address
+        SELECT p.id, p.token_id, ch.name AS network, pr.name AS protocol, pool.pool_name, p.wallet_address
         FROM liquidity_pool_position p
         JOIN liquidity_pool pool ON p.pool_id = pool.id
+        JOIN chain ch ON pool.chain_id = ch.id
+        JOIN protocol pr ON pool.protocol_id = pr.id
         WHERE p.token_id IS NOT NULL
         ORDER BY p.id
     """)

@@ -45,94 +45,8 @@ def normalize_fee_tier(fee_str):
 @task
 def sync_pools_from_swaps():
     """Scans the unified swaps table for V3 token pairings and creates pools."""
-    pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
-    conn = pg_hook.get_conn()
-    cur = conn.cursor()
-
-    logging.info(f"Scanning swaps table for new V3 pools on {NETWORK}...")
-    cur.execute("""
-        SELECT DISTINCT s.network, c0.symbol, c1.symbol, s.fee_display, s.protocol
-        FROM swaps s
-        JOIN coin c0 ON s.t0_coin_id = c0.coin_id
-        JOIN coin c1 ON s.t1_coin_id = c1.coin_id
-        WHERE s.protocol IN ('Uniswap V3', 'PancakeSwap V3', 'Aerodrome')
-          AND s.network = %s
-    """, (NETWORK,))
-    rows = cur.fetchall()
-
-    new_pools = 0
-    # Load lookups
-    cur.execute("SELECT id, LOWER(name) FROM chain")
-    chain_map = {r[1]: r[0] for r in cur.fetchall()}
-    cur.execute("SELECT id, LOWER(name) FROM protocol")
-    protocol_map = {r[1]: r[0] for r in cur.fetchall()}
-
-    # Load contract addresses map
-    cur.execute("""
-        SELECT cc.coin_id, cc.contract_address 
-        FROM coin_contract cc
-        JOIN chain ch ON cc.chain_id = ch.id
-        WHERE LOWER(ch.name) = LOWER(%s)
-    """, (NETWORK,))
-    token_addr_map = {r[0]: r[1] for r in cur.fetchall()}
-
-    # Load dex_config.yaml
-    import os
-    import yaml
-    dags_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(dags_dir, '..', '..'))
-    config_path = os.path.join(repo_root, 'config', 'dex_config.yaml')
-    with open(config_path, 'r') as f:
-        dex_config = yaml.safe_load(f)
-
-    from common.utils.uniswap_utils import derive_pool_identifiers
-
-    for network, s0, s1, fee, protocol in rows:
-        if not s0 or not s1:
-            continue
-        c0, c1 = get_base_asset_order(s0.upper(), s1.upper())
-        pool_name = f"{c0} - {c1}"
-        fee_bips = normalize_fee_tier(fee)
-
-        cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = %s", (c0,))
-        row0 = cur.fetchone()
-        cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = %s", (c1,))
-        row1 = cur.fetchone()
-        if not row0 or not row1:
-            continue
-
-        ch_id = chain_map.get(network.lower())
-        pr_id = protocol_map.get(protocol.lower())
-        if ch_id is None or pr_id is None:
-            continue
-
-        fee_val = float(fee_bips) if fee_bips and fee_bips.isdigit() else None
-
-        derived_addr, derived_id = None, None
-        t0_addr = token_addr_map.get(row0[0])
-        t1_addr = token_addr_map.get(row1[0])
-        if t0_addr and t1_addr:
-            fee_int = int(fee_val) if fee_val is not None else None
-            derived_addr, derived_id = derive_pool_identifiers(protocol, network, t0_addr, t1_addr, fee_int, dex_config)
-
-        try:
-            cur.execute("""
-                INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, coin0_id, coin1_id, fee_bps, pool_address, pool_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
-                SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
-                    pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
-            """, (ch_id, pr_id, pool_name, row0[0], row1[0], fee_val, derived_addr, derived_id))
-            if cur.statusmessage.startswith("INSERT 0 1") or cur.statusmessage.startswith("UPDATE 1"):
-                new_pools += 1
-        except Exception as e:
-            conn.rollback()
-            logging.warning(f"Failed to sync pool {pool_name}: {e}")
-
-    conn.commit()
-    cur.close()
-    conn.close()
-    logging.info(f"Synced {new_pools} new V3 pools on {NETWORK}.")
+    logging.info("Dynamic self-healing ingestion handles pool creation during swap ingestion. Skipping legacy sync.")
+    return 0
 
 @task
 def build_daily_history():
@@ -146,32 +60,18 @@ def build_daily_history():
     query = """
     INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd)
     SELECT
-        lp.id as pool_id,
-        DATE(s.ts) as date,
-        COUNT(*) as tx_count,
-        SUM(s.amount_usd) as volume_usd
+        s.pool_id AS pool_id,
+        DATE(s.ts) AS date,
+        COUNT(*) AS tx_count,
+        SUM(s.amount_usd) AS volume_usd
     FROM swaps s
-    JOIN coin c0 ON s.t0_coin_id = c0.coin_id
-    JOIN coin c1 ON s.t1_coin_id = c1.coin_id
-    JOIN liquidity_pool lp ON
-        lp.network = s.network
-        AND lp.protocol = s.protocol
-        AND lp.fee_tier = CASE
-            WHEN s.fee_display IN ('0.01%%', '0.01') THEN '100'
-            WHEN s.fee_display IN ('0.05%%', '0.05') THEN '500'
-            WHEN s.fee_display IN ('0.08%%', '0.08') THEN '800'
-            WHEN s.fee_display IN ('0.3%%', '0.3') THEN '3000'
-            WHEN s.fee_display IN ('1.0%%', '1.0') THEN '10000'
-            ELSE s.fee_display
-        END
-        AND (
-            (lp.coin0_id = s.t0_coin_id AND lp.coin1_id = s.t1_coin_id)
-            OR (lp.coin0_id = s.t1_coin_id AND lp.coin1_id = s.t0_coin_id)
-        )
+    JOIN liquidity_pool lp ON s.pool_id = lp.id
+    JOIN chain ch ON lp.chain_id = ch.id
+    JOIN protocol pr ON lp.protocol_id = pr.id
     WHERE s.amount_usd IS NOT NULL
-      AND s.network = %(network)s
-      AND s.protocol IN ('Uniswap V3', 'PancakeSwap V3', 'Aerodrome')
-    GROUP BY lp.id, DATE(s.ts)
+      AND LOWER(ch.name) = LOWER(%(network)s)
+      AND pr.name IN ('Uniswap V3', 'PancakeSwap V3', 'Aerodrome')
+    GROUP BY s.pool_id, DATE(s.ts)
     ON CONFLICT (pool_id, date) DO UPDATE
     SET tx_count = EXCLUDED.tx_count,
         volume_usd = EXCLUDED.volume_usd;
@@ -201,8 +101,9 @@ def sync_tvl_from_graph():
         SELECT c.symbol, cc.contract_address
         FROM coin c
         JOIN coin_contract cc ON c.coin_id = cc.coin_id
-        WHERE cc.chain = %s AND cc.contract_address IS NOT NULL
-    """, (NETWORK.lower(),))
+        JOIN chain ch ON cc.chain_id = ch.id
+        WHERE LOWER(ch.name) = LOWER(%s) AND cc.contract_address IS NOT NULL
+    """, (NETWORK,))
     for sym, addr in cur.fetchall():
         if sym and addr:
             symbol_map[NETWORK][sym.upper()] = addr.lower()
@@ -210,12 +111,14 @@ def sync_tvl_from_graph():
                 symbol_map[NETWORK][sym[:8].upper()] = addr.lower()
 
     cur.execute("""
-        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_tier, lp.network, lp.protocol
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_bps, ch.name AS network, pr.name AS protocol
         FROM liquidity_pool lp
+        JOIN chain ch ON lp.chain_id = ch.id
+        JOIN protocol pr ON lp.protocol_id = pr.id
         JOIN coin c0 ON lp.coin0_id = c0.coin_id
         JOIN coin c1 ON lp.coin1_id = c1.coin_id
-        WHERE lp.protocol IN ('Uniswap V3', 'PancakeSwap V3', 'Aerodrome')
-          AND lp.network = %s
+        WHERE pr.name IN ('Uniswap V3', 'PancakeSwap V3', 'Aerodrome')
+          AND LOWER(ch.name) = LOWER(%s)
     """, (NETWORK,))
     pools = cur.fetchall()
 

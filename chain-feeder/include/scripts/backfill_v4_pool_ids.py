@@ -124,13 +124,15 @@ def main():
     # 1. Get V4 pools missing pool_id, grouped by network
     cur.execute("""
         SELECT lp.id, UPPER(c0.symbol) as s0, UPPER(c1.symbol) as s1,
-               lp.fee_tier, lp.network
+               lp.fee_bps, ch.name AS network
         FROM liquidity_pool lp
+        JOIN chain ch ON lp.chain_id = ch.id
+        JOIN protocol pr ON lp.protocol_id = pr.id
         JOIN coin c0 ON lp.coin0_id = c0.coin_id
         JOIN coin c1 ON lp.coin1_id = c1.coin_id
-        WHERE lp.protocol = 'Uniswap V4'
+        WHERE pr.name = 'Uniswap V4'
           AND lp.pool_id IS NULL
-        ORDER BY lp.network
+        ORDER BY ch.name
     """)
     all_missing = cur.fetchall()
     logging.info(f"Found {len(all_missing)} V4 pools without pool_id")
@@ -217,10 +219,10 @@ def main():
             # Determine fee tier type and try multiple match strategies
             STANDARD_TIERS_PCT = {'0.01%', '0.05%', '0.08%', '0.3%', '1.0%'}
 
-            fee = fee if fee else ''
+            fee_str = str(int(fee)) if fee is not None else ''
 
             # Strategy 1: Try exact fee match (standard tiers already match this)
-            fee_clean = fee.strip().replace('%', '').strip()
+            fee_clean = fee_str.strip().replace('%', '').strip()
             pool_id = _try_match(pool_lookup, c0n, c1n, fee_clean)
 
             # Strategy 2: If fee is a %, compute bips and try matching

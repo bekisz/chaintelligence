@@ -60,96 +60,8 @@ def sync_pools_from_swaps():
     Scans the unified swaps table for Uniswap V4 token pairings and ensures
     they exist in the liquidity_pool table.
     """
-    pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
-    conn = pg_hook.get_conn()
-    cur = conn.cursor()
-
-    # Distinct pairings from the unified swaps table (coin_id FKs → symbols).
-    logging.info("Scanning swaps table for new Uniswap V4 pools...")
-    cur.execute("""
-        SELECT DISTINCT s.network, c0.symbol, c1.symbol, s.fee_display
-        FROM swaps s
-        JOIN coin c0 ON s.t0_coin_id = c0.coin_id
-        JOIN coin c1 ON s.t1_coin_id = c1.coin_id
-        WHERE s.protocol = 'Uniswap V4'
-    """)
-    rows = cur.fetchall()
-
-    new_pools = 0
-    # Load lookups
-    cur.execute("SELECT id, LOWER(name) FROM chain")
-    chain_map = {r[1]: r[0] for r in cur.fetchall()}
-    cur.execute("SELECT id, LOWER(name) FROM protocol")
-    protocol_map = {r[1]: r[0] for r in cur.fetchall()}
-
-    # Load contract addresses map
-    cur.execute("""
-        SELECT cc.coin_id, LOWER(ch.name) AS chain_name, cc.contract_address 
-        FROM coin_contract cc
-        JOIN chain ch ON cc.chain_id = ch.id
-    """)
-    token_addr_map = {}
-    for r in cur.fetchall():
-        token_addr_map[(r[0], r[1])] = r[2]
-
-    # Load dex_config.yaml
-    import os
-    import yaml
-    dags_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(dags_dir, '..', '..'))
-    config_path = os.path.join(repo_root, 'config', 'dex_config.yaml')
-    with open(config_path, 'r') as f:
-        dex_config = yaml.safe_load(f)
-
-    from common.utils.uniswap_utils import derive_pool_identifiers
-
-    for network, s0, s1, fee in rows:
-        if not s0 or not s1:
-            continue
-        c0, c1 = get_base_asset_order(s0.upper(), s1.upper())
-        pool_name = f"{c0} - {c1}"
-        fee_bips = normalize_fee_tier(fee)
-
-        cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = %s", (c0,))
-        row0 = cur.fetchone()
-        cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = %s", (c1,))
-        row1 = cur.fetchone()
-        if not row0 or not row1:
-            continue
-
-        ch_id = chain_map.get(network.lower())
-        pr_id = protocol_map.get('uniswap v4')
-        if ch_id is None or pr_id is None:
-            continue
-
-        fee_val = float(fee_bips) if fee_bips and fee_bips.isdigit() else None
-
-        derived_addr, derived_id = None, None
-        chain_key = network.lower()
-        t0_addr = token_addr_map.get((row0[0], chain_key))
-        t1_addr = token_addr_map.get((row1[0], chain_key))
-        if t0_addr and t1_addr:
-            fee_int = int(fee_val) if fee_val is not None else None
-            derived_addr, derived_id = derive_pool_identifiers('Uniswap V4', network, t0_addr, t1_addr, fee_int, dex_config)
-
-        try:
-            cur.execute("""
-                INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, coin0_id, coin1_id, fee_bps, pool_address, pool_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
-                SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
-                    pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
-            """, (ch_id, pr_id, pool_name, row0[0], row1[0], fee_val, derived_addr, derived_id))
-            if cur.statusmessage.startswith("INSERT 0 1") or cur.statusmessage.startswith("UPDATE 1"):
-                new_pools += 1
-        except Exception as e:
-            conn.rollback()
-            logging.warning(f"Failed to sync pool {pool_name}: {e}")
-
-    conn.commit()
-    cur.close()
-    conn.close()
-    logging.info(f"Synced {new_pools} new Uniswap V4 pools from swaps.")
+    logging.info("Dynamic self-healing ingestion handles pool creation during swap ingestion. Skipping legacy sync.")
+    return 0
 
 @task
 def build_daily_history():
@@ -163,38 +75,19 @@ def build_daily_history():
     
     logging.info("Refreshing liquidity_pool_history from swaps...")
     
-    # Complex query to:
-    # 1. Aggregate swaps by Day + TokenPair + Fee
-    # 2. Join with liquidity_pool to get proper pool_id
-    # 3. Upsert into history
-    
-    # We use CASE statement to normalize swap fees (0.05% -> 500) to match pool table
-    
     query = """
     INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd)
     SELECT
-        p.id AS pool_id,
+        s.pool_id AS pool_id,
         DATE(s.ts) AS date,
         COUNT(*) AS tx_count,
         SUM(s.amount_usd) AS volume_usd
     FROM swaps s
-    JOIN liquidity_pool p ON
-        p.network = s.network AND p.protocol = 'Uniswap V4' AND
-        p.fee_tier = CASE s.fee_display
-            WHEN '0.01%' THEN '100'
-            WHEN '0.05%' THEN '500'
-            WHEN '0.08%' THEN '800'
-            WHEN '0.25%' THEN '2500'
-            WHEN '0.3%'  THEN '3000'
-            WHEN '1.0%'  THEN '10000'
-            ELSE s.fee_display
-        END AND
-        (
-            (p.coin0_id = s.t0_coin_id AND p.coin1_id = s.t1_coin_id) OR
-            (p.coin0_id = s.t1_coin_id AND p.coin1_id = s.t0_coin_id)
-        )
-    WHERE s.protocol = 'Uniswap V4' AND s.amount_usd IS NOT NULL
-    GROUP BY p.id, DATE(s.ts)
+    JOIN liquidity_pool p ON s.pool_id = p.id
+    JOIN chain ch ON p.chain_id = ch.id
+    JOIN protocol pr ON p.protocol_id = pr.id
+    WHERE pr.name = 'Uniswap V4' AND s.amount_usd IS NOT NULL
+    GROUP BY s.pool_id, DATE(s.ts)
     ON CONFLICT (pool_id, date) DO UPDATE
     SET tx_count = EXCLUDED.tx_count,
         volume_usd = EXCLUDED.volume_usd;
@@ -223,17 +116,14 @@ def sync_v4_pool_ids():
     conn = pg_hook.get_conn()
     cur = conn.cursor()
 
-    # 1. Build symbol→address map by network from coin_contract (official addresses).
-    # (The unified swaps table no longer stores token addresses, so the old
-    # swap-frequency heuristic is gone; coin_contract covers the tracked tokens
-    # that V4 routing cares about.)
     from collections import defaultdict
     symbol_map = defaultdict(dict)
 
     cur.execute("""
-        SELECT cc.chain, c.symbol, cc.contract_address
+        SELECT ch.name AS chain_name, c.symbol, cc.contract_address
         FROM coin_contract cc
         JOIN coin c ON cc.coin_id = c.coin_id
+        JOIN chain ch ON cc.chain_id = ch.id
     """)
     for row in cur.fetchall():
         chain, sym, addr = row
@@ -244,11 +134,13 @@ def sync_v4_pool_ids():
     # 2. Get V4 pools that are missing pool_id
     cur.execute("""
         SELECT lp.id, UPPER(c0.symbol) as s0, UPPER(c1.symbol) as s1,
-               lp.fee_tier, lp.network
+               lp.fee_bps, ch.name AS network
         FROM liquidity_pool lp
+        JOIN chain ch ON lp.chain_id = ch.id
+        JOIN protocol pr ON lp.protocol_id = pr.id
         JOIN coin c0 ON lp.coin0_id = c0.coin_id
         JOIN coin c1 ON lp.coin1_id = c1.coin_id
-        WHERE lp.protocol = 'Uniswap V4'
+        WHERE pr.name = 'Uniswap V4'
           AND lp.pool_id IS NULL
         LIMIT 500
     """)
@@ -281,13 +173,7 @@ def sync_v4_pool_ids():
 
         # Normalize fee to bips for subgraph query
         try:
-            if fee == 'Dynamic':
-                fee_bips = 8388608
-            elif fee.isdigit():
-                fee_bips = int(fee)
-            else:
-                fee_clean = fee.replace('%', '').strip()
-                fee_bips = int(round(float(fee_clean) * 10000))
+            fee_bips = int(fee)
         except:
             continue
 
@@ -352,15 +238,14 @@ def sync_tvl_from_graph():
     cur = conn.cursor()
     
     # 1. Build Symbol -> Address Map by Network from coin_contract.
-    # (Unified swaps no longer stores token addresses, so the old swap-frequency
-    # heuristic is gone; coin_contract covers the tracked V4 tokens.)
     from collections import defaultdict
     logging.info("Building symbol->address map by network...")
     symbol_map = defaultdict(dict)
     cur.execute("""
-        SELECT cc.chain, c.symbol, cc.contract_address
+        SELECT ch.name AS chain_name, c.symbol, cc.contract_address
         FROM coin_contract cc
         JOIN coin c ON cc.coin_id = c.coin_id
+        JOIN chain ch ON cc.chain_id = ch.id
     """)
     for row in cur.fetchall():
         chain, sym, addr = row
@@ -369,11 +254,13 @@ def sync_tvl_from_graph():
                 
     # 2. Get all pools
     cur.execute("""
-        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_tier, lp.network 
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_bps, ch.name AS network 
         FROM liquidity_pool lp
+        JOIN chain ch ON lp.chain_id = ch.id
+        JOIN protocol pr ON lp.protocol_id = pr.id
         JOIN coin c0 ON lp.coin0_id = c0.coin_id
         JOIN coin c1 ON lp.coin1_id = c1.coin_id
-        WHERE lp.protocol = 'Uniswap V4'
+        WHERE pr.name = 'Uniswap V4'
         LIMIT 500
     """)
     pools = cur.fetchall()
@@ -399,13 +286,7 @@ def sync_tvl_from_graph():
             continue
             
         try:
-            if fee == 'Dynamic':
-                fee_bips = 8388608
-            elif fee.isdigit():
-                fee_bips = int(fee)
-            else:
-                fee_clean = fee.replace('%', '').strip()
-                fee_bips = int(round(float(fee_clean) * 10000))
+            fee_bips = int(fee)
         except:
             continue
            

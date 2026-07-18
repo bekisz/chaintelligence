@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS coin_contract (
     decimals INTEGER DEFAULT 18,
     is_native BOOLEAN DEFAULT FALSE,
     verified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    tracked BOOLEAN NOT NULL DEFAULT TRUE,
     PRIMARY KEY (coin_id, chain)
 );
 
@@ -374,22 +375,11 @@ INSERT INTO coin_contract (coin_id, chain, contract_address, is_native) VALUES
 ((SELECT coin_id FROM coin WHERE symbol='RETH'), 'ethereum', '0xae78736cd615f374d3085123a210448e74fc6393', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='STETH'), 'ethereum', '0xae7ab96520de3a18e5e111b5eaab095312d7fe84', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='WSTETH'), 'ethereum', '0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='SOL'), 'ethereum', '0xdummy_sol', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='MSOL'), 'ethereum', '0xdummy_msol', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='PENDLE'), 'ethereum', '0x808507121b80c0546a1d48931130635e169fa121', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='USDE'), 'ethereum', '0x4c9edd5852cd14fe7183fdb42c274d2808b04a55', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='STKGHO'), 'ethereum', '0xdummy_stkgho', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='SGHO'), 'ethereum', '0xdummy_sgho', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='RLUSD'), 'ethereum', '0xdummy_rlusd', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='SUSDS'), 'ethereum', '0xdummy_susds', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='EURCV'), 'ethereum', '0xdummy_eurcv', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='EURQ'), 'ethereum', '0xdummy_eurq', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='PAXG'), 'ethereum', '0x45804880bdc05151523316d3a01ff660eacc9292', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='XAUT'), 'ethereum', '0x68749665e53399066df52a092dd62128b1bf1e6f', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='BTC'), 'ethereum', '0xdummy_btc', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='CBBTC'), 'ethereum', '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='STAAVE'), 'ethereum', '0xdummy_staave', FALSE),
-((SELECT coin_id FROM coin WHERE symbol='CLAAVE'), 'ethereum', '0xdummy_claave', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='MIM'), 'ethereum', '0x99d1ed205117f739c49110052e42337777777777', FALSE),
 ((SELECT coin_id FROM coin WHERE symbol='ENA'), 'ethereum', '0x57e114b691db790c35207b2e685d4a43181e6061', FALSE),
 -- Arbitrum Contracts

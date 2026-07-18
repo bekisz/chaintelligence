@@ -617,7 +617,7 @@ def run_backfill(target_network="Ethereum", target_pos_id=None, target_pool_id=N
     cur = conn.cursor()
     
     sql = """
-        SELECT p.id, p.token_id, pool.network, pool.protocol,
+        SELECT p.id, p.token_id, ch.name AS network, pr.name AS protocol,
                c0.decimals as d0,
                c1.decimals as d1,
                pool.id, pool.pool_name, c0.symbol as coin0_symbol, c1.symbol as coin1_symbol,
@@ -626,20 +626,22 @@ def run_backfill(target_network="Ethereum", target_pos_id=None, target_pool_id=N
                p.wallet_address
         FROM liquidity_pool_position p
         JOIN liquidity_pool pool ON p.pool_id = pool.id
+        JOIN chain ch ON pool.chain_id = ch.id
+        JOIN protocol pr ON pool.protocol_id = pr.id
         JOIN coin c0 ON pool.coin0_id = c0.coin_id
         JOIN coin c1 ON pool.coin1_id = c1.coin_id
-        LEFT JOIN coin_contract cc0 ON c0.coin_id = cc0.coin_id AND LOWER(cc0.chain) = LOWER(pool.network)
-        LEFT JOIN coin_contract cc1 ON c1.coin_id = cc1.coin_id AND LOWER(cc1.chain) = LOWER(pool.network)
+        LEFT JOIN coin_contract cc0 ON c0.coin_id = cc0.coin_id AND cc0.chain_id = pool.chain_id
+        LEFT JOIN coin_contract cc1 ON c1.coin_id = cc1.coin_id AND cc1.chain_id = pool.chain_id
         WHERE p.token_id IS NOT NULL
     """
     params = []
     
     if not scan_all_v4:
-        sql += " AND pool.network = %s"
+        sql += " AND ch.name = %s"
         params.append(target_network)
     else:
         # If scanning all V4, we still want to filter somewhat or just grab all V4?
-        sql += " AND pool.protocol LIKE '%%V4%%'"
+        sql += " AND pr.name LIKE '%%V4%%'"
 
     if target_pos_id:
         sql += " AND p.id = %s"

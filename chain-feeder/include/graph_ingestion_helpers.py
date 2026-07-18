@@ -220,10 +220,15 @@ def ingest_positions_data(conn, positions: list):
                 cur.execute("""
                     SELECT lp.id, c0.symbol, c1.symbol 
                     FROM liquidity_pool lp
+                    JOIN chain ch ON lp.chain_id = ch.id
+                    JOIN protocol pr ON lp.protocol_id = pr.id
                     JOIN coin c0 ON lp.coin0_id = c0.coin_id
                     JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                    WHERE lp.network=%s AND lp.protocol=%s AND lp.pool_name=%s AND lp.fee_tier=%s
-                """, (p['network'], p['protocol'], pool_name, fee))
+                    WHERE LOWER(ch.name) = LOWER(%s) 
+                      AND LOWER(pr.name) = LOWER(%s) 
+                      AND lp.pool_name = %s 
+                      AND lp.fee_bps = %s
+                """, (p['network'], p['protocol'], pool_name, float(fee) if fee and str(fee).replace('.','',1).isdigit() else None))
                 res = cur.fetchone()
                 
             if not res: continue

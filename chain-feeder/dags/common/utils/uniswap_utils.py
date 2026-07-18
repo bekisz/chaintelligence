@@ -16,11 +16,7 @@ from .config import (
 
 def load_token_addresses_for_chain(chain: str) -> Dict[str, str]:
     """Load symbol → contract_address mapping for a given chain from DB."""
-    # Normalize the network name used internally ("BNB") to the canonical
-    # chain name stored in coin_contract.chain ("bsc"). Without this, the
-    # BNB fetchers (PancakeSwap V3 / V4) resolve 0 tracked token addresses
-    # and ingest nothing.
-    chain = 'bsc' if chain.lower() == 'bnb' else chain.lower()
+    chain_name = 'bnb' if chain.lower() in ('bnb', 'bsc') else chain.lower()
     mapping = {}
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
@@ -29,8 +25,9 @@ def load_token_addresses_for_chain(chain: str) -> Dict[str, str]:
             SELECT UPPER(c.symbol), cc.contract_address
             FROM coin_contract cc
             JOIN coin c ON cc.coin_id = c.coin_id
-            WHERE LOWER(cc.chain) = %s
-        """, (chain,))
+            JOIN chain ch ON cc.chain_id = ch.id
+            WHERE LOWER(ch.name) = %s
+        """, (chain_name,))
         for row in cur.fetchall():
             mapping[row[0]] = row[1]
         cur.close()
@@ -297,7 +294,8 @@ class UniswapV3Fetcher:
                         'amount0': amount_in_val if t0_addr == p0_addr else -amount_out_val,
                         'amount1': amount_out_val if t1_addr == p1_addr else -amount_in_val,
                         'amountUSD': to_float(swap.get('amountInUSD')),
-                        'fee_tier': fee_tier_str
+                        'fee_tier': fee_tier_str,
+                        'pool': {'id': pool.get('id')}
                     }
                 else:
                     token0 = swap.get('token0') or {}
@@ -325,7 +323,8 @@ class UniswapV3Fetcher:
                         'amount0': to_float(swap.get('amount0')),
                         'amount1': to_float(swap.get('amount1')),
                         'amountUSD': to_float(swap.get('amountUSD')),
-                        'fee_tier': fee_tier_str
+                        'fee_tier': fee_tier_str,
+                        'pool': {'id': (swap.get('pool') or {}).get('id')}
                     }
                 batch_swaps.append(normalized)
             
@@ -618,15 +617,15 @@ class PostgresStorage:
                 pool_id_map = {row[1].lower(): row[0] for row in rows if row[1]}
                 pool_tokens_map = {(row[2], row[3], frozenset({row[4], row[5]}), row[6]): row[0] for row in rows}
 
-                # Load existing contract addresses and addresses map for this chain to prevent duplicates
+                # Load contract addresses for this chain, mapping LOWER(contract_address) -> {coin_id, symbol, tracked}
                 cur.execute("""
-                    SELECT coin_id, LOWER(contract_address)
-                    FROM coin_contract
-                    WHERE chain_id = %s
+                    SELECT LOWER(cc.contract_address), cc.coin_id, c.symbol, cc.tracked
+                    FROM coin_contract cc
+                    JOIN coin c ON cc.coin_id = c.coin_id
+                    WHERE cc.chain_id = %s
                 """, (chain_id,))
                 contract_rows = cur.fetchall()
-                existing_contracts = {r[0]: r[1] for r in contract_rows}
-                existing_addresses = {r[1] for r in contract_rows}
+                contract_map = {r[0]: {'coin_id': r[1], 'symbol': r[2], 'tracked': r[3]} for r in contract_rows}
 
                 insert_query = """
                 INSERT INTO swaps (
@@ -640,34 +639,22 @@ class PostgresStorage:
                 from collections import defaultdict
                 tx_hash_counters = defaultdict(int)
                 for s in swaps:
-                    t0_id = SYMBOL_TO_COIN_ID.get(s.get('token0_symbol', '').upper())
-                    t1_id = SYMBOL_TO_COIN_ID.get(s.get('token1_symbol', '').upper())
-                    if t0_id is None or t1_id is None:
-                        continue  # skip swaps for untracked tokens
-
-                    # Self-healing: Dynamically register missing token contract addresses for this chain
                     t0_addr = s.get('token0_address', '').lower()
                     t1_addr = s.get('token1_address', '').lower()
-                    
-                    if t0_addr and t0_id not in existing_contracts and t0_addr not in existing_addresses:
-                        t0_dec = s.get('token0_decimals', 18)
-                        cur.execute("""
-                            INSERT INTO coin_contract (coin_id, chain_id, contract_address, decimals, is_native)
-                            VALUES (%s, %s, %s, %s, false)
-                            ON CONFLICT (coin_id, chain_id) DO NOTHING
-                        """, (t0_id, chain_id, t0_addr, t0_dec))
-                        existing_contracts[t0_id] = t0_addr
-                        existing_addresses.add(t0_addr)
 
-                    if t1_addr and t1_id not in existing_contracts and t1_addr not in existing_addresses:
-                        t1_dec = s.get('token1_decimals', 18)
-                        cur.execute("""
-                            INSERT INTO coin_contract (coin_id, chain_id, contract_address, decimals, is_native)
-                            VALUES (%s, %s, %s, %s, false)
-                            ON CONFLICT (coin_id, chain_id) DO NOTHING
-                        """, (t1_id, chain_id, t1_addr, t1_dec))
-                        existing_contracts[t1_id] = t1_addr
-                        existing_addresses.add(t1_addr)
+                    t0_info = contract_map.get(t0_addr)
+                    t1_info = contract_map.get(t1_addr)
+
+                    # 1. If we do not have both token contract (not symbol) found then skip
+                    if t0_info is None or t1_info is None:
+                        continue
+
+                    # 2. If either of the coin contract is untracked then we should skip
+                    if not t0_info['tracked'] or not t1_info['tracked']:
+                        continue
+
+                    t0_id = t0_info['coin_id']
+                    t1_id = t1_info['coin_id']
 
                     # Extract log_index from the subgraph id
                     swap_id = s.get('id', '')
@@ -709,8 +696,25 @@ class PostgresStorage:
                     if pool_id is None:
                         pool_id = pool_tokens_map.get((chain_id, protocol_id, frozenset({t0_id, t1_id}), fbps))
                         
+                    # 3. Create pool on-the-spot if it does not exist
                     if pool_id is None:
-                        continue
+                        fee_tier_str = s.get('fee_tier') or (f"{fbps / 10000}%" if fbps is not None else "")
+                        pool_name = f"{t0_info['symbol']}-{t1_info['symbol']} {fee_tier_str}".strip()
+                        pool_address_val = sg_pool_id.lower() if sg_pool_id else None
+
+                        cur.execute("""
+                            INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, false)
+                            ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
+                            SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address)
+                            RETURNING id
+                        """, (chain_id, protocol_id, pool_name, fbps, t0_id, t1_id, pool_address_val))
+                        pool_id = cur.fetchone()[0]
+
+                        # Cache it in maps for the rest of this batch
+                        if pool_address_val:
+                            pool_id_map[pool_address_val] = pool_id
+                        pool_tokens_map[(chain_id, protocol_id, frozenset({t0_id, t1_id}), fbps)] = pool_id
 
                     data.append((
                         s['tx_hash'],

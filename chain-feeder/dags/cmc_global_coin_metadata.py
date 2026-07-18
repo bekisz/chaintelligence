@@ -405,7 +405,7 @@ def cmc_upsert_to_db(fetch_result: dict):
         'SUSDS': {
             'name': 'Savings USDS',
             'slug': 'savings-usds',
-            'ethereum_address': '0xdummy_susds',
+            'ethereum_address': '0xa3931d71877c0e7a3148cb7eb4463524fec27fbd',
             'decimals': 18
         }
     }
@@ -424,15 +424,6 @@ def cmc_upsert_to_db(fetch_result: dict):
                 'logo': None,
                 'contract_address': [{'platform': {'name': 'Ethereum'}, 'contract_address': fallback['ethereum_address']}],
                 'decimals': fallback['decimals']
-            }
-        else:
-            detailed_info[mock_id] = {
-                'symbol': sym,
-                'name': f"{sym} Token",
-                'slug': sym.lower(),
-                'logo': None,
-                'contract_address': [{'platform': {'name': 'Ethereum'}, 'contract_address': f"0xdummy_{sym.lower()}"}],
-                'decimals': 18
             }
 
     if not detailed_info:
@@ -505,8 +496,6 @@ def cmc_upsert_to_db(fetch_result: dict):
                     if fallback:
                         chain_addresses['ethereum'] = fallback.get('ethereum_address')
                         decimals = fallback.get('decimals', decimals)
-                    else:
-                        chain_addresses['ethereum'] = f"0xdummy_{symbol.lower()}"
                 
                 # Only keep coins that have at least one contract address (skip if none)
                 if not chain_addresses:
