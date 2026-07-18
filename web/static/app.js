@@ -161,6 +161,68 @@ document.addEventListener('DOMContentLoaded', async () => {
         return hopCount === 1 ? totalTvl : 0;
     };
 
+    const getRouteCid = (route) => {
+        if (route.path_tokens) {
+            for (let i = 0; i < route.path_tokens.length; i++) {
+                if (i % 2 === 1 && typeof route.path_tokens[i] === 'object') {
+                    return route.path_tokens[i].cid || 0;
+                }
+            }
+        }
+        return 0;
+    };
+
+    const getRoutePoolAddr = (route) => {
+        if (route.path_tokens) {
+            for (let i = 0; i < route.path_tokens.length; i++) {
+                if (i % 2 === 1 && typeof route.path_tokens[i] === 'object') {
+                    return route.path_tokens[i].pool_address || '';
+                }
+            }
+        }
+        return '';
+    };
+
+    const getRoutePoolId = (route) => {
+        if (route.path_tokens) {
+            for (let i = 0; i < route.path_tokens.length; i++) {
+                if (i % 2 === 1 && typeof route.path_tokens[i] === 'object') {
+                    return route.path_tokens[i].pool_id || route.path_tokens[i].pool_address || '';
+                }
+            }
+        }
+        return '';
+    };
+
+    const getProtocolColor = (proto) => {
+        const p = (proto || '').toLowerCase();
+        if (p.includes('uniswap v4') || p.includes('uniswap_v4') || p === 'v4') return '#9860f3';
+        if (p.includes('uniswap v3') || p.includes('uniswap_v3') || p === 'v3') return '#ff007a';
+        if (p.includes('pancakeswap v3') || p.includes('pancakeswap_v3')) return '#1fc7d4';
+        if (p.includes('pancakeswap v4') || p.includes('pancakeswap_v4')) return '#4ade80';
+        if (p.includes('uniswap v2') || p.includes('uniswap_v2')) return '#ff6ba6';
+        if (p.includes('aerodrome')) return '#3b82f6';
+        return '#627eea'; // fallback
+    };
+
+    const getRouteProtocol = (route) => {
+        let protocols = new Set();
+        if (route.path_tokens) {
+            route.path_tokens.forEach((item, idx) => {
+                if (idx % 2 === 1 && typeof item === 'object') {
+                    const feeParts = (item.fee || '').split('|');
+                    if (feeParts.length >= 2) {
+                        protocols.add(feeParts[1].trim());
+                    }
+                }
+            });
+        }
+        if (protocols.size === 0 && route.protocol) {
+            protocols.add(route.protocol);
+        }
+        return protocols.size === 1 ? Array.from(protocols)[0] : '';
+    };
+
     const filterAndRenderRoutes = () => {
         if (!currentRoutes) return;
 
@@ -405,21 +467,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         toggleSwitch.dispatchEvent(new Event('change'));
     };
 
+    const formatAddress = (addr) => {
+        if (!addr) return '-';
+        const shortened = `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+        return `<span class="monospace clickable-addr" title="Click to copy: ${addr}" onclick="navigator.clipboard.writeText('${addr}'); const el = this; const orig = el.innerText; el.innerText = 'Copied!'; setTimeout(() => el.innerText = orig, 1000); event.stopPropagation();" style="cursor: pointer; font-family: monospace; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);">${shortened}</span>`;
+    };
+
     const renderRoutes = (routes) => {
         routesBody.innerHTML = '';
         routes.forEach((route, idx) => {
-            // Calculate Route APR (only valid for single-hop) and TVL (only meaningful for single-pool routes)
             let totalApr = 0;
             let hopCount = 0;
             let routeTvl = 0;
+            let poolAddr = null;
+            let poolId = null;
+            let cid = null;
+            let protocols = new Set();
             if (route.path_tokens) {
                 route.path_tokens.forEach((item, idx) => {
                     if (idx % 2 === 1 && typeof item === 'object') {
                         totalApr += (item.apr || 0);
                         routeTvl += (item.tvl || 0);
+                        poolAddr = item.pool_address;
+                        poolId = item.pool_id || item.pool_address;
+                        cid = item.cid;
                         hopCount++;
+                        
+                        const feeParts = (item.fee || '').split('|');
+                        if (feeParts.length >= 2) {
+                            protocols.add(feeParts[1].trim());
+                        }
                     }
                 });
+            }
+            if (protocols.size === 0 && route.protocol) {
+                protocols.add(route.protocol);
             }
             const avgApr = hopCount === 1 ? totalApr : 0;
             const aprClass = hopCount > 1 ? 'text-muted' : (avgApr > 0.5 ? 'text-success font-bold' : (avgApr > 0 ? 'text-success' : 'text-muted'));
@@ -437,9 +519,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Staggered fade-in animation
             row.classList.add('fade-in');
             row.style.animationDelay = `${idx * 30}ms`;
+            
+            const cidDisplay = hopCount === 1 && cid !== null && cid !== undefined ? cid : '-';
+            const poolIdDisplay = hopCount === 1 ? formatAddress(poolId) : '-';
+            const poolAddrDisplay = hopCount === 1 ? formatAddress(poolAddr) : '-';
+            
+            const singleProtocol = protocols.size === 1 ? Array.from(protocols)[0] : null;
+            const protocolDisplay = singleProtocol || '-';
+            const protoColor = getProtocolColor(singleProtocol || route.protocol);
+
+            let t0 = '', t1 = '';
+            if (hopCount === 1 && route.path_tokens && route.path_tokens.length >= 3) {
+                t0 = route.path_tokens[0];
+                t1 = route.path_tokens[route.path_tokens.length - 1];
+            }
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const startDateVal = startDateInput ? startDateInput.value : '';
+
             row.innerHTML = `
-                <td class="path-cell">${renderPath(route)}</td>
+                <td class="path-cell">
+                    ${renderPath(route)}
+                    ${hopCount === 1 ? `
+                        <div class="row-action-wrapper">
+                            <button class="row-action-btn" title="Backtest LP Position" onclick="event.stopPropagation(); window.open('/backtester?token1=${encodeURIComponent(t0.toLowerCase())}&token2=${encodeURIComponent(t1.toLowerCase())}&apr=${(avgApr * 100).toFixed(2)}&start=${startDateVal}&end=${todayStr}', '_blank');">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                </svg>
+                                Backtest
+                            </button>
+                        </div>
+                    ` : ''}
+                </td>
+                <td class="col-cid hidden-column">${cidDisplay}</td>
+                <td class="col-pool-id hidden-column">${poolIdDisplay}</td>
+                <td class="col-pool-addr hidden-column">${poolAddrDisplay}</td>
                 <td class="col-network"><span class="badge ${networkClass}">${networkVal}</span></td>
+                <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocolDisplay}</td>
                 <td class="col-tx-count">${route.count.toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
                 <td class="col-volume font-bold">${formatUSD(route.volume)}</td>
@@ -897,6 +1013,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (key === 'pct') {
                 valA = a.pct_volume;
                 valB = b.pct_volume;
+            } else if (key === 'cid') {
+                valA = getRouteCid(a);
+                valB = getRouteCid(b);
+            } else if (key === 'pool_addr') {
+                valA = getRoutePoolAddr(a);
+                valB = getRoutePoolAddr(b);
+                return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else if (key === 'pool_id') {
+                valA = getRoutePoolId(a);
+                valB = getRoutePoolId(b);
+                return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else if (key === 'network') {
+                valA = a.network || '';
+                valB = b.network || '';
+                return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else if (key === 'protocol') {
+                valA = getRouteProtocol(a) || '';
+                valB = getRouteProtocol(b) || '';
+                return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
             }
 
             return dir === 'asc' ? valA - valB : valB - valA;
@@ -935,6 +1070,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sort-tvl').addEventListener('click', () => sortRoutes('tvl', 'sort-tvl'));
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
+    document.getElementById('sort-cid').addEventListener('click', () => sortRoutes('cid', 'sort-cid'));
+    document.getElementById('sort-pool-addr').addEventListener('click', () => sortRoutes('pool_addr', 'sort-pool-addr'));
+    document.getElementById('sort-pool-id').addEventListener('click', () => sortRoutes('pool_id', 'sort-pool-id'));
+    document.getElementById('sort-network').addEventListener('click', () => sortRoutes('network', 'sort-network'));
+    document.getElementById('sort-protocol').addEventListener('click', () => sortRoutes('protocol', 'sort-protocol'));
 
     analyzeBtn.addEventListener('click', performAnalysis);
 

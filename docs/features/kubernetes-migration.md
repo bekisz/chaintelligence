@@ -280,7 +280,7 @@ subchart key) configures:
 | `config/dex_config.yaml`, `config/chains.yaml` | `ConfigMap` `chaintelligence-files` mounted at `/app/config` |
 | `.env` directory mounted at `/app/.env` | `ConfigMap`+`Secret` projected to `/app/.env` (or replaced by env vars) |
 | Airflow FAB admin password | ExternalSecret (prod) / Secret (dev) |
-| `GRAPH_API_KEY`, `CMC_API_KEY`, `CRYPTOCOMPARE_API_KEY`, `RPC_URL`, `DATA_WAREHOUSE_DB`, `PORTAL_*` | ExternalSecret keys, each materialized as env vars on the relevant Deployment |
+| `GRAPH_API_KEY`, `CMC_API_KEY`, `RPC_URL`, `DATA_WAREHOUSE_DB`, `PORTAL_*` | ExternalSecret keys, each materialized as env vars on the relevant Deployment |
 
 ### 4.8 DAG delivery and DAG code
 

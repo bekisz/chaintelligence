@@ -9,194 +9,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
-    <link rel="stylesheet" href="/static/style.css?v=100.0">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        .pool-layout {
-            display: grid;
-            grid-template-columns: 350px 1fr;
-            gap: 2rem;
-            margin-top: 2rem;
-        }
-
-        .pool-sidebar {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            padding: 1.5rem;
-            height: fit-content;
-            position: sticky;
-            top: 100px;
-        }
-
-        .pool-list-container {
-            max-height: 60vh;
-            overflow-y: auto;
-            margin-top: 1rem;
-        }
-
-        .pool-item {
-            padding: 1rem;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-            margin-bottom: 0.5rem;
-        }
-
-        .pool-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .pool-item.active {
-            background: rgba(255, 0, 122, 0.1);
-            border-color: var(--uniswap-pink);
-        }
-
-        .pool-item h4 {
-            font-size: 1rem;
-            margin-bottom: 0.25rem;
-        }
-
-        .pool-item-meta {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .leaderboard-container {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            padding: 2rem;
-        }
-
-        .leaderboard-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .pool-title-large {
-            font-size: 2rem;
-            font-weight: 700;
-        }
-
-        .pool-stats-row {
-            display: flex;
-            gap: 2rem;
-            margin-top: 0.5rem;
-        }
-
-        .pool-stat-box {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .pool-stat-label {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .pool-stat-value {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .leaderboard-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0 0.5rem;
-        }
-
-        .leaderboard-table th {
-            text-align: left;
-            padding: 1rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-
-        .leaderboard-row {
-            background: var(--item-bg);
-            transition: transform 0.2s;
-        }
-
-        .leaderboard-row:hover {
-            transform: scale(1.01);
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .leaderboard-row td {
-            padding: 1.25rem 1rem;
-        }
-
-        .leaderboard-row td:first-child {
-            border-top-left-radius: 12px;
-            border-bottom-left-radius: 12px;
-        }
-
-        .leaderboard-row td:last-child {
-            border-top-right-radius: 12px;
-            border-bottom-right-radius: 12px;
-        }
-
-        .rank-cell {
-            font-weight: 700;
-            color: var(--text-secondary);
-            width: 50px;
-        }
-
-        .wallet-cell {
-            font-family: monospace;
-            color: var(--accent);
-        }
-
-        .share-bar-container {
-            width: 100px;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            margin-top: 4px;
-        }
-
-        .share-bar {
-            height: 100%;
-            background: var(--uniswap-pink);
-            border-radius: 3px;
-        }
-
-        .wallet-tag-pill {
-            font-size: 0.7rem;
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-left: 0.5rem;
-            font-family: 'Outfit', sans-serif;
-            font-weight: 600;
-        }
-
-        .cluster-tag {
-            font-size: 0.7rem;
-            background: rgba(59, 130, 246, 0.1);
-            color: var(--accent);
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-left: 0.5rem;
-            font-weight: 600;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/style.css?v=25.0">
 </head>
 
 <body>
+    <!-- Unified Uniswap-Style Header -->
     <header class="unified-header">
         <div class="header-content">
             <a href="/" class="logo-section">
@@ -215,32 +32,190 @@
         </div>
     </header>
 
-    <div class="container">
-        <main>
-            <div class="pool-layout">
-                <aside class="pool-sidebar">
-                    <h3 style="margin-bottom: 1rem;">Active Pools</h3>
-                    <input type="text" id="pool-search" placeholder="Search tokens..." class="token-input" style="width: 100%; margin-bottom: 1rem; border-radius: 12px; padding: 0.6rem 1rem; font-size: 0.9rem;">
-                    
-                    <div id="pool-list" class="pool-list-container">
-                        <div class="spinner"></div>
-                    </div>
-                </aside>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
 
-                <section class="pool-main">
-                    <div id="pool-detail" class="leaderboard-container">
-                        <div style="text-align: center; color: var(--text-secondary); padding: 4rem;">
-                            <i class="fas fa-water" style="font-size: 3rem; margin-bottom: 1rem; display: block; opacity: 0.3;"></i>
-                            <p>Select a pool from the sidebar to view detailed LP analytics and provider rankings.</p>
+    <div class="container">
+        <nav class="main-nav" style="display: none;">
+            <a href="/">Home</a>
+            <a href="/pool" class="active">Pool Explorer</a>
+            <a href="/lp">LP Positions</a>
+            <a href="/backtester">Backtester</a>
+        </nav>
+
+        <main>
+            <div class="page-hero">
+                <h1 class="page-title">Pool Explorer</h1>
+                <p class="page-subtitle">Analyze and explore liquidity pools across chains and protocols</p>
+            </div>
+            <div class="controls-wrapper">
+                <div class="selection-row">
+                    <div class="input-group-pair">
+                        <input type="text" id="start-token" placeholder="Token" value="USDC" class="token-input-field">
+                        <span class="token-arrow">↔</span>
+                        <input type="text" id="end-token" placeholder="Token" value="USDT" class="token-input-field">
+                    </div>
+
+                    <div class="input-group-pair">
+                        <div class="input-group date-input">
+                            <input type="date" id="start-date">
+                        </div>
+                        <span class="date-arrow">→</span>
+                        <div class="input-group date-input">
+                            <input type="date" id="end-date">
                         </div>
                     </div>
-                </section>
+
+                    <select id="query-network-filter" class="network-select">
+                        <option value="all">All Chains</option>
+                        <option value="Ethereum">Ethereum</option>
+                        <option value="Arbitrum">Arbitrum</option>
+                        <option value="Base">Base</option>
+                        <option value="BNB">BNB Chain</option>
+                    </select>
+
+                    <button id="analyze-btn" class="primary-btn" style="background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); border-color: #9333ea; box-shadow: 0 0 10px rgba(124, 58, 237, 0.4);">Show Pools</button>
+                </div>
+            </div>
+
+            <section id="results-section" class="results-container hidden">
+                <div class="table-container glass" style="padding: 16px;">
+                    <div class="table-controls">
+                        <!-- Real-time Filter inputs for APR, Market Size, TXs -->
+                        <div class="filter-controls-wrapper">
+                            <div class="filter-input-group">
+                                <label for="network-filter">Network</label>
+                                <select id="network-filter" class="filter-select">
+                                    <option value="all">All</option>
+                                    <option value="Ethereum">Ethereum</option>
+                                    <option value="Arbitrum">Arbitrum</option>
+                                    <option value="Base">Base</option>
+                                    <option value="BNB">BNB Chain</option>
+                                </select>
+                            </div>
+                            <div class="filter-input-group">
+                                <label for="protocol-filter">Protocol</label>
+                                <select id="protocol-filter" class="filter-select">
+                                    <option value="all">All</option>
+                                    <option value="Uniswap">Uniswap</option>
+                                    <option value="Uniswap V2">Uniswap V2</option>
+                                    <option value="Uniswap V3">Uniswap V3</option>
+                                    <option value="Uniswap V4">Uniswap V4</option>
+                                    <option value="PancakeSwap">PancakeSwap</option>
+                                    <option value="PancakeSwap V3">PancakeSwap V3</option>
+                                    <option value="PancakeSwap V4">PancakeSwap V4</option>
+                                    <option value="Aerodrome">Aerodrome</option>
+                                </select>
+                            </div>
+                            <div class="filter-input-group">
+                                <label for="min-apr-filter">Min APR %</label>
+                                <input type="number" id="min-apr-filter" placeholder="e.g. 5" min="0" step="0.1">
+                            </div>
+                            <div class="filter-input-group">
+                                <label for="min-mkt-filter">Min Market Size $</label>
+                                <input type="number" id="min-mkt-filter" placeholder="e.g. 100" min="0" step="10">
+                            </div>
+                            <div class="filter-input-group">
+                                <label for="min-txs-filter">Min TXs</label>
+                                <input type="number" id="min-txs-filter" placeholder="e.g. 10" min="0" step="5">
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 10px; padding-right: 15px;">
+                        <div class="column-selector-container">
+                            <button id="column-selector-btn" class="secondary-btn flex-center" title="Settings" style="padding: 6px 8px; border-radius: 8px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                </svg>
+                            </button>
+                            <div id="column-selector-dropdown" class="column-dropdown hidden">
+                                <div class="dropdown-section">
+                                    <div class="dropdown-section-title">Liquidity Pool Link Options</div>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="tier" checked> Tier</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="apr" checked> APR</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="dex" checked> Dex Link</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="revert" checked> Revert Link</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="dexscreener" checked> DexScreener</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="defillama" checked> DeFi Llama</label>
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                <div class="dropdown-section">
+                                    <div class="dropdown-section-title">Table Columns</div>
+                                    <label class="checkbox-label" style="opacity: 0.6;"><input type="checkbox" data-col="cid"> CID</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="pool-id"> Pool ID</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="pool-addr"> Pool Address</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="network" checked> Network</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="protocol"> Protocol</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="tx-count" checked> TXs</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="apr" checked> APR</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="volume" checked> Volume</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="market-size" checked> Fees</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="tvl" checked> TVL</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="avg-volume"> Avg Volume</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="pct-volume"> % Volume</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Pool</th>
+                                    <th id="sort-cid" class="sortable col-cid hidden-column">CID <span>↕</span></th>
+                                    <th id="sort-pool-id" class="sortable col-pool-id hidden-column">Pool ID <span>↕</span></th>
+                                    <th id="sort-pool-addr" class="sortable col-pool-addr hidden-column">Pool Address <span>↕</span></th>
+                                    <th id="sort-network" class="sortable col-network">Network <span>↕</span></th>
+                                    <th id="sort-protocol" class="sortable col-protocol hidden-column">Protocol <span>↕</span></th>
+                                    <th id="sort-count" class="sortable col-tx-count">TXs <span>↕</span></th>
+                                    <th id="sort-apr" class="sortable col-apr">APR <span>↕</span></th>
+                                    <th id="sort-vol" class="sortable col-volume">Volume <span>↕</span></th>
+                                    <th id="sort-mkt" class="sortable col-market-size">Fees <span>↕</span></th>
+                                    <th id="sort-tvl" class="sortable col-tvl">TVL <span>↕</span></th>
+                                    <th id="sort-avg" class="sortable col-avg-volume">Avg Volume <span>↕</span></th>
+                                    <th id="sort-pct" class="sortable col-pct-volume">% Volume <span>↕</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="routes-body">
+                                <!-- Results will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <div id="loader" class="loader-container hidden">
+                <div class="loader-card">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-shimmer"></div>
+                        <div id="progress-bar-fill"></div>
+                        <p id="progress-text" class="progress-text">Analyzing pools...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="no-data" class="no-data-msg hidden">
+                <div class="empty-state-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v4M12 16h.01"/>
+                    </svg>
+                </div>
+                <p class="empty-state-title">No Data Found</p>
+                <p class="empty-state-desc">No liquidity pool data found for the specified period and tokens.</p>
             </div>
         </main>
+
+        <footer>
+        </footer>
     </div>
 
     <script src="/static/nav.js"></script>
-    <script src="/static/pool.js?v=101.0"></script>
+    <script src="/static/pool.js?v=25.0"></script>
 </body>
 
 </html>

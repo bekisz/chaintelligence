@@ -3,8 +3,8 @@ const { Asset } = require('./logic.js');
 
 async function runAssetTests() {
     console.log("🚀 Starting Asset Class Unit Tests...");
-    // Test 1 : User daily timeframe to get a price at a specific date  using CryptoCompare API
-    console.log("\nTest #1: Real Data Integration (CryptoCompare API) using ETH daily data");
+    // Test 1 : User daily timeframe to get a price at a specific date using the internal price API
+    console.log("\nTest #1: Real Data Integration (internal price API) using ETH daily data");
     const eth = new Asset('ETH');
     await eth.fetchHistory(useHourly = false, startTime = new Date("2025-12-01 6:00 UTC")); // daily as default
     const testDate = new Date("2025-12-26 7:30 UTC");
@@ -14,8 +14,8 @@ async function runAssetTests() {
     console.log(`  ETH price at ${testDate.toISOString()}: $${ethPrice} and expected: $2984.66`);
     assert.ok(typeof ethPrice === 'number' && ethPrice > 2900 && ethPrice < 3000, "Price should be around $2984.66");
     console.log(`✅ Real data test passed! ETH price at index: $${ethPrice}`);
-    // Test 2 : User hourly timeframe to get a price at a specific date  using CryptoCompare API
-    console.log("\nTest #2: Real Data Integration (CryptoCompare API) using ETH hourly data");
+    // Test 2 : User hourly timeframe to get a price at a specific date using the internal price API
+    console.log("\nTest #2: Real Data Integration (internal price API) using ETH hourly data");
     await eth.fetchHistory(useHourly = true, startTime = new Date("2025-12-01 6:00 UTC")); // daily as default
     console.log(`  Fetching real HOURLY data for ETH and looking up price for ${testDate.toISOString()}...`);
 

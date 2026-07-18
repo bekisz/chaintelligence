@@ -53,8 +53,6 @@ The application uses a dual-environment file structure to separate public config
 | :--- | :--- | :--- |
 | `GRAPH_API_KEY` | [The Graph Studio](https://thegraph.com/studio/) | Uniswap V3/V4 on-chain event data |
 | `CMC_API_KEY` | [CoinMarketCap API](https://coinmarketcap.com/api/) | Real-time prices & metadata |
-
-| `CRYPTOCOMPARE_API_KEY` | [CryptoCompare](https://min-api.cryptocompare.com/) | Historical price fallback |
 | `RPC_URL` | [Ankr](https://www.ankr.com/) / [Alchemy](https://www.alchemy.com/) | Direct Ethereum node connectivity |
 
 ### Airflow Security Keys

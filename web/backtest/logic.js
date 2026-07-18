@@ -1,14 +1,3 @@
-// Browser/Node compatibility
-let _CONFIG_INTERNAL;
-if (typeof require !== 'undefined') {
-    _CONFIG_INTERNAL = require('./config.js');
-} else if (typeof CONFIG !== 'undefined') {
-    _CONFIG_INTERNAL = CONFIG;
-} else if (typeof window !== 'undefined' && window.CONFIG) {
-    _CONFIG_INTERNAL = window.CONFIG;
-} else {
-    _CONFIG_INTERNAL = {};
-}
 /**
  * Represents a Financial Asset (Token).
  */
@@ -91,7 +80,7 @@ class Asset {
     async fetchHistory(startTime = 0, endTime = Date.now()) {
         try {
             // Fetch from our local API
-            const url = `/api/coin/price-history?symbol=${this.symbol}`;
+            const url = `/api/coin/price-history?symbol=${this.symbol}&start=${startTime}&end=${endTime}`;
             const res = await fetch(url);
 
             if (!res.ok) {

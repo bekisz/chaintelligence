@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
-    <link rel="stylesheet" href="/static/style.css?v=21.1">
+    <link rel="stylesheet" href="/static/style.css?v=25.0">
 </head>
 
 <body>
@@ -153,7 +153,11 @@
                                 <div class="dropdown-divider"></div>
                                 <div class="dropdown-section">
                                     <div class="dropdown-section-title">Table Columns</div>
+                                    <label class="checkbox-label" style="opacity: 0.6;"><input type="checkbox" data-col="cid"> CID</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="pool-id"> Pool ID</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="pool-addr"> Pool Address</label>
                                     <label class="checkbox-label"><input type="checkbox" data-col="network" checked> Network</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="protocol"> Protocol</label>
                                     <label class="checkbox-label"><input type="checkbox" data-col="tx-count" checked> TXs</label>
                                     <label class="checkbox-label"><input type="checkbox" data-col="apr" checked> APR</label>
                                     <label class="checkbox-label"><input type="checkbox" data-col="volume" checked> Volume</label>
@@ -170,7 +174,11 @@
                             <thead>
                                 <tr>
                                     <th>Route Path</th>
-                                    <th class="col-network">Network</th>
+                                    <th id="sort-cid" class="sortable col-cid hidden-column">CID <span>↕</span></th>
+                                    <th id="sort-pool-id" class="sortable col-pool-id hidden-column">Pool ID <span>↕</span></th>
+                                    <th id="sort-pool-addr" class="sortable col-pool-addr hidden-column">Pool Address <span>↕</span></th>
+                                    <th id="sort-network" class="sortable col-network">Network <span>↕</span></th>
+                                    <th id="sort-protocol" class="sortable col-protocol hidden-column">Protocol <span>↕</span></th>
                                     <th id="sort-count" class="sortable col-tx-count">TXs <span>↕</span></th>
                                     <th id="sort-apr" class="sortable col-apr">APR <span>↕</span></th>
                                     <th id="sort-vol" class="sortable col-volume">Volume <span>↕</span></th>
@@ -215,7 +223,7 @@
     </div>
 
     <script src="/static/nav.js"></script>
-    <script src="/static/app.js?v=5.8"></script>
+    <script src="/static/app.js?v=25.0"></script>
 </body>
 
 </html>
