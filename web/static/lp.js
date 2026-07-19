@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    fetch('/api/coin/list')
+    const coinListPromise = fetch('/api/coin/list')
         .then(response => response.json())
         .then(coins => coins.forEach(coin => {
             if (!coin.symbol) return;
@@ -693,6 +693,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const fetchLPSummary = async () => {
+        // Wait for the coin list so token slugs/images are available before
+        // the first render — avoids CMC fallback slugs (e.g. 'wbtc' vs 'wrapped-bitcoin').
+        await coinListPromise;
         loader.classList.remove('hidden');
         positionsGrid.innerHTML = '';
         noDataMsg.classList.add('hidden');
