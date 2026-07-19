@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const symbol = (asset.symbol || '---').toUpperCase();
             const mapped = aliases[symbol] || symbol;
             const source = image || lpTokenImageMap[symbol] || lpTokenImageMap[mapped] || `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${mapped.toLowerCase()}.png`;
-            return `<a href="${getCmcUrl(symbol)}" target="_blank" class="token-badge-link" data-tooltip="${symbol} on CoinMarketCap" onclick="event.stopPropagation();"><span class="lp-pair-token"><img class="lp-token-icon" src="${source}" width="28" height="28" alt="${symbol} icon" onerror="this.onerror=null;this.src='/static/favicon.png'">${symbol}</span></a>`;
+            return `<a href="${getCmcUrl(symbol)}" target="_blank" class="token-badge-link" data-tooltip="${symbol} on CoinMarketCap" onclick="event.stopPropagation();"><span class="token-badge"><img src="${source}" width="20" height="20" alt="${symbol}" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;" onerror="this.onerror=null;this.src='/static/favicon.png'"> ${symbol}</span></a>`;
         };
         const fee = feeTier || 'LP';
         const apr = apr7d ? `${(apr7d * 100).toFixed(2)}% 7d` : 'APR pending';

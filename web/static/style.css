@@ -1814,27 +1814,6 @@ input:focus+.slider {
     min-width: 0;
 }
 
-.lp-pair-token {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    padding: 5px 11px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 9px;
-    color: var(--text-primary);
-    font-size: 0.95rem;
-    font-weight: 700;
-    white-space: nowrap;
-}
-
-.lp-token-icon {
-    border-radius: 50%;
-    object-fit: contain;
-    flex-shrink: 0;
-}
-
 .lp-pair-arrow {
     display: flex;
     align-items: center;
@@ -1977,8 +1956,6 @@ input:focus+.slider {
     .position-row { padding: 1rem 1.25rem; }
     .lp-row-main { flex-wrap: wrap; gap: 0.75rem 1rem; }
     .lp-pair-path { flex: 1 1 100%; }
-    .lp-pair-token { padding: 4px 7px; font-size: 0.85rem; }
-    .lp-token-icon { width: 26px; height: 26px; }
     .lp-pair-arrow { min-width: 40px; }
     .lp-pair-label { font-size: 0.58rem; }
     .lp-pair-label span { padding: 3px 4px; }
