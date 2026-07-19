@@ -14,9 +14,37 @@ const LP_UNI_SVG = `<svg class="proto-brand-icon" viewBox="0 0 438 504" fill="#F
 
 const LP_PANCAKE_SVG = `<svg class="proto-brand-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><ellipse cx="50" cy="72" rx="26" ry="18" fill="#d1884f" opacity="0.9"/><ellipse cx="50" cy="68" rx="22" ry="14" fill="#d1884f"/><ellipse cx="36" cy="32" rx="8" ry="20" fill="#d1884f" opacity="0.9" transform="rotate(-15 36 32)"/><ellipse cx="64" cy="32" rx="8" ry="20" fill="#d1884f" opacity="0.9" transform="rotate(15 64 32)"/><ellipse cx="50" cy="58" rx="22" ry="20" fill="#d1884f"/><ellipse cx="50" cy="60" rx="18" ry="16" fill="#d1884f"/><circle cx="42" cy="55" r="3.5" fill="none" stroke="#ffffff" stroke-width="2"/><circle cx="58" cy="55" r="3.5" fill="none" stroke="#ffffff" stroke-width="2"/></svg>`;
 
-// Build Uniswap/PancakeSwap + DexScreener + Revert link panes for the pair arrow.
-// Gated on a real 42-char contract address (V3-style); V4 composite ids are skipped.
-const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid) => {
+// Revert Finance link. For Uniswap V3/V4 we link to the specific LP POSITION
+// (NFT token id): revert.finance/#/<uniswapv4-position|uniswap-position>/<net>/<tokenId>.
+// Other protocols fall back to the pool-based URL where Revert supports it.
+const revertLink = (poolAddress, protocol, network, tokenId) => {
+    const proto = (protocol || '').toLowerCase();
+    const net = (network || 'Ethereum').toLowerCase();
+    let revertNet = 'mainnet';
+    if (net.includes('base')) revertNet = 'base';
+    else if (net.includes('arbitrum')) revertNet = 'arbitrum';
+    else if (net.includes('optimism')) revertNet = 'optimism';
+    else if (net.includes('polygon')) revertNet = 'polygon';
+    else if (net.includes('bnb') || net.includes('bsc')) revertNet = 'bnb';
+
+    if (tokenId && proto.includes('uniswap')) {
+        const sub = proto.includes('v4') ? 'uniswapv4-position' : 'uniswap-position';
+        return `<a href="https://revert.finance/#/${sub}/${revertNet}/${tokenId}" target="_blank" class="revert-link" data-tooltip="Analyze position on Revert Finance" onclick="event.stopPropagation();"><img src="/static/assets/revert.svg" alt="Revert Finance" class="revert-icon" /></a>`;
+    }
+
+    if (poolAddress && /^0x[a-f0-9]{40}$/i.test(poolAddress)) {
+        let revertProto = '';
+        if (proto.includes('pancakeswap') && proto.includes('v3') && (revertNet === 'bnb' || revertNet === 'arbitrum')) revertProto = 'pancakeswapv3';
+        else if (proto.includes('aerodrome') && revertNet === 'base') revertProto = 'aerodrome';
+        if (revertProto) {
+            return `<a href="https://revert.finance/#/pool/${revertNet}/${revertProto}/${poolAddress.toLowerCase()}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();"><img src="/static/assets/revert.svg" alt="Revert Finance" class="revert-icon" /></a>`;
+        }
+    }
+    return '';
+};
+
+// Build Uniswap/PancakeSwap + DexScreener + Revert + DeFi Llama link panes for the arrow.
+const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid, tokenId) => {
     const proto = (protocol || '').toLowerCase();
     const net = (network || 'Ethereum').toLowerCase();
     const isRealAddr = typeof poolAddress === 'string' && /^0x[a-f0-9]{40}$/i.test(poolAddress);
@@ -51,9 +79,7 @@ const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid) => {
             else if (net.includes('bnb') || net.includes('bsc')) uniNetwork = 'bnb';
             else if (net.includes('arbitrum')) uniNetwork = 'arbitrum';
             links += `<a href="https://app.uniswap.org/explore/pools/${uniNetwork}/${poolAddress}" target="_blank" class="pool-label-link pool-label-link--uniswap" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
-            if (net.includes('eth')) {
-                links += `<a href="https://revert.finance/#/pool/ethereum/uniswapv4/${poolAddress}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();"><img src="/static/assets/revert.svg" alt="Revert Finance" class="revert-icon" /></a>`;
-            }
+            links += revertLink(poolAddress, protocol, network, tokenId);
         }
 
         links += `<a href="https://dexscreener.com/${dsNet}/${poolAddress}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();"><img src="/static/assets/dexscreener.ico" alt="DexScreener" class="lp-link-icon dexscreener-icon" style="border-radius: 50%;" /></a>`;
@@ -82,19 +108,7 @@ const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid) => {
     }
 
     if (isRealAddr) {
-        let revertNet = 'mainnet';
-        if (net.includes('base')) revertNet = 'base';
-        else if (net.includes('arbitrum')) revertNet = 'arbitrum';
-        else if (net.includes('optimism')) revertNet = 'optimism';
-        else if (net.includes('polygon')) revertNet = 'polygon';
-        else if (net.includes('bnb') || net.includes('bsc')) revertNet = 'bnb';
-        let revertProto = '';
-        if (proto.includes('uniswap') && proto.includes('v3')) revertProto = 'uniswapv3';
-        else if (proto.includes('pancakeswap') && proto.includes('v3') && (revertNet === 'bnb' || revertNet === 'arbitrum')) revertProto = 'pancakeswapv3';
-        else if (proto.includes('aerodrome') && revertNet === 'base') revertProto = 'aerodrome';
-        if (revertProto) {
-            links += `<a href="https://revert.finance/#/pool/${revertNet}/${revertProto}/${poolAddress.toLowerCase()}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();"><img src="/static/assets/revert.svg" alt="Revert Finance" class="revert-icon" /></a>`;
-        }
+        links += revertLink(poolAddress, protocol, network, tokenId);
     }
 
     if (isRealAddr) {
@@ -375,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'v3';
     };
 
-    const renderPairPath = (asset0, asset1, images, protocol, feeTier, apr7d, poolAddress, network, defillamaUuid) => {
+    const renderPairPath = (asset0, asset1, images, protocol, feeTier, apr7d, poolAddress, network, defillamaUuid, tokenId) => {
         const aliases = { WETH: 'ETH', WBTC: 'BTC', CBBTC: 'BTC', TBTC: 'BTC', KBTC: 'BTC', LBTC: 'BTC', FBTC: 'BTC', WBNB: 'BNB' };
         if (!Array.isArray(images)) {
             try { images = JSON.parse(images || '[]'); } catch { images = []; }
@@ -388,7 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         const fee = feeTier || 'LP';
         const apr = apr7d ? `${(apr7d * 100).toFixed(2)}% 7d` : 'APR pending';
-        const linksPane = renderPoolLinks(poolAddress, protocol, network, defillamaUuid);
+        const linksPane = renderPoolLinks(poolAddress, protocol, network, defillamaUuid, tokenId);
         return `<div class="lp-pair-path ${getProtocolClass(protocol)}" aria-label="${asset0.symbol} to ${asset1.symbol} liquidity pair">
             ${token(asset0, images[0])}
             <div class="lp-pair-arrow" aria-hidden="true"><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" style="transform: scaleX(-1);"><polyline points="1,1 7,7 1,13"/></svg><div class="lp-pair-line"><div class="lp-pair-label"><span>${fee}</span><span>${apr}</span>${linksPane}</div></div><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="1,1 7,7 1,13"/></svg></div>
@@ -471,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             row.innerHTML = `
                 <div class="lp-row-main">
-                    ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid)}
+                    ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid, pos.token_id)}
                     <div class="lp-row-meta pos-meta">
                         <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
                         ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
