@@ -485,7 +485,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             row.innerHTML = `
                 <div class="lp-row-main">
-                    ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid, pos.token_id)}
+                    <div class="lp-row-left">
+                        ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid, pos.token_id)}
+                        <div class="lp-row-range">
+                            ${rangeStatus ? `<span class="lp-range-status ${rangeStatusClass}">${rangeStatus}</span>` : ''}
+                            ${rangeHtml}
+                        </div>
+                    </div>
                     <div class="lp-row-meta pos-meta">
                         <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
                         ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
@@ -497,11 +503,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" class="expand-toggle" aria-label="Toggle position details" aria-expanded="false">
                         <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg>
                     </button>
-                </div>
-
-                <div class="lp-row-range">
-                    ${rangeStatus ? `<span class="lp-range-status ${rangeStatusClass}">${rangeStatus}</span>` : ''}
-                    ${rangeHtml}
                 </div>
 
                 <!-- DRAWER (Hidden by default) -->

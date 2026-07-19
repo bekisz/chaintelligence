@@ -1953,10 +1953,17 @@ input:focus+.slider {
 }
 
 /* Range pictogram — always visible under the pair path (even when drawer closed) */
+.lp-row-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .lp-row-range {
     position: relative;
-    margin-top: 0.5rem;
-    padding-right: 2rem;
+    padding-right: 1rem;
 }
 
 .lp-row-range .range-indicator {
