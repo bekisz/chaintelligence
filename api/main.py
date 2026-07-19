@@ -1809,7 +1809,7 @@ async def lp_history(position_key: str):
 
         # Fetch events for the specific position key
         query = """
-        SELECT 
+        SELECT
             e.timestamp,
             e.event_type,
             e.amount0,
@@ -1817,10 +1817,11 @@ async def lp_history(position_key: str):
             e.tx_hash,
             c0.symbol,
             c1.symbol,
-            pool.network
+            ch.name
         FROM liquidity_pool_position_event e
         JOIN liquidity_pool_position pos ON e.position_id = pos.id
         JOIN liquidity_pool pool ON pos.pool_id = pool.id
+        JOIN chain ch ON pool.chain_id = ch.id
         JOIN coin c0 ON pool.coin0_id = c0.coin_id
         JOIN coin c1 ON pool.coin1_id = c1.coin_id
         WHERE (pos.position_key = %s OR pos.id::text = %s)
