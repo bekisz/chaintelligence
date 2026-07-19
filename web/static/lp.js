@@ -1,5 +1,116 @@
 // Global state for filtering and sorting
 let allPositions = [];
+let lpTokenImageMap = {};
+let lpTokenSlugMap = {};
+
+const getCmcUrl = (symbol) => {
+    const s = (symbol || '').toUpperCase().trim();
+    const slug = lpTokenSlugMap[s] || s.toLowerCase();
+    return `https://coinmarketcap.com/currencies/${slug}/`;
+};
+
+// Brand mark SVGs (parity with Pool Explorer's pool-label-link icons).
+const LP_UNI_SVG = `<svg class="proto-brand-icon" viewBox="0 0 438 504" fill="#FF007A" xmlns="http://www.w3.org/2000/svg"><path d="M171.43,114.54c-5.45-.78-5.71-1-3.12-1.3,4.94-.78,16.37.26,24.42,2.08,18.7,4.41,35.58,15.84,53.5,35.84l4.68,5.46,6.75-1c28.83-4.68,58.44-1,83.11,10.39,6.76,3.11,17.41,9.35,18.7,10.9.52.52,1.3,3.9,1.82,7.28,1.82,12.2,1,21.29-2.85,28.31-2.08,3.89-2.08,4.93-.78,8.31a7.79,7.79,0,0,0,7,4.41c6.23,0,12.73-9.87,15.84-23.63l1.3-5.46,2.34,2.6c13.24,14.81,23.63,35.32,25.19,49.87l.52,3.89-2.34-3.37c-3.89-6-7.53-9.87-12.46-13.25-8.83-6-18.18-7.79-42.86-9.09-22.33-1.3-35.06-3.11-47.53-7.27-21.3-7-32.2-16.1-57.4-49.61-11.17-14.8-18.18-22.85-25.19-29.61C206.75,125.45,191.43,117.66,171.43,114.54Z"/></svg>`;
+
+const LP_PANCAKE_SVG = `<svg class="proto-brand-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><ellipse cx="50" cy="72" rx="26" ry="18" fill="#d1884f" opacity="0.9"/><ellipse cx="50" cy="68" rx="22" ry="14" fill="#d1884f"/><ellipse cx="36" cy="32" rx="8" ry="20" fill="#d1884f" opacity="0.9" transform="rotate(-15 36 32)"/><ellipse cx="64" cy="32" rx="8" ry="20" fill="#d1884f" opacity="0.9" transform="rotate(15 64 32)"/><ellipse cx="50" cy="58" rx="22" ry="20" fill="#d1884f"/><ellipse cx="50" cy="60" rx="18" ry="16" fill="#d1884f"/><circle cx="42" cy="55" r="3.5" fill="none" stroke="#ffffff" stroke-width="2"/><circle cx="58" cy="55" r="3.5" fill="none" stroke="#ffffff" stroke-width="2"/></svg>`;
+
+// Build Uniswap/PancakeSwap + DexScreener + Revert link panes for the pair arrow.
+// Gated on a real 42-char contract address (V3-style); V4 composite ids are skipped.
+const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid) => {
+    const proto = (protocol || '').toLowerCase();
+    const net = (network || 'Ethereum').toLowerCase();
+    const isRealAddr = typeof poolAddress === 'string' && /^0x[a-f0-9]{40}$/i.test(poolAddress);
+    const isV4Id = typeof poolAddress === 'string' && /^0x[a-f0-9]{64}$/i.test(poolAddress);
+    let links = '';
+    const defillamaHtml = defillamaUuid
+        ? `<a href="https://defillama.com/yields/pool/${defillamaUuid}" target="_blank" class="lp-link defillama-link" data-tooltip="View on DeFi Llama" onclick="event.stopPropagation();"><img src="/static/assets/defillama.ico" alt="DeFi Llama" class="lp-link-icon defillama-icon" style="border-radius: 50%;" /></a>`
+        : '';
+
+    // V4: bytes32 poolId -> explorer + DexScreener + Revert links.
+    // Verified: DexScreener and Revert both index V4 pools by the bytes32
+    // poolId (dexscreener.com/<chain>/<poolId>,
+    // revert.finance/#/pool/<net>/uniswapv4/<poolId>). Revert V4 is
+    // Ethereum/Unichain only.
+    if (isV4Id) {
+        let dsNet = 'ethereum';
+        if (net.includes('base')) dsNet = 'base';
+        else if (net.includes('arbitrum')) dsNet = 'arbitrum';
+        else if (net.includes('optimism')) dsNet = 'optimism';
+        else if (net.includes('polygon')) dsNet = 'polygon';
+        else if (net.includes('bnb') || net.includes('bsc')) dsNet = 'bsc';
+
+        if (proto.includes('pancake')) {
+            let pChain = 'bsc';
+            if (net.includes('base')) pChain = 'base';
+            else if (net.includes('eth')) pChain = 'eth';
+            else if (net.includes('arbitrum')) pChain = 'arb';
+            links += `<a href="https://pancakeswap.finance/liquidity/pool/${pChain}/${poolAddress}" target="_blank" class="pool-label-link pool-label-link--pancakeswap" data-tooltip="View on PancakeSwap" onclick="event.stopPropagation();">${LP_PANCAKE_SVG}</a>`;
+        } else if (proto.includes('uniswap') || proto.includes('v4')) {
+            let uniNetwork = 'ethereum';
+            if (net.includes('base')) uniNetwork = 'base';
+            else if (net.includes('bnb') || net.includes('bsc')) uniNetwork = 'bnb';
+            else if (net.includes('arbitrum')) uniNetwork = 'arbitrum';
+            links += `<a href="https://app.uniswap.org/explore/pools/${uniNetwork}/${poolAddress}" target="_blank" class="pool-label-link pool-label-link--uniswap" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
+            if (net.includes('eth')) {
+                links += `<a href="https://revert.finance/#/pool/ethereum/uniswapv4/${poolAddress}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();"><img src="/static/assets/revert.svg" alt="Revert Finance" class="revert-icon" /></a>`;
+            }
+        }
+
+        links += `<a href="https://dexscreener.com/${dsNet}/${poolAddress}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();"><img src="/static/assets/dexscreener.ico" alt="DexScreener" class="lp-link-icon dexscreener-icon" style="border-radius: 50%;" /></a>`;
+        links += defillamaHtml;
+
+        return links ? `<div class="label-pane links-pane">${links}</div>` : '';
+    }
+
+    if (isRealAddr) {
+        if (proto.includes('pancake')) {
+            let pChain = 'bsc';
+            if (net.includes('base')) pChain = 'base';
+            else if (net.includes('eth')) pChain = 'eth';
+            else if (net.includes('arbitrum')) pChain = 'arb';
+            const href = proto.includes('v4')
+                ? `https://pancakeswap.finance/liquidity/pool/${pChain}/${poolAddress}`
+                : `https://pancakeswap.finance/info/v3/pairs/${poolAddress}?chain=${pChain}`;
+            links += `<a href="${href}" target="_blank" class="pool-label-link pool-label-link--pancakeswap" data-tooltip="View on PancakeSwap" onclick="event.stopPropagation();">${LP_PANCAKE_SVG}</a>`;
+        } else if (proto.includes('uniswap') || proto.includes('v3') || proto.includes('v2')) {
+            let uniNetwork = 'ethereum';
+            if (net.includes('base')) uniNetwork = 'base';
+            else if (net.includes('bnb') || net.includes('bsc')) uniNetwork = 'bnb';
+            else if (net.includes('arbitrum')) uniNetwork = 'arbitrum';
+            links += `<a href="https://app.uniswap.org/explore/pools/${uniNetwork}/${poolAddress}" target="_blank" class="pool-label-link pool-label-link--uniswap" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
+        }
+    }
+
+    if (isRealAddr) {
+        let revertNet = 'mainnet';
+        if (net.includes('base')) revertNet = 'base';
+        else if (net.includes('arbitrum')) revertNet = 'arbitrum';
+        else if (net.includes('optimism')) revertNet = 'optimism';
+        else if (net.includes('polygon')) revertNet = 'polygon';
+        else if (net.includes('bnb') || net.includes('bsc')) revertNet = 'bnb';
+        let revertProto = '';
+        if (proto.includes('uniswap') && proto.includes('v3')) revertProto = 'uniswapv3';
+        else if (proto.includes('pancakeswap') && proto.includes('v3') && (revertNet === 'bnb' || revertNet === 'arbitrum')) revertProto = 'pancakeswapv3';
+        else if (proto.includes('aerodrome') && revertNet === 'base') revertProto = 'aerodrome';
+        if (revertProto) {
+            links += `<a href="https://revert.finance/#/pool/${revertNet}/${revertProto}/${poolAddress.toLowerCase()}" target="_blank" class="revert-link" data-tooltip="Analyze on Revert Finance" onclick="event.stopPropagation();"><img src="/static/assets/revert.svg" alt="Revert Finance" class="revert-icon" /></a>`;
+        }
+    }
+
+    if (isRealAddr) {
+        let dsNet = 'ethereum';
+        if (net.includes('base')) dsNet = 'base';
+        else if (net.includes('arbitrum')) dsNet = 'arbitrum';
+        else if (net.includes('optimism')) dsNet = 'optimism';
+        else if (net.includes('polygon')) dsNet = 'polygon';
+        else if (net.includes('bnb') || net.includes('bsc')) dsNet = 'bsc';
+        links += `<a href="https://dexscreener.com/${dsNet}/${poolAddress}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();"><img src="/static/assets/dexscreener.ico" alt="DexScreener" class="lp-link-icon dexscreener-icon" style="border-radius: 50%;" /></a>`;
+    }
+
+    links += defillamaHtml;
+    return links ? `<div class="label-pane links-pane">${links}</div>` : '';
+};
+
 let currentFilters = {
     network: 'all',
     protocol: 'all',
@@ -244,6 +355,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    fetch('/api/coin/list')
+        .then(response => response.json())
+        .then(coins => coins.forEach(coin => {
+            if (!coin.symbol) return;
+            const up = coin.symbol.toUpperCase();
+            if (coin.image) lpTokenImageMap[up] = coin.image;
+            if (coin.slug) lpTokenSlugMap[up] = coin.slug;
+        }))
+        .catch(error => console.warn('Unable to load LP token icons:', error));
+
+    const getProtocolClass = (protocol) => {
+        const value = (protocol || '').toLowerCase();
+        if (value.includes('pancake') && value.includes('v4')) return 'pancakeswap-v4';
+        if (value.includes('pancake')) return 'pancakeswap-v3';
+        if (value.includes('v4')) return 'v4';
+        if (value.includes('v2')) return 'uniswap-v2';
+        if (value.includes('aerodrome')) return 'aerodrome';
+        return 'v3';
+    };
+
+    const renderPairPath = (asset0, asset1, images, protocol, feeTier, apr7d, poolAddress, network, defillamaUuid) => {
+        const aliases = { WETH: 'ETH', WBTC: 'BTC', CBBTC: 'BTC', TBTC: 'BTC', KBTC: 'BTC', LBTC: 'BTC', FBTC: 'BTC', WBNB: 'BNB' };
+        if (!Array.isArray(images)) {
+            try { images = JSON.parse(images || '[]'); } catch { images = []; }
+        }
+        const token = (asset, image) => {
+            const symbol = (asset.symbol || '---').toUpperCase();
+            const mapped = aliases[symbol] || symbol;
+            const source = image || lpTokenImageMap[symbol] || lpTokenImageMap[mapped] || `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${mapped.toLowerCase()}.png`;
+            return `<a href="${getCmcUrl(symbol)}" target="_blank" class="token-badge-link" data-tooltip="${symbol} on CoinMarketCap" onclick="event.stopPropagation();"><span class="lp-pair-token"><img class="lp-token-icon" src="${source}" width="28" height="28" alt="${symbol} icon" onerror="this.onerror=null;this.src='/static/favicon.png'">${symbol}</span></a>`;
+        };
+        const fee = feeTier || 'LP';
+        const apr = apr7d ? `${(apr7d * 100).toFixed(2)}% 7d` : 'APR pending';
+        const linksPane = renderPoolLinks(poolAddress, protocol, network, defillamaUuid);
+        return `<div class="lp-pair-path ${getProtocolClass(protocol)}" aria-label="${asset0.symbol} to ${asset1.symbol} liquidity pair">
+            ${token(asset0, images[0])}
+            <div class="lp-pair-arrow" aria-hidden="true"><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" style="transform: scaleX(-1);"><polyline points="1,1 7,7 1,13"/></svg><div class="lp-pair-line"><div class="lp-pair-label"><span>${fee}</span><span>${apr}</span>${linksPane}</div></div><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="1,1 7,7 1,13"/></svg></div>
+            ${token(asset1, images[1])}
+        </div>`;
+    };
+
     const renderPositions = (positions) => {
         if (!positions || positions.length === 0) {
             positionsGrid.innerHTML = '<div class="no-data-msg">No positions match your filters.</div>';
@@ -269,10 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayLabel += ' <span style="color:#f87171; font-size:0.8em;">(Closed)</span>';
             }
 
-            const images = (pos.images && pos.images.length > 0) ? pos.images.slice(0, 2) : ['/static/favicon.png'];
-            // Add explicit width/height to icons
-            const iconsHtml = images.map(img => `<img src="${img}" width="32" height="32" class="pos-icon-stacked" onerror="this.src='/static/favicon.png'">`).join('');
-
             const delta = pos.reward_delta_usd || 0;
             const accrualHtml = delta > 0
                 ? `<span class="accrual-tag positive">+${formatUSD(delta)} accrued</span>`
@@ -280,6 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const rangeData = calculateRangeData(pos);
             const rangeHtml = createRangeIndicator(rangeData);
+            const rangeStatus = !rangeData ? null : (rangeData.inRange ? 'In range' : 'Out of range');
+            const rangeStatusClass = !rangeData ? '' : (rangeData.inRange ? 'in-range' : 'out-of-range');
 
             // Format APRs
             const apr1d = pos.apr_1d ? (pos.apr_1d * 100).toFixed(2) + '%' : '0.00%';
@@ -296,7 +446,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const asset0 = pos.assets[0] || { symbol: '---', balance: 0, balanceUSD: 0 };
             const asset1 = pos.assets[1] || { symbol: '---', balance: 0, balanceUSD: 0 };
-            
+
+            // Backtest link params — mirrors the Pool Explorer result-table Backtest button.
+            // No date selector on the LP page, so start/end are omitted and the backtester
+            // falls back to its built-in default range (2y ago -> today).
+            const btToken1 = (asset0.symbol || '').toLowerCase();
+            const btToken2 = (asset1.symbol || '').toLowerCase();
+            const btApr = ((pos.apr_7d || pos.apr_1d || 0) * 100).toFixed(2);
+            const btHref = `/backtester?token1=${encodeURIComponent(btToken1)}&token2=${encodeURIComponent(btToken2)}&apr=${btApr}`;
+
             const unclaimed0 = (pos.unclaimed && pos.unclaimed[0]) || { balance: 0, balanceUSD: 0 };
             const unclaimed1 = (pos.unclaimed && pos.unclaimed[1]) || { balance: 0, balanceUSD: 0 };
             
@@ -312,78 +470,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const grandTotalUSD = pooledUSD + claimableUSD + claimedUSD;
 
             row.innerHTML = `
-                <!-- Toggle Icon (Absolute Positioned) -->
-                <div class="expand-toggle">
-                    <i class="fas fa-chevron-down"></i> &#9660;
-                </div>
-
-                <div class="pos-info">
-                    <div class="pos-header-with-icon">
-                        <div class="pos-icons-stack">
-                            ${iconsHtml}
-                        </div>
-                        <div class="pos-title-area">
-                            <h4>${displayLabel}</h4>
-                            <div class="pos-meta">
-                                <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
-                                ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
-                                <span class="protocol-tag">${pos.protocol}${pos.token_id ? `<span style="margin-left:6px; opacity:0.7; font-weight:400;">#${pos.token_id}</span>` : ''}</span>
-                            </div>
-                        </div>
+                <div class="lp-row-main">
+                    ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid)}
+                    <div class="lp-row-meta pos-meta">
+                        <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
+                        ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
                     </div>
-                    ${rangeHtml}
-                </div>
-                
-                <div class="pos-table-container">
-                    <table class="compact-lp-table">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>Pooled</th>
-                                <th>Claimable</th>
-                                <th>Claimed</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td class="token-sym">${asset0.symbol}</td>
-                                <td>${formatTokenAmount(asset0.balance)}</td>
-                                <td>${formatTokenAmount(unclaimed0.balance)}</td>
-                                <td>${formatTokenAmount(claimed0.balance)}</td>
-                                <td class="token-total">${formatTokenAmount(totalAmt0)}</td>
-                            </tr>
-                            <tr>
-                                <td class="token-sym">${asset1.symbol}</td>
-                                <td>${formatTokenAmount(asset1.balance)}</td>
-                                <td>${formatTokenAmount(unclaimed1.balance)}</td>
-                                <td>${formatTokenAmount(claimed1.balance)}</td>
-                                <td class="token-total">${formatTokenAmount(totalAmt1)}</td>
-                            </tr>
-                            <tr class="totals-row">
-                                <td class="totals-label">Total (USD)</td>
-                                <td class="pooled-val">${formatUSD(pooledUSD)}</td>
-                                <td class="claimable-val">${formatUSD(claimableUSD)}</td>
-                                <td class="claimed-val">${formatUSD(claimedUSD)}</td>
-                                <td class="grand-total">${formatUSD(grandTotalUSD)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="lp-row-total">
+                        <span class="lp-total-label">Total value</span>
+                        <strong>${formatUSD(grandTotalUSD)}</strong>
+                    </div>
+                    <button type="button" class="expand-toggle" aria-label="Toggle position details" aria-expanded="false">
+                        <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg>
+                    </button>
                 </div>
 
                 <!-- DRAWER (Hidden by default) -->
                 <div class="drawer" onclick="event.stopPropagation();">
                     <div class="drawer-section">
-                        <div class="drawer-title">Invested Tokens</div>
-                        ${pos.assets.filter(a => a.symbol).map(asset => `
-                            <div class="drawer-item">
-                                <span class="drawer-label">${asset.symbol}</span>
-                                <div style="text-align:right">
-                                    <div class="drawer-value">${formatTokenAmount(asset.balance)}</div>
-                                    <div style="font-size:0.75rem; color:var(--text-secondary);">$${formatUSD(asset.balanceUSD)}</div> 
-                                </div>
-                            </div>
-                        `).join('')}
+                        <div class="drawer-title">Overview</div>
+                        <div class="pos-meta lp-drawer-meta">
+                            <span class="badge ${pos.network.toLowerCase()}">${pos.network}</span>
+                            ${walletDisplay ? `<span class="wallet-tag" title="${walletAddr}">${walletDisplay}</span>` : ''}
+                            <span class="protocol-tag">${pos.protocol}${pos.token_id ? ` <span class="lp-token-id">#${pos.token_id}</span>` : ''}</span>
+                            ${pos.isClosed ? '<span class="lp-closed-tag">Closed</span>' : ''}
+                            ${accrualHtml}
+                        </div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-title">Range</div>
+                        ${rangeStatus ? `<span class="lp-range-status ${rangeStatusClass}">${rangeStatus}</span>` : ''}
+                        ${rangeHtml}
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-title">Balances</div>
+                        <div class="drawer-item"><span class="drawer-label">Pooled</span><span class="drawer-value">${formatUSD(pooledUSD)}</span></div>
+                        <div class="drawer-item"><span class="drawer-label">Claimable</span><span class="drawer-value">${formatUSD(claimableUSD)}</span></div>
+                        <div class="drawer-item"><span class="drawer-label">Claimed</span><span class="drawer-value">${formatUSD(claimedUSD)}</span></div>
+                        <div class="drawer-item"><span class="drawer-label">Total</span><span class="drawer-value">${formatUSD(grandTotalUSD)}</span></div>
                     </div>
                     <div class="drawer-section">
                         <div class="drawer-title">Performance (APR)</div>
@@ -395,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="drawer-label">7d APR</span>
                             <span class="drawer-value ${getAprClass(pos.apr_7d)}">${apr7d}</span>
                         </div>
-                        
+
                         <button class="history-btn" onclick="openHistoryModal('${pos.position_key}', '${cleanedLabel.replace(/'/g, "\\'") + (pos.isClosed ? ' (Closed)' : '')}')">
                             <i class="fas fa-history"></i> View History
                         </button>
@@ -403,21 +527,38 @@ document.addEventListener('DOMContentLoaded', () => {
                         <a href="/pool?id=${pos.pool_id}" class="history-btn" style="text-decoration:none; margin-top:0.5rem; display:block; text-align:center;">
                             <i class="fas fa-chart-line"></i> Pool Analytics
                         </a>
+
+                        <a href="${btHref}" class="history-btn" target="_blank" style="text-decoration:none; margin-top:0.5rem; display:block; text-align:center;" onclick="event.stopPropagation();">
+                            <i class="fas fa-chart-area"></i> Backtest
+                        </a>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-title">Invested Tokens</div>
+                        ${pos.assets.filter(a => a.symbol).map(asset => `
+                            <div class="drawer-item">
+                                <span class="drawer-label">${asset.symbol}</span>
+                                <div style="text-align:right">
+                                    <div class="drawer-value">${formatTokenAmount(asset.balance)}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-secondary);">$${formatUSD(asset.balanceUSD)}</div>
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             `;
 
-            // Toggle Logic
-            row.addEventListener('click', (e) => {
-                // Prevent toggling if clicking links/buttons
-                if (e.target.tagName !== 'A' && e.target.tagName !== 'BUTTON' && !e.target.closest('.history-btn')) {
-                    const drawer = row.querySelector('.drawer');
-                    if (drawer) {
-                        drawer.classList.toggle('open');
-                        // Optional: Add active class to row for styling
-                        row.classList.toggle('active');
-                    }
-                }
+            const expandBtn = row.querySelector('.expand-toggle');
+            const toggleDrawer = () => {
+                const drawer = row.querySelector('.drawer');
+                if (!drawer) return;
+                const isOpen = drawer.classList.toggle('open');
+                row.classList.toggle('active', isOpen);
+                expandBtn.setAttribute('aria-expanded', String(isOpen));
+            };
+
+            expandBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                toggleDrawer();
             });
 
             positionsGrid.appendChild(row);

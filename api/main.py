@@ -264,15 +264,13 @@ _NATIVE_ZERO = '0x0000000000000000000000000000000000000000'
 
 def _derive_v4_pool_id(c0_hex: str, c1_hex: str, fee: int, tick_spacing: int) -> str:
     """V4 poolId = keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks)),
-    assuming hooks = address(0). currency0 < currency1 (sorted)."""
-    a = bytes.fromhex(c0_hex.lower().removeprefix('0x').rjust(40, '0'))
-    b = bytes.fromhex(c1_hex.lower().removeprefix('0x').rjust(40, '0'))
-    if b < a:
-        a, b = b, a
-    hooks = b'\x00' * 32
-    enc = (a.rjust(32, b'\x00') + b.rjust(32, b'\x00') +
-           fee.to_bytes(32, 'big') + tick_spacing.to_bytes(32, 'big', signed=True) + hooks)
-    return '0x' + keccak(enc).hex()
+    assuming hooks = address(0). currency0 < currency1 (sorted).
+
+    Delegates to the shared chain-feeder/include/v4_pool.py implementation so the
+    API and the Airflow ingestion use one source of truth.
+    """
+    from include.v4_pool import derive_v4_pool_id
+    return derive_v4_pool_id(c0_hex, c1_hex, fee, tick_spacing)
 
 
 def _build_defillama_index() -> Dict[str, str]:
@@ -289,13 +287,11 @@ def _build_defillama_index() -> Dict[str, str]:
         if len(tokens) != 2:
             continue
 
-        # Uniswap V4: derive the poolId (what Chaintelligence carries) and map
-        # it to the UUID. Only non-ETH, standard-fee, no-hook pools — ETH pools
-        # use native 0x0 on DeFi Llama but WETH in Chaintelligence (different
-        # poolIds), and non-standard fees have unknown tickSpacing/hooks.
+        # Uniswap V4: derive the on-chain poolId from DeFi Llama's raw
+        # underlyingTokens (native 0x0 for ETH — matching Chaintelligence's
+        # RPC-derived V4 pool_address) and map it to the UUID. Standard fee
+        # tiers only; non-standard fees have no knowable tickSpacing here.
         if project == 'uniswap-v4':
-            if any(t.lower() == _NATIVE_ZERO for t in tokens):
-                continue
             fee = _dl_fee_to_bips(p.get('poolMeta'))
             if fee is None:
                 continue
@@ -1476,6 +1472,11 @@ async def get_date_range(network: Optional[str] = Query(None, description="Filte
 async def lp_summary():
     """Get the latest summary of LP snapshots with APR calculations."""
     try:
+        # Ensure the DeFi Llama yields index (pool address / V4 poolId -> UUID)
+        # is warm so per-position UUID lookups below are cheap dict hits; the
+        # (24h-cached) build runs off the event loop.
+        if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
+            await asyncio.to_thread(get_defillama_index)
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
         cur = conn.cursor()
         
@@ -1537,6 +1538,22 @@ async def lp_summary():
             key = row[11] if row[11] else f"{row[3]}-{row[5]}-{row[4]}"
             if key not in latest_positions:
                 latest_positions[key] = row
+
+        # Resolve the real pool_address (and pool_id) per position via the
+        # position -> liquidity_pool join. The summary view exposes position_key
+        # but not the pool address, which the frontend needs for Uniswap /
+        # DexScreener / Revert / DeFi Llama links (parity with Pool Explorer).
+        position_keys = [k for k in latest_positions.keys() if k]
+        pool_lookup = {}
+        if position_keys:
+            cur.execute("""
+                SELECT lpp.position_key, lp.pool_address, lp.id
+                FROM liquidity_pool_position lpp
+                JOIN liquidity_pool lp ON lpp.pool_id = lp.id
+                WHERE lpp.position_key = ANY(%s)
+            """, (position_keys,))
+            for pk, addr, pid in cur.fetchall():
+                pool_lookup[pk] = {"pool_address": addr, "pool_id": pid}
                 
         # 2. Fetch historical snapshots for APR calculation (Last 8 days)
         # We need raw snapshot data to calculate fee growth
@@ -1618,7 +1635,9 @@ async def lp_summary():
                 "total_unclaimed_usd": float(latest[10]) if latest[10] else 0,
                 "images": latest[9],
                 "token_id": latest[12],
-                "pool_id": latest[21],
+                "pool_id": (pool_lookup.get(key) or {}).get("pool_id") or latest[21],
+                "pool_address": (pool_lookup.get(key) or {}).get("pool_address"),
+                "defillama_uuid": get_defillama_pool_uuid((pool_lookup.get(key) or {}).get("pool_address")),
                 # Range data (indices 12-20)
                 "range_data": {
                     "token_id": latest[12],

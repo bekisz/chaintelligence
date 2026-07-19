@@ -4,6 +4,8 @@ import os
 import math
 from typing import List, Dict, Any
 
+from include.v4_pool import derive_v4_pool_id
+
 logger = logging.getLogger(__name__)
 
 # Uniswap V3 Subgraph IDs on The Graph Decentralized Network
@@ -474,7 +476,22 @@ def fetch_graph_positions(wallet_addresses: Any, networks: List[str] = None, gra
                                 # Fetch token details from RPC data
                                 t0_addr = pkey["token0"]
                                 t1_addr = pkey["token1"]
-                                pool_addr = f"v4-{t0_addr}-{t1_addr}"
+                                # Derive the real V4 poolId (bytes32) — what the
+                                # Uniswap explorer expects. pkey carries the
+                                # authoritative fee/tickSpacing/hooks from the
+                                # PoolManager, so this matches on-chain exactly
+                                # (incl. native ETH and hooked pools). Fall back
+                                # to the synthetic composite only if derivation
+                                # fails, so the pool is never lost.
+                                try:
+                                    pool_addr = derive_v4_pool_id(
+                                        t0_addr, t1_addr,
+                                        pkey["fee"], pkey["tickSpacing"],
+                                        pkey.get("hooks"),
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"V4 poolId derivation failed for {t0_addr}/{t1_addr}: {e}")
+                                    pool_addr = f"v4-{t0_addr}-{t1_addr}"
                                 
                                 # Fetch token details from Graph / Fallback to RPC
                                 t0_sym, t0_dec = "UNK", 18
