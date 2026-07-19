@@ -488,7 +488,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="lp-row-left">
                         ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid, pos.token_id)}
                         <div class="lp-row-range">
-                            ${rangeStatus ? `<span class="lp-range-status ${rangeStatusClass}">${rangeStatus}</span>` : ''}
                             ${rangeHtml}
                         </div>
                     </div>
