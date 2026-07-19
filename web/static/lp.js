@@ -499,6 +499,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </div>
 
+                <div class="lp-row-range">
+                    ${rangeStatus ? `<span class="lp-range-status ${rangeStatusClass}">${rangeStatus}</span>` : ''}
+                    ${rangeHtml}
+                </div>
+
                 <!-- DRAWER (Hidden by default) -->
                 <div class="drawer" onclick="event.stopPropagation();">
                     <div class="drawer-section">
@@ -510,11 +515,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${pos.isClosed ? '<span class="lp-closed-tag">Closed</span>' : ''}
                             ${accrualHtml}
                         </div>
-                    </div>
-                    <div class="drawer-section">
-                        <div class="drawer-title">Range</div>
-                        ${rangeStatus ? `<span class="lp-range-status ${rangeStatusClass}">${rangeStatus}</span>` : ''}
-                        ${rangeHtml}
                     </div>
                     <div class="drawer-section">
                         <div class="drawer-title">Balances</div>
