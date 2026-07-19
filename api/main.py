@@ -1834,7 +1834,7 @@ async def lp_history(position_key: str):
 
         raw_history = []
         tx_groups = {}
-        
+
         for r in rows:
             event = {
                 "timestamp": r[0].isoformat(),
@@ -1847,10 +1847,20 @@ async def lp_history(position_key: str):
                 "network": r[7]
             }
             raw_history.append(event)
-            
+
             if event['tx_hash'] not in tx_groups:
                 tx_groups[event['tx_hash']] = []
             tx_groups[event['tx_hash']].append(event)
+
+        # A position NFT is minted exactly once. Older duplicate 'create'
+        # events are backfill artifacts (txs that predate the NFT) — keep
+        # only the latest create per position.
+        create_events = [e for e in raw_history if e['event_type'] == 'create']
+        if len(create_events) > 1:
+            latest = max(create_events, key=lambda x: x['timestamp'])
+            raw_history = [e for e in raw_history
+                           if e['event_type'] != 'create'
+                           or (e['timestamp'] == latest['timestamp'] and e['tx_hash'] == latest['tx_hash'])]
 
         history = []
         for e in raw_history:
