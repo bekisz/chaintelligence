@@ -74,6 +74,38 @@ class V4EventFetcher:
             
         return None, None, None, False, None
 
+    def get_position_tokens(self, token_id, pm_address):
+        """Authoritative on-chain token0/token1 for a V4 position via the
+        PositionManager's getPoolAndPositionInfo(uint256). These always match
+        the deposit tx (unlike coin_contract addresses, which can be stale).
+        Returns (token0, token1) or (None, None) if the position is gone / call fails.
+        Mirrors verify_v4_position_rpc in graph_discovery_client.py.
+        """
+        if not pm_address:
+            return None, None
+        selector = "0x7ba03aad"  # getPoolAndPositionInfo(uint256)
+        calldata = selector + format(int(token_id), '064x')
+        data = self._rpc_call("eth_call", [{"to": pm_address, "data": calldata}, "latest"])
+        if not data or "result" not in data or not data["result"] or data["result"] == "0x":
+            return None, None
+        raw = data["result"][2:]
+        if len(raw) < 128:  # need at least 2 words (token0, token1)
+            return None, None
+        words = [raw[i:i + 64] for i in range(0, len(raw), 64)]
+        return "0x" + words[0][-40:], "0x" + words[1][-40:]
+
+    def _get_decimals(self, token_addr):
+        """On-chain ERC20 decimals() for token_addr; returns int or None."""
+        if not token_addr:
+            return None
+        data = self._rpc_call("eth_call", [{"to": token_addr, "data": "0x313ce567"}, "latest"])
+        if not data or "result" not in data or not data["result"] or data["result"] == "0x":
+            return None
+        try:
+            return int(data["result"], 16)
+        except (ValueError, TypeError):
+            return None
+
     def get_token_amounts_from_tx(self, tx_hash, token0, token1, decimals0, decimals1, extra_manager=None):
         """
         Parses a transaction to find net inputs for token0 and token1.

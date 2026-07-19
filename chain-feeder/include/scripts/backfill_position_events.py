@@ -347,17 +347,30 @@ def scan_events(network, protocol, positions, start_date_override=None):
                             from_addr = "0x" + log['topics'][1][26:]
                             if int(from_addr, 16) == 0:
                                 event_type = 'create'
-                                
+
                                 # Use the address of the log (PositionManager) as the extra manager
                                 # This handles custom/testnet PositionManagers
                                 pm_address = log['address']
-                                
-                                c0_addr = p['c0_addr']
-                                c1_addr = p['c1_addr']
-                                
-                                v0, v1, status = fetcher.get_token_amounts_from_tx(tx_hash, c0_addr, c1_addr, p['d0'], p['d1'], extra_manager=pm_address)
+
+                                # Authoritative on-chain token0/token1 from the V4
+                                # PositionManager (getPoolAndPositionInfo). coin_contract
+                                # addresses can be stale/mismatched vs the deposit tx, which
+                                # left amounts at 0. Fall back to coin_contract if the call
+                                # fails (e.g. closed/burnt position).
+                                auth0, auth1 = fetcher.get_position_tokens(p['token_id'], pm_address)
+                                c0_addr = auth0 or p['c0_addr']
+                                c1_addr = auth1 or p['c1_addr']
+
+                                # On-chain decimals (fallback to coin table) so a mislabeled
+                                # coin doesn't produce the wrong magnitude.
+                                d0 = fetcher._get_decimals(c0_addr)
+                                d1 = fetcher._get_decimals(c1_addr)
+                                d0 = d0 if d0 is not None else p['d0']
+                                d1 = d1 if d1 is not None else p['d1']
+
+                                v0, v1, status = fetcher.get_token_amounts_from_tx(tx_hash, c0_addr, c1_addr, d0, d1, extra_manager=pm_address)
                                 logger.info(f"  V4 Details: {status}")
-                                
+
                          except Exception as e:
                             logger.error(f"Error parsing V4 transfer: {e}")
 
