@@ -5,15 +5,7 @@ let lpTokenSlugMap = {};
 
 const getCmcUrl = (symbol) => {
     const s = (symbol || '').toUpperCase().trim();
-    // Hardcoded overrides for tokens whose DB slugs are stale or wrong.
-    // The CMC API ingest sometimes returns incorrect slugs; these are the
-    // known correct ones for the most common LP tokens.
-    const OVERRIDES = {
-        'EURC': 'euro-coin',
-        'ETH': 'ethereum',
-        'USDT': 'tether',
-    };
-    const slug = OVERRIDES[s] || lpTokenSlugMap[s] || s.toLowerCase();
+    const slug = lpTokenSlugMap[s] || s.toLowerCase();
     return `https://coinmarketcap.com/currencies/${slug}/`;
 };
 
