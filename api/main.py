@@ -391,7 +391,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health", "/status"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -3076,6 +3076,91 @@ async def health_check():
         status["status"] = "degraded"
         status["database"] = f"error: {e}"
     return status
+
+
+@app.get("/status", tags=["System"])
+async def data_status():
+    """Data freshness for swaps, coins, and coin_price_history tables."""
+    import time
+    from datetime import datetime, timezone, timedelta
+
+    now = datetime.now(timezone.utc)
+    status = {"status": "ok", "timestamp": time.time()}
+    overall_degraded = False
+
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB, connect_timeout=10)
+        cur = conn.cursor()
+
+        # 1. Swaps — earliest/latest per (chain, protocol).
+        cur.execute("""
+            SELECT ch.name, pr.name, MIN(s.ts), MAX(s.ts)
+            FROM swaps s
+            JOIN liquidity_pool lp ON s.pool_id = lp.id
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            GROUP BY ch.name, pr.name
+            ORDER BY ch.name, pr.name
+        """)
+        swap_info = {}
+        for chain, protocol, earliest, latest in cur.fetchall():
+            ft = latest if latest.tzinfo else latest.replace(tzinfo=timezone.utc)
+            stale = ft < now - timedelta(hours=3)
+            if stale: overall_degraded = True
+            swap_info[f"{chain}/{protocol}"] = {
+                "earliest": earliest.isoformat() if earliest else None,
+                "latest": latest.isoformat() if latest else None,
+                "status": "stale" if stale else "fresh",
+            }
+        any_swap_stale = any(s["status"] == "stale" for s in swap_info.values())
+        status["swaps"] = {"status": "stale" if any_swap_stale else "fresh", "chains": swap_info}
+
+        # 2. Coins — cmc_last_updated.
+        cur.execute("""
+            SELECT symbol, cmc_last_updated FROM coin
+            WHERE cmc_last_updated IS NOT NULL ORDER BY cmc_last_updated ASC
+        """)
+        coin_rows = cur.fetchall()
+        if coin_rows:
+            old_sym, old_ts = coin_rows[0]
+            new_sym, new_ts = coin_rows[-1]
+            ft = old_ts if old_ts.tzinfo else old_ts.replace(tzinfo=timezone.utc)
+            coin_stale = ft < now - timedelta(hours=3)
+            if coin_stale: overall_degraded = True
+            status["coins"] = {
+                "status": "stale" if coin_stale else "fresh",
+                "total": len(coin_rows),
+                "oldest": {"symbol": old_sym, "last_updated": old_ts.isoformat() if old_ts else None},
+                "latest": {"symbol": new_sym, "last_updated": new_ts.isoformat() if new_ts else None},
+            }
+        else:
+            status["coins"] = {"status": "stale", "total": 0}
+
+        # 3. Coin price history — global min/max timestamp.
+        cur.execute("SELECT MIN(timestamp), MAX(timestamp) FROM coin_price_history")
+        ph_min, ph_max = cur.fetchone()
+        if ph_max:
+            ft = ph_max if ph_max.tzinfo else ph_max.replace(tzinfo=timezone.utc)
+            ph_stale = ft < now - timedelta(days=2)
+            if ph_stale: overall_degraded = True
+        else:
+            ph_stale = True
+        status["coin_price_history"] = {
+            "status": "stale" if ph_stale else "fresh",
+            "earliest": ph_min.isoformat() if ph_min else None,
+            "latest": ph_max.isoformat() if ph_max else None,
+        }
+
+        if overall_degraded:
+            status["status"] = "degraded"
+
+        cur.close(); conn.close()
+    except Exception as e:
+        status["status"] = "error"
+        status["error"] = str(e)
+
+    return status
+
 
 @app.get("/lp", include_in_schema=False)
 async def read_lp():
