@@ -391,7 +391,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -866,7 +866,19 @@ async def analyze(
                     return db_results
 
                 db_batch = await asyncio.to_thread(_lookup_db_pools)
-                pool_addresses.update(db_batch)
+                # Preserve derived CREATE2 addresses for V2/V3 pools (the DB
+                # may contain stale/wrong addresses); only overlay the internal cid
+                # from the DB. V4 pools, which have no CREATE2 derivation, still get
+                # their pool_address/pool_id from the DB.
+                for key, db_val in db_batch.items():
+                    if key in pool_addresses:
+                        pool_addresses[key] = {
+                            "pool_address": pool_addresses[key]["pool_address"],
+                            "pool_id": pool_addresses[key].get("pool_id", db_val.get("pool_id", "")),
+                            "cid": db_val.get("cid"),
+                        }
+                    else:
+                        pool_addresses[key] = db_val
 
             # Warm the DeFi Llama yields index off the event loop (one-time per TTL).
             if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
@@ -1347,7 +1359,19 @@ async def analyze_pools(
                     return db_results
 
                 db_batch = await asyncio.to_thread(_lookup_db_pools)
-                pool_addresses.update(db_batch)
+                # Preserve derived CREATE2 addresses for V2/V3 pools (the DB
+                # may contain stale/wrong addresses); only overlay the internal cid
+                # from the DB. V4 pools, which have no CREATE2 derivation, still get
+                # their pool_address/pool_id from the DB.
+                for key, db_val in db_batch.items():
+                    if key in pool_addresses:
+                        pool_addresses[key] = {
+                            "pool_address": pool_addresses[key]["pool_address"],
+                            "pool_id": pool_addresses[key].get("pool_id", db_val.get("pool_id", "")),
+                            "cid": db_val.get("cid"),
+                        }
+                    else:
+                        pool_addresses[key] = db_val
 
             if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
                 await asyncio.to_thread(get_defillama_index)
@@ -1468,7 +1492,7 @@ async def get_date_range(network: Optional[str] = Query(None, description="Filte
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/lp/position-summary", tags=["Liquidity Pools"])
+@app.get("/api/lp/position-summary", tags=["Liquidity Pool Positions"])
 async def lp_summary():
     """Get the latest summary of LP snapshots with APR calculations."""
     try:
@@ -1800,7 +1824,7 @@ async def lp_summary():
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@app.get("/api/lp/history", tags=["Liquidity Pools"])
+@app.get("/api/lp/history", tags=["Liquidity Pool Positions"])
 async def lp_history(position_key: str):
     """Get historical events for a specific LP position."""
     try:
@@ -1886,7 +1910,236 @@ async def lp_history(position_key: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/coin/price-history", tags=["Assets"])
+
+@app.get("/api/pool/{identifier}", tags=["Liquidity Pools"])
+async def get_pool(identifier: str):
+    """Get pool metadata, analytics, and external links.
+
+    Accepts a liquidity_pool.id (integer), a V3 contract address (0x + 40 hex,
+    42 chars), or a V4 pool_id (0x + 64 hex, 66 chars). Returns a single pool
+    object (or 404 if not found).
+    """
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+        cur = conn.cursor()
+
+        # Determine what to search by.
+        if identifier.isdigit():
+            col_clause = "lp.id = %s"
+            param = int(identifier)
+        elif len(identifier) == 42 and identifier.startswith("0x"):
+            col_clause = "LOWER(lp.pool_address) = LOWER(%s)"
+            param = identifier
+        elif len(identifier) == 66 and identifier.startswith("0x"):
+            col_clause = "LOWER(lp.pool_id) = LOWER(%s) OR LOWER(lp.pool_address) = LOWER(%s)"
+            param = (identifier, identifier)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Identifier must be a numeric id, a 42-char 0x contract address, or a 66-char 0x V4 pool_id",
+            )
+
+        # Fetch pool metadata.
+        q = f"""
+            SELECT lp.id, lp.pool_address, lp.pool_id, lp.fee_bps,
+                   ch.name AS network, pr.name AS protocol,
+                   c0.coin_id AS c0_id, c0.symbol AS c0_sym,
+                   c1.coin_id AS c1_id, c1.symbol AS c1_sym,
+                   lp.created_at
+            FROM liquidity_pool lp
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            JOIN coin c0 ON lp.coin0_id = c0.coin_id
+            JOIN coin c1 ON lp.coin1_id = c1.coin_id
+            WHERE {col_clause}
+            LIMIT 1
+        """
+        if isinstance(param, tuple):
+            cur.execute(q, param)
+        else:
+            cur.execute(q, (param,))
+        row = cur.fetchone()
+
+        if not row:
+            cur.close()
+            conn.close()
+            # Try id numeric match if the identifier is hex but no match yet.
+            # This is just a last-resort  — we already checked above.
+            raise HTTPException(status_code=404, detail="Pool not found")
+
+        (
+            pool_id, pool_address, v4_pool_id, fee_bps,
+            network, protocol,
+            coin0_id, coin0_sym,
+            coin1_id, coin1_sym,
+            created_at
+        ) = row
+
+        is_v4 = "v4" in (protocol or "").lower()
+        is_pancake_v4 = "pancakeswapv4" in (protocol or "").lower().replace(" ", "")
+
+        # For V3 pools derive the canonical address for comparison.
+        canonical_address = None
+        fee_val = round(fee_bps) if fee_bps else None
+        if not is_v4 and fee_bps is not None and coin0_id and coin1_id:
+            try:
+                cur.execute("""
+                    SELECT cc.contract_address
+                    FROM coin_contract cc
+                    JOIN chain ch ON cc.chain_id = ch.id
+                    WHERE cc.coin_id = %s AND LOWER(ch.name) = LOWER(%s)
+                    LIMIT 1
+                """, (coin0_id, network))
+                r0 = cur.fetchone()
+                cur.execute("""
+                    SELECT cc.contract_address
+                    FROM coin_contract cc
+                    JOIN chain ch ON cc.chain_id = ch.id
+                    WHERE cc.coin_id = %s AND LOWER(ch.name) = LOWER(%s)
+                    LIMIT 1
+                """, (coin1_id, network))
+                r1 = cur.fetchone()
+                if r0 and r1:
+                    t0_bytes = bytes.fromhex(r0[0].lower().removeprefix("0x"))
+                    t1_bytes = bytes.fromhex(r1[0].lower().removeprefix("0x"))
+                    from config.dex_config import DEX_CONFIG  # noqa
+                    proto_key = "pancakeswap_v3" if "pancake" in protocol.lower() else "uniswap_v3"
+                    net_key = network.lower()
+                    cfg = DEX_CONFIG.get(proto_key, {})
+                    net_cfg = cfg.get(net_key) or (cfg.get("eth") if net_key == "ethereum" else None)
+                    if net_cfg and "factory" in net_cfg:
+                        canonical_address = _derive_address(
+                            t0_bytes, t1_bytes, fee_val,
+                            net_cfg["factory"], net_cfg["init_hash"], is_v2=False
+                        )
+            except Exception:
+                pass  # non-fatal; canonical_address remains None
+
+        # DeFiLlama UUID.
+        addr_for_lookup = canonical_address or pool_address or v4_pool_id or ""
+        defillama_uuid = get_defillama_pool_uuid(addr_for_lookup)
+
+        # TVL and volume from liquidity_pool_history.
+        cur.execute("""
+            SELECT date, tvl_usd, volume_usd, tx_count
+            FROM liquidity_pool_history
+            WHERE pool_id = %s
+              AND date >= NOW() - INTERVAL '90 days'
+            ORDER BY date DESC
+        """, (pool_id,))
+        history_rows = cur.fetchall()
+
+        latest_tvl = None
+        latest_volume = None
+        history = []
+        for hr in history_rows:
+            d, tvl, vol, txs = hr
+            history.append({
+                "date": d.isoformat(),
+                "tvl_usd": float(tvl) if tvl else None,
+                "volume_usd": float(vol) if vol else None,
+                "tx_count": txs or 0,
+            })
+            if latest_tvl is None and tvl:
+                latest_tvl = float(tvl)
+            if latest_volume is None and vol:
+                latest_volume = float(vol)
+
+        # Fallback TVL from DeFiLlama if history had none.
+        if latest_tvl is None:
+            latest_tvl = get_defillama_pool_tvl(addr_for_lookup)
+
+        cur.close()
+        conn.close()
+
+        # Build external links.
+        links = {}
+
+        # Uniswap / PancakeSwap link
+        link_addr = v4_pool_id or pool_address or ""
+        if link_addr:
+            proto_lower = protocol.lower()
+            # Determine chain segment.
+            net_seg = "ethereum"
+            if "base" in network.lower():
+                net_seg = "base"
+            elif "arbitrum" in network.lower():
+                net_seg = "arbitrum"
+            elif "optimism" in network.lower():
+                net_seg = "optimism"
+            elif "polygon" in network.lower():
+                net_seg = "polygon"
+            elif "bnb" in network.lower() or "bsc" in network.lower():
+                net_seg = "bnb"
+
+            if "pancake" in proto_lower:
+                pchain = net_seg
+                if "v4" in proto_lower:
+                    if len(link_addr) == 66:
+                        links["pancakeswap"] = f"https://pancakeswap.finance/liquidity/pool/{pchain}/{link_addr}"
+                    else:
+                        links["pancakeswap"] = f"https://pancakeswap.finance/info/infinity/pairs/tokens/{link_addr}?chain={pchain}"
+                else:
+                    links["pancakeswap"] = f"https://pancakeswap.finance/info/v3/pairs/{link_addr}?chain={pchain}"
+            elif "uniswap" in proto_lower or "v3" in proto_lower or "v2" in proto_lower:
+                links["uniswap"] = f"https://app.uniswap.org/explore/pools/{net_seg}/{link_addr}"
+
+            # DexScreener
+            ds_chain = net_seg
+            if ds_chain == "bnb":
+                ds_chain = "bsc"
+            links["dexscreener"] = f"https://dexscreener.com/{ds_chain}/{link_addr.lower()}"
+
+            # Revert Finance
+            revert_net = net_seg
+            if revert_net == "bnb":
+                revert_net = "bsc"
+            if revert_net == "ethereum":
+                revert_net = "mainnet"
+            revert_proto = None
+            if "uniswap" in proto_lower:
+                if "v4" in proto_lower:
+                    revert_proto = "uniswapv4"
+                else:
+                    revert_proto = "uniswapv3"
+            elif "pancake" in proto_lower and "v3" in proto_lower:
+                if revert_net in ("bnb", "arbitrum"):
+                    revert_proto = "pancakeswapv3"
+            elif "aerodrome" in proto_lower:
+                if revert_net == "base":
+                    revert_proto = "aerodrome"
+            if revert_proto:
+                links["revert"] = f"https://revert.finance/#/pool/{revert_net}/{revert_proto}/{link_addr.lower()}"
+
+        # DeFiLlama link
+        if defillama_uuid:
+            links["defillama"] = f"https://defillama.com/yields/pool/{defillama_uuid}"
+
+        return {
+            "id": pool_id,
+            "pool_address": pool_address or "",
+            "pool_id": v4_pool_id or "",
+            "canonical_address": canonical_address or "",
+            "chain": network,
+            "protocol": protocol,
+            "token0": {"coin_id": coin0_id, "symbol": coin0_sym},
+            "token1": {"coin_id": coin1_id, "symbol": coin1_sym},
+            "fee_bps": float(fee_bps) if fee_bps else None,
+            "fee_tier": f"{fee_val / 100.0:.2f}%" if fee_val else ("Dynamic" if fee_bps is None else None),
+            "created_at": created_at.isoformat() if created_at else None,
+            "defillama_uuid": defillama_uuid,
+            "tvl_usd": latest_tvl or None,
+            "volume_usd_24h": latest_volume or None,
+            "links": links,
+            "history": history,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/coin/price-history", tags=["Coins"])
 async def price_history(symbol: str, start: Optional[int] = None, end: Optional[int] = None):
     """Get historical daily prices for a coin from Postgres.
 
@@ -2140,7 +2393,7 @@ async def get_dag_run_status(dag_id: str, dag_run_id: str):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Error communicating with Airflow: {exc}")
 
-@app.get("/api/coin/list", tags=["Assets"])
+@app.get("/api/coin/list", tags=["Coins"])
 async def get_coins():
     """Get list of active indexed coins for the backtester."""
     try:
@@ -2359,7 +2612,7 @@ async def sync_pool(pool_id: int):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@app.get("/api/assets/price-by-cmc-id", tags=["Assets"])
+@app.get("/api/assets/price-by-cmc-id", tags=["Coins"])
 async def get_price_by_cmc_id(id: str = Query(..., description="Comma-separated CMC IDs (max 100)")):
     """
     Get coin price data by CoinMarketCap IDs.
@@ -2806,6 +3059,23 @@ async def read_index():
 @app.get("/routing", include_in_schema=False)
 async def read_routing():
     return FileResponse(os.path.join(STATIC_DIR, 'routing.html'))
+
+@app.get("/health", tags=["System"])
+async def health_check():
+    """Lightweight health check — DB connectivity + basic status."""
+    import time
+    status = {"status": "ok", "timestamp": time.time()}
+    try:
+        conn = psycopg2.connect(DATA_WAREHOUSE_DB, connect_timeout=3)
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+        conn.close()
+        status["database"] = "connected"
+    except Exception as e:
+        status["status"] = "degraded"
+        status["database"] = f"error: {e}"
+    return status
 
 @app.get("/lp", include_in_schema=False)
 async def read_lp():
