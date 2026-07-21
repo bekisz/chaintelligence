@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaintelligence | System & Data Health</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
+    <link rel="stylesheet" href="/static/style.css?v=40.0">
+</head>
+
+<body class="health-page-body">
+    <!-- Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png?v=side-brain-minimal" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/lp" class="nav-link">LP Positions</a>
+                <a href="/pool" class="nav-link">Pool Explorer</a>
+                <a href="/backtester" class="nav-link">Backtest</a>
+                <a href="/routing" class="nav-link">Route Analysis</a>
+                <a href="/sps" class="nav-link">SPS</a>
+                <a href="/status" class="nav-link active">Status</a>
+                <a href="/docs" class="nav-link">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <main class="main-container health-main-container">
+        <!-- Main Status Banner -->
+        <div class="health-hero-banner glass-card">
+            <div class="banner-gradient-border"></div>
+            <div class="banner-main-row">
+                <div class="status-indicator-group">
+                    <div id="system-status-pulse" class="status-pulse-ring pulse-green">
+                        <div class="pulse-core"></div>
+                    </div>
+                    <div class="status-titles">
+                        <div class="status-eyebrow">Data Warehouse & Indexer Status</div>
+                        <h1 id="system-status-title" class="status-heading">ALL SYSTEMS OPERATIONAL</h1>
+                    </div>
+                </div>
+
+                <div class="banner-controls">
+                    <div class="live-clock-badge">
+                        <span class="pulse-dot-sm"></span>
+                        <span id="last-updated-text">Updating...</span>
+                    </div>
+                    <button id="refresh-health-btn" class="btn-glow-primary">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Health Meter Bar -->
+            <div class="health-meter-wrapper">
+                <div class="health-meter-header">
+                    <span>Database Health Score</span>
+                    <span id="health-score-value" class="health-score-val">100% Operational</span>
+                </div>
+                <div class="health-meter-track">
+                    <div id="health-score-fill" class="health-meter-fill fill-green" style="width: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- TOP Summary Amber-Green Code Grid for Various Tables -->
+            <div class="summary-matrix-wrapper">
+                <div class="summary-matrix-header">
+                    <span class="summary-title-text">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        Warehouse Tables SLA Status (Amber / Green Code)
+                    </span>
+                    <span id="summary-badge-count" class="dim-text">12 Tables Tracked</span>
+                </div>
+                <div id="tables-summary-grid" class="summary-matrix-grid">
+                    <!-- Injected dynamically by health.js -->
+                </div>
+            </div>
+
+            <!-- Metric Cards Strip -->
+            <div class="kpi-cards-grid">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Database Core</span>
+                        <div class="kpi-icon icon-purple">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                        </div>
+                    </div>
+                    <div id="db-status-badge" class="kpi-value-badge status-ok">CONNECTED</div>
+                    <span class="kpi-subtext">PostgreSQL Warehouse</span>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Swaps Ingested</span>
+                        <div class="kpi-icon icon-blue">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                        </div>
+                    </div>
+                    <div id="total-swaps-count" class="kpi-number font-mono">--</div>
+                    <span class="kpi-subtext">5 Blockchains & 6 DEX Protocols</span>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Token Assets</span>
+                        <div class="kpi-icon icon-emerald">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v12M15 9.5H10.5a1.5 1.5 0 0 0 0 3h3a1.5 1.5 0 0 1 0 3H9"></path></svg>
+                        </div>
+                    </div>
+                    <div id="total-coins-count" class="kpi-number font-mono">--</div>
+                    <span id="coins-subtext" class="kpi-subtext">Tracked Crypto Assets</span>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Liquidity Pools</span>
+                        <div class="kpi-icon icon-amber">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                        </div>
+                    </div>
+                    <div id="total-pools-count" class="kpi-number font-mono">--</div>
+                    <span class="kpi-subtext">Active DEX Liquidity Pools</span>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Contract Coverage</span>
+                        <div class="kpi-icon icon-emerald">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        </div>
+                    </div>
+                    <div id="contract-coverage-main" class="kpi-number font-mono">--%</div>
+                    <span id="contract-coverage-subtext" class="kpi-subtext">ETH: --% | BNB: --% | Base: --% | Arb: --%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section: Data Warehouse Tables Deep-Dive Inspector -->
+        <section class="dashboard-section" id="tables-detail-section">
+            <div class="section-top-bar space-between">
+                <div class="section-title-wrapper">
+                    <h2>
+                        <span class="glow-accent-dot cyan"></span>
+                        Warehouse Tables Inspector
+                    </h2>
+                    <p class="section-desc">Full metrics, freshness SLAs, check results, and breakdown details for all warehouse tables</p>
+                </div>
+
+                <div class="matrix-controls">
+                    <div class="search-box">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" id="table-search-input" placeholder="Search tables..." class="search-input">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Detail Cards Grid Container -->
+            <div id="tables-detail-container" class="tables-detail-grid">
+                <!-- Injected dynamically by health.js -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Subpath Inspector Drawer / Modal -->
+    <div id="api-modal" class="modal-overlay hidden">
+        <div class="modal-card glass-modal">
+            <div class="modal-top">
+                <div class="modal-title-group">
+                    <span class="modal-badge-get">GET</span>
+                    <h3 id="modal-title" class="modal-heading">Endpoint Inspector</h3>
+                </div>
+                <button id="close-modal-btn" class="modal-close-icon">&times;</button>
+            </div>
+            <div class="modal-content-area">
+                <div class="modal-url-strip">
+                    <input type="text" id="modal-url-input" readonly class="modal-url-field font-mono">
+                    <button id="copy-modal-url-btn" class="btn-copy-url">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        Copy URL
+                    </button>
+                </div>
+                <pre id="modal-json-viewer" class="code-viewer font-mono"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/nav.js"></script>
+    <script src="/static/health.js?v=57.0"></script>
+</body>
+
+</html>
