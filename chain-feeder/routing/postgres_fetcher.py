@@ -307,46 +307,44 @@ class PostgresFetcher:
             results = {}
             pool_meta = {}
 
-            # Helper to parse fee string to basis points
-            def parse_fee_bps(f):
-                f_str = str(f).split('|')[0].strip()
-                if f_str == 'Dynamic' or not f_str:
-                    return None
+            # Helper to parse fee string to basis points or float
+            def is_fee_match(lp_fee_bps, fee_raw_str):
+                if lp_fee_bps is None:
+                    return fee_raw_str == 'Dynamic' or not fee_raw_str
+                clean = str(fee_raw_str).split('|')[0].replace('%', '').strip()
                 try:
-                    val = float(f_str.replace('%', ''))
-                    if '%' in f_str:
-                        return val * 100.0
-                    elif val >= 10.0:
-                        return val / 100.0
-                    else:
-                        return val * 100.0
-                except:
-                    return None
+                    val = float(clean)
+                    candidates = {
+                        val,
+                        val * 100.0,
+                        val * 10000.0,
+                        val / 100.0,
+                        val / 10000.0
+                    }
+                    for cand in candidates:
+                        if abs(lp_fee_bps - cand) < 1e-4:
+                            return True
+                except Exception:
+                    pass
+                return False
 
             # ------------------------------------------------------------------
             # Phase 0: normalize every requested pool into pool_meta[key].
             # ------------------------------------------------------------------
             all_networks = set()
             all_protocols = set()
-            all_fee_bps = set()
-            has_dynamic_fees = False
             all_symbols = set()
-            # (network, protocol, frozenset({t0,t1})) -> list of keys that could
-            # match a pool row; used to fan out Phase 1 results without rescanning.
             pair_index = {}
 
             for p in pools:
                 t0, t1, fee_raw_full = p
                 t0_sym, t1_sym = t0.upper(), t1.upper()
-                fee_raw = str(fee_raw_full).split('|')[0].strip()
-                fee_val = parse_fee_bps(fee_raw_full)
 
                 network = "Ethereum"
                 parts = str(fee_raw_full).split('|')
                 if len(parts) >= 3:
                     network = parts[2].strip()
                 
-                # Normalize network to lowercase for consistent indexing
                 network_lower = network.lower()
 
                 protocol = "Uniswap V3"
@@ -364,17 +362,13 @@ class PostgresFetcher:
 
                 key = f"{t0}-{t1}-{fee_raw_full}"
                 pool_meta[key] = {
-                    't0_sym': t0_sym, 't1_sym': t1_sym, 'fee_bps': fee_val, 'network': network_lower,
+                    't0_sym': t0_sym, 't1_sym': t1_sym, 'network': network_lower,
                     'protocol': protocol, 'fee_raw_full': fee_raw_full,
                     'pool_ids': [], 'total_vol': 0.0, 'avg_tvl': 0.0,
                 }
 
                 all_networks.add(network_lower)
                 all_protocols.add(protocol)
-                if fee_val is None:
-                    has_dynamic_fees = True
-                else:
-                    all_fee_bps.add(fee_val)
                 all_symbols.add(t0_sym)
                 all_symbols.add(t1_sym)
                 pair_index.setdefault((network_lower, protocol, frozenset((t0_sym, t1_sym))), []).append(key)
@@ -387,9 +381,6 @@ class PostgresFetcher:
 
             # ------------------------------------------------------------------
             # Phase 1: resolve pool_id(s) for ALL requested pools in ONE query.
-            # We over-fetch by the union of symbols/fees/networks (liquidity_pool
-            # is a small dimension table) and refine the symbol-pair + fee match
-            # in Python via pair_index.
             # ------------------------------------------------------------------
             cur.execute("""
                 SELECT lp.id, ch.name AS network, pr.name AS protocol, lp.fee_bps,
@@ -401,11 +392,10 @@ class PostgresFetcher:
                 JOIN coin c1 ON lp.coin1_id = c1.coin_id
                 WHERE LOWER(ch.name) = ANY(%s)
                   AND pr.name = ANY(%s)
-                  AND (lp.fee_bps = ANY(%s) OR (lp.fee_bps IS NULL AND %s))
                   AND UPPER(c0.symbol) = ANY(%s)
                   AND UPPER(c1.symbol) = ANY(%s)
             """, (
-                list(all_networks), list(all_protocols), list(all_fee_bps), has_dynamic_fees,
+                list(all_networks), list(all_protocols),
                 list(all_symbols), list(all_symbols),
             ))
             for pid, net, proto, lp_fee_bps, c0, c1 in cur.fetchall():
@@ -416,15 +406,9 @@ class PostgresFetcher:
                     continue
                 for k in candidates:
                     meta = pool_meta[k]
-                    meta_fee = meta['fee_bps']
-                    if meta_fee is None:
-                        if lp_fee_bps is not None:
-                            continue
-                    else:
-                        if lp_fee_bps is None or abs(lp_fee_bps - meta_fee) > 1e-6:
-                            continue
-                    if (meta['t0_sym'], meta['t1_sym']) in ((c0, c1), (c1, c0)):
-                        meta['pool_ids'].append(pid)
+                    if is_fee_match(lp_fee_bps, meta['fee_raw_full']):
+                        if (meta['t0_sym'], meta['t1_sym']) in ((c0, c1), (c1, c0)):
+                            meta['pool_ids'].append(pid)
 
             all_pool_ids = sorted({pid for m in pool_meta.values() for pid in m['pool_ids']})
 
@@ -556,12 +540,20 @@ class PostgresFetcher:
                 # Calculate fee rate
                 fee_rate = None
                 try:
-                    fee_db = meta['fee_db']
-                    if fee_db == 'Dynamic': fee_rate = 0.0002
-                    elif '%' in fee_db: fee_rate = float(fee_db.replace('%', '').strip()) / 100.0
-                    else: fee_rate = float(fee_db) / 1000000.0
-                except:
-                    pass
+                    fee_str = str(meta['fee_raw_full']).split('|')[0].strip()
+                    if fee_str == 'Dynamic' or not fee_str:
+                        fee_rate = 0.0002
+                    else:
+                        val = float(fee_str.replace('%', '').strip())
+                        if val > 0:
+                            if val >= 10.0 and val.is_integer():
+                                fee_rate = val / 1000000.0
+                            else:
+                                fee_rate = val / 100.0
+                        else:
+                            fee_rate = 0.0
+                except Exception:
+                    fee_rate = 0.003
 
                 apr = None
                 if fee_rate == 0.0:

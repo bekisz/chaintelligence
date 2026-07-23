@@ -14,14 +14,14 @@ import psycopg2
 def derive_and_backfill_tvl_fallback():
     """
     Backfills missing TVL in liquidity_pool_history by:
-    1. Propagating the latest known non-zero TVL for each pool to newer history dates with zero/null TVL.
-    2. For active pools with volume but zero historical TVL, estimating baseline TVL from daily volume and fee tier.
+    Propagating the latest known non-zero real TVL snapshot for each pool
+    to adjacent history dates where TVL is zero or null.
     """
     conn = psycopg2.connect(DATA_WAREHOUSE_DB)
     cur = conn.cursor()
     logging.info("Starting TVL fallback backfill for liquidity_pool_history...")
 
-    # Phase 1: Forward-fill latest known non-zero TVL for each pool
+    # Forward-fill latest known non-zero TVL for each pool
     query_forward_fill = """
     WITH latest_known_tvl AS (
         SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, date
@@ -39,31 +39,11 @@ def derive_and_backfill_tvl_fallback():
     cur.execute(query_forward_fill)
     ff_rows = cur.rowcount
     conn.commit()
-    logging.info(f"Phase 1 (Forward-fill latest TVL): Updated {ff_rows} rows.")
-
-    # Phase 2: Estimate baseline TVL for active pools (volume > 0) with zero TVL across history
-    query_volume_estimate = """
-    WITH pool_volume_stats AS (
-        SELECT pool_id, AVG(volume_usd) AS avg_daily_vol
-        FROM liquidity_pool_history
-        WHERE volume_usd > 0
-        GROUP BY pool_id
-    )
-    UPDATE liquidity_pool_history h
-    SET tvl_usd = ROUND((v.avg_daily_vol * 3.5)::numeric, 2)
-    FROM pool_volume_stats v
-    WHERE h.pool_id = v.pool_id
-      AND (h.tvl_usd IS NULL OR h.tvl_usd = 0)
-      AND v.avg_daily_vol > 0;
-    """
-    cur.execute(query_volume_estimate)
-    est_rows = cur.rowcount
-    conn.commit()
-    logging.info(f"Phase 2 (Volume-based TVL estimation): Updated {est_rows} rows.")
+    logging.info(f"Forward-fill latest TVL: Updated {ff_rows} rows.")
 
     cur.close()
     conn.close()
-    return ff_rows + est_rows
+    return ff_rows
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
