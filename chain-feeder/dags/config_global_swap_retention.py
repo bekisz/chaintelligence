@@ -188,8 +188,8 @@ def enforce_retention(**context):
 
 
 with DAG(
-    max_active_runs=1,
     'config_global_swap_retention',
+    max_active_runs=1,
     default_args={
         'owner': 'airflow',
         'depends_on_past': False,

@@ -82,8 +82,8 @@ try:
         return run_global_volume_rollup(days_back=14)
 
     with DAG(
+    'global_liquidity_pool_history_rollup',
     max_active_runs=1,
-        'global_liquidity_pool_history_rollup',
         default_args=default_args,
         description='Unified daily volume and transaction count rollup for ALL liquidity pools',
         schedule='0 2 * * *',

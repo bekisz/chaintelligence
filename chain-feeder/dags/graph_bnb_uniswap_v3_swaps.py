@@ -16,8 +16,8 @@ default_args = {
 }
 
 with DAG(
-    max_active_runs=1,
     'graph_bnb_uniswap_v3_swaps',
+    max_active_runs=1,
     default_args=default_args,
     description='Fetch PancakeSwap V3 (via Uniswap V3 schema) swaps on BNB from The Graph',
     schedule='@hourly',

@@ -16,8 +16,8 @@ default_args = {
 }
 
 with DAG(
-    max_active_runs=1,
     'graph_arbitrum_uniswap_v4_swaps',
+    max_active_runs=1,
     default_args=default_args,
     description='Fetch Uniswap V4 swaps on Arbitrum from The Graph',
     schedule='@hourly',

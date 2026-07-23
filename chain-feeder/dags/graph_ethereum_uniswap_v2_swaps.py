@@ -223,8 +223,8 @@ class UniswapV2Fetcher:
 # ---------------------------------------------------------------------------
 
 with DAG(
-    max_active_runs=1,
     'graph_ethereum_uniswap_v2_swaps',
+    max_active_runs=1,
     default_args=default_args,
     description='Fetch Uniswap V2 swaps for tracked tokens on Ethereum (Airflow 3)',
     schedule='@hourly',

@@ -320,8 +320,8 @@ def sync_tvl_from_graph():
     conn.close()
 
 with DAG(
-    max_active_runs=1,
     'graph_ethereum_uniswap_v4_liquidity_pool_history',
+    max_active_runs=1,
     default_args=default_args,
     description='Derived daily history for Uniswap V4 Pools',
     schedule='0 1 * * *', # Daily at 1 AM
