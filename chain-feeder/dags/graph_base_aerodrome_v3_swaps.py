@@ -16,6 +16,7 @@ default_args = {
 }
 
 with DAG(
+    max_active_runs=1,
     'graph_base_aerodrome_v3_swaps',
     default_args=default_args,
     description='Fetch Aerodrome (Slipstream, V3-fork) swaps on Base from The Graph',

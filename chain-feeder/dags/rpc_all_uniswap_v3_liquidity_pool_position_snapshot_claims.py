@@ -13,6 +13,7 @@ default_args = {
 }
 
 with DAG(
+    max_active_runs=1,
     'rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims',
     default_args=default_args,
     description='Fetch historical claim events from RPC logs and update snapshots',

@@ -486,6 +486,7 @@ def skip_sync():
     logging.info("⏭️ Mapping is already fresh. Skipping.")
 
 with DAG(
+    max_active_runs=1,
     dag_id='cmc_global_coin_metadata',
     default_args=default_args,
     description='Sync CoinMarketCap coin-to-address mapping and run multi-source fallback resolution',

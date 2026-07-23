@@ -172,8 +172,6 @@ def sync_v4_pool_ids():
         if best:
             cur.execute("UPDATE liquidity_pool SET pool_id = %s WHERE id = %s", (best, pool_db_id))
             updated += 1
-        else:
-            cur.execute("UPDATE liquidity_pool SET pool_id = NULL WHERE id = %s", (pool_db_id,))
 
     conn.commit()
     cur.close()
@@ -213,6 +211,7 @@ def build_daily_history():
 
 
 with DAG(
+    max_active_runs=1,
     'graph_bnb_pancakeswap_v4_liquidity_pool_history',
     default_args=default_args,
     description='Derived daily history for PancakeSwap V4 (Infinity) pools',

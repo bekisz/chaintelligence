@@ -17,7 +17,7 @@ from typing import List, Dict, Tuple
 
 CONFIG_PATH = os.path.join(
     os.environ.get('AIRFLOW_HOME', '/opt/airflow'),
-    'include/config/swap_retention.yaml'
+    'config/swap-retention.yaml'
 )
 
 BATCH_SIZE = 10000
@@ -188,6 +188,7 @@ def enforce_retention(**context):
 
 
 with DAG(
+    max_active_runs=1,
     'config_global_swap_retention',
     default_args={
         'owner': 'airflow',

@@ -16,6 +16,7 @@ default_args = {
 }
 
 with DAG(
+    max_active_runs=1,
     'graph_bnb_pancakeswap_v4_swaps',
     default_args=default_args,
     description='Fetch PancakeSwap V4 swaps on BNB from The Graph',

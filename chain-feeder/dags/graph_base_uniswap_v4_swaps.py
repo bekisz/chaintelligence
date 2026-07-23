@@ -16,6 +16,7 @@ default_args = {
 }
 
 with DAG(
+    max_active_runs=1,
     'graph_base_uniswap_v4_swaps',
     default_args=default_args,
     description='Fetch Uniswap V4 swaps on Base from The Graph',

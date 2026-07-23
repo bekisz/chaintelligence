@@ -219,7 +219,7 @@ def create_price_ingestion_dag(
         schedule=schedule,
         start_date=pendulum.now().subtract(days=1),
         catchup=False,
-        max_active_runs=2,
+        max_active_runs=1,
         tags=['prices', 'coinmarketcap', 'factory'],
         params={
             'targets': Param(default_targets, type='string', description='Comma-separated targets (e.g. "ETH, 0x123..., 1027, USD.*")'),

@@ -163,6 +163,7 @@ def sync_tvl_from_graph():
     conn.close()
 
 with DAG(
+    max_active_runs=1,
     'graph_arbitrum_uniswap_v3_liquidity_pool_history',
     default_args=default_args,
     description='Derived daily history for V3 pools on Ethereum',

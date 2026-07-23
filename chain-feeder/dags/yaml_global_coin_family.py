@@ -12,7 +12,7 @@ from datetime import timedelta
     schedule='@weekly',
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
-    max_active_runs=5,
+    max_active_runs=1,
     tags=['config', 'coin_family', 'ingestion'],
     params={
         'bypass_sensor': Param(False, type='boolean', description='Bypass file change sensor and force update'),

@@ -28,6 +28,7 @@ def _run_backfill_task(**context):
     run_backfill(start_date=start_date)
 
 with DAG(
+    max_active_runs=1,
     'rpc_all_uniswap_v3_liquidity_pool_position_event',
     default_args=default_args,
     description='Fetch historical position events (claims, liquidity) from RPC logs',

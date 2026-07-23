@@ -16,6 +16,7 @@ default_args = {
 }
 
 with DAG(
+    max_active_runs=1,
     'graph_ethereum_uniswap_v3_swaps',
     default_args=default_args,
     description='Fetch Uniswap V3 swaps on Ethereum from The Graph',

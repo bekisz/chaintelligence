@@ -103,7 +103,7 @@ with DAG(
     schedule='*/15 * * * *',
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
-    max_active_runs=2,
+    max_active_runs=1,
     tags=['prices', 'orchestrator'],
     params={
         "tier_1_coin_family": Param("T1", type="string", description="Family name for Tier 1 coins"),

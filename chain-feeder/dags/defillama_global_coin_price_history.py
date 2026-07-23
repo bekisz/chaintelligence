@@ -27,7 +27,7 @@ def identify_coins_to_sync(target_symbols: list = None) -> List[Dict]:
 
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     conn_uri = pg_hook.get_uri()
-    config_path = os.path.join(os.environ.get('AIRFLOW_HOME', '/opt/airflow'), 'include/config/coin-families.yml')
+    config_path = os.path.join(os.environ.get('AIRFLOW_HOME', '/opt/airflow'), 'config/coin-families.yml')
     resolver = CoinFamilyResolver(config_path, conn_uri)
 
     resolved_symbols = []
