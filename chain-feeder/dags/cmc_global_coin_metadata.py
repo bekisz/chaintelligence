@@ -73,7 +73,7 @@ def check_mapping_freshness(force_update: bool = False):
     return 'cmc_map_fetch'
 
 @task
-def cmc_map_fetch(max_rank: int = 10000, max_coins: int = 15000):
+def cmc_map_fetch(max_rank: int = 2000, max_coins: int = 2000):
     """
     Fetch Basic CMC Map and identify all target coins.
     """
@@ -81,13 +81,13 @@ def cmc_map_fetch(max_rank: int = 10000, max_coins: int = 15000):
         try:
             max_rank = int(max_rank)
         except ValueError:
-            max_rank = 10000
+            max_rank = 2000
 
     if isinstance(max_coins, str):
         try:
             max_coins = int(max_coins)
         except ValueError:
-            max_coins = 15000
+            max_coins = 2000
 
     logging.info(f"🔄 Fetching full CMC basic map (Max Rank: {max_rank})...")
     
@@ -282,8 +282,9 @@ def cmc_fetch_and_upsert_to_db(mapping_data: dict) -> int:
             conn.commit()
 
             # 2. Ingest batches from CMC
-            for i in range(0, len(target_ids), 50):
-                batch = target_ids[i:i+50]
+            batch_size = 100
+            for i in range(0, len(target_ids), batch_size):
+                batch = target_ids[i:i+batch_size]
                 logging.info(f"Fetching & upserting batch {i}-{i+len(batch)} of {len(target_ids)}...")
                 
                 # Fetch info batch
@@ -297,7 +298,7 @@ def cmc_fetch_and_upsert_to_db(mapping_data: dict) -> int:
                 if r_info.status_code == 200:
                     batch_info = r_info.json().get('data', {})
 
-                time.sleep(0.3)
+                time.sleep(0.05)
 
                 # Fetch quotes batch
                 r_quotes = requests.get(CMC_QUOTES_URL, headers=headers, params={'id': ','.join(batch)}, timeout=30)

@@ -226,25 +226,10 @@ def create_price_ingestion_dag(
         },
     ) as dag:
         
-        from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
-
-        # Always trigger, the mapping DAG itself handles freshness check
-        mapping_step = TriggerDagRunOperator(
-            task_id="trigger_coin_family_ingestion",
-            trigger_dag_id="yaml_global_coin_family",
-            conf={"bypass_sensor": True},
-            wait_for_completion=True,
-            poke_interval=30,
-            reset_dag_run=True,
-            deferrable=False
-        )
-        
-        # We pass the targets from params. If default_targets is set in factory, it acts as default in UI too.
+        # Pass targets from params. If default_targets is set in factory, it acts as default in UI.
         resolved_ids = resolve_targets(target_list="{{ params.targets }}")
-        
         update_task = fetch_and_update_prices(resolved_ids)
-        
-        mapping_step >> resolved_ids >> update_task
+        resolved_ids >> update_task
         
     return dag
 

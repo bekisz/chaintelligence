@@ -103,16 +103,14 @@ def yaml_global_coin_family_dag():
             "force_update": "{{ params.force_coin_ingestion }}",
             "max_rank": "{{ params.max_rank }}"
         },
-        wait_for_completion=True,
-        poke_interval=30,
-        reset_dag_run=True,
+        wait_for_completion=False,
         deferrable=False
     )
 
     # Pass the DAG parameter to the sensor task
     mtime = wait_for_config_change(bypass_sensor="{{ params.bypass_sensor }}")
     
-    mtime >> trigger_ingestion >> wait_for_coin_table() >> update_coin_families(mtime)
+    mtime >> update_coin_families(mtime) >> trigger_ingestion
 
 # Initialize the DAG and assign to variable for Airflow discovery
 dag = yaml_global_coin_family_dag()

@@ -117,10 +117,7 @@ with DAG(
         task_id='trigger_family_update',
         trigger_dag_id='yaml_global_coin_family',
         conf={'bypass_sensor': True, 'force_coin_ingestion': False},
-        wait_for_completion=True,
-        poke_interval=20,
-        allowed_states=['success'],
-        failed_states=['failed'],
+        wait_for_completion=False,
         deferrable=False
     )
 
@@ -137,7 +134,7 @@ with DAG(
         conf={
             'targets': "{{ params.tier_1_coin_family }}",
         },
-        wait_for_completion=True,
+        wait_for_completion=False,
         deferrable=False
     )
 
@@ -147,7 +144,7 @@ with DAG(
         conf={
             'targets': "{{ params.tier_2_coin_family }}",
         },
-        wait_for_completion=True,
+        wait_for_completion=False,
         deferrable=False
     )
 
@@ -157,7 +154,7 @@ with DAG(
         conf={
             'targets': "{{ params.tier_3_coin_family }}",
         },
-        wait_for_completion=True,
+        wait_for_completion=False,
         deferrable=False
     )
     
@@ -167,7 +164,7 @@ with DAG(
         conf={
             'targets': "current-lp-tokens",
         },
-        wait_for_completion=True,
+        wait_for_completion=False,
         deferrable=False
     )
 
