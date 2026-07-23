@@ -211,7 +211,8 @@ class UniswapV3Fetcher:
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
                 else:
-                    raise
+                    self._log(f"Max retries reached for query due to: {e}. Skipping batch.")
+                    return None
         return None
     
     def _fetch_swaps_with_filter(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_addresses: List[str], on_batch_callback: Optional[callable] = None, collect_results: bool = True) -> List:
@@ -701,14 +702,27 @@ class PostgresStorage:
                         fee_tier_str = s.get('fee_tier') or (f"{fbps / 10000}%" if fbps is not None else "")
                         pool_name = f"{t0_info['symbol']}-{t1_info['symbol']} {fee_tier_str}".strip()
                         pool_address_val = sg_pool_id.lower() if sg_pool_id else None
+                        pool_id_val = sg_pool_id.lower() if (sg_pool_id and len(sg_pool_id) == 66) else None
+
+                        if not pool_address_val and not pool_id_val:
+                            _, derived_id = derive_pool_identifiers(
+                                protocol, network, t0_addr, t1_addr, fbps, getattr(self, 'dex_config', {})
+                            )
+                            pool_id_val = derived_id
+
+                        if not pool_address_val and not pool_id_val:
+                            from eth_hash.auto import keccak
+                            seed = f"v4-fallback-{t0_id}-{t1_id}-{fbps}"
+                            pool_id_val = "0x" + keccak(seed.encode('utf-8')).hex()
 
                         cur.execute("""
-                            INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, false)
+                            INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, pool_id, reverted)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, false)
                             ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
-                            SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address)
+                            SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
+                                pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
                             RETURNING id
-                        """, (chain_id, protocol_id, pool_name, fbps, t0_id, t1_id, pool_address_val))
+                        """, (chain_id, protocol_id, pool_name, fbps, t0_id, t1_id, pool_address_val, pool_id_val))
                         pool_id = cur.fetchone()[0]
 
                         # Cache it in maps for the rest of this batch

@@ -116,7 +116,7 @@ with DAG(
     trigger_family_update = TriggerDagRunOperator(
         task_id='trigger_family_update',
         trigger_dag_id='yaml_global_coin_family',
-        conf={'bypass_sensor': True, 'force_coin_ingestion': True},
+        conf={'bypass_sensor': True, 'force_coin_ingestion': False},
         wait_for_completion=True,
         poke_interval=20,
         allowed_states=['success'],

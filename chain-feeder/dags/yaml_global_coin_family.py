@@ -26,13 +26,13 @@ from datetime import timedelta
 )
 def yaml_global_coin_family_dag():
     
-    @task.sensor(poke_interval=30, timeout=3600, mode='reschedule', soft_fail=True)
+    @task.sensor(poke_interval=30, timeout=300, mode='reschedule', soft_fail=True)
     def wait_for_config_change(bypass_sensor: bool = False):
         """
         Pokes the file modification time and compares it with the last recorded mtime.
         If bypass_sensor is True, it returns immediately.
         """
-        config_path = os.path.join(os.environ.get('AIRFLOW_HOME', '/opt/airflow'), 'include/config/coin-families.yml')
+        config_path = os.path.join(os.environ.get('AIRFLOW_HOME', '/opt/airflow'), 'config/coin-families.yml')
         logging.info(f"Checking config at {config_path}. Raw bypass_sensor: {bypass_sensor} ({type(bypass_sensor)})")
         
         if not os.path.exists(config_path):
@@ -58,7 +58,7 @@ def yaml_global_coin_family_dag():
         
         return PokeReturnValue(is_done=False)
 
-    @task.sensor(poke_interval=60, timeout=3600, mode='reschedule')
+    @task.sensor(poke_interval=60, timeout=300, mode='reschedule', soft_fail=True)
     def wait_for_coin_table():
         """
         Waits until the coin table has been populated by the CMC mapper.
@@ -85,7 +85,7 @@ def yaml_global_coin_family_dag():
         
         pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
         conn_uri = pg_hook.get_uri()
-        config_path = os.path.join(os.environ.get('AIRFLOW_HOME', '/opt/airflow'), 'include/config/coin-families.yml')
+        config_path = os.path.join(os.environ.get('AIRFLOW_HOME', '/opt/airflow'), 'config/coin-families.yml')
         
         logging.info(f"Syncing families from {config_path}")
         resolver = CoinFamilyResolver(config_path, conn_uri)

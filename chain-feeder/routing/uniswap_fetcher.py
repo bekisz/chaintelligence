@@ -95,7 +95,8 @@ class UniswapV3Fetcher:
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
                 else:
-                    raise
+                    self._log(f"Max retries reached for query due to: {e}. Skipping batch.")
+                    return None
         
         return None
     
