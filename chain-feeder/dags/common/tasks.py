@@ -16,12 +16,18 @@ def fetch_missing_ranges():
     
     # Select positions needing update, including protocol
     cur.execute("""
-        SELECT p.id, p.token_id, pool.network, pool.pool_name, p.wallet_address, pool.protocol
+        SELECT p.id, p.token_id, ch.name AS network,
+               c0.symbol || '/' || c1.symbol AS pool_name,
+               p.wallet_address, pr.name AS protocol
         FROM liquidity_pool_position p
         JOIN liquidity_pool pool ON p.pool_id = pool.id
+        JOIN chain ch ON pool.chain_id = ch.id
+        JOIN protocol pr ON pool.protocol_id = pr.id
+        JOIN coin c0 ON pool.coin0_id = c0.coin_id
+        JOIN coin c1 ON pool.coin1_id = c1.coin_id
         WHERE (p.tick_lower IS NULL OR p.current_tick IS NULL)
           AND p.token_id IS NOT NULL 
-          AND pool.protocol ILIKE '%Uniswap%'
+          AND pr.name ILIKE '%Uniswap%'
     """)
     rows = cur.fetchall()
     logging.info(f"Found {len(rows)} positions needing range/state backfill.")
