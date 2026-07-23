@@ -203,17 +203,16 @@ class UniswapV3Fetcher:
                 response.raise_for_status()
                 data = response.json()
                 if 'errors' in data:
-                    self._log(f"GraphQL errors: {data['errors']}")
-                    return None
+                    err_msg = f"GraphQL returned errors for {self.network} {self.protocol}: {data['errors']}"
+                    self._log(err_msg)
+                    raise RuntimeError(err_msg)
                 return data
             except Exception as e:
                 self._log(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
                 else:
-                    self._log(f"Max retries reached for query due to: {e}. Skipping batch.")
-                    return None
-        return None
+                    raise RuntimeError(f"Max retries reached for {self.network} {self.protocol} query: {e}") from e
     
     def _fetch_swaps_with_filter(self, start_timestamp: int, end_timestamp: int, filter_field: str, filter_addresses: List[str], on_batch_callback: Optional[callable] = None, collect_results: bool = True) -> List:
         found_results = []
@@ -477,15 +476,16 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
                 response.raise_for_status()
                 data = response.json()
                 if 'errors' in data:
-                    self._log(f"GraphQL errors: {data['errors']}")
-                    return None
+                    err_msg = f"GraphQL returned errors for {self.network} {self.protocol} V4: {data['errors']}"
+                    self._log(err_msg)
+                    raise RuntimeError(err_msg)
                 return data
             except Exception as e:
                 self._log(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
                 else:
-                    raise
+                    raise RuntimeError(f"Max retries reached for {self.network} {self.protocol} V4 query: {e}") from e
         return None
 
     def fetch_pool_daily_data(self, token0_addr: str, token1_addr: str, fee_tier_bips: int, start_date: datetime) -> List[Dict]:
