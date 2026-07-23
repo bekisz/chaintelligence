@@ -592,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                 <span class="status-indicator-dot ${isFresh ? 'dot-green' : 'dot-amber'}" style="flex-shrink:0;"></span>
                                                 <span class="dim-text">${earliestShort}</span>
                                                 <span style="color:${arrowColor}; cursor:help;" title="${tooltipText}">➔</span>
-                                                <span class="dim-text${isFresh ? '' : ' text-warning'}" style="${isFresh ? '' : 'font-weight:700;'}">${latestShort}</span>
+                                                <span style="${isFresh ? 'color:#6b7280;' : 'color:#f9fafb; font-weight:700;'}">${latestShort}</span>
                                             </div>
                                             <div style="font-size:0.72rem; color:#6b7280;" class="font-mono">
                                                 ${formatNumber(pData.count)}
@@ -601,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </td>
                                 `;
                             } else {
-                                rowCellsHtml += `<td style="text-align: center;" class="dim-text">--</td>`;
+                                rowCellsHtml += `<td style="text-align: center;"></td>`;
                             }
                         });
 
@@ -619,28 +619,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     chainNames.forEach(cName => {
                         const cs = chainSummary[cName];
                         if (cs.totalCount > 0) {
-                            const latestShort = cs.latestMs ? formatShortTimeAgo(new Date(cs.latestMs).toISOString()) : '--';
-                            const commonEarliestShort = cs.commonEarliestMs ? formatShortTimeAgo(new Date(cs.commonEarliestMs).toISOString()) : '--';
+                            const latestShort = cs.latestMs ? formatShortTimeAgo(new Date(cs.latestMs).toISOString()) : '';
+                            const commonEarliestShort = cs.commonEarliestMs ? formatShortTimeAgo(new Date(cs.commonEarliestMs).toISOString()) : '';
                             const hasIssue = cs.anyStale || cs.anyContinuityFail;
                             const dotClass = hasIssue ? 'dot-amber' : 'dot-green';
-                            // Highlight right-side time only if the chain's worst-case latest is stale (>3h)
-                            const latestClass = cs.anyStale ? ' text-warning' : '';
-                            const latestWeight = cs.anyStale ? 'font-weight:700;' : '';
+                            // Bright white when stale (>3h), dim grey otherwise
+                            const latestStyle = cs.anyStale ? 'color:#f9fafb; font-weight:700;' : 'color:#6b7280;';
                             footerCellsHtml += `
-                                <td style="text-align: center; border-top: 1px solid rgba(99,102,241,0.3); padding-top: 10px;">
+                                <td style="text-align: center; border-top: 2px solid rgba(99,102,241,0.75); padding-top: 10px;">
                                     <div class="matrix-cell">
                                         <div style="display:flex; align-items:center; justify-content:center; gap:4px; font-size:0.85rem; font-weight:600;" class="font-mono">
                                             <span class="status-indicator-dot ${dotClass}" style="flex-shrink:0;"></span>
                                             <span class="dim-text">${commonEarliestShort}</span>
                                             <span style="color:#818cf8; margin:0 2px;">➔</span>
-                                            <span class="dim-text${latestClass}" style="${latestWeight}">${latestShort}</span>
+                                            <span style="${latestStyle}">${latestShort}</span>
                                         </div>
                                         <div style="font-size:0.72rem; color:#6b7280;" class="font-mono">${formatNumber(cs.totalCount)}</div>
                                     </div>
                                 </td>
                             `;
                         } else {
-                            footerCellsHtml += `<td style="border-top: 1px solid rgba(99,102,241,0.3);" class="dim-text" style="text-align:center;">--</td>`;
+                            footerCellsHtml += `<td style="border-top: 2px solid rgba(99,102,241,0.75);"></td>`;
                         }
                     });
 
@@ -648,11 +647,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     breakdownHtml += `
                             <tr>
-                                <td class="font-bold" style="text-align: left; border-top: 1px solid rgba(99,102,241,0.3); color:#a78bfa; padding-top: 10px;">
+                                <td class="font-bold" style="text-align: left; border-top: 2px solid rgba(99,102,241,0.75); color:#a78bfa; padding-top: 10px;">
                                     Σ Chain Total
                                 </td>
                                 ${footerCellsHtml}
-                                <td class="font-mono font-bold" style="text-align: right; border-top: 1px solid rgba(99,102,241,0.3); color:#a78bfa; padding-top: 10px;">${formatNumber(grandTotal)}</td>
+                                <td class="font-mono font-bold" style="text-align: right; border-top: 2px solid rgba(99,102,241,0.75); color:#a78bfa; padding-top: 10px;">${formatNumber(grandTotal)}</td>
                             </tr>
                                     </tbody>
                                 </table>
@@ -703,18 +702,170 @@ document.addEventListener('DOMContentLoaded', () => {
                     breakdownHtml += `</div></div>`;
                 }
 
-                // 4. Liquidity pool breakdown by chain
+                // 4. Liquidity pool breakdown by chain with history coverage matrix
                 if (tName === 'liquidity_pool' && tData.chains) {
-                    breakdownHtml += `<div class="breakdown-subpanel"><div class="subpanel-title">Registered DEX Liquidity Pools per Chain</div><div style="display: flex; flex-wrap: wrap; gap: 10px;">`;
-                    Object.keys(tData.chains).forEach(cName => {
-                        const cObj = tData.chains[cName];
-                        let chainPools = 0;
-                        if (cObj.protocols) {
-                            Object.values(cObj.protocols).forEach(p => chainPools += (p.count || 0));
-                        }
-                        breakdownHtml += `<div class="proto-item font-mono" style="padding: 6px 12px;"><span class="font-bold text-warning">${cName}:</span> <span>${formatNumber(chainPools)} pools</span></div>`;
+                    const chainNames = Object.keys(tData.chains).sort((a, b) => {
+                        if (a.toLowerCase() === 'ethereum') return -1;
+                        if (b.toLowerCase() === 'ethereum') return 1;
+                        return a.localeCompare(b);
                     });
-                    breakdownHtml += `</div></div>`;
+
+                    // Gather distinct protocol names across all chains
+                    const protoSet = new Set();
+                    chainNames.forEach(cName => {
+                        const protos = tData.chains[cName].protocols || {};
+                        Object.keys(protos).forEach(p => protoSet.add(p));
+                    });
+
+                    const getProtoPriority = (p) => {
+                        const name = p.toLowerCase();
+                        if (name.includes('uniswap v2')) return 1;
+                        if (name.includes('uniswap v3')) return 2;
+                        if (name.includes('uniswap v4')) return 3;
+                        if (name.includes('uniswap')) return 4;
+                        if (name.includes('pancakeswap v3')) return 10;
+                        if (name.includes('pancakeswap v4')) return 11;
+                        if (name.includes('pancakeswap')) return 12;
+                        if (name.includes('aerodrome')) return 20;
+                        return 99;
+                    };
+
+                    const protoList = Array.from(protoSet).sort((a, b) => {
+                        const prioA = getProtoPriority(a);
+                        const prioB = getProtoPriority(b);
+                        if (prioA !== prioB) return prioA - prioB;
+                        return a.localeCompare(b);
+                    });
+
+                    breakdownHtml += `
+                        <div class="breakdown-subpanel">
+                            <div class="subpanel-title">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                                Pool Count & History Coverage Matrix
+                            </div>
+                            <div style="overflow-x: auto;">
+                                <table class="indexer-matrix-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left;">DEX Protocol</th>
+                                            ${chainNames.map(c => `<th style="text-align: center;">${c}</th>`).join('')}
+                                            <th style="text-align: right;">Total Pools</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+
+                    const chainSummary = {};
+                    chainNames.forEach(cName => {
+                        chainSummary[cName] = { totalPools: 0, totalCovered: 0, totalFresh: 0, coverageSum: 0, protoCount: 0 };
+                    });
+
+                    protoList.forEach(protoName => {
+                        let protoTotal = 0;
+                        let protoCovered = 0;
+                        let protoFresh = 0;
+                        let rowCellsHtml = '';
+
+                        chainNames.forEach(cName => {
+                            const pData = (tData.chains[cName].protocols || {})[protoName];
+                            if (pData && pData.count > 0) {
+                                protoTotal += (pData.count || 0);
+                                protoCovered += (pData.covered_count || 0);
+                                protoFresh += (pData.fresh_count || 0);
+                                chainSummary[cName].totalPools += (pData.count || 0);
+                                chainSummary[cName].totalCovered += (pData.covered_count || 0);
+                                chainSummary[cName].totalFresh += (pData.fresh_count || 0);
+                                chainSummary[cName].protoCount++;
+
+                                const covPct = pData.coverage_percentage || 0;
+                                const tvlCovPct = pData.tvl_coverage_percentage || 0;
+                                const freshPct = pData.fresh_percentage || 0;
+                                const isFullyCovered = covPct >= 90;
+                                const isPartiallyCovered = covPct >= 50;
+                                const isFresh = freshPct >= 50;
+
+                                const covColor = isFullyCovered ? '#34d399' : (isPartiallyCovered ? '#fbbf24' : '#ef4444');
+                                const freshDot = isFresh ? 'dot-green' : 'dot-amber';
+
+                                rowCellsHtml += `
+                                    <td style="text-align: center;">
+                                        <div class="matrix-cell">
+                                            <div style="display:flex; align-items:center; justify-content:center; gap:4px; font-size:0.85rem; font-weight:600;" class="font-mono">
+                                                <span class="status-indicator-dot ${freshDot}" style="flex-shrink:0;"></span>
+                                                <span style="color:#f9fafb;">${formatNumber(pData.count)}</span>
+                                                <span class="dim-text">pools</span>
+                                            </div>
+                                            <div style="font-size:0.72rem; color:#6b7280;" class="font-mono">
+                                                <span style="color:${covColor};" title="History & TVL Coverage">${covPct}% hist</span>
+                                                <span class="dim-text"> | </span>
+                                                <span style="${freshPct >= 50 ? 'color:#34d399;' : 'color:#fbbf24;'}">${freshPct}% fresh</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                `;
+                            } else {
+                                rowCellsHtml += `<td style="text-align: center;"></td>`;
+                            }
+                        });
+
+                        breakdownHtml += `
+                            <tr>
+                                <td class="font-bold font-mono" style="color:#60a5fa; text-align: left;">${protoName}</td>
+                                ${rowCellsHtml}
+                                <td class="font-mono font-bold" style="text-align: right;">
+                                    <span style="color:#34d399;">${formatNumber(protoTotal)}</span>
+                                    <span class="dim-text" style="font-size:0.75rem;"> pools</span>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    // Chain summary footer
+                    let footerCellsHtml = '';
+                    chainNames.forEach(cName => {
+                        const cs = chainSummary[cName];
+                        if (cs.totalPools > 0) {
+                            const aggCovPct = Math.round((cs.totalCovered / cs.totalPools) * 100);
+                            const aggFreshPct = Math.round((cs.totalFresh / cs.totalPools) * 100);
+                            const hasIssue = aggCovPct < 90 || aggFreshPct < 50;
+                            const dotClass = hasIssue ? 'dot-amber' : 'dot-green';
+
+                            footerCellsHtml += `
+                                <td style="text-align: center; border-top: 2px solid rgba(99,102,241,0.75); padding-top: 10px;">
+                                    <div class="matrix-cell">
+                                        <div style="display:flex; align-items:center; justify-content:center; gap:4px; font-size:0.85rem; font-weight:600;" class="font-mono">
+                                            <span class="status-indicator-dot ${dotClass}" style="flex-shrink:0;"></span>
+                                            <span style="color:#f9fafb;">${formatNumber(cs.totalPools)}</span>
+                                            <span class="dim-text">pools</span>
+                                        </div>
+                                        <div style="font-size:0.72rem; color:#6b7280;" class="font-mono">
+                                            <span style="color:#a78bfa;">${aggCovPct}% hist</span>
+                                            <span style="color:#6b7280;"> | </span>
+                                            <span style="${aggFreshPct >= 50 ? 'color:#34d399;' : 'color:#fbbf24;'}">${aggFreshPct}% fresh</span>
+                                        </div>
+                                    </div>
+                                </td>
+                            `;
+                        } else {
+                            footerCellsHtml += `<td style="border-top: 2px solid rgba(99,102,241,0.75);"></td>`;
+                        }
+                    });
+
+                    const grandTotal = chainNames.reduce((s, c) => s + chainSummary[c].totalPools, 0);
+
+                    breakdownHtml += `
+                            <tr>
+                                <td class="font-bold" style="text-align: left; border-top: 2px solid rgba(99,102,241,0.75); color:#a78bfa; padding-top: 10px;">
+                                    Σ Chain Total
+                                </td>
+                                ${footerCellsHtml}
+                                <td class="font-mono font-bold" style="text-align: right; border-top: 2px solid rgba(99,102,241,0.75); color:#a78bfa; padding-top: 10px;">${formatNumber(grandTotal)}</td>
+                            </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
                 }
 
                 // 5. Coin price history coverage breakdown

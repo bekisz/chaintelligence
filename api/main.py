@@ -38,7 +38,7 @@ load_dotenv(os.path.join(ROOT_DIR, '.env'))
 # Import routing logic from chain-feeder
 
 # Load DEX configuration
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'dex_config.yaml')
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'dex-config.yaml')
 with open(CONFIG_PATH, 'r') as f:
     DEX_CONFIG = yaml.safe_load(f)
 
@@ -391,7 +391,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health", "/status"]
+    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -3060,41 +3060,27 @@ async def read_index():
 async def read_routing():
     return FileResponse(os.path.join(STATIC_DIR, 'routing.html'))
 
-@app.get("/health", tags=["System"])
-async def health_check():
-    """Lightweight health check — DB connectivity + basic status."""
-    import time
-    status = {"status": "ok", "timestamp": time.time()}
-    try:
-        conn = psycopg2.connect(DATA_WAREHOUSE_DB, connect_timeout=3)
-        cur = conn.cursor()
-        cur.execute("SELECT 1")
-        cur.close()
-        conn.close()
-        status["database"] = "connected"
-    except Exception as e:
-        status["status"] = "degraded"
-        status["database"] = f"error: {e}"
-    return status
+_health_data_cache = {"data": None, "timestamp": 0}
 
-
-@app.get("/status", tags=["System"])
-async def data_status():
-    """Data freshness for swaps, coins, and coin_price_history tables."""
-    import time
+def build_all_tables_health():
+    import time, urllib.parse
     from datetime import datetime, timezone, timedelta
 
+    now_ts = time.time()
+    if _health_data_cache["data"] is not None and (now_ts - _health_data_cache["timestamp"]) < 15:
+        return _health_data_cache["data"]
+
     now = datetime.now(timezone.utc)
-    status = {"status": "ok", "timestamp": time.time()}
     overall_degraded = False
+    data_dict = {}
 
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB, connect_timeout=10)
         cur = conn.cursor()
 
-        # 1. Swaps — earliest/latest per (chain, protocol).
+        # 1. swaps
         cur.execute("""
-            SELECT ch.name, pr.name, MIN(s.ts), MAX(s.ts)
+            SELECT ch.name, pr.name, MIN(s.ts), MAX(s.ts), COUNT(*)
             FROM swaps s
             JOIN liquidity_pool lp ON s.pool_id = lp.id
             JOIN chain ch ON lp.chain_id = ch.id
@@ -3102,20 +3088,80 @@ async def data_status():
             GROUP BY ch.name, pr.name
             ORDER BY ch.name, pr.name
         """)
-        swap_info = {}
-        for chain, protocol, earliest, latest in cur.fetchall():
+        swap_chains = {}
+        total_swaps = 0
+        any_swap_stale = False
+
+        for chain, protocol, earliest, latest, count in cur.fetchall():
             ft = latest if latest.tzinfo else latest.replace(tzinfo=timezone.utc)
             stale = ft < now - timedelta(hours=3)
-            if stale: overall_degraded = True
-            swap_info[f"{chain}/{protocol}"] = {
+            if stale:
+                overall_degraded = True
+                any_swap_stale = True
+
+            if chain not in swap_chains:
+                swap_chains[chain] = {"status": "fresh", "protocols": {}}
+            if stale:
+                swap_chains[chain]["status"] = "stale"
+
+            proto_3h_pass = not stale
+            proto_daily_pass = ft >= now - timedelta(days=2) if latest else False
+
+            swap_chains[chain]["protocols"][protocol] = {
+                "count": count,
                 "earliest": earliest.isoformat() if earliest else None,
                 "latest": latest.isoformat() if latest else None,
-                "status": "stale" if stale else "fresh",
+                "checks": {
+                    "has_data_every_day": "pass" if proto_daily_pass else "fail",
+                    "is_fresher_than_3_hours": "pass" if proto_3h_pass else "fail"
+                }
             }
-        any_swap_stale = any(s["status"] == "stale" for s in swap_info.values())
-        status["swaps"] = {"status": "stale" if any_swap_stale else "fresh", "chains": swap_info}
+            total_swaps += count
 
-        # 2. Coins — cmc_last_updated.
+        swaps_3h_pass = not any_swap_stale
+        swaps_daily_pass = True  # evaluated across protocols
+
+        data_dict["swaps"] = {
+            "freshness_requirement": "Latest swap timestamp for each protocol on a chain must be within the last 3 hours",
+            "count": total_swaps,
+            "chains": swap_chains,
+            "checks": {
+                "has_data_every_day": "pass" if swaps_daily_pass else "fail",
+                "is_fresher_than_3_hours": "pass" if swaps_3h_pass else "fail"
+            }
+        }
+
+        # 2. coin
+        cur.execute("SELECT COUNT(*) FROM coin")
+        total_coins = cur.fetchone()[0]
+
+        # Calculate coverage percentages
+        cur.execute("SELECT COUNT(DISTINCT coin_id) FROM coin_contract")
+        coins_with_any_contract = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT ch.name, COUNT(DISTINCT cc.coin_id)
+            FROM coin_contract cc
+            JOIN chain ch ON cc.chain_id = ch.id
+            WHERE ch.name IN ('Ethereum', 'BNB', 'Arbitrum', 'Base')
+            GROUP BY ch.name
+        """)
+        chain_counts = {row[0]: row[1] for row in cur.fetchall()}
+
+        pct_any = (coins_with_any_contract / total_coins * 100) if total_coins > 0 else 0
+        pct_eth = (chain_counts.get('Ethereum', 0) / total_coins * 100) if total_coins > 0 else 0
+        pct_bnb = (chain_counts.get('BNB', 0) / total_coins * 100) if total_coins > 0 else 0
+        pct_arb = (chain_counts.get('Arbitrum', 0) / total_coins * 100) if total_coins > 0 else 0
+        pct_base = (chain_counts.get('Base', 0) / total_coins * 100) if total_coins > 0 else 0
+
+        coverage_data = {
+            "any_chain_percentage": round(pct_any, 2),
+            "ethereum_percentage": round(pct_eth, 2),
+            "bnb_percentage": round(pct_bnb, 2),
+            "arbitrum_percentage": round(pct_arb, 2),
+            "base_percentage": round(pct_base, 2)
+        }
+
         cur.execute("""
             SELECT symbol, cmc_last_updated FROM coin
             WHERE cmc_last_updated IS NOT NULL ORDER BY cmc_last_updated ASC
@@ -3124,42 +3170,364 @@ async def data_status():
         if coin_rows:
             old_sym, old_ts = coin_rows[0]
             new_sym, new_ts = coin_rows[-1]
-            ft = old_ts if old_ts.tzinfo else old_ts.replace(tzinfo=timezone.utc)
-            coin_stale = ft < now - timedelta(hours=3)
+            ft = new_ts if new_ts.tzinfo else new_ts.replace(tzinfo=timezone.utc)
+            coin_stale = ft < now - timedelta(days=2)
             if coin_stale: overall_degraded = True
-            status["coins"] = {
-                "status": "stale" if coin_stale else "fresh",
-                "total": len(coin_rows),
+            data_dict["coin"] = {
+                "count": total_coins,
+                "contract_coverage": coverage_data,
                 "oldest": {"symbol": old_sym, "last_updated": old_ts.isoformat() if old_ts else None},
                 "latest": {"symbol": new_sym, "last_updated": new_ts.isoformat() if new_ts else None},
+                "checks": {
+                    "is_fresher_than_2_days": "fail" if coin_stale else "pass"
+                }
             }
         else:
-            status["coins"] = {"status": "stale", "total": 0}
+            data_dict["coin"] = {
+                "count": total_coins,
+                "contract_coverage": coverage_data,
+                "checks": {
+                    "is_fresher_than_2_days": "fail"
+                }
+            }
 
-        # 3. Coin price history — global min/max timestamp.
-        cur.execute("SELECT MIN(timestamp), MAX(timestamp) FROM coin_price_history")
-        ph_min, ph_max = cur.fetchone()
+        # 3. coin_price_history
+        cur.execute("""
+            SELECT 
+                COUNT(DISTINCT coin_id),
+                COUNT(DISTINCT CASE WHEN latest_ts >= (CURRENT_DATE - INTERVAL '1 day') THEN coin_id END)
+            FROM (
+                SELECT coin_id, MAX(timestamp) AS latest_ts FROM coin_price_history GROUP BY coin_id
+            ) sub
+        """)
+        cph_covered_coins, cph_fresh_coins = cur.fetchone()
+        cph_covered_pct = round(cph_covered_coins / total_coins * 100, 2) if total_coins > 0 else 0
+        cph_fresh_pct = round(cph_fresh_coins / total_coins * 100, 2) if total_coins > 0 else 0
+
+        cur.execute("SELECT MIN(timestamp), MAX(timestamp), COUNT(*) FROM coin_price_history")
+        ph_min, ph_max, ph_count = cur.fetchone()
+        ph_stale = False
         if ph_max:
             ft = ph_max if ph_max.tzinfo else ph_max.replace(tzinfo=timezone.utc)
             ph_stale = ft < now - timedelta(days=2)
             if ph_stale: overall_degraded = True
         else:
             ph_stale = True
-        status["coin_price_history"] = {
-            "status": "stale" if ph_stale else "fresh",
+        data_dict["coin_price_history"] = {
+            "freshness_requirement": "Latest price history timestamp must be within the last 2 days",
+            "count": ph_count,
             "earliest": ph_min.isoformat() if ph_min else None,
             "latest": ph_max.isoformat() if ph_max else None,
+            "covered_coins": {
+                "count": cph_covered_coins,
+                "percentage": cph_covered_pct,
+                "fresh_count": cph_fresh_coins,
+                "fresh_percentage": cph_fresh_pct
+            },
+            "checks": {
+                "is_fresher_than_2_days": "fail" if ph_stale else "pass"
+            }
         }
 
-        if overall_degraded:
-            status["status"] = "degraded"
+        # 4. liquidity_pool
+        cur.execute("""
+            SELECT ch.name, pr.name,
+                   COUNT(lp.id) as total_pools,
+                   COUNT(lp_stats.pool_id) as covered_pools,
+                   COUNT(lp_stats.pool_id) FILTER (WHERE lp_stats.has_tvl = true) as tvl_covered_pools,
+                   COUNT(lp_stats.pool_id) FILTER (WHERE lp_stats.last_history_date >= CURRENT_DATE - INTERVAL '2 days') as fresh_pools,
+                   MAX(lp_stats.last_history_date) as latest_history_date
+            FROM liquidity_pool lp
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            LEFT JOIN (
+                SELECT pool_id, MAX(date) as last_history_date, bool_or(tvl_usd IS NOT NULL AND tvl_usd > 0) as has_tvl
+                FROM liquidity_pool_history
+                GROUP BY pool_id
+            ) lp_stats ON lp.id = lp_stats.pool_id
+            GROUP BY ch.name, pr.name
+            ORDER BY ch.name, pr.name
+        """)
+        lp_chains = {}
+        total_pools = 0
+        total_covered = 0
+        total_tvl_covered = 0
+        total_fresh = 0
+        for chain, protocol, count, covered, tvl_covered, fresh, latest_ts in cur.fetchall():
+            if chain not in lp_chains:
+                lp_chains[chain] = {"protocols": {}}
+            coverage_pct = round((covered / count * 100)) if count > 0 else 0
+            tvl_coverage_pct = round((tvl_covered / count * 100)) if count > 0 else 0
+            fresh_pct = round((fresh / count * 100)) if count > 0 else 0
+            lp_chains[chain]["protocols"][protocol] = {
+                "count": count,
+                "covered_count": covered,
+                "tvl_covered_count": tvl_covered,
+                "fresh_count": fresh,
+                "coverage_percentage": coverage_pct,
+                "tvl_coverage_percentage": tvl_coverage_pct,
+                "fresh_percentage": fresh_pct,
+                "latest_history_date": latest_ts.isoformat() if latest_ts else None
+            }
+            total_pools += count
+            total_covered += covered
+            total_tvl_covered += tvl_covered
+            total_fresh += fresh
+        overall_coverage_pct = round((total_covered / total_pools * 100)) if total_pools > 0 else 0
+        overall_tvl_coverage_pct = round((total_tvl_covered / total_pools * 100)) if total_pools > 0 else 0
+        overall_fresh_pct = round((total_fresh / total_pools * 100)) if total_pools > 0 else 0
+        data_dict["liquidity_pool"] = {
+            "count": total_pools,
+            "chains": lp_chains,
+            "covered_pools": {
+                "count": total_covered,
+                "percentage": overall_coverage_pct,
+                "tvl_covered_count": total_tvl_covered,
+                "tvl_coverage_percentage": overall_tvl_coverage_pct,
+                "fresh_count": total_fresh,
+                "fresh_percentage": overall_fresh_pct
+            }
+        }
 
-        cur.close(); conn.close()
+        # 5. coin_contract
+        cur.execute("SELECT COUNT(*), COUNT(*) FILTER (WHERE tracked = true) FROM coin_contract")
+        cc_total, cc_tracked = cur.fetchone()
+
+        cur.execute("""
+            SELECT ch.name, COUNT(*), COUNT(*) FILTER (WHERE cc.tracked = true)
+            FROM coin_contract cc
+            JOIN chain ch ON cc.chain_id = ch.id
+            GROUP BY ch.name
+            ORDER BY ch.name
+        """)
+        cc_chains = {}
+        for chain, chain_total, chain_tracked in cur.fetchall():
+            cc_chains[chain] = {
+                "count": chain_total,
+                "tracked_count": chain_tracked,
+                "untracked_count": chain_total - chain_tracked
+            }
+
+        data_dict["coin_contract"] = {
+            "count": cc_total,
+            "tracked_count": cc_tracked,
+            "untracked_count": cc_total - cc_tracked,
+            "chains": cc_chains
+        }
+
+        # 6. coin_family
+        cur.execute("SELECT COUNT(*) FROM coin_family")
+        cf_count = cur.fetchone()[0]
+        data_dict["coin_family"] = {
+            "count": cf_count
+        }
+
+        # 7. chain
+        cur.execute("SELECT name FROM chain ORDER BY id")
+        chain_names = [r[0] for r in cur.fetchall()]
+        data_dict["chain"] = {
+            "count": len(chain_names),
+            "chains": chain_names
+        }
+
+        # 8. protocol
+        cur.execute("SELECT name FROM protocol ORDER BY id")
+        proto_names = [r[0] for r in cur.fetchall()]
+        data_dict["protocol"] = {
+            "count": len(proto_names),
+            "protocols": proto_names
+        }
+
+        # 9. liquidity_pool_history
+        cur.execute("""
+            SELECT 
+                COUNT(DISTINCT pool_id),
+                COUNT(DISTINCT CASE WHEN latest_date >= (CURRENT_DATE - INTERVAL '1 day') THEN pool_id END)
+            FROM (
+                SELECT pool_id, MAX(date) AS latest_date FROM liquidity_pool_history GROUP BY pool_id
+            ) sub
+        """)
+        lph_covered_pools, lph_fresh_pools = cur.fetchone()
+        lph_covered_pct = round(lph_covered_pools / total_pools * 100, 2) if total_pools > 0 else 0
+        lph_fresh_pct = round(lph_fresh_pools / total_pools * 100, 2) if total_pools > 0 else 0
+
+        cur.execute("SELECT MIN(date), MAX(date), COUNT(*) FROM liquidity_pool_history")
+        lph_min, lph_max, lph_count = cur.fetchone()
+        lph_stale = False
+        if lph_max:
+            if isinstance(lph_max, datetime):
+                ft = lph_max if lph_max.tzinfo else lph_max.replace(tzinfo=timezone.utc)
+                lph_stale = ft < now - timedelta(days=2)
+            else:
+                lph_stale = lph_max < (now.date() - timedelta(days=2))
+            if lph_stale: overall_degraded = True
+        else:
+            lph_stale = True
+        data_dict["liquidity_pool_history"] = {
+            "freshness_requirement": "Latest pool history timestamp must be within the last 2 days",
+            "count": lph_count,
+            "earliest": lph_min.isoformat() if lph_min else None,
+            "latest": lph_max.isoformat() if lph_max else None,
+            "covered_pools": {
+                "count": lph_covered_pools,
+                "percentage": lph_covered_pct,
+                "fresh_count": lph_fresh_pools,
+                "fresh_percentage": lph_fresh_pct
+            },
+            "checks": {
+                "is_fresher_than_2_days": "fail" if lph_stale else "pass"
+            }
+        }
+
+        # 10. liquidity_pool_position
+        cur.execute("SELECT COUNT(*) FROM liquidity_pool_position")
+        lpp_count = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT 
+                COUNT(DISTINCT position_id),
+                COUNT(DISTINCT CASE WHEN latest_ts >= (CURRENT_DATE - INTERVAL '1 day') THEN position_id END)
+            FROM (
+                SELECT position_id, MAX(timestamp) AS latest_ts FROM liquidity_pool_position_snapshot GROUP BY position_id
+            ) sub
+        """)
+        lpps_covered_pos, lpps_fresh_pos = cur.fetchone()
+        lpps_covered_pct = round(lpps_covered_pos / lpp_count * 100, 2) if lpp_count > 0 else 0
+        lpps_fresh_pct = round(lpps_fresh_pos / lpp_count * 100, 2) if lpp_count > 0 else 0
+
+        data_dict["liquidity_pool_position"] = {
+            "count": lpp_count,
+            "snapshot_coverage": {
+                "covered_positions_count": lpps_covered_pos,
+                "covered_positions_percentage": lpps_covered_pct,
+                "fresh_positions_count": lpps_fresh_pos,
+                "fresh_positions_percentage": lpps_fresh_pct
+            }
+        }
+
+        # 11. liquidity_pool_position_event
+        cur.execute("SELECT MIN(timestamp), MAX(timestamp), COUNT(*) FROM liquidity_pool_position_event")
+        lppe_min, lppe_max, lppe_count = cur.fetchone()
+        data_dict["liquidity_pool_position_event"] = {
+            "count": lppe_count,
+            "earliest": lppe_min.isoformat() if lppe_min else None,
+            "latest": lppe_max.isoformat() if lppe_max else None
+        }
+
+        # 12. liquidity_pool_position_snapshot
+        cur.execute("SELECT MIN(timestamp), MAX(timestamp), COUNT(*) FROM liquidity_pool_position_snapshot")
+        lpps_min, lpps_max, lpps_count = cur.fetchone()
+        lpps_stale = False
+        if lpps_max:
+            ft = lpps_max if lpps_max.tzinfo else lpps_max.replace(tzinfo=timezone.utc)
+            lpps_stale = ft < now - timedelta(days=2)
+            if lpps_stale: overall_degraded = True
+        else:
+            lpps_stale = True
+        data_dict["liquidity_pool_position_snapshot"] = {
+            "freshness_requirement": "Latest pool position snapshot timestamp must be within the last 2 days",
+            "count": lpps_count,
+            "earliest": lpps_min.isoformat() if lpps_min else None,
+            "latest": lpps_max.isoformat() if lpps_max else None,
+            "covered_positions": {
+                "count": lpps_covered_pos,
+                "percentage": lpps_covered_pct,
+                "fresh_count": lpps_fresh_pos,
+                "fresh_percentage": lpps_fresh_pct
+            },
+            "checks": {
+                "has_data_every_day": "pass" if lpps_max else "fail",
+                "is_fresher_than_2_days": "fail" if lpps_stale else "pass"
+            }
+        }
+
+        cur.close()
+        conn.close()
     except Exception as e:
-        status["status"] = "error"
-        status["error"] = str(e)
+        overall_degraded = True
+        data_dict["error"] = str(e)
 
-    return status
+    res_tuple = (overall_degraded, data_dict)
+    _health_data_cache["data"] = res_tuple
+    _health_data_cache["timestamp"] = time.time()
+    return res_tuple
+
+
+def navigate_health_data(data_obj, path_str: str):
+    import urllib.parse
+    if not path_str or path_str.strip("/") == "":
+        return data_obj
+
+    parts = [p for p in path_str.strip("/").split("/") if p]
+    current = data_obj
+
+    for part in parts:
+        part_unquoted = urllib.parse.unquote(part)
+        if isinstance(current, dict):
+            if part in current:
+                current = current[part]
+            else:
+                found = False
+                for k, v in current.items():
+                    if k.lower() == part.lower() or k.lower() == part_unquoted.lower():
+                        current = v
+                        found = True
+                        break
+                if not found:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Path segment '{part}' not found. Available keys: {list(current.keys())}"
+                    )
+        elif isinstance(current, list):
+            try:
+                idx = int(part)
+                current = current[idx]
+            except (ValueError, IndexError):
+                if part_unquoted in current:
+                    current = part_unquoted
+                else:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Item '{part}' not found in list: {current}"
+                    )
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Cannot drill down further into '{part}' on non-container element"
+            )
+
+    return current
+
+
+@app.get("/health", tags=["System"])
+async def health_check():
+    """Detailed health and data freshness report for database and all 12 tables."""
+    from datetime import datetime, timezone
+    overall_degraded, data = build_all_tables_health()
+    response_data = {k: v for k, v in data.items() if k != "coins"}
+
+    db_status = {
+        "status": "connected" if "error" not in data else "error",
+        "table": response_data
+    }
+    if "error" in data:
+        db_status["error"] = data["error"]
+
+    return {
+        "status": "degraded" if overall_degraded else "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "db": db_status
+    }
+
+
+@app.get("/health/db/table", tags=["System"])
+@app.get("/health/db/table/{subpath:path}", tags=["System"])
+async def health_table_subpath(subpath: str = ""):
+    """Drill down into table health data (e.g. /health/db/table/, /health/db/table/swaps, /health/db/table/swaps/chains/Arbitrum)."""
+    overall_degraded, data = build_all_tables_health()
+    if "error" in data and not subpath:
+        return data
+    return navigate_health_data(data, subpath)
 
 
 @app.get("/lp", include_in_schema=False)
@@ -3174,6 +3542,11 @@ async def read_pool():
 async def read_sps():
     return FileResponse(os.path.join(STATIC_DIR, 'sps.html'))
 
+@app.get("/status", include_in_schema=False)
+@app.get("/health-status", include_in_schema=False)
+async def read_status():
+    return FileResponse(os.path.join(STATIC_DIR, 'health.html'))
+
 @app.get("/docs", include_in_schema=False)
 async def custom_docs():
     return FileResponse(os.path.join(STATIC_DIR, 'api.html'))
@@ -3184,8 +3557,8 @@ async def custom_swagger_ui_html():
         openapi_url=app.openapi_url,
         title=app.title + " - API Specs",
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
-        swagger_css_url="/static/swagger-custom.css",
-        swagger_ui_parameters={"syntaxHighlight": False}
+        swagger_css_url="/static/swagger-custom.css?v=3.0",
+        swagger_ui_parameters={"syntaxHighlight": {"theme": "monokai"}}
     )
 
 if __name__ == "__main__":
