@@ -109,7 +109,7 @@ class UniswapV3Fetcher:
             v4_subgraph_id = "GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM"  # unused (V3 protocol)
         elif self.network == "Base":
             v3_subgraph_id = "43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG"
-            v4_subgraph_id = "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS" # Placeholder if V4 is not available
+            v4_subgraph_id = "Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj"  # Uniswap V4 Base swaps (verified active)
         elif self.network == "BNB":
             v3_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV"
             v4_subgraph_id = "7XgdLW3bts4HktCYsu9dy8bEnuiNeZuftcuK3Aj4JXYV" # Placeholder
