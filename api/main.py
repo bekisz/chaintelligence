@@ -1074,7 +1074,7 @@ async def analyze_pools(
                         fee_full = f"{fee_disp}|{protocol}|{net_val}"
                         key = (t_sorted[0], fee_full, t_sorted[1])
                         
-                        vol_usd = s.get('amount_usd') or 0.0
+                        vol_usd = s.get('amount_usd') if s.get('amount_usd') is not None else (s.get('amountUSD') or 0.0)
                         total_volume += vol_usd
                         total_tx += 1
                         
@@ -3229,65 +3229,80 @@ def build_all_tables_health():
             }
         }
 
-        # 4. liquidity_pool
-        cur.execute("""
-            SELECT ch.name, pr.name,
-                   COUNT(lp.id) as total_pools,
-                   COUNT(lp_stats.pool_id) as covered_pools,
-                   COUNT(lp_stats.pool_id) FILTER (WHERE lp_stats.has_tvl = true) as tvl_covered_pools,
-                   COUNT(lp_stats.pool_id) FILTER (WHERE lp_stats.last_history_date >= CURRENT_DATE - INTERVAL '2 days') as fresh_pools,
-                   MAX(lp_stats.last_history_date) as latest_history_date
-            FROM liquidity_pool lp
-            JOIN chain ch ON lp.chain_id = ch.id
-            JOIN protocol pr ON lp.protocol_id = pr.id
-            LEFT JOIN (
-                SELECT pool_id, MAX(date) as last_history_date, bool_or(tvl_usd IS NOT NULL AND tvl_usd > 0) as has_tvl
-                FROM liquidity_pool_history
-                GROUP BY pool_id
-            ) lp_stats ON lp.id = lp_stats.pool_id
-            GROUP BY ch.name, pr.name
-            ORDER BY ch.name, pr.name
-        """)
-        lp_chains = {}
-        total_pools = 0
-        total_covered = 0
-        total_tvl_covered = 0
-        total_fresh = 0
-        for chain, protocol, count, covered, tvl_covered, fresh, latest_ts in cur.fetchall():
-            if chain not in lp_chains:
-                lp_chains[chain] = {"protocols": {}}
-            coverage_pct = round((covered / count * 100)) if count > 0 else 0
-            tvl_coverage_pct = round((tvl_covered / count * 100)) if count > 0 else 0
-            fresh_pct = round((fresh / count * 100)) if count > 0 else 0
-            lp_chains[chain]["protocols"][protocol] = {
-                "count": count,
-                "covered_count": covered,
-                "tvl_covered_count": tvl_covered,
-                "fresh_count": fresh,
-                "coverage_percentage": coverage_pct,
-                "tvl_coverage_percentage": tvl_coverage_pct,
-                "fresh_percentage": fresh_pct,
-                "latest_history_date": latest_ts.isoformat() if latest_ts else None
+        # 4. liquidity_pool & volume filters matrix (0, 10, 100, 1000 USD)
+        volume_thresholds = [0, 10, 100, 1000]
+        matrix_filters = {}
+
+        for min_vol in volume_thresholds:
+            cur.execute("""
+                SELECT ch.name, pr.name,
+                       COUNT(lp.id) as total_pools,
+                       COUNT(lp_stats.pool_id) as covered_pools,
+                       COUNT(lp_stats.pool_id) FILTER (WHERE lp_stats.has_tvl = true) as tvl_covered_pools,
+                       COUNT(lp_stats.pool_id) FILTER (WHERE lp_stats.last_history_date >= CURRENT_DATE - INTERVAL '2 days') as fresh_pools,
+                       MAX(lp_stats.last_history_date) as latest_history_date
+                FROM liquidity_pool lp
+                JOIN chain ch ON lp.chain_id = ch.id
+                JOIN protocol pr ON lp.protocol_id = pr.id
+                LEFT JOIN (
+                    SELECT pool_id, 
+                           MAX(date) as last_history_date, 
+                           bool_or(tvl_usd IS NOT NULL AND tvl_usd > 0) as has_tvl,
+                           SUM(CASE WHEN date >= CURRENT_DATE - INTERVAL '7 days' THEN volume_usd ELSE 0 END) as vol_7d
+                    FROM liquidity_pool_history
+                    GROUP BY pool_id
+                ) lp_stats ON lp.id = lp_stats.pool_id
+                WHERE (%s = 0 OR COALESCE(lp_stats.vol_7d, 0) >= %s)
+                GROUP BY ch.name, pr.name
+                ORDER BY ch.name, pr.name
+            """, (min_vol, min_vol))
+            
+            lp_chains = {}
+            tot_pools = 0
+            tot_covered = 0
+            tot_tvl_covered = 0
+            tot_fresh = 0
+            for chain, protocol, count, covered, tvl_covered, fresh, latest_ts in cur.fetchall():
+                if chain not in lp_chains:
+                    lp_chains[chain] = {"protocols": {}}
+                coverage_pct = round((covered / count * 100)) if count > 0 else 0
+                tvl_coverage_pct = round((tvl_covered / count * 100)) if count > 0 else 0
+                fresh_pct = round((fresh / count * 100)) if count > 0 else 0
+                lp_chains[chain]["protocols"][protocol] = {
+                    "count": count,
+                    "covered_count": covered,
+                    "tvl_covered_count": tvl_covered,
+                    "fresh_count": fresh,
+                    "coverage_percentage": coverage_pct,
+                    "tvl_coverage_percentage": tvl_coverage_pct,
+                    "fresh_percentage": fresh_pct,
+                    "latest_history_date": latest_ts.isoformat() if latest_ts else None
+                }
+                tot_pools += count
+                tot_covered += covered
+                tot_tvl_covered += tvl_covered
+                tot_fresh += fresh
+            
+            ov_coverage_pct = round((tot_covered / tot_pools * 100)) if tot_pools > 0 else 0
+            ov_tvl_coverage_pct = round((tot_tvl_covered / tot_pools * 100)) if tot_pools > 0 else 0
+            ov_fresh_pct = round((tot_fresh / tot_pools * 100)) if tot_pools > 0 else 0
+
+            matrix_filters[str(min_vol)] = {
+                "min_volume": min_vol,
+                "count": tot_pools,
+                "chains": lp_chains,
+                "covered_pools": {
+                    "count": tot_covered,
+                    "percentage": ov_coverage_pct,
+                    "tvl_covered_count": tot_tvl_covered,
+                    "tvl_coverage_percentage": ov_tvl_coverage_pct,
+                    "fresh_count": tot_fresh,
+                    "fresh_percentage": ov_fresh_pct
+                }
             }
-            total_pools += count
-            total_covered += covered
-            total_tvl_covered += tvl_covered
-            total_fresh += fresh
-        overall_coverage_pct = round((total_covered / total_pools * 100)) if total_pools > 0 else 0
-        overall_tvl_coverage_pct = round((total_tvl_covered / total_pools * 100)) if total_pools > 0 else 0
-        overall_fresh_pct = round((total_fresh / total_pools * 100)) if total_pools > 0 else 0
-        data_dict["liquidity_pool"] = {
-            "count": total_pools,
-            "chains": lp_chains,
-            "covered_pools": {
-                "count": total_covered,
-                "percentage": overall_coverage_pct,
-                "tvl_covered_count": total_tvl_covered,
-                "tvl_coverage_percentage": overall_tvl_coverage_pct,
-                "fresh_count": total_fresh,
-                "fresh_percentage": overall_fresh_pct
-            }
-        }
+
+        data_dict["liquidity_pool"] = {k: v for k, v in matrix_filters["0"].items()}
+        data_dict["liquidity_pool"]["volume_filters"] = {k: {x: y for x, y in v.items()} for k, v in matrix_filters.items()}
 
         # 5. coin_contract
         cur.execute("SELECT COUNT(*), COUNT(*) FILTER (WHERE tracked = true) FROM coin_contract")

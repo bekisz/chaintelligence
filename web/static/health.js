@@ -28,6 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentHealthData = null;
 
+    window.currentMatrixVolFilter = window.currentMatrixVolFilter || '0';
+    window.setMatrixVolumeFilter = function(val) {
+        window.currentMatrixVolFilter = String(val);
+        if (currentHealthData) {
+            renderHealthUI(currentHealthData);
+        }
+    };
+
     const formatNumber = (num) => {
         if (num === undefined || num === null) return '--';
         return Number(num).toLocaleString();
@@ -703,110 +711,127 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // 4. Liquidity pool breakdown by chain with history coverage matrix
-                if (tName === 'liquidity_pool' && tData.chains) {
-                    const chainNames = Object.keys(tData.chains).sort((a, b) => {
-                        if (a.toLowerCase() === 'ethereum') return -1;
-                        if (b.toLowerCase() === 'ethereum') return 1;
-                        return a.localeCompare(b);
-                    });
+                if (tName === 'liquidity_pool') {
+                    const activeVolFilter = window.currentMatrixVolFilter || '0';
+                    const matrixData = (tData.volume_filters && tData.volume_filters[activeVolFilter]) ? tData.volume_filters[activeVolFilter] : tData;
 
-                    // Gather distinct protocol names across all chains
-                    const protoSet = new Set();
-                    chainNames.forEach(cName => {
-                        const protos = tData.chains[cName].protocols || {};
-                        Object.keys(protos).forEach(p => protoSet.add(p));
-                    });
-
-                    const getProtoPriority = (p) => {
-                        const name = p.toLowerCase();
-                        if (name.includes('uniswap v2')) return 1;
-                        if (name.includes('uniswap v3')) return 2;
-                        if (name.includes('uniswap v4')) return 3;
-                        if (name.includes('uniswap')) return 4;
-                        if (name.includes('pancakeswap v3')) return 10;
-                        if (name.includes('pancakeswap v4')) return 11;
-                        if (name.includes('pancakeswap')) return 12;
-                        if (name.includes('aerodrome')) return 20;
-                        return 99;
-                    };
-
-                    const protoList = Array.from(protoSet).sort((a, b) => {
-                        const prioA = getProtoPriority(a);
-                        const prioB = getProtoPriority(b);
-                        if (prioA !== prioB) return prioA - prioB;
-                        return a.localeCompare(b);
-                    });
-
-                    breakdownHtml += `
-                        <div class="breakdown-subpanel">
-                            <div class="subpanel-title">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-                                Pool Count & History Coverage Matrix
-                            </div>
-                            <div style="overflow-x: auto;">
-                                <table class="indexer-matrix-table">
-                                    <thead>
-                                        <tr>
-                                            <th style="text-align: left;">DEX Protocol</th>
-                                            ${chainNames.map(c => `<th style="text-align: center;">${c}</th>`).join('')}
-                                            <th style="text-align: right;">Total Pools</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                    `;
-
-                    const chainSummary = {};
-                    chainNames.forEach(cName => {
-                        chainSummary[cName] = { totalPools: 0, totalCovered: 0, totalFresh: 0, coverageSum: 0, protoCount: 0 };
-                    });
-
-                    protoList.forEach(protoName => {
-                        let protoTotal = 0;
-                        let protoCovered = 0;
-                        let protoFresh = 0;
-                        let rowCellsHtml = '';
-
-                        chainNames.forEach(cName => {
-                            const pData = (tData.chains[cName].protocols || {})[protoName];
-                            if (pData && pData.count > 0) {
-                                protoTotal += (pData.count || 0);
-                                protoCovered += (pData.covered_count || 0);
-                                protoFresh += (pData.fresh_count || 0);
-                                chainSummary[cName].totalPools += (pData.count || 0);
-                                chainSummary[cName].totalCovered += (pData.covered_count || 0);
-                                chainSummary[cName].totalFresh += (pData.fresh_count || 0);
-                                chainSummary[cName].protoCount++;
-
-                                const covPct = pData.coverage_percentage || 0;
-                                const tvlCovPct = pData.tvl_coverage_percentage || 0;
-                                const freshPct = pData.fresh_percentage || 0;
-                                const isFullyCovered = covPct >= 90;
-                                const isPartiallyCovered = covPct >= 50;
-                                const isFresh = freshPct >= 50;
-
-                                const covColor = isFullyCovered ? '#34d399' : (isPartiallyCovered ? '#fbbf24' : '#ef4444');
-                                const freshDot = isFresh ? 'dot-green' : 'dot-amber';
-
-                                rowCellsHtml += `
-                                    <td style="text-align: center;">
-                                        <div class="matrix-cell">
-                                            <div style="display:flex; align-items:center; justify-content:center; gap:4px; font-size:0.85rem; font-weight:600;" class="font-mono">
-                                                <span class="status-indicator-dot ${freshDot}" style="flex-shrink:0;"></span>
-                                                <span style="color:#f9fafb;">${formatNumber(pData.count)}</span>
-                                                <span class="dim-text">pools</span>
-                                            </div>
-                                            <div style="font-size:0.72rem; color:#6b7280;" class="font-mono">
-                                                <span style="color:${covColor};" title="History & TVL Coverage">${covPct}% hist</span>
-                                                <span class="dim-text"> | </span>
-                                                <span style="${freshPct >= 50 ? 'color:#34d399;' : 'color:#fbbf24;'}">${freshPct}% fresh</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                `;
-                            } else {
-                                rowCellsHtml += `<td style="text-align: center;"></td>`;
-                            }
+                    if (matrixData.chains) {
+                        const chainNames = Object.keys(matrixData.chains).sort((a, b) => {
+                            if (a.toLowerCase() === 'ethereum') return -1;
+                            if (b.toLowerCase() === 'ethereum') return 1;
+                            return a.localeCompare(b);
                         });
+
+                        // Gather distinct protocol names across all chains
+                        const protoSet = new Set();
+                        chainNames.forEach(cName => {
+                            const protos = matrixData.chains[cName].protocols || {};
+                            Object.keys(protos).forEach(p => protoSet.add(p));
+                        });
+
+                        const getProtoPriority = (p) => {
+                            const name = p.toLowerCase();
+                            if (name.includes('uniswap v2')) return 1;
+                            if (name.includes('uniswap v3')) return 2;
+                            if (name.includes('uniswap v4')) return 3;
+                            if (name.includes('uniswap')) return 4;
+                            if (name.includes('pancakeswap v3')) return 10;
+                            if (name.includes('pancakeswap v4')) return 11;
+                            if (name.includes('pancakeswap')) return 12;
+                            if (name.includes('aerodrome')) return 20;
+                            return 99;
+                        };
+
+                        const protoList = Array.from(protoSet).sort((a, b) => {
+                            const prioA = getProtoPriority(a);
+                            const prioB = getProtoPriority(b);
+                            if (prioA !== prioB) return prioA - prioB;
+                            return a.localeCompare(b);
+                        });
+
+                        const getVolBtnStyle = (val) => {
+                            const isActive = (activeVolFilter === val);
+                            return `padding:4px 10px; font-size:0.75rem; font-weight:600; border:none; border-radius:6px; cursor:pointer; transition:all 0.2s; ${isActive ? 'background:#6366f1; color:#ffffff; box-shadow:0 2px 4px rgba(99,102,241,0.4);' : 'background:transparent; color:#94a3b8;'}`;
+                        };
+
+                        breakdownHtml += `
+                            <div class="breakdown-subpanel">
+                                <div class="subpanel-title" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                                        <span>Pool Count & History Coverage Matrix</span>
+                                    </div>
+                                    <div class="matrix-filter-group" style="display:inline-flex; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:2px;">
+                                        <button onclick="setMatrixVolumeFilter('0')" style="${getVolBtnStyle('0')}">All Pools</button>
+                                        <button onclick="setMatrixVolumeFilter('10')" style="${getVolBtnStyle('10')}">&gt; $10 (7d Vol)</button>
+                                        <button onclick="setMatrixVolumeFilter('100')" style="${getVolBtnStyle('100')}">&gt; $100 (7d Vol)</button>
+                                        <button onclick="setMatrixVolumeFilter('1000')" style="${getVolBtnStyle('1000')}">&gt; $1000 (7d Vol)</button>
+                                    </div>
+                                </div>
+                                <div style="overflow-x: auto;">
+                                    <table class="indexer-matrix-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left;">DEX Protocol</th>
+                                                ${chainNames.map(c => `<th style="text-align: center;">${c}</th>`).join('')}
+                                                <th style="text-align: right;">Total Pools</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                        `;
+
+                        const chainSummary = {};
+                        chainNames.forEach(cName => {
+                            chainSummary[cName] = { totalPools: 0, totalCovered: 0, totalFresh: 0, coverageSum: 0, protoCount: 0 };
+                        });
+
+                        protoList.forEach(protoName => {
+                            let protoTotal = 0;
+                            let protoCovered = 0;
+                            let protoFresh = 0;
+                            let rowCellsHtml = '';
+
+                            chainNames.forEach(cName => {
+                                const pData = (matrixData.chains[cName].protocols || {})[protoName];
+                                if (pData && pData.count > 0) {
+                                    protoTotal += (pData.count || 0);
+                                    protoCovered += (pData.covered_count || 0);
+                                    protoFresh += (pData.fresh_count || 0);
+                                    chainSummary[cName].totalPools += (pData.count || 0);
+                                    chainSummary[cName].totalCovered += (pData.covered_count || 0);
+                                    chainSummary[cName].totalFresh += (pData.fresh_count || 0);
+                                    chainSummary[cName].protoCount++;
+
+                                    const covPct = pData.coverage_percentage || 0;
+                                    const tvlCovPct = pData.tvl_coverage_percentage || 0;
+                                    const freshPct = pData.fresh_percentage || 0;
+                                    const isFullyCovered = covPct >= 90;
+                                    const isPartiallyCovered = covPct >= 50;
+                                    const isFresh = freshPct >= 50;
+
+                                    const covColor = isFullyCovered ? '#34d399' : (isPartiallyCovered ? '#fbbf24' : '#ef4444');
+                                    const freshDot = isFresh ? 'dot-green' : 'dot-amber';
+
+                                    rowCellsHtml += `
+                                        <td style="text-align: center;">
+                                            <div class="matrix-cell">
+                                                <div style="display:flex; align-items:center; justify-content:center; gap:4px; font-size:0.85rem; font-weight:600;" class="font-mono">
+                                                    <span class="status-indicator-dot ${freshDot}" style="flex-shrink:0;"></span>
+                                                    <span style="color:#f9fafb;">${formatNumber(pData.count)}</span>
+                                                    <span class="dim-text">pools</span>
+                                                </div>
+                                                <div style="font-size:0.72rem; color:#6b7280;" class="font-mono">
+                                                    <span style="color:${covColor};" title="History & TVL Coverage">${covPct}% hist</span>
+                                                    <span class="dim-text"> | </span>
+                                                    <span style="${freshPct >= 50 ? 'color:#34d399;' : 'color:#fbbf24;'}">${freshPct}% fresh</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    `;
+                                } else {
+                                    rowCellsHtml += `<td style="text-align: center;"></td>`;
+                                }
+                            });
 
                         breakdownHtml += `
                             <tr>
@@ -866,6 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                     `;
+                    }
                 }
 
                 // 5. Coin price history coverage breakdown
@@ -889,23 +915,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // 6. Liquidity pool history coverage breakdown
-                if (tName === 'liquidity_pool_history' && tData.covered_pools) {
-                    const cp = tData.covered_pools;
-                    breakdownHtml += `
-                        <div class="breakdown-subpanel">
-                            <div class="subpanel-title">Pool History Metrics Coverage & Freshness</div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
-                                <div>
-                                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;"><span class="dim-text">History Coverage (Pools)</span><span class="font-bold text-success">${formatNumber(cp.count)} pools (${cp.percentage}%)</span></div>
-                                    <div class="health-meter-track"><div class="health-meter-fill fill-green" style="width: ${cp.percentage}%;"></div></div>
-                                </div>
-                                <div>
-                                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;"><span class="dim-text">Fresh Data (>= Yesterday)</span><span class="font-bold ${cp.fresh_count > 0 ? 'text-success' : 'text-warning'}">${formatNumber(cp.fresh_count)} pools (${cp.fresh_percentage}%)</span></div>
-                                    <div class="health-meter-track"><div class="health-meter-fill ${cp.fresh_percentage > 50 ? 'fill-green' : 'fill-yellow'}" style="width: ${cp.fresh_percentage}%;"></div></div>
+                if (tName === 'liquidity_pool_history' && tables.liquidity_pool) {
+                    const activeVolFilter = window.currentMatrixVolFilter || '0';
+                    const matrixData = (tables.liquidity_pool.volume_filters && tables.liquidity_pool.volume_filters[activeVolFilter]) ? tables.liquidity_pool.volume_filters[activeVolFilter] : (tData.covered_pools ? tData : tables.liquidity_pool);
+                    const cp = matrixData.covered_pools || tData.covered_pools;
+                    if (cp) {
+                        const filterLabel = (activeVolFilter === '0') ? 'All Pools' : `> $${activeVolFilter} 7d Vol`;
+                        breakdownHtml += `
+                            <div class="breakdown-subpanel">
+                                <div class="subpanel-title">Pool History Metrics Coverage & Freshness (${filterLabel})</div>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                                    <div>
+                                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;"><span class="dim-text">History Coverage (Pools)</span><span class="font-bold text-success">${formatNumber(cp.count)} pools (${cp.percentage}%)</span></div>
+                                        <div class="health-meter-track"><div class="health-meter-fill fill-green" style="width: ${cp.percentage}%;"></div></div>
+                                    </div>
+                                    <div>
+                                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;"><span class="dim-text">Fresh Data (>= Yesterday)</span><span class="font-bold ${cp.fresh_count > 0 ? 'text-success' : 'text-warning'}">${formatNumber(cp.fresh_count)} pools (${cp.fresh_percentage}%)</span></div>
+                                        <div class="health-meter-track"><div class="health-meter-fill ${cp.fresh_percentage > 50 ? 'fill-green' : 'fill-yellow'}" style="width: ${cp.fresh_percentage}%;"></div></div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                    }
                 }
 
                 // 7. Position snapshot coverage breakdown
