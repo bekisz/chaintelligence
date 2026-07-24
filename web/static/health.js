@@ -763,9 +763,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </div>
                                     <div class="matrix-filter-group" style="display:inline-flex; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:2px;">
                                         <button onclick="setMatrixVolumeFilter('0')" style="${getVolBtnStyle('0')}">All Pools</button>
-                                        <button onclick="setMatrixVolumeFilter('10')" style="${getVolBtnStyle('10')}">&gt; $10 (7d Vol)</button>
-                                        <button onclick="setMatrixVolumeFilter('100')" style="${getVolBtnStyle('100')}">&gt; $100 (7d Vol)</button>
-                                        <button onclick="setMatrixVolumeFilter('1000')" style="${getVolBtnStyle('1000')}">&gt; $1000 (7d Vol)</button>
+                                        <button onclick="setMatrixVolumeFilter('1000')" style="${getVolBtnStyle('1000')}">&gt; $1k (7d Vol)</button>
+                                        <button onclick="setMatrixVolumeFilter('100000')" style="${getVolBtnStyle('100000')}">&gt; $100k (7d Vol)</button>
+                                        <button onclick="setMatrixVolumeFilter('10000000')" style="${getVolBtnStyle('10000000')}">&gt; $10M (7d Vol)</button>
                                     </div>
                                 </div>
                                 <div style="overflow-x: auto;">
@@ -920,7 +920,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const matrixData = (tables.liquidity_pool.volume_filters && tables.liquidity_pool.volume_filters[activeVolFilter]) ? tables.liquidity_pool.volume_filters[activeVolFilter] : (tData.covered_pools ? tData : tables.liquidity_pool);
                     const cp = matrixData.covered_pools || tData.covered_pools;
                     if (cp) {
-                        const filterLabel = (activeVolFilter === '0') ? 'All Pools' : `> $${activeVolFilter} 7d Vol`;
+                        const formatVolLabel = (v) => {
+                            if (v === '0') return 'All Pools';
+                            if (v === '1000') return '> $1k 7d Vol';
+                            if (v === '100000') return '> $100k 7d Vol';
+                            if (v === '10000000') return '> $10M 7d Vol';
+                            return `> $${v} 7d Vol`;
+                        };
+                        const filterLabel = formatVolLabel(activeVolFilter);
                         breakdownHtml += `
                             <div class="breakdown-subpanel">
                                 <div class="subpanel-title">Pool History Metrics Coverage & Freshness (${filterLabel})</div>

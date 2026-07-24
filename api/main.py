@@ -3229,8 +3229,8 @@ def build_all_tables_health():
             }
         }
 
-        # 4. liquidity_pool & volume filters matrix (0, 10, 100, 1000 USD)
-        volume_thresholds = [0, 10, 100, 1000]
+        # 4. liquidity_pool & volume filters matrix (0, 1k, 100k, 10M USD)
+        volume_thresholds = [0, 1000, 100000, 10000000]
         matrix_filters = {}
 
         for min_vol in volume_thresholds:
