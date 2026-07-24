@@ -3079,57 +3079,72 @@ def build_all_tables_health():
         cur = conn.cursor()
 
         # 1. swaps
-        cur.execute("""
-            SELECT ch.name, pr.name, MIN(s.ts), MAX(s.ts), COUNT(*)
-            FROM swaps s
-            JOIN liquidity_pool lp ON s.pool_id = lp.id
-            JOIN chain ch ON lp.chain_id = ch.id
-            JOIN protocol pr ON lp.protocol_id = pr.id
-            GROUP BY ch.name, pr.name
-            ORDER BY ch.name, pr.name
-        """)
-        swap_chains = {}
-        total_swaps = 0
-        any_swap_stale = False
+        volume_thresholds = [0, 1000, 100000, 10000000]
+        swap_matrix_filters = {}
 
-        for chain, protocol, earliest, latest, count in cur.fetchall():
-            ft = latest if latest.tzinfo else latest.replace(tzinfo=timezone.utc)
-            stale = ft < now - timedelta(hours=3)
-            if stale:
-                overall_degraded = True
-                any_swap_stale = True
+        for min_vol in volume_thresholds:
+            cur.execute("""
+                SELECT ch.name, pr.name, MIN(s.ts), MAX(s.ts), COUNT(*)
+                FROM swaps s
+                JOIN liquidity_pool lp ON s.pool_id = lp.id
+                JOIN chain ch ON lp.chain_id = ch.id
+                JOIN protocol pr ON lp.protocol_id = pr.id
+                LEFT JOIN (
+                    SELECT pool_id, SUM(CASE WHEN date >= CURRENT_DATE - INTERVAL '7 days' THEN volume_usd ELSE 0 END) as vol_7d
+                    FROM liquidity_pool_history
+                    GROUP BY pool_id
+                ) lp_stats ON lp.id = lp_stats.pool_id
+                WHERE (%s = 0 OR COALESCE(lp_stats.vol_7d, 0) >= %s)
+                GROUP BY ch.name, pr.name
+                ORDER BY ch.name, pr.name
+            """, (min_vol, min_vol))
+            
+            swap_chains = {}
+            total_swaps = 0
+            any_swap_stale = False
 
-            if chain not in swap_chains:
-                swap_chains[chain] = {"status": "fresh", "protocols": {}}
-            if stale:
-                swap_chains[chain]["status"] = "stale"
+            for chain, protocol, earliest, latest, count in cur.fetchall():
+                ft = latest if latest.tzinfo else latest.replace(tzinfo=timezone.utc)
+                stale = ft < now - timedelta(hours=3)
+                if stale:
+                    if min_vol == 0:
+                        overall_degraded = True
+                    any_swap_stale = True
 
-            proto_3h_pass = not stale
-            proto_daily_pass = ft >= now - timedelta(days=2) if latest else False
+                if chain not in swap_chains:
+                    swap_chains[chain] = {"status": "fresh", "protocols": {}}
+                if stale:
+                    swap_chains[chain]["status"] = "stale"
 
-            swap_chains[chain]["protocols"][protocol] = {
-                "count": count,
-                "earliest": earliest.isoformat() if earliest else None,
-                "latest": latest.isoformat() if latest else None,
+                proto_3h_pass = not stale
+                proto_daily_pass = ft >= now - timedelta(days=2) if latest else False
+
+                swap_chains[chain]["protocols"][protocol] = {
+                    "count": count,
+                    "earliest": earliest.isoformat() if earliest else None,
+                    "latest": latest.isoformat() if latest else None,
+                    "checks": {
+                        "has_data_every_day": "pass" if proto_daily_pass else "fail",
+                        "is_fresher_than_3_hours": "pass" if proto_3h_pass else "fail"
+                    }
+                }
+                total_swaps += count
+
+            swaps_3h_pass = not any_swap_stale
+            swaps_daily_pass = True
+
+            swap_matrix_filters[str(min_vol)] = {
+                "freshness_requirement": "Latest swap timestamp for each protocol on a chain must be within the last 3 hours",
+                "count": total_swaps,
+                "chains": swap_chains,
                 "checks": {
-                    "has_data_every_day": "pass" if proto_daily_pass else "fail",
-                    "is_fresher_than_3_hours": "pass" if proto_3h_pass else "fail"
+                    "has_data_every_day": "pass" if swaps_daily_pass else "fail",
+                    "is_fresher_than_3_hours": "pass" if swaps_3h_pass else "fail"
                 }
             }
-            total_swaps += count
 
-        swaps_3h_pass = not any_swap_stale
-        swaps_daily_pass = True  # evaluated across protocols
-
-        data_dict["swaps"] = {
-            "freshness_requirement": "Latest swap timestamp for each protocol on a chain must be within the last 3 hours",
-            "count": total_swaps,
-            "chains": swap_chains,
-            "checks": {
-                "has_data_every_day": "pass" if swaps_daily_pass else "fail",
-                "is_fresher_than_3_hours": "pass" if swaps_3h_pass else "fail"
-            }
-        }
+        data_dict["swaps"] = {k: v for k, v in swap_matrix_filters["0"].items()}
+        data_dict["swaps"]["volume_filters"] = {k: {x: y for x, y in v.items()} for k, v in swap_matrix_filters.items()}
 
         # 2. coin
         cur.execute("SELECT COUNT(*) FROM coin")

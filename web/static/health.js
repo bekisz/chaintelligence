@@ -503,57 +503,74 @@ document.addEventListener('DOMContentLoaded', () => {
                 let breakdownHtml = '';
 
                 // 1. Swaps breakdown: Blockchain Indexer Freshness Matrix (Protocol rows × Chain columns)
-                if (tName === 'swaps' && tData.chains) {
-                    const chainNames = Object.keys(tData.chains).sort((a, b) => {
-                        if (a.toLowerCase() === 'ethereum') return -1;
-                        if (b.toLowerCase() === 'ethereum') return 1;
-                        return a.localeCompare(b);
-                    });
+                if (tName === 'swaps') {
+                    const activeVolFilter = window.currentMatrixVolFilter || '0';
+                    const matrixData = (tData.volume_filters && tData.volume_filters[activeVolFilter]) ? tData.volume_filters[activeVolFilter] : tData;
 
-                    // Gather distinct protocol names across all chains
-                    const protoSet = new Set();
-                    chainNames.forEach(cName => {
-                        const protos = tData.chains[cName].protocols || {};
-                        Object.keys(protos).forEach(p => protoSet.add(p));
-                    });
+                    if (matrixData.chains) {
+                        const chainNames = Object.keys(matrixData.chains).sort((a, b) => {
+                            if (a.toLowerCase() === 'ethereum') return -1;
+                            if (b.toLowerCase() === 'ethereum') return 1;
+                            return a.localeCompare(b);
+                        });
 
-                    const getProtoPriority = (p) => {
-                        const name = p.toLowerCase();
-                        if (name.includes('uniswap v2')) return 1;
-                        if (name.includes('uniswap v3')) return 2;
-                        if (name.includes('uniswap v4')) return 3;
-                        if (name.includes('uniswap')) return 4;
-                        if (name.includes('pancakeswap v3')) return 10;
-                        if (name.includes('pancakeswap v4')) return 11;
-                        if (name.includes('pancakeswap')) return 12;
-                        if (name.includes('aerodrome')) return 20;
-                        return 99;
-                    };
+                        // Gather distinct protocol names across all chains
+                        const protoSet = new Set();
+                        chainNames.forEach(cName => {
+                            const protos = matrixData.chains[cName].protocols || {};
+                            Object.keys(protos).forEach(p => protoSet.add(p));
+                        });
 
-                    const protoList = Array.from(protoSet).sort((a, b) => {
-                        const prioA = getProtoPriority(a);
-                        const prioB = getProtoPriority(b);
-                        if (prioA !== prioB) return prioA - prioB;
-                        return a.localeCompare(b);
-                    });
+                        const getProtoPriority = (p) => {
+                            const name = p.toLowerCase();
+                            if (name.includes('uniswap v2')) return 1;
+                            if (name.includes('uniswap v3')) return 2;
+                            if (name.includes('uniswap v4')) return 3;
+                            if (name.includes('uniswap')) return 4;
+                            if (name.includes('pancakeswap v3')) return 10;
+                            if (name.includes('pancakeswap v4')) return 11;
+                            if (name.includes('pancakeswap')) return 12;
+                            if (name.includes('aerodrome')) return 20;
+                            return 99;
+                        };
 
-                    breakdownHtml += `
-                        <div class="breakdown-subpanel">
-                            <div class="subpanel-title">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                                Staleness Matrix
-                            </div>
-                            <div style="overflow-x: auto;">
-                                <table class="indexer-matrix-table">
-                                    <thead>
-                                        <tr>
-                                            <th style="text-align: left;">DEX Protocol</th>
-                                            ${chainNames.map(c => `<th style="text-align: center;">${c}</th>`).join('')}
-                                            <th style="text-align: right;">Total Swaps</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                    `;
+                        const protoList = Array.from(protoSet).sort((a, b) => {
+                            const prioA = getProtoPriority(a);
+                            const prioB = getProtoPriority(b);
+                            if (prioA !== prioB) return prioA - prioB;
+                            return a.localeCompare(b);
+                        });
+
+                        const getVolBtnStyle = (val) => {
+                            const isActive = (activeVolFilter === val);
+                            return `padding:4px 10px; font-size:0.75rem; font-weight:600; border:none; border-radius:6px; cursor:pointer; transition:all 0.2s; ${isActive ? 'background:#6366f1; color:#ffffff; box-shadow:0 2px 4px rgba(99,102,241,0.4);' : 'background:transparent; color:#94a3b8;'}`;
+                        };
+
+                        breakdownHtml += `
+                            <div class="breakdown-subpanel">
+                                <div class="subpanel-title" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                        <span>Swap Staleness Matrix</span>
+                                    </div>
+                                    <div class="matrix-filter-group" style="display:inline-flex; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:2px;">
+                                        <button onclick="setMatrixVolumeFilter('0')" style="${getVolBtnStyle('0')}">All Pools</button>
+                                        <button onclick="setMatrixVolumeFilter('1000')" style="${getVolBtnStyle('1000')}">&gt; $1k (7d Vol)</button>
+                                        <button onclick="setMatrixVolumeFilter('100000')" style="${getVolBtnStyle('100000')}">&gt; $100k (7d Vol)</button>
+                                        <button onclick="setMatrixVolumeFilter('10000000')" style="${getVolBtnStyle('10000000')}">&gt; $10M (7d Vol)</button>
+                                    </div>
+                                </div>
+                                <div style="overflow-x: auto;">
+                                    <table class="indexer-matrix-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left;">DEX Protocol</th>
+                                                ${chainNames.map(c => `<th style="text-align: center;">${c}</th>`).join('')}
+                                                <th style="text-align: right;">Total Swaps</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                        `;
 
                     // Track per-chain aggregates for the summary footer
                     const chainSummary = {};
@@ -566,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let rowCellsHtml = '';
 
                         chainNames.forEach(cName => {
-                            const pData = (tData.chains[cName].protocols || {})[protoName];
+                            const pData = (matrixData.chains[cName].protocols || {})[protoName];
                             if (pData) {
                                 protoTotal += (pData.count || 0);
                                 chainSummary[cName].totalCount += (pData.count || 0);
@@ -663,9 +680,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             </tr>
                                     </tbody>
                                 </table>
-                            </div>
                         </div>
                     `;
+                    }
                 }
 
                 // 2. Coin contract coverage breakdown
