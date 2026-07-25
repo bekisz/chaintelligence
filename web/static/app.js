@@ -469,8 +469,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const formatAddress = (addr) => {
         if (!addr) return '-';
+        const isPoolId = addr.length > 42;
+        const labelType = isPoolId ? 'Pool ID (PoolKey Hash)' : 'Contract Address';
         const shortened = addr.length > 13 ? `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}` : addr;
-        return `<span class="monospace clickable-addr" title="Click to copy: ${addr}" onclick="copyToClipboard('${addr}', this, event);">
+        return `<span class="monospace clickable-addr" title="${labelType}: ${addr}\nClick to copy" onclick="copyToClipboard('${addr}', this, event);">
             <span>${shortened}</span>
             <span class="copy-icon-wrapper">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
