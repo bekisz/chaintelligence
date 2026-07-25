@@ -949,13 +949,8 @@ async def analyze(
                         fee = item
                         t1 = path[i+1]
                     
-                        t0_norm = t0.upper()
-                        t1_norm = t1.upper()
-                        if 'v4' in fee.lower():
-                            if t0_norm == 'ETH': t0_norm = 'WETH'
-                            if t0_norm == 'BNB': t0_norm = 'WBNB'
-                            if t1_norm == 'ETH': t1_norm = 'WETH'
-                            if t1_norm == 'BNB': t1_norm = 'WBNB'
+                        t0_norm = 'WETH' if t0.upper() == 'ETH' else ('WBNB' if t0.upper() == 'BNB' else t0.upper())
+                        t1_norm = 'WETH' if t1.upper() == 'ETH' else ('WBNB' if t1.upper() == 'BNB' else t1.upper())
 
                         key = f"{t0_norm}-{t1_norm}-{fee}"
                         rev_key = f"{t1_norm}-{t0_norm}-{fee}"
