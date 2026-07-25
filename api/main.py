@@ -829,7 +829,7 @@ async def analyze(
                                         v4_pool_addr = t0_addr
                                         v4_pool_id = t0_addr
                                 
-                                if not v4_pool_addr and proto != 'Uniswap V4':
+                                if not v4_pool_addr:
                                     v4_pool_addr = pid
                                 
                                 value = {
@@ -1322,7 +1322,7 @@ async def analyze_pools(
                                         v4_pool_addr = t0_addr
                                         v4_pool_id = t0_addr
                                 
-                                if not v4_pool_addr and proto != 'Uniswap V4':
+                                if not v4_pool_addr:
                                     v4_pool_addr = pid
                                 
                                 value = {

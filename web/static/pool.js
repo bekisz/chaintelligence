@@ -610,11 +610,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 let uniHref = '';
                 let uniProtocol = '';
 
-                if (item && typeof item === 'object' && item.pool_address) {
+                if (item && typeof item === 'object' && (item.pool_address || item.pool_id)) {
                     const parsed = parseProtocol(item.fee);
                     const protocolNameLower = parsed.protocolName.toLowerCase();
                     const networkLower = (parsed.networkName || 'ethereum').toLowerCase();
-                    const pool_addr = item.pool_address;
+                    const pool_addr = item.pool_address || item.pool_id;
 
                     if (protocolNameLower.includes('uniswap v4')) {
                         let uniNetwork = 'ethereum';
