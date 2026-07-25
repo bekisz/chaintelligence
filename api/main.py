@@ -188,9 +188,10 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
     vol_val = pool_stat.get('volume') or 0.0
     apr_val = pool_stat.get('apr')
     
-    is_unreliable = tvl_val <= 1.0 or (vol_val > 0.0 and tvl_val < (vol_val / period_days) * 0.05)
+    is_v4 = 'v4' in fee_tier.lower()
+    is_unreliable = is_v4 or tvl_val <= 1.0 or (vol_val > 0.0 and tvl_val < (vol_val / period_days) * 0.05)
     
-    if is_unreliable and pool_addr:
+    if pool_addr:
         ds_tvl = await asyncio.to_thread(fetch_dexscreener_tvl, pool_network, pool_addr)
         
         # Fallback to DeFi Llama TVL if DexScreener fails
@@ -199,10 +200,10 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
             if dl_tvl and dl_tvl > 1.0:
                 ds_tvl = dl_tvl
                 
-        if ds_tvl and ds_tvl > 1.0:
+        if ds_tvl and ds_tvl > 1.0 and (is_unreliable or abs(ds_tvl - tvl_val) / max(1.0, tvl_val) > 0.1):
             tvl_val = ds_tvl
             fee_rate = parse_fee_rate(fee_tier)
-            if fee_rate is not None:
+            if fee_rate is not None and vol_val > 0:
                 fees_earned = vol_val * fee_rate
                 apr_val = (fees_earned / tvl_val) * (365.0 / period_days)
                 
