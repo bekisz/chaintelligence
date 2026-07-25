@@ -1096,9 +1096,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sort-tvl').addEventListener('click', () => sortRoutes('tvl', 'sort-tvl'));
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
-    document.getElementById('sort-cid').addEventListener('click', () => sortRoutes('cid', 'sort-cid'));
-    document.getElementById('sort-pool-addr').addEventListener('click', () => sortRoutes('pool_addr', 'sort-pool-addr'));
-    document.getElementById('sort-pool-id').addEventListener('click', () => sortRoutes('pool_id', 'sort-pool-id'));
+    const sortPoolAddrEl = document.getElementById('sort-pool-addr');
+    if (sortPoolAddrEl) sortPoolAddrEl.addEventListener('click', () => sortRoutes('pool_addr', 'sort-pool-addr'));
+    const sortPoolIdEl = document.getElementById('sort-pool-id');
+    if (sortPoolIdEl) sortPoolIdEl.addEventListener('click', () => sortRoutes('pool_id', 'sort-pool-id'));
     document.getElementById('sort-network').addEventListener('click', () => sortRoutes('network', 'sort-network'));
     document.getElementById('sort-protocol').addEventListener('click', () => sortRoutes('protocol', 'sort-protocol'));
 
