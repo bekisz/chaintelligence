@@ -65,6 +65,57 @@ class PostgresFetcher:
         """Print log message if verbose mode is enabled"""
         if self.verbose:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] [DB] {message}")
+
+    @staticmethod
+    def _build_token_clause(start_tokens: Optional[List[str]] = None,
+                            end_tokens: Optional[List[str]] = None,
+                            token_filter: Optional[List[str]] = None):
+        """Build the coin-symbol filter clause used by swap queries.
+
+        Returns (where_sql, params). The clause filters on the *pool's* coin
+        symbols (c0.symbol / c1.symbol), which is equivalent to filtering on
+        individual swap direction since a pool's coin0/coin1 are fixed.
+
+        `start_tokens`/`end_tokens` take precedence over `token_filter` when
+        present. A '*' wildcard on either side means "no constraint on that side".
+        """
+        if start_tokens and end_tokens:
+            start_upper = [s.upper() for s in start_tokens]
+            end_upper = [e.upper() for e in end_tokens]
+
+            start_has_wildcard = '*' in start_upper
+            end_has_wildcard = '*' in end_upper
+
+            if start_has_wildcard and end_has_wildcard:
+                return "", []
+            elif start_has_wildcard:
+                return ("UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)",
+                        [end_upper, end_upper])
+            elif end_has_wildcard:
+                return ("UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)",
+                        [start_upper, start_upper])
+            else:
+                return (("(UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s)) "
+                         "OR (UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s))"),
+                        [start_upper, end_upper, end_upper, start_upper])
+
+        upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
+        if token_filter and len(token_filter) == 2:
+            t0, t1 = upper_symbols[0], upper_symbols[1]
+            return (("(UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) "
+                     "OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)"),
+                    [t0, t1, t1, t0])
+        elif token_filter:
+            return ("UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)",
+                    [upper_symbols, upper_symbols])
+        return "", []
+
+    @staticmethod
+    def _build_network_clause(network: Optional[str]):
+        """Return (where_sql, param) for the network filter, or ('', None)."""
+        if network and network.lower() != 'all':
+            return " AND LOWER(ch.name) = LOWER(%s)", network
+        return "", None
     
     def fetch_swaps(self, start_date: datetime, end_date: datetime,
                     token_filter: Optional[List[str]] = None,
@@ -82,58 +133,25 @@ class PostgresFetcher:
             with get_conn() as conn:
                 cur = conn.cursor()
 
-                # Determine the token query condition
-                if start_tokens and end_tokens:
-                    start_upper = [s.upper() for s in start_tokens]
-                    end_upper = [e.upper() for e in end_tokens]
-                    
-                    start_has_wildcard = '*' in start_upper
-                    end_has_wildcard = '*' in end_upper
-                    
-                    if start_has_wildcard and end_has_wildcard:
-                        token_where = ""
-                        token_params = []
-                    elif start_has_wildcard:
-                        token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
-                        token_params = [end_upper, end_upper]
-                    elif end_has_wildcard:
-                        token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
-                        token_params = [start_upper, start_upper]
-                    else:
-                        token_where = "(UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s)) OR (UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s))"
-                        token_params = [start_upper, end_upper, end_upper, start_upper]
-                else:
-                    upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
+                token_where, token_params = self._build_token_clause(start_tokens, end_tokens, token_filter)
+                network_where, network_param = self._build_network_clause(network)
 
-                    # Build the token filter condition using coin symbols
-                    if token_filter and len(token_filter) == 2:
-                        t0, t1 = upper_symbols[0], upper_symbols[1]
-                        token_where = "(UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)"
-                        token_params = [t0, t1, t1, t0]
-                    elif token_filter:
-                        token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
-                        token_params = [upper_symbols, upper_symbols]
-                    else:
-                        token_where = ""
-                        token_params = []
-
-                # Network filter
-                network_where = ""
-                network_param = None
-                if network and network.lower() != 'all':
-                    network_where = " AND LOWER(ch.name) = LOWER(%s)"
-                    network_param = network
-
-                # Query the unified swaps table
+                # Query the unified swaps table. No ORDER BY: callers that need
+                # chronological order (route_analyzer) re-sort by tx_hash/log_index
+                # anyway, and forcing a sort here triggers a large external disk
+                # sort over the full result set for no benefit.
                 query = f"""
                     SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
                            c0.symbol, c1.symbol,
                            s.amount0, s.amount1, s.amount_usd,
-                           CASE 
-                               WHEN lp.fee_bps IS NULL THEN 'Dynamic' 
-                               ELSE (lp.fee_bps / 100.0)::text || '%%' 
+                           CASE
+                               WHEN lp.fee_bps IS NULL THEN 'Dynamic'
+                               ELSE (lp.fee_bps / 100.0)::text || '%%'
                            END AS fee_display,
-                           lp.fee_bps
+                           lp.fee_bps,
+                           lp.id AS cid,
+                           lp.pool_address,
+                           lp.pool_id
                     FROM swaps s
                     JOIN liquidity_pool lp ON s.pool_id = lp.id
                     JOIN chain ch ON lp.chain_id = ch.id
@@ -150,7 +168,6 @@ class PostgresFetcher:
                 if network_param:
                     query += network_where
                     params.append(network_param)
-                query += "\nORDER BY s.ts"
 
                 cur.execute(query, params)
                 rows = cur.fetchall()
@@ -168,10 +185,14 @@ class PostgresFetcher:
                         'amount0': float(row[7]) if row[7] is not None else 0.0,
                         'amount1': float(row[8]) if row[8] is not None else 0.0,
                         'amountUSD': float(row[9]) if row[9] is not None else 0.0,
+                        'amount_usd': float(row[9]) if row[9] is not None else 0.0,
                         'fee_tier': row[10] or '',
                         'fee_bps': float(row[11]) if row[11] is not None else None,
                         'protocol': row[4],
                         'network': row[3],
+                        'cid': row[12],
+                        'pool_address': row[13] or row[14] or '',
+                        'pool_id': row[14] or row[13] or '',
                         'log_index': log_index,
                     })
 
@@ -182,6 +203,114 @@ class PostgresFetcher:
 
         except Exception as e:
             self._log(f"Database query failed: {e}")
+            raise
+
+    def fetch_pool_swap_aggregates(self, start_date: datetime, end_date: datetime,
+                                   token_filter: Optional[List[str]] = None,
+                                   network: Optional[str] = None,
+                                   start_tokens: Optional[List[str]] = None,
+                                   end_tokens: Optional[List[str]] = None) -> List[Dict]:
+        """Aggregate swaps per pool directly in SQL.
+
+        Returns one dict per pool_id that had swaps in range — with count,
+        volume, and market_size already summed. The /api/pools/analyze endpoint
+        merges these into its (sorted token pair, fee, protocol, network) key.
+
+        This collapses ~100k swap rows per day-chunk down to ~tens of pool rows,
+        avoiding the large row transfer and Python aggregation loop.
+
+        Shape: the inner query joins swaps -> liquidity_pool -> coin ONLY (the
+        coin symbols are needed for the token filter) and GROUP BY s.pool_id,
+        using the covering (pool_id, ts) INCLUDE (amount_usd) index as an
+        Index Only Scan. chain/protocol/coin-for-naming are joined in the OUTER
+        query against the ~tens of aggregated rows — never per-swap — so we
+        avoid ~1.3M redundant chain/protocol PK probes the flat join would do.
+        market_size is fee_bps/10000 * volume, computed in the outer query
+        (fee_bps is constant per pool, so SUM(amount_usd*k) == k*SUM(amount_usd)).
+
+        Each row:
+            {token0, token1, fee_tier, fee_bps, protocol, network, count, volume, market_size}
+        where token0/token1 are sorted alphabetically (matching the endpoint's key).
+        """
+        self._log(f"Aggregating swaps {start_date} -> {end_date} (network={network}, start={start_tokens}, end={end_tokens})")
+
+        try:
+            with get_conn() as conn:
+                cur = conn.cursor()
+
+                token_where, token_params = self._build_token_clause(start_tokens, end_tokens, token_filter)
+                # The network filter is a pool attribute, so apply it on the
+                # outer join (tens of rows) rather than the inner aggregation —
+                # this keeps the inner (pool_id, ts) index scan unconstrained
+                # and lets it use the covering index cleanly.
+                outer_network_where, outer_network_param = self._build_network_clause(network)
+
+                inner_query = f"""
+                    SELECT s.pool_id AS pid, COUNT(*) AS swap_count,
+                           COALESCE(SUM(s.amount_usd), 0.0) AS volume
+                    FROM swaps s
+                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                    WHERE s.ts >= %s AND s.ts <= %s
+                      AND s.amount_usd >= 10.0
+                """
+                inner_params = [start_date, end_date]
+                if token_where:
+                    inner_query += f" AND ({token_where})"
+                    inner_params.extend(token_params)
+                inner_query += "\nGROUP BY s.pool_id"
+
+                query = f"""
+                    SELECT
+                        LEAST(UPPER(c0.symbol), UPPER(c1.symbol)) AS token0,
+                        GREATEST(UPPER(c0.symbol), UPPER(c1.symbol)) AS token1,
+                        CASE
+                            WHEN lp.fee_bps IS NULL THEN 'Dynamic'
+                            ELSE (lp.fee_bps / 100.0)::text || '%%'
+                        END AS fee_display,
+                        lp.fee_bps,
+                        pr.name AS protocol,
+                        ch.name AS network,
+                        agg.swap_count,
+                        agg.volume,
+                        agg.volume * COALESCE(lp.fee_bps / 10000.0, 0.003) AS market_size
+                    FROM ({inner_query}) agg
+                    JOIN liquidity_pool lp ON agg.pid = lp.id
+                    JOIN chain ch ON lp.chain_id = ch.id
+                    JOIN protocol pr ON lp.protocol_id = pr.id
+                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                """
+                params = list(inner_params)
+                if outer_network_param:
+                    query += outer_network_where
+                    params.append(outer_network_param)
+
+                cur.execute(query, params)
+                rows = cur.fetchall()
+                cur.close()
+
+            aggregates = []
+            for row in rows:
+                fee_bps = float(row[3]) if row[3] is not None else None
+                aggregates.append({
+                    'token0': row[0],
+                    'token1': row[1],
+                    'fee_tier': row[2] or '',
+                    'fee_bps': fee_bps,
+                    'protocol': row[4],
+                    'network': row[5],
+                    'count': int(row[6]),
+                    'volume': float(row[7]),
+                    'market_size': float(row[8]),
+                })
+
+            self._log(f"Aggregate complete. Pools: {len(aggregates)}")
+            return aggregates
+
+        except Exception as e:
+            self._log(f"Database aggregate query failed: {e}")
             raise
 
     def fetch_swaps_streaming(self, start_date: datetime, end_date: datetime,
@@ -200,34 +329,19 @@ class PostgresFetcher:
         """
         import psycopg2
 
-        upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
+        token_where, token_params = self._build_token_clause(token_filter=token_filter)
+        network_where, network_param = self._build_network_clause(network)
 
-        # Build token filter condition using coin symbols
-        if token_filter and len(token_filter) == 2:
-            t0, t1 = upper_symbols[0], upper_symbols[1]
-            token_where = "(UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s) OR (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)"
-            token_params = [t0, t1, t1, t0]
-        elif token_filter:
-            token_where = "UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
-            token_params = [upper_symbols, upper_symbols]
-        else:
-            token_where = ""
-            token_params = []
-
-        network_where = ""
-        network_param = None
-        if network and network.lower() != 'all':
-            network_where = " AND LOWER(ch.name) = LOWER(%s)"
-            network_param = network
-
-        # Single query against the unified swaps table
+        # Single query against the unified swaps table. No ORDER BY: the
+        # server-side cursor streams rows in storage order; callers that need
+        # chronological order sort by log_index themselves.
         query = f"""
             SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
                    c0.symbol, c1.symbol,
                    s.amount0, s.amount1, s.amount_usd,
-                   CASE 
-                       WHEN lp.fee_bps IS NULL THEN 'Dynamic' 
-                       ELSE (lp.fee_bps / 100.0)::text || '%%' 
+                   CASE
+                       WHEN lp.fee_bps IS NULL THEN 'Dynamic'
+                       ELSE (lp.fee_bps / 100.0)::text || '%%'
                    END AS fee_display
             FROM swaps s
             JOIN liquidity_pool lp ON s.pool_id = lp.id
@@ -245,7 +359,6 @@ class PostgresFetcher:
         if network_param:
             query += network_where
             params.append(network_param)
-        query += "\nORDER BY s.ts"
 
         # Use a dedicated connection with a server-side named cursor
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)

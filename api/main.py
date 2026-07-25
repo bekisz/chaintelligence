@@ -551,16 +551,31 @@ async def analyze(
             end_dt = now
             start_dt = end_dt - timedelta(days=days)
         elif start_date:
-            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            def safe_parse_iso(date_str: str) -> datetime:
+                s = date_str.replace('Z', '+00:00').strip()
+                try:
+                    return datetime.fromisoformat(s)
+                except ValueError:
+                    date_part = s.split('T')[0]
+                    parts = date_part.split('-')
+                    if len(parts) == 3:
+                        yr, mo, dy = int(parts[0]), int(parts[1]), int(parts[2])
+                        import calendar
+                        max_d = calendar.monthrange(yr, mo)[1]
+                        if dy > max_d:
+                            s_fixed = f"{yr:04d}-{mo:02d}-{max_d:02d}"
+                            if 'T' in s:
+                                s_fixed += 'T' + s.split('T')[1]
+                            return datetime.fromisoformat(s_fixed)
+                    raise
+
+            start_dt = safe_parse_iso(start_date)
             if end_date:
-                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                # If it's a date-only input (midnight), extend to the end of that day
+                end_dt = safe_parse_iso(end_date)
                 if end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
                     end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             else:
                 end_dt = now
-            # No cap — the streaming + day‑chunking approach handles
-# large ranges efficiently, one day at a time.
         else:
             end_dt = now
             start_dt = end_dt - timedelta(days=1)
@@ -896,24 +911,55 @@ async def analyze(
 
                                 fee_keys = {fee_tier}
                                 if '%' in fee_tier:
-                                    fee_keys.add(fee_tier.replace('%', '').strip())
-                                else:
+                                    clean_pct = fee_tier.replace('%', '').strip()
+                                    fee_keys.add(clean_pct)
                                     try:
-                                        val = int(fee_tier)
-                                        pct = val / 10000
-                                        pct_str = f'{pct:.6f}'.rstrip('0').rstrip('.')
-                                        fee_keys.add(f'{pct_str}%')
-                                        fee_keys.add(fee_tier)
-                                        fee_keys.add(str(val))
+                                        val = float(clean_pct)
+                                        bps = int(round(val * 10000))
+                                        fee_keys.add(str(bps))
                                     except ValueError:
                                         pass
+                                else:
+                                    try:
+                                        val = float(fee_tier)
+                                        if val < 5:
+                                            pct_str = f'{val:.6f}'.rstrip('0').rstrip('.')
+                                            fee_keys.add(f'{pct_str}%')
+                                            fee_keys.add(str(int(round(val * 10000))))
+                                        else:
+                                            bps = int(val)
+                                            pct = bps / 10000.0
+                                            pct_str = f'{pct:.6f}'.rstrip('0').rstrip('.')
+                                            fee_keys.add(f'{pct_str}%')
+                                            fee_keys.add(str(bps))
+                                    except ValueError:
+                                        pass
+
+                                proto_variants = {proto, proto.lower(), proto.replace(' ', '-').lower()}
+                                if 'v3' in proto.lower():
+                                    proto_variants.update({'v3', 'uniswap v3', 'pancakeswap v3'})
+                                elif 'v4' in proto.lower():
+                                    proto_variants.update({'v4', 'uniswap v4', 'pancakeswap v4'})
+                                elif 'v2' in proto.lower():
+                                    proto_variants.update({'v2', 'uniswap v2', 'pancakeswap v2'})
+
+                                net_variants = {net, net.lower(), ''}
+
                                 for fk in fee_keys:
                                     if not fk:
                                         continue
-                                    key_fwd = f"{s0_norm}-{s1_norm}-{fk}|{proto}|{net}"
-                                    key_rev = f"{s1_norm}-{s0_norm}-{fk}|{proto}|{net}"
-                                    db_results[key_fwd] = value
-                                    db_results[key_rev] = value
+                                    for pv in proto_variants:
+                                        for nv in net_variants:
+                                            suffix = f"|{pv}|{nv}" if nv else f"|{pv}"
+                                            db_results[f"{s0_norm}-{s1_norm}-{fk}{suffix}"] = value
+                                            db_results[f"{s1_norm}-{s0_norm}-{fk}{suffix}"] = value
+                                            db_results[f"{sym0.upper()}-{sym1.upper()}-{fk}{suffix}"] = value
+                                            db_results[f"{sym1.upper()}-{sym0.upper()}-{fk}{suffix}"] = value
+
+                                if lp_addr:
+                                    db_results[lp_addr.lower()] = value
+                                if pid:
+                                    db_results[pid.lower()] = value
                     except Exception as ex:
                         print(f"  Error looking up DB pools: {ex}")
                     return db_results
@@ -923,15 +969,37 @@ async def analyze(
                 # may contain stale/wrong addresses); only overlay the internal cid
                 # from the DB. V4 pools, which have no CREATE2 derivation, still get
                 # their pool_address/pool_id from the DB.
+                db_by_addr = {}
+                for k, v in db_batch.items():
+                    if isinstance(v, dict) and v.get("cid"):
+                        p_addr = (v.get("pool_address") or "").lower()
+                        p_id = (v.get("pool_id") or "").lower()
+                        if p_addr: db_by_addr[p_addr] = v
+                        if p_id: db_by_addr[p_id] = v
+
                 for key, db_val in db_batch.items():
                     if key in pool_addresses:
-                        pool_addresses[key] = {
-                            "pool_address": pool_addresses[key]["pool_address"],
-                            "pool_id": pool_addresses[key].get("pool_id", db_val.get("pool_id", "")),
-                            "cid": db_val.get("cid"),
-                        }
+                        pool_addresses[key]["cid"] = db_val.get("cid")
+                        if db_val.get("pool_address"):
+                            pool_addresses[key]["pool_address"] = db_val["pool_address"]
+                        if db_val.get("pool_id"):
+                            pool_addresses[key]["pool_id"] = db_val["pool_id"]
                     else:
                         pool_addresses[key] = db_val
+
+                # Overlay CID & metadata by pool address / pool ID matching
+                for k, v in pool_addresses.items():
+                    if isinstance(v, dict):
+                        p_addr = (v.get("pool_address") or "").lower()
+                        p_id = (v.get("pool_id") or "").lower()
+                        match_val = db_by_addr.get(p_addr) or db_by_addr.get(p_id)
+                        if match_val:
+                            if not v.get("cid"):
+                                v["cid"] = match_val.get("cid")
+                            if not v.get("pool_address"):
+                                v["pool_address"] = match_val.get("pool_address", "")
+                            if not v.get("pool_id"):
+                                v["pool_id"] = match_val.get("pool_id") or match_val.get("pool_address", "")
 
             # Warm the DeFi Llama yields index off the event loop (one-time per TTL).
             if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
@@ -954,7 +1022,31 @@ async def analyze(
 
                         key = f"{t0_norm}-{t1_norm}-{fee}"
                         rev_key = f"{t1_norm}-{t0_norm}-{fee}"
-                        pool_info = pool_addresses.get(key) or pool_addresses.get(rev_key) or {}
+                        pool_info = pool_addresses.get(key) or pool_addresses.get(rev_key)
+
+                        if not pool_info:
+                            fee_parts = fee.split('|')
+                            clean_fee = fee_parts[0].strip()
+                            clean_proto = fee_parts[1].strip() if len(fee_parts) >= 2 else ""
+                            clean_net = fee_parts[2].strip() if len(fee_parts) >= 3 else ""
+
+                            alt_keys = [
+                                f"{t0_norm}-{t1_norm}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t1_norm}-{t0_norm}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t0_norm}-{t1_norm}-{clean_fee}|{clean_proto}",
+                                f"{t1_norm}-{t0_norm}-{clean_fee}|{clean_proto}",
+                                f"{t0.upper()}-{t1.upper()}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t1.upper()}-{t0.upper()}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t0.upper()}-{t1.upper()}-{clean_fee}|{clean_proto}",
+                                f"{t1.upper()}-{t0.upper()}-{clean_fee}|{clean_proto}",
+                            ]
+                            for ak in alt_keys:
+                                if ak in pool_addresses:
+                                    pool_info = pool_addresses[ak]
+                                    break
+                        if not pool_info:
+                            pool_info = {}
+
                         if isinstance(pool_info, str):
                             pool_info = {"pool_address": pool_info, "pool_id": pool_info, "cid": None}
                         pool_addr = pool_info.get("pool_address")
@@ -1110,29 +1202,30 @@ async def analyze_pools(
                 await asyncio.sleep(0.01)
 
                 print(f"[Pool Analysis] Processing batch: {c_chunk_start} -> {c_chunk_end}")
-                batch_swaps = await asyncio.to_thread(
-                    fetcher.fetch_swaps, c_chunk_start, c_chunk_end, token_filter, network, start_tokens_list, end_tokens_list
+                chunk_aggs = await asyncio.to_thread(
+                    fetcher.fetch_pool_swap_aggregates, c_chunk_start, c_chunk_end, token_filter, network, start_tokens_list, end_tokens_list
                 )
 
-                if batch_swaps:
+                if chunk_aggs:
                     has_data = True
-                    for s in batch_swaps:
-                        t0 = s['token0_symbol'].upper()
-                        t1 = s['token1_symbol'].upper()
-                        t_sorted = sorted([t0, t1])
-                        
-                        fee_disp = s.get('fee_tier') or 'Dynamic'
-                        protocol = s.get('protocol') or 'Uniswap V3'
-                        net_val = s.get('network') or 'Ethereum'
-                        fee_bps = s.get('fee_bps')
-                        
+                    for agg in chunk_aggs:
+                        t0 = agg['token0']
+                        t1 = agg['token1']
+                        fee_disp = agg['fee_tier'] or 'Dynamic'
+                        protocol = agg['protocol'] or 'Uniswap V3'
+                        net_val = agg['network'] or 'Ethereum'
+                        fee_bps = agg['fee_bps']
+
                         fee_full = f"{fee_disp}|{protocol}|{net_val}"
-                        key = (t_sorted[0], fee_full, t_sorted[1])
-                        
-                        vol_usd = s.get('amount_usd') if s.get('amount_usd') is not None else (s.get('amountUSD') or 0.0)
+                        key = (t0, fee_full, t1)
+
+                        count = agg['count']
+                        vol_usd = agg['volume']
+                        market_size = agg['market_size']
+
                         total_volume += vol_usd
-                        total_tx += 1
-                        
+                        total_tx += count
+
                         if key not in pool_stats:
                             pool_stats[key] = {
                                 'count': 0,
@@ -1141,19 +1234,14 @@ async def analyze_pools(
                                 'fee_bps': fee_bps,
                                 'protocol': protocol,
                                 'network': net_val,
-                                'token0': t_sorted[0],
-                                'token1': t_sorted[1],
+                                'token0': t0,
+                                'token1': t1,
                             }
-                        
-                        pool_stats[key]['count'] += 1
-                        pool_stats[key]['volume'] += vol_usd
-                        
-                        if fee_bps is not None:
-                            pool_stats[key]['market_size'] += vol_usd * (fee_bps / 10000.0)
-                        else:
-                            pool_stats[key]['market_size'] += vol_usd * 0.003
 
-                batch_swaps = []
+                        pool_stats[key]['count'] += count
+                        pool_stats[key]['volume'] += vol_usd
+                        pool_stats[key]['market_size'] += market_size
+
                 c_chunk_start = c_chunk_end
 
             yield json.dumps({"type": "progress", "pct": 75.0, "message": "Analyzing active liquidity pools..."}) + "\n"
@@ -1508,44 +1596,88 @@ async def analyze_pools(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+# Cache for the /api/routes/date-range endpoint. The swap date range changes
+# at most once per ingestion run (roughly daily), so a 10-minute TTL turns a
+# ~120 ms indexed query (or, pre-warm, a heavier scan) into an instant hit for
+# every page load / network switch. Key: lowercased network name or "all".
+_DATE_RANGE_CACHE: Dict[str, tuple] = {}
+_DATE_RANGE_CACHE_TTL = 600  # seconds
+
+
 @app.get("/api/routes/date-range", tags=["Route Analytics"])
 async def get_date_range(network: Optional[str] = Query(None, description="Filter by network")):
-    """Get the available date range from the swap data, optionally scoped to a network."""
-    try:
+    """Get the available date range from the swap data, optionally scoped to a network.
+
+    DB work is offloaded to a worker thread so the event loop stays responsive
+    (this endpoint is hit on every page load). The date range is cached per
+    network for _DATE_RANGE_CACHE_TTL seconds.
+
+    Both modes use index-only MIN/MAX scans:
+      - "all":  SELECT MIN(ts), MAX(ts) FROM swaps  (partition PK index, ~90 ms)
+      - network: resolve that network's pool_ids, then MIN/MAX over swaps via
+        the (pool_id, ts) covering index using = ANY(ARRAY(...)), which lets
+        the planner use the per-partition PK indexes (~120 ms).
+    The previous shape joined the full 45M-row swaps table to liquidity_pool and
+    grouped by network — a post-normalization full scan that blocked the event
+    loop for tens of seconds and wedged the whole server.
+    """
+    cache_key = (network or 'all').lower()
+    now = time.time()
+    cached = _DATE_RANGE_CACHE.get(cache_key)
+    if cached and (now - cached[1]) < _DATE_RANGE_CACHE_TTL:
+        return cached[0]
+
+    def _query():
         with get_conn() as conn:
             cur = conn.cursor()
-            if network and network.lower() != 'all':
-                # Per-network: return the exact date range for that network
-                cur.execute("""
-                    SELECT MIN(s.ts)::date, MAX(s.ts)::date
-                    FROM swaps s
-                    JOIN liquidity_pool lp ON s.pool_id = lp.id
-                    JOIN chain ch ON lp.chain_id = ch.id
-                    WHERE LOWER(ch.name) = LOWER(%s)
-                """, (network,))
-            else:
-                # "All" mode: return the tightest range that has data for every network
-                cur.execute("""
-                    SELECT MAX(min_date)::date, MAX(max_date)::date FROM (
-                        SELECT ch.name as network, MIN(s.ts) as min_date, MAX(s.ts) as max_date
-                        FROM swaps s
-                        JOIN liquidity_pool lp ON s.pool_id = lp.id
-                        JOIN chain ch ON lp.chain_id = ch.id
-                        GROUP BY ch.name
-                    ) as per_network
-                """)
-            row = cur.fetchone()
-            cur.close()
+            try:
+                # Bound the worst case so a degraded/cold DB can't hold a
+                # pool connection (and thus a worker thread) indefinitely.
+                cur.execute("SET LOCAL statement_timeout = '30s'")
+                if network and network.lower() != 'all':
+                    # Per-network min/max via the (pool_id, ts) covering index.
+                    # The LATERAL join does one index seek per pool (MIN/MAX
+                    # per pool_id = first/last entry of its index range), so
+                    # cost is bounded by pool count, not swap count, and it
+                    # never degrades into a full-partition backward scan the
+                    # way a ts-leading MAX(s.ts) WHERE pool_id IN (...) would
+                    # for networks without swaps at the very latest timestamps.
+                    cur.execute("""
+                        SELECT MIN(p.mn)::date, MAX(p.mx)::date FROM (
+                            SELECT l.mn, l.mx
+                            FROM unnest(ARRAY(
+                                SELECT lp.id FROM liquidity_pool lp
+                                JOIN chain ch ON lp.chain_id = ch.id
+                                WHERE LOWER(ch.name) = LOWER(%s)
+                            )) AS pid
+                            CROSS JOIN LATERAL (
+                                SELECT MIN(s.ts) AS mn, MAX(s.ts) AS mx
+                                FROM swaps s
+                                WHERE s.pool_id = pid
+                            ) l
+                        ) p
+                    """, (network,))
+                else:
+                    # Full available data range across all networks.
+                    cur.execute("SELECT MIN(ts)::date, MAX(ts)::date FROM swaps")
+                return cur.fetchone()
+            finally:
+                cur.close()
 
+    try:
+        row = await asyncio.to_thread(_query)
         if row and row[0] and row[1]:
-            return {
-                "min_date": row[0].isoformat(),
-                "max_date": row[1].isoformat()
-            }
+            result = {"min_date": row[0].isoformat(), "max_date": row[1].isoformat()}
         else:
-            return {"min_date": None, "max_date": None}
+            result = {"min_date": None, "max_date": None}
+        _DATE_RANGE_CACHE[cache_key] = (result, time.time())
+        return result
     except Exception as e:
+        # Serve stale cache rather than erroring if the DB is momentarily slow.
+        if cached:
+            return cached[0]
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/lp/position-summary", tags=["Liquidity Pool Positions"])
 async def lp_summary():
@@ -3116,14 +3248,48 @@ async def read_routing():
     return FileResponse(os.path.join(STATIC_DIR, 'routing.html'))
 
 _health_data_cache = {"data": None, "timestamp": 0}
+_health_data_lock = threading.Lock()
+_HEALTH_DATA_TTL = 120  # seconds — health data changes slowly (per ingestion run)
 
 def build_all_tables_health():
+    """Build the table-freshness report. Cached for _HEALTH_DATA_TTL seconds.
+
+    Thread-safety: a non-blocking lock ensures only ONE caller runs the (slow)
+    full-swap-scan build; concurrent callers serve the stale cache instead of
+    all piling onto the same 45M-row scan and wedging the DB / event loop.
+    Callers MUST run this off the event loop (asyncio.to_thread) — the swaps
+    aggregation alone can take tens of seconds on a cold cache.
+    """
     import time, urllib.parse
     from datetime import datetime, timezone, timedelta
 
     now_ts = time.time()
-    if _health_data_cache["data"] is not None and (now_ts - _health_data_cache["timestamp"]) < 15:
-        return _health_data_cache["data"]
+    cached = _health_data_cache["data"]
+    if cached is not None and (now_ts - _health_data_cache["timestamp"]) < _HEALTH_DATA_TTL:
+        return cached
+
+    # Block (up to 60s) waiting for an in-progress builder rather than piling
+    # a second full-swap-scan onto the DB. The acquirer builds; waiters wake
+    # and read the freshly-populated cache.
+    acquired = _health_data_lock.acquire(blocking=True, timeout=60)
+    if not acquired:
+        # Timed out waiting for the builder — serve stale if we have it,
+        # otherwise report degraded so the caller isn't wedged indefinitely.
+        if cached is not None:
+            return cached
+        return (True, {"error": "health check build in progress"})
+    try:
+        # Double-check after acquiring — another builder may have just
+        # finished and refreshed the cache while we waited.
+        cached = _health_data_cache["data"]
+        if cached is not None and (time.time() - _health_data_cache["timestamp"]) < _HEALTH_DATA_TTL:
+            _health_data_lock.release()
+            return cached
+    except Exception:
+        _health_data_lock.release()
+        raise
+    # We hold the lock and the cache is stale/empty — build. The lock is
+    # released at the end (and in the double-check's exception path above).
 
     now = datetime.now(timezone.utc)
     overall_degraded = False
@@ -3132,6 +3298,7 @@ def build_all_tables_health():
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB, connect_timeout=10)
         cur = conn.cursor()
+        cur.execute("SET LOCAL statement_timeout = '60s'")
 
         # 1. swaps
         volume_thresholds = [0, 1000, 100000, 10000000]
@@ -3535,6 +3702,8 @@ def build_all_tables_health():
     res_tuple = (overall_degraded, data_dict)
     _health_data_cache["data"] = res_tuple
     _health_data_cache["timestamp"] = time.time()
+    if acquired:
+        _health_data_lock.release()
     return res_tuple
 
 
@@ -3588,7 +3757,7 @@ def navigate_health_data(data_obj, path_str: str):
 async def health_check():
     """Detailed health and data freshness report for database and all 12 tables."""
     from datetime import datetime, timezone
-    overall_degraded, data = build_all_tables_health()
+    overall_degraded, data = await asyncio.to_thread(build_all_tables_health)
     response_data = {k: v for k, v in data.items() if k != "coins"}
 
     db_status = {
@@ -3609,7 +3778,7 @@ async def health_check():
 @app.get("/health/db/table/{subpath:path}", tags=["System"])
 async def health_table_subpath(subpath: str = ""):
     """Drill down into table health data (e.g. /health/db/table/, /health/db/table/swaps, /health/db/table/swaps/chains/Arbitrum)."""
-    overall_degraded, data = build_all_tables_health()
+    overall_degraded, data = await asyncio.to_thread(build_all_tables_health)
     if "error" in data and not subpath:
         return data
     return navigate_health_data(data, subpath)
