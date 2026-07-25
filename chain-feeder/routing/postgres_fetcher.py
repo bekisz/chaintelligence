@@ -778,13 +778,17 @@ class PostgresFetcher:
                 END AS fee_display,
                 COALESCE(SUM(lph.tx_count), 0) AS total_tx,
                 COALESCE(SUM(ABS(lph.volume_usd)), 0) AS total_vol,
-                AVG(ABS(lph.tvl_usd)) FILTER (WHERE lph.tvl_usd <> 0) AS avg_tvl
+                AVG(ABS(lph.tvl_usd)) FILTER (WHERE lph.tvl_usd <> 0) AS avg_tvl,
+                cc0.contract_address AS addr0,
+                cc1.contract_address AS addr1
             FROM liquidity_pool lp
             JOIN chain ch ON lp.chain_id = ch.id
             JOIN protocol pr ON lp.protocol_id = pr.id
             JOIN coin c0 ON lp.coin0_id = c0.coin_id
             JOIN coin c1 ON lp.coin1_id = c1.coin_id
             JOIN liquidity_pool_history lph ON lph.pool_id = lp.id
+            LEFT JOIN coin_contract cc0 ON cc0.coin_id = lp.coin0_id AND cc0.chain_id = lp.chain_id
+            LEFT JOIN coin_contract cc1 ON cc1.coin_id = lp.coin1_id AND cc1.chain_id = lp.chain_id
             WHERE lph.date >= %s::date AND lph.date <= %s::date
         """
         params = [start_date, end_date]
@@ -796,7 +800,7 @@ class PostgresFetcher:
             params.append(network_param)
 
         query += """
-            GROUP BY lp.id, lp.pool_address, lp.pool_id, ch.name, pr.name, c0.symbol, c1.symbol, c0.hardness, c1.hardness, lp.fee_bps
+            GROUP BY lp.id, lp.pool_address, lp.pool_id, ch.name, pr.name, c0.symbol, c1.symbol, c0.hardness, c1.hardness, lp.fee_bps, cc0.contract_address, cc1.contract_address
             HAVING SUM(ABS(lph.volume_usd)) > 0
             ORDER BY total_vol DESC
         """
@@ -808,10 +812,12 @@ class PostgresFetcher:
                 cur.execute(query, params)
                 rows = cur.fetchall()
                 for r in rows:
+                    p_addr = r[1] or r[2] or ''
+                    p_id = r[2] or r[1] or ''
                     results.append({
                         'cid': r[0],
-                        'pool_address': r[1] or r[2] or '',
-                        'pool_id': r[2] or r[1] or '',
+                        'pool_address': p_addr,
+                        'pool_id': p_id,
                         'network': r[3],
                         'protocol': r[4],
                         'token0': r[5],
@@ -822,7 +828,9 @@ class PostgresFetcher:
                         'fee_display': r[10],
                         'tx_count': int(r[11] or 0),
                         'volume_usd': float(r[12] or 0.0),
-                        'avg_tvl': float(r[13]) if r[13] is not None else 0.0
+                        'avg_tvl': float(r[13]) if r[13] is not None else 0.0,
+                        'addr0': r[14],
+                        'addr1': r[15]
                     })
                 cur.close()
         except Exception as e:
