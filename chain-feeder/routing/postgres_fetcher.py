@@ -10,10 +10,72 @@ from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
 from datetime import datetime
 from typing import List, Dict, Optional
+import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
+from contextlib import contextmanager
+from datetime import datetime
+from typing import List, Dict, Optional
+from eth_hash.auto import keccak
 from config import (
     DATA_WAREHOUSE_DB,
     ADDRESS_TO_SYMBOL
 )
+
+_FACTORY_CONFIGS = {
+    ('uniswap v3', 'ethereum'): ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
+    ('uniswap v3', 'arbitrum'): ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
+    ('uniswap v3', 'optimism'): ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
+    ('uniswap v3', 'polygon'):  ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
+    ('uniswap v3', 'base'):     ('33128a8fC17869897dcE68Ed026d694621f6FDfD', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
+    ('pancakeswap v3', 'bsc'):  ('0B61ea8668592Eea74E6F74D9a96e5792F0a6F0c', '6ce8ebae00d44007d4b4724497a760f38df483bcf3d6c1a89c9d5f756086d63e', False),
+    ('pancakeswap v3', 'arbitrum'): ('0B61ea8668592Eea74E6F74D9a96e5792F0a6F0c', '6ce8ebae00d44007d4b4724497a760f38df483bcf3d6c1a89c9d5f756086d63e', False),
+    ('uniswap v2', 'ethereum'): ('5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f', '96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f', True),
+}
+
+def _to_checksum_address(addr_hex: str) -> str:
+    addr = addr_hex.lower().removeprefix('0x')
+    hash_hex = keccak(addr.encode('ascii')).hex()
+    return '0x' + ''.join(
+        c.upper() if int(hash_hex[i], 16) >= 8 else c
+        for i, c in enumerate(addr)
+    )
+
+def _derive_canonical_address(proto: str, net: str, fee_bps: Optional[float], addr0: Optional[str], addr1: Optional[str]) -> Optional[str]:
+    if not addr0 or not addr1 or not addr0.startswith('0x') or not addr1.startswith('0x'):
+        return None
+    net_key = 'bsc' if net.lower() in ('bnb', 'bsc') else net.lower()
+    cfg_key = (proto.lower(), net_key)
+    if cfg_key not in _FACTORY_CONFIGS:
+        return None
+        
+    factory_hex, init_hash_hex, is_v2 = _FACTORY_CONFIGS[cfg_key]
+    
+    v = float(fee_bps or 500)
+    if v == 5.0 or v == 0.05: fee_val = 500
+    elif v == 1.0 or v == 0.01: fee_val = 100
+    elif v == 30.0 or v == 0.3: fee_val = 3000
+    elif v == 100.0 or v == 1.0: fee_val = 10000
+    elif v == 8.0 or v == 0.08: fee_val = 800
+    elif v == 25.0 or v == 0.25: fee_val = 2500
+    elif v > 0 and v < 5: fee_val = int(v * 10000)
+    else: fee_val = int(v)
+    
+    try:
+        t0_bytes = bytes.fromhex(addr0.removeprefix('0x'))
+        t1_bytes = bytes.fromhex(addr1.removeprefix('0x'))
+        tokens = sorted([t0_bytes, t1_bytes])
+        if is_v2:
+            salt = keccak(tokens[0] + tokens[1])
+        else:
+            salt_data = b'\x00' * 12 + tokens[0] + b'\x00' * 12 + tokens[1] + fee_val.to_bytes(32, 'big')
+            salt = keccak(salt_data)
+            
+        f_bytes = bytes.fromhex(factory_hex.removeprefix('0x'))
+        ih_bytes = bytes.fromhex(init_hash_hex.removeprefix('0x'))
+        derived = keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
+        return _to_checksum_address('0x' + derived)
+    except Exception:
+        return None
 
 # ---------------------------------------------------------------------------
 # Module-level connection pool — shared across all PostgresFetcher instances
@@ -814,12 +876,23 @@ class PostgresFetcher:
                 for r in rows:
                     p_addr = r[1] or r[2] or ''
                     p_id = r[2] or r[1] or ''
+                    net_val = r[3]
+                    proto_val = r[4]
+                    fee_bps_val = r[9]
+                    addr0_val = r[14]
+                    addr1_val = r[15]
+
+                    canonical = _derive_canonical_address(proto_val, net_val, fee_bps_val, addr0_val, addr1_val)
+                    if canonical:
+                        p_addr = canonical
+                        p_id = canonical
+
                     results.append({
                         'cid': r[0],
                         'pool_address': p_addr,
                         'pool_id': p_id,
-                        'network': r[3],
-                        'protocol': r[4],
+                        'network': net_val,
+                        'protocol': proto_val,
                         'token0': r[5],
                         'token1': r[6],
                         'h0': r[7],
