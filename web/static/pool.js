@@ -364,10 +364,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    window.copyToClipboard = (text, el, ev) => {
+        if (ev) ev.stopPropagation();
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            const iconWrapper = el.querySelector('.copy-icon-wrapper');
+            if (iconWrapper) {
+                const orig = iconWrapper.innerHTML;
+                iconWrapper.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+                setTimeout(() => { iconWrapper.innerHTML = orig; }, 1200);
+            }
+        }).catch(err => console.error('Copy error:', err));
+    };
+
     const formatAddress = (addr) => {
         if (!addr) return '-';
-        const shortened = `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
-        return `<span class="monospace clickable-addr" title="Click to copy: ${addr}" onclick="navigator.clipboard.writeText('${addr}'); const el = this; const orig = el.innerText; el.innerText = 'Copied!'; setTimeout(() => el.innerText = orig, 1000); event.stopPropagation();" style="cursor: pointer; font-family: monospace; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);">${shortened}</span>`;
+        const shortened = addr.length > 13 ? `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}` : addr;
+        return `<span class="monospace clickable-addr" title="Click to copy: ${addr}" onclick="copyToClipboard('${addr}', this, event);">
+            <span>${shortened}</span>
+            <span class="copy-icon-wrapper">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </span>
+        </span>`;
     };
 
     const renderRoutes = (routes) => {
