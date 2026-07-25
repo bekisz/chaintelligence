@@ -552,8 +552,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ` : ''}
                 </td>
                 <td class="col-cid hidden-column">${cidDisplay}</td>
-                <td class="col-pool-id hidden-column">${poolIdDisplay}</td>
-                <td class="col-pool-addr hidden-column">${poolAddrDisplay}</td>
+                <td class="col-pool-id hidden-column">${poolIdDisplay || poolAddrDisplay}</td>
                 <td class="col-network"><span class="badge ${networkClass}">${networkVal}</span></td>
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocolDisplay}</td>
                 <td class="col-tx-count">${route.count.toLocaleString()}</td>

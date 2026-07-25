@@ -27,6 +27,7 @@
                 <a href="/backtester" class="nav-link">Backtest</a>
                 <a href="/routing" class="nav-link">Route Analysis</a>
                 <a href="/sps" class="nav-link">SPS</a>
+                <a href="/status" class="nav-link">Status</a>
                 <a href="/docs" class="nav-link">API</a>
             </nav>
         </div>
@@ -146,8 +147,7 @@
                                 <div class="dropdown-section">
                                     <div class="dropdown-section-title">Table Columns</div>
                                     <label class="checkbox-label" style="opacity: 0.6;"><input type="checkbox" data-col="cid"> CID</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-col="pool-id"> Pool ID</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-col="pool-addr"> Pool Address</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-col="pool-id"> Pool Address / ID</label>
                                     <label class="checkbox-label"><input type="checkbox" data-col="network" checked> Network</label>
                                     <label class="checkbox-label"><input type="checkbox" data-col="protocol"> Protocol</label>
                                     <label class="checkbox-label"><input type="checkbox" data-col="tx-count" checked> TXs</label>
@@ -167,8 +167,7 @@
                                 <tr>
                                     <th>Pool</th>
                                     <th id="sort-cid" class="sortable col-cid hidden-column">CID <span>↕</span></th>
-                                    <th id="sort-pool-id" class="sortable col-pool-id hidden-column">Pool ID <span>↕</span></th>
-                                    <th id="sort-pool-addr" class="sortable col-pool-addr hidden-column">Pool Address <span>↕</span></th>
+                                    <th id="sort-pool-id" class="sortable col-pool-id hidden-column">Pool Address / ID <span>↕</span></th>
                                     <th id="sort-network" class="sortable col-network">Network <span>↕</span></th>
                                     <th id="sort-protocol" class="sortable col-protocol hidden-column">Protocol <span>↕</span></th>
                                     <th id="sort-count" class="sortable col-tx-count">TXs <span>↕</span></th>
