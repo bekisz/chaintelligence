@@ -490,6 +490,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `<img src="${url}" width="${size}" height="${size}" onerror="this.src='/static/favicon.png'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;">`;
     };
 
+    const getTokenHardness = (symbol) => {
+        if (!symbol || typeof symbol !== 'string') return 0;
+        const s = symbol.toUpperCase();
+        if (s.includes('USD') || s === 'DAI' || s === 'MIM' || s === 'GHO' || s === 'FRAX') return 1000;
+        if (s.includes('EUR')) return 930;
+        if (s.includes('GOLD') || s === 'PAXG' || s === 'XAUT') return 850;
+        if (s.includes('BTC') || s === 'WBTC' || s === 'CBBTC' || s === 'TBTC') return 870;
+        if (s.includes('ETH') || s === 'WETH' || s === 'STETH') return 860;
+        if (s.includes('SOL')) return 700;
+        return 0;
+    };
+
     const renderPath = (route) => {
         let tokens = [];
         let items = [];
@@ -504,6 +516,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             for (let i = 0; i < parts.length; i++) {
                 if (i % 4 === 0) tokens.push(parts[i]);
                 else if (i % 4 === 2) items.push(parseInt(parts[i]));
+            }
+        }
+
+        if (tokens.length === 2) {
+            const h0 = getTokenHardness(tokens[0]);
+            const h1 = getTokenHardness(tokens[1]);
+            if (h0 > h1) {
+                tokens = [tokens[1], tokens[0]];
             }
         }
 

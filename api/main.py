@@ -179,6 +179,58 @@ def parse_fee_rate(fee_str: str) -> Optional[float]:
         return None
 
 
+TOKEN_HARDNESS_CACHE: Dict[str, int] = {}
+TOKEN_HARDNESS_BUILT_AT: float = 0.0
+
+def get_token_hardness_map() -> Dict[str, int]:
+    global TOKEN_HARDNESS_CACHE, TOKEN_HARDNESS_BUILT_AT
+    now = time.time()
+    if not TOKEN_HARDNESS_CACHE or (now - TOKEN_HARDNESS_BUILT_AT > 300):
+        try:
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT UPPER(c.symbol), GREATEST(
+                        c.hardness,
+                        CASE 
+                            WHEN f.name = 'USD' THEN 950
+                            WHEN f.name = 'EUR' THEN 930
+                            WHEN f.name = 'GOLD' THEN 850
+                            WHEN f.name = 'BTC' THEN 870
+                            WHEN f.name = 'ETH' THEN 860
+                            WHEN f.name = 'SOL' THEN 700
+                            ELSE 0
+                        END
+                    ) as hardness
+                    FROM coin c
+                    LEFT JOIN coin_family f ON f.coin_id = c.coin_id
+                """)
+                h_map = {}
+                for sym, h in cur.fetchall():
+                    if sym:
+                        h_map[sym.upper()] = max(h_map.get(sym.upper(), 0), h or 0)
+                TOKEN_HARDNESS_CACHE = h_map
+                TOKEN_HARDNESS_BUILT_AT = now
+        except Exception as e:
+            print(f"Error loading token hardness map: {e}")
+    return TOKEN_HARDNESS_CACHE
+
+def get_hardness(symbol: str) -> int:
+    sym = (symbol or '').upper()
+    h_map = get_token_hardness_map()
+    if sym in h_map:
+        return h_map[sym]
+    if any(u in sym for u in ['USD', 'DAI', 'MIM', 'GHO', 'FRAX']):
+        return 950
+    if 'EUR' in sym:
+        return 930
+    if any(b in sym for b in ['BTC', 'WBTC', 'CBBTC', 'TBTC']):
+        return 870
+    if any(e in sym for e in ['ETH', 'WETH', 'STETH']):
+        return 860
+    return 0
+
+
 async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: str, pool_network: str, period_days: float, fee_tier: str) -> dict:
     pool_stat = aprs.get(key) or aprs.get(rev_key)
     if pool_stat is None:
@@ -969,6 +1021,13 @@ async def analyze(
                             route_network = fee_parts[2].strip()
                             break
             
+                # Normalize 1-hop route so softer asset is 1st (left) and harder asset is 2nd (right)
+                if len(new_path) == 3 and isinstance(new_path[0], str) and isinstance(new_path[2], str):
+                    h0 = get_hardness(new_path[0])
+                    h1 = get_hardness(new_path[2])
+                    if h0 > h1:
+                        new_path = [new_path[2], new_path[1], new_path[0]]
+
                 analysis['routes'][route_idx]['path_tokens'] = new_path
                 analysis['routes'][route_idx]['apr'] = route_apr
                 analysis['routes'][route_idx]['apr_str'] = apr_str
