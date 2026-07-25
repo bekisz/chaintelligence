@@ -745,3 +745,86 @@ class PostgresFetcher:
         except Exception as e:
             self._log(f"Latest price fetch failed: {e}")
             return {}
+
+    def fetch_pool_explorer_data(self, start_date: datetime, end_date: datetime,
+                                  start_tokens: Optional[List[str]] = None,
+                                  end_tokens: Optional[List[str]] = None,
+                                  network: Optional[str] = None) -> List[Dict]:
+        """
+        Fetch aggregated pool statistics directly from liquidity_pool_history & liquidity_pool.
+        Sub-second execution that avoids scanning raw swaps.
+        """
+        start_tokens_list = [t.upper() for t in (start_tokens or [])]
+        end_tokens_list = [t.upper() for t in (end_tokens or [])]
+        
+        token_where, token_params = self._build_token_clause(start_tokens_list, end_tokens_list, None)
+        network_where, network_param = self._build_network_clause(network)
+
+        query = f"""
+            SELECT 
+                lp.id AS cid,
+                COALESCE(lp.pool_address, '') AS pool_address,
+                COALESCE(lp.pool_id, '') AS pool_id,
+                ch.name AS network,
+                pr.name AS protocol,
+                c0.symbol AS token0,
+                c1.symbol AS token1,
+                COALESCE(c0.hardness, 0) AS h0,
+                COALESCE(c1.hardness, 0) AS h1,
+                lp.fee_bps,
+                CASE
+                    WHEN lp.fee_bps IS NULL THEN 'Dynamic'
+                    ELSE (lp.fee_bps / 100.0)::text || '%%'
+                END AS fee_display,
+                COALESCE(SUM(lph.tx_count), 0) AS total_tx,
+                COALESCE(SUM(ABS(lph.volume_usd)), 0) AS total_vol,
+                AVG(ABS(lph.tvl_usd)) FILTER (WHERE lph.tvl_usd <> 0) AS avg_tvl
+            FROM liquidity_pool lp
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            JOIN coin c0 ON lp.coin0_id = c0.coin_id
+            JOIN coin c1 ON lp.coin1_id = c1.coin_id
+            JOIN liquidity_pool_history lph ON lph.pool_id = lp.id
+            WHERE lph.date >= %s::date AND lph.date <= %s::date
+        """
+        params = [start_date, end_date]
+        if token_where:
+            query += f" AND ({token_where})"
+            params.extend(token_params)
+        if network_param:
+            query += network_where
+            params.append(network_param)
+
+        query += """
+            GROUP BY lp.id, lp.pool_address, lp.pool_id, ch.name, pr.name, c0.symbol, c1.symbol, c0.hardness, c1.hardness, lp.fee_bps
+            HAVING SUM(ABS(lph.volume_usd)) > 0
+            ORDER BY total_vol DESC
+        """
+
+        results = []
+        try:
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute(query, params)
+                rows = cur.fetchall()
+                for r in rows:
+                    results.append({
+                        'cid': r[0],
+                        'pool_address': r[1] or r[2] or '',
+                        'pool_id': r[2] or r[1] or '',
+                        'network': r[3],
+                        'protocol': r[4],
+                        'token0': r[5],
+                        'token1': r[6],
+                        'h0': r[7],
+                        'h1': r[8],
+                        'fee_bps': r[9],
+                        'fee_display': r[10],
+                        'tx_count': int(r[11] or 0),
+                        'volume_usd': float(r[12] or 0.0),
+                        'avg_tvl': float(r[13]) if r[13] is not None else 0.0
+                    })
+                cur.close()
+        except Exception as e:
+            self._log(f"Direct pool history fetch failed: {e}")
+        return results
