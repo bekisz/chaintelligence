@@ -1204,29 +1204,40 @@ async def analyze_pools(
             total_tx = 0
             total_volume = sum(p['volume_usd'] for p in pool_rows)
 
-            for p in pool_rows:
-                total_tx += p['tx_count']
+            if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
+                await asyncio.to_thread(get_defillama_index)
+
+            async def _enrich_pool(p):
                 vol_usd = p['volume_usd']
                 tvl_usd = p['avg_tvl']
-
                 fee_disp = p['fee_display']
                 proto = p['protocol']
                 net_val = p['network']
                 fee_full = f"{fee_disp}|{proto}|{net_val}"
+                pool_addr = p['pool_address'] or p['pool_id']
+
+                fee_pct = (p['fee_bps'] / 10000.0) if p['fee_bps'] is not None else 0.0005
+                base_apr = ((vol_usd * fee_pct * (365.0 / period_days)) / tvl_usd) if tvl_usd > 0 else 0.0
+
+                aprs_dict = {fee_full: {'apr': base_apr, 'tvl': tvl_usd, 'volume': vol_usd}}
+                enriched = await get_enriched_pool_stat(fee_full, fee_full, aprs_dict, pool_addr, net_val, period_days, fee_full)
+
+                tvl_final = enriched['tvl']
+                apr_final = enriched['apr'] if enriched['apr'] is not None else base_apr
+
+                return (p, tvl_final, apr_final, fee_full)
+
+            enriched_results = await asyncio.gather(*[_enrich_pool(p) for p in pool_rows])
+
+            for p, tvl_usd, apr_val, fee_full in enriched_results:
+                total_tx += p['tx_count']
+                vol_usd = p['volume_usd']
 
                 # Hardness Token Ordering (Softer 1st, Harder 2nd)
                 t0, t1 = p['token0'], p['token1']
                 h0, h1 = p['h0'], p['h1']
                 if h0 > h1:
                     t0, t1 = t1, t0
-
-                # Compute APR
-                fee_pct = (p['fee_bps'] / 10000.0) if p['fee_bps'] is not None else 0.0005
-                if tvl_usd > 0:
-                    annual_fees = vol_usd * fee_pct * (365.0 / period_days)
-                    apr_val = (annual_fees / tvl_usd) * 100.0
-                else:
-                    apr_val = 0.0
 
                 pool_addr = p['pool_address']
                 pool_id = p['pool_id']
@@ -1252,8 +1263,8 @@ async def analyze_pools(
                 routes.append({
                     'path_tokens': path_tokens,
                     'path': f"{t0} -- {fee_full} --> {t1}",
-                    'network': net_val,
-                    'protocol': proto,
+                    'network': p['network'],
+                    'protocol': p['protocol'],
                     'count': p['tx_count'],
                     'volume': vol_usd,
                     'market_size': 0.0,
