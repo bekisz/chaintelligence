@@ -44,85 +44,29 @@ const revertLink = (poolAddress, protocol, network, tokenId) => {
 };
 
 // Build Uniswap/PancakeSwap + DexScreener + Revert + DeFi Llama link panes for the arrow.
-const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid, tokenId) => {
-    const proto = (protocol || '').toLowerCase();
-    const net = (network || 'Ethereum').toLowerCase();
-    const isRealAddr = typeof poolAddress === 'string' && /^0x[a-f0-9]{40}$/i.test(poolAddress);
-    const isV4Id = typeof poolAddress === 'string' && /^0x[a-f0-9]{64}$/i.test(poolAddress);
-    let links = '';
-    const defillamaHtml = defillamaUuid
-        ? `<a href="https://defillama.com/yields/pool/${defillamaUuid}" target="_blank" class="lp-link defillama-link" data-tooltip="View on DeFi Llama" onclick="event.stopPropagation();"><img src="/static/assets/defillama.ico" alt="DeFi Llama" class="lp-link-icon defillama-icon" style="border-radius: 50%;" /></a>`
-        : '';
+// Uses pos.links from API response; Revert position links use tokenId when available.
+const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid, tokenId, links) => {
+    let html = '';
 
-    // V4: bytes32 poolId -> explorer + DexScreener + Revert links.
-    // Verified: DexScreener and Revert both index V4 pools by the bytes32
-    // poolId (dexscreener.com/<chain>/<poolId>,
-    // revert.finance/#/pool/<net>/uniswapv4/<poolId>). Revert V4 is
-    // Ethereum/Unichain only.
-    if (isV4Id) {
-        let dsNet = 'ethereum';
-        if (net.includes('base')) dsNet = 'base';
-        else if (net.includes('arbitrum')) dsNet = 'arbitrum';
-        else if (net.includes('optimism')) dsNet = 'optimism';
-        else if (net.includes('polygon')) dsNet = 'polygon';
-        else if (net.includes('bnb') || net.includes('bsc')) dsNet = 'bsc';
-
-        if (proto.includes('pancake')) {
-            let pChain = 'bsc';
-            if (net.includes('base')) pChain = 'base';
-            else if (net.includes('eth')) pChain = 'eth';
-            else if (net.includes('arbitrum')) pChain = 'arb';
-            links += `<a href="https://pancakeswap.finance/liquidity/pool/${pChain}/${poolAddress}" target="_blank" class="pool-label-link pool-label-link--pancakeswap" data-tooltip="View on PancakeSwap" onclick="event.stopPropagation();">${LP_PANCAKE_SVG}</a>`;
-        } else if (proto.includes('uniswap') || proto.includes('v4')) {
-            let uniNetwork = 'ethereum';
-            if (net.includes('base')) uniNetwork = 'base';
-            else if (net.includes('bnb') || net.includes('bsc')) uniNetwork = 'bnb';
-            else if (net.includes('arbitrum')) uniNetwork = 'arbitrum';
-            links += `<a href="https://app.uniswap.org/explore/pools/${uniNetwork}/${poolAddress}" target="_blank" class="pool-label-link pool-label-link--uniswap" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
-            links += revertLink(poolAddress, protocol, network, tokenId);
+    if (links) {
+        if (links.pancakeswap) {
+            html += `<a href="${links.pancakeswap}" target="_blank" class="pool-label-link pool-label-link--pancakeswap" data-tooltip="View on PancakeSwap" onclick="event.stopPropagation();">${LP_PANCAKE_SVG}</a>`;
+        } else if (links.uniswap) {
+            html += `<a href="${links.uniswap}" target="_blank" class="pool-label-link pool-label-link--uniswap" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
         }
-
-        links += `<a href="https://dexscreener.com/${dsNet}/${poolAddress}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();"><img src="/static/assets/dexscreener.ico" alt="DexScreener" class="lp-link-icon dexscreener-icon" style="border-radius: 50%;" /></a>`;
-        links += defillamaHtml;
-
-        return links ? `<div class="label-pane links-pane">${links}</div>` : '';
-    }
-
-    if (isRealAddr) {
-        if (proto.includes('pancake')) {
-            let pChain = 'bsc';
-            if (net.includes('base')) pChain = 'base';
-            else if (net.includes('eth')) pChain = 'eth';
-            else if (net.includes('arbitrum')) pChain = 'arb';
-            const href = proto.includes('v4')
-                ? `https://pancakeswap.finance/liquidity/pool/${pChain}/${poolAddress}`
-                : `https://pancakeswap.finance/info/v3/pairs/${poolAddress}?chain=${pChain}`;
-            links += `<a href="${href}" target="_blank" class="pool-label-link pool-label-link--pancakeswap" data-tooltip="View on PancakeSwap" onclick="event.stopPropagation();">${LP_PANCAKE_SVG}</a>`;
-        } else if (proto.includes('uniswap') || proto.includes('v3') || proto.includes('v2')) {
-            let uniNetwork = 'ethereum';
-            if (net.includes('base')) uniNetwork = 'base';
-            else if (net.includes('bnb') || net.includes('bsc')) uniNetwork = 'bnb';
-            else if (net.includes('arbitrum')) uniNetwork = 'arbitrum';
-            links += `<a href="https://app.uniswap.org/explore/pools/${uniNetwork}/${poolAddress}" target="_blank" class="pool-label-link pool-label-link--uniswap" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
+        if (links.dexscreener) {
+            html += `<a href="${links.dexscreener}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();"><img src="/static/assets/dexscreener.ico" alt="DexScreener" class="lp-link-icon dexscreener-icon" style="border-radius: 50%;" /></a>`;
+        }
+        if (links.defillama) {
+            html += `<a href="${links.defillama}" target="_blank" class="lp-link defillama-link" data-tooltip="View on DeFi Llama" onclick="event.stopPropagation();"><img src="/static/assets/defillama.ico" alt="DeFi Llama" class="lp-link-icon defillama-icon" style="border-radius: 50%;" /></a>`;
         }
     }
 
-    if (isRealAddr) {
-        links += revertLink(poolAddress, protocol, network, tokenId);
-    }
+    // Position-level Revert link (tokenId-based) — backend doesn't have tokenId
+    const revertPosHtml = revertLink(poolAddress, protocol, network, tokenId);
+    if (revertPosHtml) html += revertPosHtml;
 
-    if (isRealAddr) {
-        let dsNet = 'ethereum';
-        if (net.includes('base')) dsNet = 'base';
-        else if (net.includes('arbitrum')) dsNet = 'arbitrum';
-        else if (net.includes('optimism')) dsNet = 'optimism';
-        else if (net.includes('polygon')) dsNet = 'polygon';
-        else if (net.includes('bnb') || net.includes('bsc')) dsNet = 'bsc';
-        links += `<a href="https://dexscreener.com/${dsNet}/${poolAddress}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();"><img src="/static/assets/dexscreener.ico" alt="DexScreener" class="lp-link-icon dexscreener-icon" style="border-radius: 50%;" /></a>`;
-    }
-
-    links += defillamaHtml;
-    return links ? `<div class="label-pane links-pane">${links}</div>` : '';
+    return html ? `<div class="label-pane links-pane">${html}</div>` : '';
 };
 
 let currentFilters = {
@@ -389,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'v3';
     };
 
-    const renderPairPath = (asset0, asset1, images, protocol, feeTier, apr7d, poolAddress, network, defillamaUuid, tokenId) => {
+    const renderPairPath = (asset0, asset1, images, protocol, feeTier, apr7d, poolAddress, network, defillamaUuid, tokenId, links) => {
         const aliases = { WETH: 'ETH', WBTC: 'BTC', CBBTC: 'BTC', TBTC: 'BTC', KBTC: 'BTC', LBTC: 'BTC', FBTC: 'BTC', WBNB: 'BNB' };
         if (!Array.isArray(images)) {
             try { images = JSON.parse(images || '[]'); } catch { images = []; }
@@ -402,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         const fee = feeTier || 'LP';
         const apr = apr7d ? `${(apr7d * 100).toFixed(2)}% 7d` : 'APR pending';
-        const linksPane = renderPoolLinks(poolAddress, protocol, network, defillamaUuid, tokenId);
+        const linksPane = renderPoolLinks(poolAddress, protocol, network, defillamaUuid, tokenId, links);
         return `<div class="lp-pair-path ${getProtocolClass(protocol)}" aria-label="${asset0.symbol} to ${asset1.symbol} liquidity pair">
             ${token(asset0, images[0])}
             <div class="lp-pair-arrow" aria-hidden="true"><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" style="transform: scaleX(-1);"><polyline points="1,1 7,7 1,13"/></svg><div class="lp-pair-line"><div class="lp-pair-label"><span>${fee}</span><span>${apr}</span>${linksPane}</div></div><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="1,1 7,7 1,13"/></svg></div>
@@ -486,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.innerHTML = `
                 <div class="lp-row-main">
                     <div class="lp-row-left">
-                        ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid, pos.token_id)}
+                        ${renderPairPath(asset0, asset1, pos.images, pos.protocol, pos.range_data?.fee_tier, pos.apr_7d, pos.pool_address, pos.network, pos.defillama_uuid, pos.token_id, pos.links)}
                         <div class="lp-row-range">
                             ${rangeHtml}
                         </div>

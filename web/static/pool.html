@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
-    <link rel="stylesheet" href="/static/style.css?v=25.0">
+    <link rel="stylesheet" href="/static/style.css?v=28.0">
 </head>
 
 <body>
@@ -116,17 +116,15 @@
                                 <input type="number" id="min-apr-filter" placeholder="e.g. 5" min="0" step="0.1">
                             </div>
                             <div class="filter-input-group">
-                                <label for="min-mkt-filter">Min Market Size $</label>
+                                <label for="min-mkt-filter">Min Fees $</label>
                                 <input type="number" id="min-mkt-filter" placeholder="e.g. 100" min="0" step="10">
                             </div>
                             <div class="filter-input-group">
                                 <label for="min-txs-filter">Min TXs</label>
                                 <input type="number" id="min-txs-filter" placeholder="e.g. 10" min="0" step="5">
                             </div>
-                        </div>
-                    </div>
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 10px; padding-right: 15px;">
-                        <div class="column-selector-container">
+                            <div style="margin-left: auto;">
+                                <div class="column-selector-container">
                             <button id="column-selector-btn" class="secondary-btn flex-center" title="Settings" style="padding: 6px 8px; border-radius: 8px;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
                                     <circle cx="12" cy="12" r="3"/>
@@ -142,6 +140,9 @@
                                     <label class="checkbox-label"><input type="checkbox" data-lp="revert" checked> Revert Link</label>
                                     <label class="checkbox-label"><input type="checkbox" data-lp="dexscreener" checked> DexScreener</label>
                                     <label class="checkbox-label"><input type="checkbox" data-lp="defillama" checked> DeFi Llama</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="explorer" checked> Explorer</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="geckoterminal" checked> GeckoTerminal</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="defined" checked> Defined.fi</label>
                                 </div>
                                 <div class="dropdown-divider"></div>
                                 <div class="dropdown-section">
@@ -160,6 +161,8 @@
                                 </div>
                             </div>
                         </div>
+                        </div>
+                    </div>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -214,7 +217,7 @@
     </div>
 
     <script src="/static/nav.js"></script>
-    <script src="/static/pool.js?v=25.0"></script>
+    <script src="/static/pool.js?v=28.0"></script>
 </body>
 
 </html>

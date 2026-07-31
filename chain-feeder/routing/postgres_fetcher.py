@@ -5,32 +5,132 @@ This module fetches swap data from the local Postgres database
 for specified tokens within a given time range.
 """
 
+import os
 import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
 from datetime import datetime
-from typing import List, Dict, Optional
-import psycopg2
-from psycopg2.pool import ThreadedConnectionPool
-from contextlib import contextmanager
-from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from eth_hash.auto import keccak
 from config import (
     DATA_WAREHOUSE_DB,
     ADDRESS_TO_SYMBOL
 )
 
-_FACTORY_CONFIGS = {
-    ('uniswap v3', 'ethereum'): ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
-    ('uniswap v3', 'arbitrum'): ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
-    ('uniswap v3', 'optimism'): ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
-    ('uniswap v3', 'polygon'):  ('1F98431c8aD98523631AE4a59f267346ea31F984', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
-    ('uniswap v3', 'base'):     ('33128a8fC17869897dcE68Ed026d694621f6FDfD', 'e34f199709d42558d7579ddf5745122b19262c03390f3199e3a6104f7b6d1933', False),
-    ('pancakeswap v3', 'bsc'):  ('0B61ea8668592Eea74E6F74D9a96e5792F0a6F0c', '6ce8ebae00d44007d4b4724497a760f38df483bcf3d6c1a89c9d5f756086d63e', False),
-    ('pancakeswap v3', 'arbitrum'): ('0B61ea8668592Eea74E6F74D9a96e5792F0a6F0c', '6ce8ebae00d44007d4b4724497a760f38df483bcf3d6c1a89c9d5f756086d63e', False),
-    ('uniswap v2', 'ethereum'): ('5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f', '96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f', True),
+try:
+    import yaml
+except ImportError:  # pragma: no cover - yaml is always present in our images
+    yaml = None
+
+# ---------------------------------------------------------------------------
+# CREATE2 pool-address derivation
+#
+# For V2/V3-style DEXes the pool address is fully determined by
+# (deployer, token pair, fee tier), so we derive it locally instead of trusting
+# liquidity_pool.pool_address — many legacy rows there hold fabricated
+# addresses that 404 on Uniswap / Revert / DexScreener.
+#
+# Factory addresses and init code hashes are read from config/dex-config.yaml,
+# the same file api/main.py uses, so there is exactly one source of truth.
+# _FALLBACK_DEX_CONFIG mirrors it for environments where it is not mounted.
+# NEVER hand-edit these hashes: a single wrong nibble yields a plausible-looking
+# address that points at nothing.
+# ---------------------------------------------------------------------------
+_UNISWAP_V3_INIT_HASH = '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54'
+_PANCAKE_V3_INIT_HASH = '0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2'
+_UNISWAP_V2_INIT_HASH = '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f'
+
+_FALLBACK_DEX_CONFIG = {
+    'uniswap_v3': {
+        net: {'factory': factory, 'init_hash': _UNISWAP_V3_INIT_HASH}
+        for net, factory in (
+            ('ethereum', '0x1F98431c8aD98523631AE4a59f267346ea31F984'),
+            ('arbitrum', '0x1F98431c8aD98523631AE4a59f267346ea31F984'),
+            ('optimism', '0x1F98431c8aD98523631AE4a59f267346ea31F984'),
+            ('polygon', '0x1F98431c8aD98523631AE4a59f267346ea31F984'),
+            ('base', '0x33128a8fC17869897dcE68Ed026d694621f6FDfD'),
+            ('bsc', '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7'),
+        )
+    },
+    # PancakeSwap V3 deploys pools from the PoolDeployer, not the Factory.
+    'pancakeswap_v3': {
+        net: {'factory': '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9',
+              'init_hash': _PANCAKE_V3_INIT_HASH}
+        for net in ('bsc', 'ethereum', 'arbitrum', 'base')
+    },
+    'uniswap_v2': {
+        'ethereum': {'factory': '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f',
+                     'init_hash': _UNISWAP_V2_INIT_HASH},
+    },
 }
+
+_DEX_CONFIG: Optional[dict] = None
+
+
+def _load_dex_config() -> dict:
+    """Load config/dex-config.yaml once, falling back to the built-in table.
+
+    Searched in the repo-relative location first, then the container mount
+    points used by the API server and the Airflow images.
+    """
+    global _DEX_CONFIG
+    if _DEX_CONFIG is not None:
+        return _DEX_CONFIG
+
+    loaded = None
+    if yaml is not None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for path in (
+            os.path.join(here, '..', '..', 'config', 'dex-config.yaml'),
+            '/app/config/dex-config.yaml',
+            '/opt/airflow/config/dex-config.yaml',
+        ):
+            try:
+                with open(path, 'r') as fh:
+                    candidate = yaml.safe_load(fh)
+            except (OSError, yaml.YAMLError):
+                continue
+            if isinstance(candidate, dict) and candidate:
+                loaded = candidate
+                break
+
+    _DEX_CONFIG = loaded if loaded else _FALLBACK_DEX_CONFIG
+    return _DEX_CONFIG
+
+
+def _network_config_keys(net: str) -> Tuple[str, ...]:
+    """Candidate config keys for a chain name, newest naming first.
+
+    The DB stores 'BNB' where the config says 'bsc', and PancakeSwap's section
+    keys Ethereum as 'eth' while Uniswap's says 'ethereum'.
+    """
+    n = (net or '').lower()
+    if n in ('bnb', 'bsc', 'binance', 'binance smart chain'):
+        return ('bsc', 'bnb', 'binance')
+    if n in ('ethereum', 'eth', 'mainnet'):
+        return ('ethereum', 'eth', 'mainnet')
+    return (n,)
+
+
+def _get_dex_params(proto_key: str, net: str) -> Optional[Tuple[str, str]]:
+    """Return (deployer_address, init_code_hash) for a protocol/network, or None."""
+    cfg = _load_dex_config().get(proto_key)
+    if not isinstance(cfg, dict):
+        return None
+    if 'factory' in cfg and 'init_hash' in cfg:
+        entry = cfg
+    else:
+        entry = next(
+            (cfg[key] for key in _network_config_keys(net) if isinstance(cfg.get(key), dict)),
+            None
+        )
+    if not isinstance(entry, dict):
+        return None
+    factory, init_hash = entry.get('factory'), entry.get('init_hash')
+    if not factory or not init_hash:
+        return None
+    return factory, init_hash
+
 
 def _to_checksum_address(addr_hex: str) -> str:
     addr = addr_hex.lower().removeprefix('0x')
@@ -40,26 +140,36 @@ def _to_checksum_address(addr_hex: str) -> str:
         for i, c in enumerate(addr)
     )
 
-def _derive_canonical_address(proto: str, net: str, fee_bps: Optional[float], addr0: Optional[str], addr1: Optional[str]) -> Optional[str]:
+
+def _derive_canonical_address(proto: str, net: str, fee_bps: Optional[float],
+                              addr0: Optional[str], addr1: Optional[str]) -> Optional[str]:
+    """Derive a V2/V3 pool's CREATE2 address from its tokens and fee tier.
+
+    Returns None whenever the pool is not derivable — a V4 singleton, an
+    unconfigured protocol/network, a token with no known contract address, or a
+    missing fee tier — so the caller keeps the stored address instead of
+    linking to an address that does not exist.
+    """
     if not addr0 or not addr1 or not addr0.startswith('0x') or not addr1.startswith('0x'):
         return None
-    net_key = 'bsc' if net.lower() in ('bnb', 'bsc') else net.lower()
-    cfg_key = (proto.lower(), net_key)
-    if cfg_key not in _FACTORY_CONFIGS:
+
+    proto_key = (proto or '').lower().replace(' ', '_').replace('-', '_')
+    params = _get_dex_params(proto_key, net or '')
+    if not params:
         return None
-        
-    factory_hex, init_hash_hex, is_v2 = _FACTORY_CONFIGS[cfg_key]
-    
-    v = float(fee_bps or 500)
-    if v == 5.0 or v == 0.05: fee_val = 500
-    elif v == 1.0 or v == 0.01: fee_val = 100
-    elif v == 30.0 or v == 0.3: fee_val = 3000
-    elif v == 100.0 or v == 1.0: fee_val = 10000
-    elif v == 8.0 or v == 0.08: fee_val = 800
-    elif v == 25.0 or v == 0.25: fee_val = 2500
-    elif v > 0 and v < 5: fee_val = int(v * 10000)
-    else: fee_val = int(v)
-    
+    factory_hex, init_hash_hex = params
+    is_v2 = proto_key.endswith('_v2')
+
+    fee_val = 0
+    if not is_v2:
+        # fee_bps is basis points (5 = 0.05%, 30 = 0.30%); the fee baked into
+        # the V3 pool salt is in hundredths of a bip, so it is bps * 100.
+        if fee_bps is None:
+            return None
+        fee_val = int(round(float(fee_bps) * 100))
+        if fee_val <= 0:
+            return None
+
     try:
         t0_bytes = bytes.fromhex(addr0.removeprefix('0x'))
         t1_bytes = bytes.fromhex(addr1.removeprefix('0x'))
@@ -69,7 +179,7 @@ def _derive_canonical_address(proto: str, net: str, fee_bps: Optional[float], ad
         else:
             salt_data = b'\x00' * 12 + tokens[0] + b'\x00' * 12 + tokens[1] + fee_val.to_bytes(32, 'big')
             salt = keccak(salt_data)
-            
+
         f_bytes = bytes.fromhex(factory_hex.removeprefix('0x'))
         ih_bytes = bytes.fromhex(init_hash_hex.removeprefix('0x'))
         derived = keccak(b'\xff' + f_bytes + salt + ih_bytes)[12:].hex()
@@ -275,7 +385,7 @@ class PostgresFetcher:
         """Aggregate swaps per pool directly in SQL.
 
         Returns one dict per pool_id that had swaps in range — with count,
-        volume, and market_size already summed. The /api/pools/analyze endpoint
+        volume, and market_size already summed. The /api/pools/search endpoint
         merges these into its (sorted token pair, fee, protocol, network) key.
 
         This collapses ~100k swap rows per day-chunk down to ~tens of pool rows,
@@ -811,10 +921,18 @@ class PostgresFetcher:
     def fetch_pool_explorer_data(self, start_date: datetime, end_date: datetime,
                                   start_tokens: Optional[List[str]] = None,
                                   end_tokens: Optional[List[str]] = None,
-                                  network: Optional[str] = None) -> List[Dict]:
+                                  network: Optional[str] = None,
+                                  limit: int = 0,
+                                  offset: int = 0,
+                                  sort_by: str = "volume") -> List[Dict]:
         """
         Fetch aggregated pool statistics directly from liquidity_pool_history & liquidity_pool.
         Sub-second execution that avoids scanning raw swaps.
+
+        Args:
+            limit: Max rows (0 = unlimited, for backward compat).
+            offset: Rows to skip.
+            sort_by: "volume" (default), "tvl", "tx_count", or "cid".
         """
         start_tokens_list = [t.upper() for t in (start_tokens or [])]
         end_tokens_list = [t.upper() for t in (end_tokens or [])]
@@ -826,10 +944,12 @@ class PostgresFetcher:
             SELECT 
                 lp.id AS cid,
                 COALESCE(lp.pool_address, '') AS pool_address,
-                COALESCE(lp.pool_id, '') AS pool_id,
+                COALESCE((SELECT token_id FROM liquidity_pool_position lpp WHERE lpp.pool_id = lp.id AND lpp.token_id IS NOT NULL LIMIT 1), lp.pool_id, '') AS pool_id,
                 ch.name AS network,
                 pr.name AS protocol,
+                c0.coin_id AS coin0_id,
                 c0.symbol AS token0,
+                c1.coin_id AS coin1_id,
                 c1.symbol AS token1,
                 COALESCE(c0.hardness, 0) AS h0,
                 COALESCE(c1.hardness, 0) AS h1,
@@ -840,9 +960,14 @@ class PostgresFetcher:
                 END AS fee_display,
                 COALESCE(SUM(lph.tx_count), 0) AS total_tx,
                 COALESCE(SUM(ABS(lph.volume_usd)), 0) AS total_vol,
-                AVG(ABS(lph.tvl_usd)) FILTER (WHERE lph.tvl_usd <> 0) AS avg_tvl,
+                COALESCE(
+                    AVG(ABS(lph.tvl_usd)) FILTER (WHERE lph.tvl_usd <> 0),
+                    lt.tvl_usd,
+                    0.0
+                ) AS avg_tvl,
                 cc0.contract_address AS addr0,
-                cc1.contract_address AS addr1
+                cc1.contract_address AS addr1,
+                lp.created_at
             FROM liquidity_pool lp
             JOIN chain ch ON lp.chain_id = ch.id
             JOIN protocol pr ON lp.protocol_id = pr.id
@@ -851,6 +976,15 @@ class PostgresFetcher:
             JOIN liquidity_pool_history lph ON lph.pool_id = lp.id
             LEFT JOIN coin_contract cc0 ON cc0.coin_id = lp.coin0_id AND cc0.chain_id = lp.chain_id
             LEFT JOIN coin_contract cc1 ON cc1.coin_id = lp.coin1_id AND cc1.chain_id = lp.chain_id
+            LEFT JOIN LATERAL (
+                SELECT lph2.tvl_usd
+                FROM liquidity_pool_history lph2
+                WHERE lph2.pool_id = lp.id
+                  AND lph2.tvl_usd IS NOT NULL
+                  AND lph2.tvl_usd > 0
+                ORDER BY lph2.date DESC
+                LIMIT 1
+            ) lt ON TRUE
             WHERE lph.date >= %s::date AND lph.date <= %s::date
         """
         params = [start_date, end_date]
@@ -861,11 +995,27 @@ class PostgresFetcher:
             query += network_where
             params.append(network_param)
 
-        query += """
-            GROUP BY lp.id, lp.pool_address, lp.pool_id, ch.name, pr.name, c0.symbol, c1.symbol, c0.hardness, c1.hardness, lp.fee_bps, cc0.contract_address, cc1.contract_address
+        # Validate and map sort_by to a SQL ORDER BY expression.
+        sort_map = {
+            "volume": "total_vol DESC",
+            "tvl": "avg_tvl DESC NULLS LAST",
+            "tx_count": "total_tx DESC",
+            "cid": "lp.id ASC",
+        }
+        order_clause = sort_map.get(sort_by, "total_vol DESC")
+
+        query += f"""
+            GROUP BY lp.id, lp.pool_address, lp.pool_id, ch.name, pr.name,
+                     c0.coin_id, c0.symbol, c1.coin_id, c1.symbol,
+                     c0.hardness, c1.hardness, lp.fee_bps, lp.created_at,
+                     cc0.contract_address, cc1.contract_address,
+                     lt.tvl_usd
             HAVING SUM(ABS(lph.volume_usd)) > 0
-            ORDER BY total_vol DESC
+            ORDER BY {order_clause}
         """
+        if limit > 0:
+            query += " LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
 
         results = []
         try:
@@ -878,9 +1028,9 @@ class PostgresFetcher:
                     p_id = r[2] or r[1] or ''
                     net_val = r[3]
                     proto_val = r[4]
-                    fee_bps_val = r[9]
-                    addr0_val = r[14]
-                    addr1_val = r[15]
+                    fee_bps_val = r[11]
+                    addr0_val = r[16]
+                    addr1_val = r[17]
 
                     canonical = _derive_canonical_address(proto_val, net_val, fee_bps_val, addr0_val, addr1_val)
                     if canonical:
@@ -893,17 +1043,20 @@ class PostgresFetcher:
                         'pool_id': p_id,
                         'network': net_val,
                         'protocol': proto_val,
-                        'token0': r[5],
-                        'token1': r[6],
-                        'h0': r[7],
-                        'h1': r[8],
-                        'fee_bps': r[9],
-                        'fee_display': r[10],
-                        'tx_count': int(r[11] or 0),
-                        'volume_usd': float(r[12] or 0.0),
-                        'avg_tvl': float(r[13]) if r[13] is not None else 0.0,
-                        'addr0': r[14],
-                        'addr1': r[15]
+                        'coin0_id': r[5],
+                        'token0': r[6],
+                        'coin1_id': r[7],
+                        'token1': r[8],
+                        'h0': r[9],
+                        'h1': r[10],
+                        'fee_bps': r[11],
+                        'fee_display': r[12],
+                        'tx_count': int(r[13] or 0),
+                        'volume_usd': float(r[14] or 0.0),
+                        'avg_tvl': float(r[15]) if r[15] is not None else 0.0,
+                        'addr0': r[16],
+                        'addr1': r[17],
+                        'created_at': r[18],
                     })
                 cur.close()
         except Exception as e:

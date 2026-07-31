@@ -255,7 +255,7 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
         if ds_tvl and ds_tvl > 1.0 and (is_unreliable or abs(ds_tvl - tvl_val) / max(1.0, tvl_val) > 0.1):
             tvl_val = ds_tvl
             fee_rate = parse_fee_rate(fee_tier)
-            if fee_rate is not None and vol_val > 0:
+            if fee_rate is not None and vol_val > 0 and is_unreliable:
                 fees_earned = vol_val * fee_rate
                 apr_val = (fees_earned / tvl_val) * (365.0 / period_days)
                 
@@ -418,6 +418,144 @@ def get_defillama_pool_tvl(pool_addr: Optional[str]) -> Optional[float]:
     if not pool_addr:
         return None
     return get_defillama_index().get(pool_addr.lower(), {}).get('tvl')
+
+
+def build_pool_links(
+    pool_address: Optional[str],
+    v4_pool_id: Optional[str],
+    protocol: Optional[str],
+    network: Optional[str],
+    defillama_uuid: Optional[str] = None,
+) -> dict:
+    links = {}
+    proto_lower = (protocol or "").lower()
+    net_lower = (network or "").lower()
+    is_v4 = "v4" in proto_lower
+    link_addr = (v4_pool_id if is_v4 and v4_pool_id and len(v4_pool_id) == 66 else pool_address) or ""
+    if not link_addr:
+        if defillama_uuid:
+            links["defillama"] = f"https://defillama.com/yields/pool/{defillama_uuid}"
+        return links
+
+    net_seg = "ethereum"
+    if "base" in net_lower:
+        net_seg = "base"
+    elif "arbitrum" in net_lower:
+        net_seg = "arbitrum"
+    elif "optimism" in net_lower:
+        net_seg = "optimism"
+    elif "polygon" in net_lower:
+        net_seg = "polygon"
+    elif "bnb" in net_lower or "bsc" in net_lower:
+        net_seg = "bnb"
+
+    if "pancake" in proto_lower:
+        pchain = "bsc"
+        if "base" in net_lower:
+            pchain = "base"
+        elif "eth" in net_lower:
+            pchain = "eth"
+        elif "arbitrum" in net_lower:
+            pchain = "arb"
+        if is_v4:
+            if len(link_addr) == 66:
+                links["pancakeswap"] = f"https://pancakeswap.finance/liquidity/pool/{pchain}/{link_addr}"
+            else:
+                links["pancakeswap"] = f"https://pancakeswap.finance/info/infinity/pairs/tokens/{link_addr}?chain={pchain}"
+        else:
+            links["pancakeswap"] = f"https://pancakeswap.finance/info/v3/pairs/{link_addr}?chain={pchain}"
+    elif "uniswap" in proto_lower or "v3" in proto_lower or "v2" in proto_lower:
+        uni_net = net_seg
+        if uni_net == "bnb":
+            uni_net = "bnb"
+        links["uniswap"] = f"https://app.uniswap.org/explore/pools/{uni_net}/{link_addr}"
+
+    ds_chain = net_seg
+    if ds_chain == "bnb":
+        ds_chain = "bsc"
+    links["dexscreener"] = f"https://dexscreener.com/{ds_chain}/{link_addr.lower()}"
+
+    revert_net = {"bnb": "bsc", "ethereum": "mainnet"}.get(net_seg, net_seg)
+    revert_proto = None
+    if "uniswap" in proto_lower:
+        revert_proto = "uniswapv4" if "v4" in proto_lower else "uniswapv3"
+    elif "pancake" in proto_lower and "v3" in proto_lower and revert_net in ("bsc", "arbitrum"):
+        revert_proto = "pancakeswapv3"
+    elif "aerodrome" in proto_lower and revert_net == "base":
+        revert_proto = "aerodrome"
+    if revert_proto:
+        num_id = None
+        if v4_pool_id and str(v4_pool_id).strip().isdigit():
+            num_id = str(v4_pool_id).strip()
+        elif pool_address and str(pool_address).strip().isdigit():
+            num_id = str(pool_address).strip()
+
+        # If Uniswap V4 and no numeric ID passed directly, look up token_id from DB
+        if not num_id and revert_proto == "uniswapv4":
+            v4_lookup_key = (v4_pool_id if (v4_pool_id and len(v4_pool_id) == 66) else pool_address) or ""
+            if v4_lookup_key:
+                try:
+                    with get_conn() as conn:
+                        cur = conn.cursor()
+                        cur.execute("""
+                            SELECT lpp.token_id 
+                            FROM liquidity_pool_position lpp
+                            JOIN liquidity_pool lp ON lpp.pool_id = lp.id
+                            WHERE (lp.pool_id = %s OR lp.pool_address = %s)
+                              AND lpp.token_id IS NOT NULL 
+                            LIMIT 1
+                        """, (v4_lookup_key, v4_lookup_key))
+                        row = cur.fetchone()
+                        if row and row[0]:
+                            num_id = str(row[0]).strip()
+                except Exception:
+                    pass
+
+        if num_id:
+            sub = "uniswapv4-position" if revert_proto == "uniswapv4" else "uniswap-position"
+            links["revert"] = f"https://revert.finance/#/{sub}/{revert_net}/{num_id}"
+        elif revert_proto != "uniswapv4":
+            links["revert"] = f"https://revert.finance/#/pool/{revert_net}/{revert_proto}/{link_addr.lower()}"
+
+    # 1. Block Explorer (Etherscan, Arbiscan, Basescan, BscScan, etc.)
+    explorer_addr = pool_address or link_addr
+    if explorer_addr and len(explorer_addr) == 42:
+        explorer_base = {
+            "ethereum": "https://etherscan.io/address/",
+            "arbitrum": "https://arbiscan.io/address/",
+            "base": "https://basescan.org/address/",
+            "bnb": "https://bscscan.com/address/",
+            "optimism": "https://optimistic.etherscan.io/address/",
+            "polygon": "https://polygonscan.com/address/"
+        }.get(net_seg, "https://etherscan.io/address/")
+        links["explorer"] = explorer_base + explorer_addr
+
+    # 2. GeckoTerminal
+    gecko_chain = {
+        "ethereum": "eth",
+        "arbitrum": "arbitrum",
+        "base": "base",
+        "bnb": "bsc",
+        "optimism": "optimism",
+        "polygon": "polygon_pos"
+    }.get(net_seg, "eth")
+    links["geckoterminal"] = f"https://www.geckoterminal.com/{gecko_chain}/pools/{link_addr.lower()}"
+
+    # 3. Defined.fi
+    defined_chain = {
+        "ethereum": "eth",
+        "arbitrum": "arbitrum",
+        "base": "base",
+        "bnb": "bsc",
+        "optimism": "optimism",
+        "polygon": "polygon"
+    }.get(net_seg, "eth")
+    links["defined"] = f"https://www.defined.fi/{defined_chain}/{link_addr.lower()}"
+
+    if defillama_uuid:
+        links["defillama"] = f"https://defillama.com/yields/pool/{defillama_uuid}"
+
+    return links
 
 
 try:
@@ -979,11 +1117,10 @@ async def analyze(
 
                 for key, db_val in db_batch.items():
                     if key in pool_addresses:
+                        # Preserve derived CREATE2 addresses for V2/V3 pools (the DB
+                        # may contain stale/wrong addresses); only overlay the internal
+                        # cid from the DB.
                         pool_addresses[key]["cid"] = db_val.get("cid")
-                        if db_val.get("pool_address"):
-                            pool_addresses[key]["pool_address"] = db_val["pool_address"]
-                        if db_val.get("pool_id"):
-                            pool_addresses[key]["pool_id"] = db_val["pool_id"]
                     else:
                         pool_addresses[key] = db_val
 
@@ -1071,6 +1208,8 @@ async def analyze(
                         tvl_val = enriched['tvl']
 
                         # Replace string fee with object
+                        pool_protocol = fee_parts[1].strip() if len(fee_parts) >= 2 else "Uniswap V3"
+                        pool_defillama_uuid = get_defillama_pool_uuid(pool_addr)
                         new_path.append({
                             'fee': fee,
                             'apr': apr_val if apr_val is not None else 0.0,
@@ -1079,7 +1218,8 @@ async def analyze(
                             'pool_id': pool_id,
                             'cid': cid,
                             'tvl': tvl_val,
-                            'defillama_uuid': get_defillama_pool_uuid(pool_addr)
+                            'defillama_uuid': pool_defillama_uuid,
+                            'links': build_pool_links(pool_addr, pool_id, pool_protocol, pool_network, pool_defillama_uuid),
                         })
                     else:
                         new_path.append(item)
@@ -1134,14 +1274,19 @@ async def analyze(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/pools/analyze", tags=["Liquidity Pools"])
+@app.get("/api/pools/search", tags=["Liquidity Pools"])
 async def analyze_pools(
     start_token: str,
     end_token: str,
     days: Optional[float] = Query(None, description="Lookback period in days"),
     start_date: Optional[str] = Query(None, description="ISO format start date"),
     end_date: Optional[str] = Query(None, description="ISO format end date"),
-    network: Optional[str] = Query(None, description="Filter swaps by network")
+    network: Optional[str] = Query(None, description="Filter swaps by network"),
+    limit: int = Query(50, ge=1, le=500, description="Max results to return"),
+    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    sort_by: str = Query("volume", pattern="^(volume|tvl|tx_count|cid)$", description="Sort field: volume, tvl, tx_count, or cid"),
+    stream: bool = Query(True, description="Stream NDJSON with progress (true) or return plain JSON (false)"),
+    include_history: bool = Query(False, description="Include daily history data for each pool"),
 ):
     """Analyze liquidity pools matching start and end tokens over a date range."""
     try:
@@ -1189,19 +1334,21 @@ async def analyze_pools(
             await asyncio.sleep(0.01)
 
             pool_rows = await asyncio.to_thread(
-                fetcher.fetch_pool_explorer_data, start_dt, end_dt, start_tokens_list, end_tokens_list, network
+                fetcher.fetch_pool_explorer_data, start_dt, end_dt, start_tokens_list, end_tokens_list, network,
+                limit=limit, offset=offset, sort_by=sort_by,
             )
 
             if not pool_rows:
-                yield json.dumps({"type": "result", "data": {"routes": [], "total_tx": 0, "total_volume": 0}}) + "\n"
+                yield json.dumps({"type": "result", "data": {"pools": [], "meta": {"total_pools": 0, "total_tx": 0, "total_volume_usd": 0, "limit": limit, "offset": offset}}}) + "\n"
                 return
 
             yield json.dumps({"type": "progress", "pct": 80.0, "message": "Formatting pool explorer results..."}) + "\n"
             await asyncio.sleep(0.01)
 
             period_days = max(1.0, (end_dt - start_dt).total_seconds() / 86400.0)
-            routes = []
+            pools = []
             total_tx = 0
+            total_fees = 0.0
             total_volume = sum(p['volume_usd'] for p in pool_rows)
 
             if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
@@ -1232,6 +1379,9 @@ async def analyze_pools(
             for p, tvl_usd, apr_val, fee_full in enriched_results:
                 total_tx += p['tx_count']
                 vol_usd = p['volume_usd']
+                fee_pct = (p['fee_bps'] / 10000.0) if p['fee_bps'] is not None else 0.0005
+                fees_usd = round(vol_usd * fee_pct, 2) if vol_usd > 0 else 0.0
+                total_fees += fees_usd
 
                 # Hardness Token Ordering (Softer 1st, Harder 2nd)
                 t0, t1 = p['token0'], p['token1']
@@ -1240,50 +1390,83 @@ async def analyze_pools(
                     t0, t1 = t1, t0
 
                 pool_addr = p['pool_address']
-                pool_id = p['pool_id']
-                cid = p['cid']
+                defillama_uuid = get_defillama_pool_uuid(pool_addr)
+                created = p['created_at']
+                created_iso = created.isoformat() if created else None
 
-                path_tokens = [
-                    t0,
-                    {
-                        'fee': fee_full,
-                        'apr': apr_val,
-                        'apr_str': format_apr(apr_val),
-                        'pool_address': pool_addr,
-                        'pool_id': pool_id,
-                        'cid': cid,
-                        'tvl': tvl_usd,
-                        'defillama_uuid': get_defillama_pool_uuid(pool_addr)
-                    },
-                    t1
-                ]
-
-                pct_vol = (vol_usd / total_volume * 100.0) if total_volume > 0 else 0.0
-
-                routes.append({
-                    'path_tokens': path_tokens,
-                    'path': f"{t0} -- {fee_full} --> {t1}",
-                    'network': p['network'],
+                pools.append({
+                    'id': p['cid'],
+                    'pool_address': pool_addr,
+                    'chain': p['network'],
                     'protocol': p['protocol'],
-                    'count': p['tx_count'],
-                    'volume': vol_usd,
-                    'market_size': 0.0,
-                    'apr': apr_val,
-                    'apr_str': format_apr(apr_val),
-                    'avg_volume': vol_usd / period_days if period_days > 0 else vol_usd,
-                    'pct_volume': pct_vol,
+                    'token0': {'coin_id': p['coin0_id'], 'symbol': t0},
+                    'token1': {'coin_id': p['coin1_id'], 'symbol': t1},
+                    'fee_bps': float(p['fee_bps']) if p['fee_bps'] is not None else None,
+                    'fee_tier': p['fee_display'],
+                    'created_at': created_iso,
+                    'defillama_uuid': defillama_uuid,
+                    'tvl_usd': tvl_usd,
+                    'volume_usd': vol_usd,
+                    'fees_usd': fees_usd,
+                    'tx_count': p['tx_count'],
+                    'apr_percent': round(apr_val * 100, 1),
+                    'links': build_pool_links(pool_addr, p.get('v4_pool_id'), p['protocol'], p['network'], defillama_uuid),
                 })
+
+            # Batch-fetch daily history when requested
+            if include_history and pools:
+                pool_ids = [pool['id'] for pool in pools]
+                try:
+                    with get_conn() as conn:
+                        cur = conn.cursor()
+                        cur.execute("""
+                            SELECT pool_id, date, tvl_usd, volume_usd, tx_count
+                            FROM liquidity_pool_history
+                            WHERE pool_id = ANY(%s) AND date >= %s::date AND date <= %s::date
+                            ORDER BY pool_id, date DESC
+                        """, (pool_ids, start_dt, end_dt))
+                        hist_by_pool = {}
+                        for pid, d, tvl, vol, txc in cur.fetchall():
+                            hist_by_pool.setdefault(pid, []).append({
+                                'date': d.isoformat(),
+                                'tvl_usd': float(tvl) if tvl else None,
+                                'volume_usd': float(vol) if vol else None,
+                                'tx_count': txc or 0,
+                            })
+                        cur.close()
+                    for pool in pools:
+                        pool['history'] = hist_by_pool.get(pool['id'], [])
+                except Exception as e:
+                    print(f"  Error fetching pool history: {e}")
 
             yield json.dumps({"type": "progress", "pct": 100.0, "message": "Complete!"}) + "\n"
             await asyncio.sleep(0.01)
 
             yield json.dumps({"type": "result", "data": {
-                "routes": routes,
-                "total_tx": total_tx,
-                "total_volume": total_volume,
+                "pools": pools,
+                "meta": {
+                    "total_pools": len(pools),
+                    "total_tx": total_tx,
+                    "total_volume_usd": total_volume,
+                    "total_fees_usd": round(total_fees, 2),
+                    "limit": limit,
+                    "offset": offset,
+                },
             }}) + "\n"
 
-        return StreamingResponse(generate(), media_type="application/x-ndjson")
+        if stream:
+            return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+        # Non-streaming: collect the generator result into a single JSON response.
+        full_result = None
+        async for msg in generate():
+            parsed = json.loads(msg)
+            if parsed.get("type") == "result":
+                full_result = parsed["data"]
+                break
+        if full_result is None:
+            full_result = {"pools": [], "meta": {"total_pools": 0, "total_tx": 0, "total_volume_usd": 0, "limit": limit, "offset": offset}}
+        return full_result
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -1451,13 +1634,13 @@ async def lp_summary():
         pool_lookup = {}
         if position_keys:
             cur.execute("""
-                SELECT lpp.position_key, lp.pool_address, lp.id
+                SELECT lpp.position_key, lp.pool_address, lp.id, lp.pool_id
                 FROM liquidity_pool_position lpp
                 JOIN liquidity_pool lp ON lpp.pool_id = lp.id
                 WHERE lpp.position_key = ANY(%s)
             """, (position_keys,))
-            for pk, addr, pid in cur.fetchall():
-                pool_lookup[pk] = {"pool_address": addr, "pool_id": pid}
+            for pk, addr, pid, v4id in cur.fetchall():
+                pool_lookup[pk] = {"pool_address": addr, "pool_id": pid, "v4_pool_id": v4id}
                 
         # 2. Fetch historical snapshots for APR calculation (Last 8 days)
         # We need raw snapshot data to calculate fee growth
@@ -1542,6 +1725,12 @@ async def lp_summary():
                 "pool_id": (pool_lookup.get(key) or {}).get("pool_id") or latest[21],
                 "pool_address": (pool_lookup.get(key) or {}).get("pool_address"),
                 "defillama_uuid": get_defillama_pool_uuid((pool_lookup.get(key) or {}).get("pool_address")),
+                "links": build_pool_links(
+                    (pool_lookup.get(key) or {}).get("pool_address"),
+                    (pool_lookup.get(key) or {}).get("v4_pool_id"),
+                    latest[3], latest[4],
+                    get_defillama_pool_uuid((pool_lookup.get(key) or {}).get("pool_address")),
+                ),
                 # Range data (indices 12-20)
                 "range_data": {
                     "token_id": latest[12],
@@ -1932,73 +2121,12 @@ async def get_pool(identifier: str):
         cur.close()
         conn.close()
 
-        # Build external links.
-        links = {}
-
-        # Uniswap / PancakeSwap link
-        link_addr = v4_pool_id or pool_address or ""
-        if link_addr:
-            proto_lower = protocol.lower()
-            # Determine chain segment.
-            net_seg = "ethereum"
-            if "base" in network.lower():
-                net_seg = "base"
-            elif "arbitrum" in network.lower():
-                net_seg = "arbitrum"
-            elif "optimism" in network.lower():
-                net_seg = "optimism"
-            elif "polygon" in network.lower():
-                net_seg = "polygon"
-            elif "bnb" in network.lower() or "bsc" in network.lower():
-                net_seg = "bnb"
-
-            if "pancake" in proto_lower:
-                pchain = net_seg
-                if "v4" in proto_lower:
-                    if len(link_addr) == 66:
-                        links["pancakeswap"] = f"https://pancakeswap.finance/liquidity/pool/{pchain}/{link_addr}"
-                    else:
-                        links["pancakeswap"] = f"https://pancakeswap.finance/info/infinity/pairs/tokens/{link_addr}?chain={pchain}"
-                else:
-                    links["pancakeswap"] = f"https://pancakeswap.finance/info/v3/pairs/{link_addr}?chain={pchain}"
-            elif "uniswap" in proto_lower or "v3" in proto_lower or "v2" in proto_lower:
-                links["uniswap"] = f"https://app.uniswap.org/explore/pools/{net_seg}/{link_addr}"
-
-            # DexScreener
-            ds_chain = net_seg
-            if ds_chain == "bnb":
-                ds_chain = "bsc"
-            links["dexscreener"] = f"https://dexscreener.com/{ds_chain}/{link_addr.lower()}"
-
-            # Revert Finance
-            revert_net = net_seg
-            if revert_net == "bnb":
-                revert_net = "bsc"
-            if revert_net == "ethereum":
-                revert_net = "mainnet"
-            revert_proto = None
-            if "uniswap" in proto_lower:
-                if "v4" in proto_lower:
-                    revert_proto = "uniswapv4"
-                else:
-                    revert_proto = "uniswapv3"
-            elif "pancake" in proto_lower and "v3" in proto_lower:
-                if revert_net in ("bnb", "arbitrum"):
-                    revert_proto = "pancakeswapv3"
-            elif "aerodrome" in proto_lower:
-                if revert_net == "base":
-                    revert_proto = "aerodrome"
-            if revert_proto:
-                links["revert"] = f"https://revert.finance/#/pool/{revert_net}/{revert_proto}/{link_addr.lower()}"
-
-        # DeFiLlama link
-        if defillama_uuid:
-            links["defillama"] = f"https://defillama.com/yields/pool/{defillama_uuid}"
+        links = build_pool_links(pool_address, v4_pool_id, protocol, network, defillama_uuid)
 
         return {
             "id": pool_id,
-            "pool_address": pool_address or "",
-            "pool_id": v4_pool_id or "",
+            "pool_address": pool_address or v4_pool_id or "",
+            "pool_id": v4_pool_id or pool_address or "",
             "canonical_address": canonical_address or "",
             "chain": network,
             "protocol": protocol,
@@ -2294,15 +2422,18 @@ async def get_coins():
 
 
 @app.get("/api/pools", tags=["Liquidity Pools"])
-async def list_pools():
-    """List all available liquidity pools with latest stats."""
+async def list_pools(
+    limit: int = Query(50, ge=1, le=500, description="Max rows to return"),
+    offset: int = Query(0, ge=0, description="Number of rows to skip"),
+):
+    """List liquidity pools with latest stats, ordered by TVL descending."""
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
                 query = """
                 SELECT
                     p.id, ch.name AS network, pr.name AS protocol, p.pool_name,
-                    CASE WHEN p.fee_bps IS NULL THEN 'Dynamic' ELSE (p.fee_bps / 100.0)::text || '%' END AS fee_tier,
+                    CASE WHEN p.fee_bps IS NULL THEN 'Dynamic' ELSE (p.fee_bps / 100.0)::text || '%%' END AS fee_tier,
                     p.pool_address,
                     h.tvl_usd, h.volume_usd, h.tx_count, c0.symbol, c1.symbol
                 FROM liquidity_pool p
@@ -2315,10 +2446,11 @@ async def list_pools():
                     FROM liquidity_pool_history
                     ORDER BY pool_id, date DESC
                 ) h ON p.id = h.pool_id
-                WHERE p.reverted = FALSE OR pr.name IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4') -- Show all V3/V4 pools even if reverted, to avoid gaps
+                WHERE p.reverted = FALSE OR pr.name IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4')
                 ORDER BY h.tvl_usd DESC NULLS LAST
+                LIMIT %s OFFSET %s
                 """
-                cur.execute(query)
+                cur.execute(query, (limit, offset))
                 rows = cur.fetchall()
                 
                 pools = []
@@ -2902,12 +3034,15 @@ async def sps_find(
                 apr_val = enriched['apr']
                 tvl_val = enriched['tvl']
                 apr_str = format_apr(apr_val)
+                defillama_uuid = get_defillama_pool_uuid(pool_addr)
+                pool_protocol = fee_parts[1].strip() if len(fee_parts) >= 2 else "Uniswap V3"
                 pool_stats[f"{t0}-{t1}-{fee}"] = {
                     'apr': apr_val if apr_val is not None else 0.0,
                     'apr_str': apr_str,
                     'pool_address': pool_addr,
                     'tvl': tvl_val,
-                    'defillama_uuid': get_defillama_pool_uuid(pool_addr)
+                    'defillama_uuid': defillama_uuid,
+                    'links': build_pool_links(pool_addr, None, pool_protocol, pool_network, defillama_uuid),
                 }
 
         return {
@@ -2940,11 +3075,11 @@ async def read_index():
 async def read_routing():
     return FileResponse(os.path.join(STATIC_DIR, 'routing.html'))
 
-_health_data_cache = {"data": None, "timestamp": 0}
+_health_data_cache: Dict[int, tuple] = {}  # lookback_days -> (data, timestamp)
 _health_data_lock = threading.Lock()
 _HEALTH_DATA_TTL = 120  # seconds — health data changes slowly (per ingestion run)
 
-def build_all_tables_health():
+def build_all_tables_health(lookback_days: int = 7):
     """Build the table-freshness report. Cached for _HEALTH_DATA_TTL seconds.
 
     Thread-safety: a non-blocking lock ensures only ONE caller runs the (slow)
@@ -2957,8 +3092,10 @@ def build_all_tables_health():
     from datetime import datetime, timezone, timedelta
 
     now_ts = time.time()
-    cached = _health_data_cache["data"]
-    if cached is not None and (now_ts - _health_data_cache["timestamp"]) < _HEALTH_DATA_TTL:
+    cache_entry = _health_data_cache.get(lookback_days)
+    cached = cache_entry[0] if cache_entry else None
+    cached_ts = cache_entry[1] if cache_entry else 0
+    if cached is not None and (now_ts - cached_ts) < _HEALTH_DATA_TTL:
         return cached
 
     # Block (up to 60s) waiting for an in-progress builder rather than piling
@@ -2974,8 +3111,10 @@ def build_all_tables_health():
     try:
         # Double-check after acquiring — another builder may have just
         # finished and refreshed the cache while we waited.
-        cached = _health_data_cache["data"]
-        if cached is not None and (time.time() - _health_data_cache["timestamp"]) < _HEALTH_DATA_TTL:
+        cache_entry = _health_data_cache.get(lookback_days)
+        cached = cache_entry[0] if cache_entry else None
+        cached_ts = cache_entry[1] if cache_entry else 0
+        if cached is not None and (time.time() - cached_ts) < _HEALTH_DATA_TTL:
             _health_data_lock.release()
             return cached
     except Exception:
@@ -2991,75 +3130,109 @@ def build_all_tables_health():
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB, connect_timeout=10)
         cur = conn.cursor()
-        cur.execute("SET LOCAL statement_timeout = '60s'")
+        cur.execute("SET LOCAL statement_timeout = '600s'")
 
-        # 1. swaps
+        # 1. swaps (from liquidity_pool_history — 28MB vs 19GB swaps partition)
         volume_thresholds = [0, 1000, 100000, 10000000]
-        swap_matrix_filters = {}
 
+        # Single scan of history: get per-chain/protocol cnt/min/max for each volume threshold
+        filter_cols = []
         for min_vol in volume_thresholds:
-            cur.execute("""
-                SELECT ch.name, pr.name, MIN(s.ts), MAX(s.ts), COUNT(*)
-                FROM swaps s
-                JOIN liquidity_pool lp ON s.pool_id = lp.id
-                JOIN chain ch ON lp.chain_id = ch.id
-                JOIN protocol pr ON lp.protocol_id = pr.id
-                LEFT JOIN (
-                    SELECT pool_id, SUM(CASE WHEN date >= CURRENT_DATE - INTERVAL '7 days' THEN volume_usd ELSE 0 END) as vol_7d
-                    FROM liquidity_pool_history
-                    GROUP BY pool_id
-                ) lp_stats ON lp.id = lp_stats.pool_id
-                WHERE (%s = 0 OR COALESCE(lp_stats.vol_7d, 0) >= %s)
-                GROUP BY ch.name, pr.name
-                ORDER BY ch.name, pr.name
-            """, (min_vol, min_vol))
-            
+            vol_filter = "" if min_vol == 0 else f"AND v.vol_7d >= {min_vol}"
+            filter_cols.append(f"""
+                COALESCE(SUM(lph.tx_count) FILTER (WHERE 1=1 {vol_filter}), 0) as cnt_{min_vol},
+                MIN(lph.date) FILTER (WHERE 1=1 {vol_filter}) as min_date_{min_vol},
+                MAX(lph.date) FILTER (WHERE 1=1 {vol_filter}) as max_date_{min_vol}
+            """)
+        filter_sql = ','.join(filter_cols)
+
+        cur.execute(f"""
+            SELECT ch.name, pr.name,
+                   {filter_sql}
+            FROM liquidity_pool_history lph
+            JOIN liquidity_pool lp ON lph.pool_id = lp.id
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            LEFT JOIN (
+                SELECT pool_id, COALESCE(SUM(volume_usd), 0) as vol_7d
+                FROM liquidity_pool_history
+                WHERE date >= CURRENT_DATE - INTERVAL '7 days' AND date < CURRENT_DATE
+                GROUP BY pool_id
+            ) v ON lp.id = v.pool_id
+            WHERE lph.date >= CURRENT_DATE - INTERVAL '7 days'
+              AND lph.date < CURRENT_DATE
+            GROUP BY ch.name, pr.name
+            ORDER BY ch.name, pr.name
+        """)
+
+        lph_rows = cur.fetchall()
+
+        # Also get overall earliest swap data and total estimate
+        cur.execute("SELECT MIN(date), MAX(date) FROM liquidity_pool_history")
+        lph_earliest, lph_latest = cur.fetchone()
+        cur.execute("SELECT SUM(reltuples)::bigint FROM pg_class WHERE relname LIKE 'swaps_%' AND relkind = 'r'")
+        swaps_total_estimate = cur.fetchone()[0] or 0
+
+        swap_matrix_filters = {}
+        for i, min_vol in enumerate(volume_thresholds):
             swap_chains = {}
             total_swaps = 0
             any_swap_stale = False
+            swaps_daily_pass = True
 
-            for chain, protocol, earliest, latest, count in cur.fetchall():
-                ft = latest if latest.tzinfo else latest.replace(tzinfo=timezone.utc)
-                stale = ft < now - timedelta(hours=3)
-                if stale:
-                    if min_vol == 0:
-                        overall_degraded = True
-                    any_swap_stale = True
+            # Each threshold: 3 cols at positions 2 + i*3 in the row
+            col_offset = 2 + i * 3
+
+            for row in lph_rows:
+                chain = row[0]
+                protocol = row[1]
+                count = row[col_offset] or 0
+                earliest = row[col_offset + 1]
+                latest = row[col_offset + 2]
 
                 if chain not in swap_chains:
                     swap_chains[chain] = {"status": "fresh", "protocols": {}}
+
+                stale = False
+                if latest:
+                    ft = datetime(latest.year, latest.month, latest.day, tzinfo=timezone.utc)
+                    stale = ft < now - timedelta(hours=3)
+                    if stale and min_vol == 0:
+                        overall_degraded = True
+                    any_swap_stale = stale or any_swap_stale
+                    if ft < now - timedelta(days=2):
+                        swaps_daily_pass = False
+                else:
+                    stale = True
+
                 if stale:
                     swap_chains[chain]["status"] = "stale"
 
-                proto_3h_pass = not stale
-                proto_daily_pass = ft >= now - timedelta(days=2) if latest else False
-
                 swap_chains[chain]["protocols"][protocol] = {
-                    "count": count,
+                    "count": int(count),
                     "earliest": earliest.isoformat() if earliest else None,
                     "latest": latest.isoformat() if latest else None,
                     "checks": {
-                        "has_data_every_day": "pass" if proto_daily_pass else "fail",
-                        "is_fresher_than_3_hours": "pass" if proto_3h_pass else "fail"
+                        "has_data_every_day": "pass" if latest and ft >= now - timedelta(days=2) else "fail",
+                        "is_fresher_than_3_hours": "pass" if not stale else "fail"
                     }
                 }
-                total_swaps += count
-
-            swaps_3h_pass = not any_swap_stale
-            swaps_daily_pass = True
+                total_swaps += int(count)
 
             swap_matrix_filters[str(min_vol)] = {
-                "freshness_requirement": "Latest swap timestamp for each protocol on a chain must be within the last 3 hours",
+                "freshness_requirement": "Latest pool history date for each protocol on a chain must be within the last 3 hours",
                 "count": total_swaps,
                 "chains": swap_chains,
                 "checks": {
                     "has_data_every_day": "pass" if swaps_daily_pass else "fail",
-                    "is_fresher_than_3_hours": "pass" if swaps_3h_pass else "fail"
+                    "is_fresher_than_3_hours": "pass" if not any_swap_stale else "fail"
                 }
             }
 
         data_dict["swaps"] = {k: v for k, v in swap_matrix_filters["0"].items()}
         data_dict["swaps"]["volume_filters"] = {k: {x: y for x, y in v.items()} for k, v in swap_matrix_filters.items()}
+        data_dict["swaps"]["earliest_all_time"] = lph_earliest.isoformat() if lph_earliest else None
+        data_dict["swaps"]["total_estimate"] = swaps_total_estimate
 
         # 2. coin
         cur.execute("SELECT COUNT(*) FROM coin")
@@ -3284,6 +3457,9 @@ def build_all_tables_health():
         }
 
         # 9. liquidity_pool_history
+        cur.execute("SELECT COUNT(*) FROM liquidity_pool")
+        total_pools = cur.fetchone()[0]
+
         cur.execute("""
             SELECT 
                 COUNT(DISTINCT pool_id),
@@ -3323,6 +3499,121 @@ def build_all_tables_health():
                 "is_fresher_than_2_days": "fail" if lph_stale else "pass"
             }
         }
+
+        # Per-chain/protocol pool-level passing metric for liquidity_pool_history matrix
+        # A pool passes if it has TVL > 0 for every day in the lookback window.
+        # Dormant pools (0 tx, 0 vol) with healthy TVL are considered passing.
+        lookback_interval = f'{lookback_days} days'
+        cur.execute("""
+            SELECT ch.name, pr.name,
+                   COUNT(lp.id) as total_pools,
+                   COUNT(*) FILTER (WHERE sub.valid_days >= %s) as passing_pools,
+                   MIN(sub.earliest_valid) as earliest_valid,
+                   MAX(sub.latest_valid) as latest_valid
+            FROM liquidity_pool lp
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            LEFT JOIN (
+                SELECT lph.pool_id,
+                       COUNT(*) FILTER (WHERE lph.tvl_usd > 0) as valid_days,
+                       MIN(lph.date) FILTER (WHERE lph.tvl_usd > 0) as earliest_valid,
+                       MAX(lph.date) FILTER (WHERE lph.tvl_usd > 0) as latest_valid
+                FROM liquidity_pool_history lph
+                WHERE lph.date >= CURRENT_DATE - %s::interval
+                  AND lph.date < CURRENT_DATE
+                GROUP BY lph.pool_id
+            ) sub ON lp.id = sub.pool_id
+            GROUP BY ch.name, pr.name
+            ORDER BY ch.name, pr.name
+        """, (lookback_days, lookback_interval))
+
+        lph_chains = {}
+        for chain, protocol, total_pools, passing_pools, earliest, latest in cur.fetchall():
+            if chain not in lph_chains:
+                lph_chains[chain] = {"protocols": {}}
+
+            is_fresh = False
+            if latest:
+                if isinstance(latest, datetime):
+                    ft = latest if latest.tzinfo else latest.replace(tzinfo=timezone.utc)
+                    is_fresh = ft >= now - timedelta(days=2)
+                else:
+                    is_fresh = latest >= (now.date() - timedelta(days=2))
+
+            passing_pct = round(passing_pools / total_pools * 100, 1) if total_pools > 0 else 0.0
+
+            lph_chains[chain]["protocols"][protocol] = {
+                "total_pools": total_pools,
+                "passing_pools": passing_pools,
+                "passing_pct": passing_pct,
+                "lookback_days": lookback_days,
+                "earliest": earliest.isoformat() if earliest else None,
+                "latest": latest.isoformat() if latest else None,
+                "checks": {
+                    "is_fresher_than_2_days": "pass" if is_fresh else "fail"
+                }
+            }
+
+        data_dict["liquidity_pool_history"]["lookback_days"] = lookback_days
+        data_dict["liquidity_pool_history"]["chains"] = lph_chains
+
+        # Per-volume-threshold passing metrics for liquidity_pool_history
+        lph_volume_filters = {}
+        for min_vol in volume_thresholds:
+            cur.execute("""
+                SELECT ch.name, pr.name,
+                       COUNT(lp.id) as total_pools,
+                       COUNT(*) FILTER (WHERE sub.valid_days >= %s) as passing_pools,
+                       MIN(sub.earliest_valid) as earliest,
+                       MAX(sub.latest_valid) as latest
+                FROM liquidity_pool lp
+                JOIN chain ch ON lp.chain_id = ch.id
+                JOIN protocol pr ON lp.protocol_id = pr.id
+                LEFT JOIN (
+                    SELECT lph.pool_id,
+                           COUNT(*) FILTER (WHERE lph.tvl_usd > 0) as valid_days,
+                           MIN(lph.date) FILTER (WHERE lph.tvl_usd > 0) as earliest_valid,
+                           MAX(lph.date) FILTER (WHERE lph.tvl_usd > 0) as latest_valid,
+                            SUM(CASE WHEN date >= CURRENT_DATE - %s::interval THEN volume_usd ELSE 0 END) as vol_window
+                    FROM liquidity_pool_history lph
+                    WHERE lph.date >= CURRENT_DATE - %s::interval
+                      AND lph.date < CURRENT_DATE
+                    GROUP BY lph.pool_id
+                ) sub ON lp.id = sub.pool_id
+                WHERE (%s = 0 OR COALESCE(sub.vol_window, 0) >= %s)
+                GROUP BY ch.name, pr.name
+                ORDER BY ch.name, pr.name
+            """, (lookback_days, lookback_interval, lookback_interval, min_vol, min_vol))
+
+            lph_threshold_chains = {}
+            tot_pools = 0
+            tot_passing = 0
+            for chain, protocol, total_pools, passing_pools, earliest, latest in cur.fetchall():
+                if chain not in lph_threshold_chains:
+                    lph_threshold_chains[chain] = {"protocols": {}}
+
+                passing_pct = round(passing_pools / total_pools * 100, 1) if total_pools > 0 else 0.0
+
+                lph_threshold_chains[chain]["protocols"][protocol] = {
+                    "total_pools": total_pools,
+                    "passing_pools": passing_pools,
+                    "passing_pct": passing_pct,
+                    "earliest": earliest.isoformat() if earliest else None,
+                    "latest": latest.isoformat() if latest else None,
+                }
+                tot_pools += total_pools
+                tot_passing += passing_pools
+
+            lph_volume_filters[str(min_vol)] = {
+                "chains": lph_threshold_chains,
+                "count": tot_pools,
+                "covered_pools": {
+                    "count": tot_passing,
+                    "percentage": round(tot_passing / tot_pools * 100, 2) if tot_pools > 0 else 0,
+                }
+            }
+
+        data_dict["liquidity_pool_history"]["volume_filters"] = lph_volume_filters
 
         # 10. liquidity_pool_position
         cur.execute("SELECT COUNT(*) FROM liquidity_pool_position")
@@ -3393,8 +3684,8 @@ def build_all_tables_health():
         data_dict["error"] = str(e)
 
     res_tuple = (overall_degraded, data_dict)
-    _health_data_cache["data"] = res_tuple
-    _health_data_cache["timestamp"] = time.time()
+    _health_data_cache[lookback_days] = (res_tuple, time.time())
+
     if acquired:
         _health_data_lock.release()
     return res_tuple
@@ -3447,10 +3738,12 @@ def navigate_health_data(data_obj, path_str: str):
 
 
 @app.get("/health", tags=["System"])
-async def health_check():
-    """Detailed health and data freshness report for database and all 12 tables."""
+async def health_check(lph_lookback: int = Query(7, ge=1, le=365)):
+    """Detailed health and data freshness report for database and all 12 tables.
+    - lph_lookback: number of days to check for complete pool history coverage (default 7)
+    """
     from datetime import datetime, timezone
-    overall_degraded, data = await asyncio.to_thread(build_all_tables_health)
+    overall_degraded, data = await asyncio.to_thread(build_all_tables_health, lph_lookback)
     response_data = {k: v for k, v in data.items() if k != "coins"}
 
     db_status = {

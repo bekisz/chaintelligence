@@ -1570,6 +1570,102 @@ footer {
     flex-shrink: 0;
 }
 
+/* Block Explorer link */
+.explorer-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(98, 126, 234, 0.14);
+    color: #627eea;
+    border: 1px solid rgba(98, 126, 234, 0.25);
+    border-radius: 4px;
+    padding: 2.5px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    line-height: 0;
+}
+
+.explorer-link:hover {
+    background: #627eea;
+    color: #ffffff;
+    transform: scale(1.15);
+    border-color: #627eea;
+    box-shadow: 0 0 10px rgba(98, 126, 234, 0.6);
+}
+
+.explorer-icon {
+    display: block;
+    width: 13px;
+    height: 13px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* GeckoTerminal link */
+.geckoterminal-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(74, 222, 128, 0.14);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.25);
+    border-radius: 4px;
+    padding: 2.5px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    line-height: 0;
+}
+
+.geckoterminal-link:hover {
+    background: #4ade80;
+    color: #000000;
+    transform: scale(1.15);
+    border-color: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+}
+
+.geckoterminal-icon {
+    display: block;
+    width: 13px;
+    height: 13px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Defined.fi link */
+.defined-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(244, 63, 94, 0.14);
+    color: #f43f5e;
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    border-radius: 4px;
+    padding: 2.5px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    line-height: 0;
+}
+
+.defined-link:hover {
+    background: #f43f5e;
+    color: #ffffff;
+    transform: scale(1.15);
+    border-color: #f43f5e;
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.6);
+}
+
+.defined-icon {
+    display: block;
+    width: 13px;
+    height: 13px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
 /* Protocol-specific arrow colours — set on the arrow container */
 .route-hop.v3 .route-hop-arrow,
 .route-hop.uniswap-v3 .route-hop-arrow {
@@ -2711,8 +2807,17 @@ input:focus+.slider {
 .hide-lp-defillama .defillama-link {
     display: none !important;
 }
+.hide-lp-explorer .explorer-link {
+    display: none !important;
+}
+.hide-lp-geckoterminal .geckoterminal-link {
+    display: none !important;
+}
+.hide-lp-defined .defined-link {
+    display: none !important;
+}
 /* Collapse the links pane entirely when all of its children are hidden */
-.hide-lp-dex.hide-lp-revert.hide-lp-dexscreener.hide-lp-defillama .links-pane {
+.hide-lp-dex.hide-lp-revert.hide-lp-dexscreener.hide-lp-defillama.hide-lp-explorer.hide-lp-geckoterminal.hide-lp-defined .links-pane {
     display: none !important;
 }
 
