@@ -792,3 +792,45 @@ contracts:
     chain: arbitrum
     address: "0xA8B08006E88a10738a9D69DF5F9d6aD13E678d46"
     decimals: 18
+
+  - symbol: PTsUSDe
+    name: Pendle PT sUSDe
+    slug: pendle-pt-susde
+    chain: ethereum
+    address: "0x9b0499648fe627341e309fb13ebf6ce1301c2cb1"
+    decimals: 18
+
+  - symbol: PTUSDe
+    name: Pendle PT USDe
+    slug: pendle-pt-usde
+    chain: ethereum
+    address: "0xb13e9a7e6b0a68dd92cc632357388e6378e9b6bf"
+    decimals: 18
+
+  - symbol: PTUSDC
+    name: Pendle PT USDC
+    slug: pendle-pt-usdc
+    chain: ethereum
+    address: "0x0e24177d6ee037e42d72a9e06f04808b70a10099"
+    decimals: 6
+
+  - symbol: PTeETH
+    name: Pendle PT eETH
+    slug: pendle-pt-eeth
+    chain: ethereum
+    address: "0xd468641a293630f74e32d645638c4b1257d07c01"
+    decimals: 18
+
+  - symbol: PTezETH
+    name: Pendle PT ezETH
+    slug: pendle-pt-ezeth
+    chain: ethereum
+    address: "0x13d64c1cf647313333333333333333333333333"
+    decimals: 18
+
+  - symbol: PTwstE
+    name: Pendle PT wstETH
+    slug: pendle-pt-wsteth
+    chain: ethereum
+    address: "0xc1C2b67f13d80E42C04e844Dcf60e7E3F1c7C22e"
+    decimals: 18
