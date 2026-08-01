@@ -1039,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const updateColumnVisibility = () => {
-        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"], #lp-options-dropdown input[type="checkbox"]');
         // Scope LP-element toggles to the routes body so they survive re-renders
         const lpScope = routesBody;
         checkboxes.forEach(cb => {
@@ -1086,13 +1086,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // LP Options UI controls
+    const lpBtn = document.getElementById('lp-options-btn');
+    const lpDropdown = document.getElementById('lp-options-dropdown');
     // Column selector UI controls
     const colBtn = document.getElementById('column-selector-btn');
     const colDropdown = document.getElementById('column-selector-dropdown');
 
+    if (lpBtn && lpDropdown) {
+        lpBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (colDropdown) colDropdown.classList.add('hidden');
+            lpDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!lpDropdown.contains(e.target) && e.target !== lpBtn) {
+                lpDropdown.classList.add('hidden');
+            }
+        });
+
+        lpDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                updateColumnVisibility();
+            });
+        });
+    }
+
     if (colBtn && colDropdown) {
         colBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (lpDropdown) lpDropdown.classList.add('hidden');
             colDropdown.classList.toggle('hidden');
         });
 
