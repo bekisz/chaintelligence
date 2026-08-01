@@ -67,7 +67,7 @@ def run_global_volume_rollup(days_back: int = 14) -> int:
         s.pool_id AS pool_id,
         DATE(s.ts) AS date,
         COUNT(*) AS tx_count,
-        SUM(s.amount_usd) AS volume_usd
+        SUM(ABS(s.amount_usd)) AS volume_usd
     FROM swaps s
     WHERE s.amount_usd IS NOT NULL
       AND s.ts >= CURRENT_DATE - (INTERVAL '1 day' * %s)
