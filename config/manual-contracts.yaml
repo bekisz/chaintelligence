@@ -960,3 +960,31 @@ contracts:
     chain: bnb
     address: "0x57A5297F2CB2c0AaC9D554660cad6da368bd5010"
     decimals: 8
+
+  - symbol: sypUSDC
+    name: Syrup USDC
+    slug: syrup-usdc
+    chain: ethereum
+    address: "0x8a927a4d5e75525547636e0932c0d860d5b78b54"
+    decimals: 6
+
+  - symbol: sypUSDT
+    name: Syrup USDT
+    slug: syrup-usdt
+    chain: ethereum
+    address: "0x0f2C558F485Bcf3526c82d499FfAEdc2A6C4b03C"
+    decimals: 6
+
+  - symbol: MPL
+    name: Maple Token
+    slug: maple-token
+    chain: ethereum
+    address: "0x33349B282065b0284d756F0577FB39c158F935e6"
+    decimals: 18
+
+  - symbol: SYRUP
+    name: Syrup Token
+    slug: syrup-token
+    chain: ethereum
+    address: "0x643C4E15d7d62Ad0aBeC4a9DA4Bf225776691037"
+    decimals: 18

@@ -174,6 +174,8 @@ coin-families:
       - vDAI
       - vBUSD
       - vTUSD
+      - sypUSDC
+      - sypUSDT
       - DOLA
     regexp-rule: ".*USD.*"
 

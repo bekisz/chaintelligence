@@ -173,6 +173,8 @@ coin-families:
       - vDAI
       - vBUSD
       - vTUSD
+      - sypUSDC
+      - sypUSDT
       - DOLA
       - USDT0
     regexp-rule: ".*USD.*"
