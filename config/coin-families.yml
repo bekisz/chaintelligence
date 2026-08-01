@@ -76,6 +76,8 @@ coin-families:
       - vBETH
       - weETH
       - EETH
+      - apxETH
+      - pufETH
       - USDT0
   - name: USD
     correlated: true
@@ -177,6 +179,9 @@ coin-families:
       - sypUSDC
       - sypUSDT
       - DOLA
+      - USD0++
+      - deUSD
+      - sdeUSD
     regexp-rule: ".*USD.*"
 
   - name: EUR
@@ -219,6 +224,8 @@ coin-families:
       - fcbBTC
       - cWBTC
       - vBTC
+      - solvBTC
+      - solvBTC.BBN
   - name: GOLD
     correlated: true
     coin-list:

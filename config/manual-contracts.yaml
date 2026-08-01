@@ -988,3 +988,59 @@ contracts:
     chain: ethereum
     address: "0x643C4E15d7d62Ad0aBeC4a9DA4Bf225776691037"
     decimals: 18
+
+  - symbol: USD0++
+    name: Usual Liquid Yield USD
+    slug: usual-liquid-yield-usd
+    chain: ethereum
+    address: "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0"
+    decimals: 18
+
+  - symbol: syrupUSDC
+    name: Syrup USDC
+    slug: syrup-usdc
+    chain: ethereum
+    address: "0x85780a405bc1167b0d06856519e868a773ff1f35"
+    decimals: 6
+
+  - symbol: deUSD
+    name: Elixir Decentralized USD
+    slug: elixir-deusd
+    chain: ethereum
+    address: "0x151D833446059c38F6bA3d4bcfB45B3f26E7b308"
+    decimals: 18
+
+  - symbol: sdeUSD
+    name: Elixir Staked Decentralized USD
+    slug: elixir-staked-deusd
+    chain: ethereum
+    address: "0x6f4520A453d8C2652B0959E7A31c26fA2906eF38"
+    decimals: 18
+
+  - symbol: apxETH
+    name: Auto-PxETH
+    slug: auto-pxeth
+    chain: ethereum
+    address: "0x9Ba00D6856a4eDF46a5B3c08170994f293DE3871"
+    decimals: 18
+
+  - symbol: pufETH
+    name: Puffer ETH
+    slug: puffer-eth
+    chain: ethereum
+    address: "0xD9A442856C234a39a81a089C06451EBAa43D6a7D"
+    decimals: 18
+
+  - symbol: solvBTC
+    name: Solv BTC
+    slug: solv-btc
+    chain: ethereum
+    address: "0xCC96675eF06c4058b329830025d1536719A55c13"
+    decimals: 18
+
+  - symbol: solvBTC.BBN
+    name: Solv BTC Babylon
+    slug: solv-btc-babylon
+    chain: ethereum
+    address: "0xCC96675eF06c4058b329830025d1536719A55c13"
+    decimals: 18
