@@ -302,3 +302,87 @@ contracts:
     chain: base
     address: "0x0b8a1c62187b8d4f09d8d6f140df03531b67b140"
     decimals: 8
+
+  - symbol: maUSDC
+    name: B.Protocol MetaMorpho USDC
+    slug: b-protocol-metamorpho-usdc
+    chain: ethereum
+    address: "0xb8a2f8d070b4ec2b8ef42bc02e6c51fa80c85c27"
+    decimals: 6
+
+  - symbol: mweETH
+    name: Gauntlet Ethereum weETH Vault
+    slug: gauntlet-ethereum-weeth-vault
+    chain: ethereum
+    address: "0xbe694c7b8e5c1d6835a6435645638c4b1257d07c"
+    decimals: 18
+
+  - symbol: mezETH
+    name: Renzo Ethereum ezETH Vault
+    slug: renzo-ethereum-ezeth-vault
+    chain: ethereum
+    address: "0x1d4a822008099f34514b5e0b925ed163218f6680"
+    decimals: 18
+
+  - symbol: mtBTC
+    name: Threshold Ethereum tBTC Vault
+    slug: threshold-ethereum-tbtc-vault
+    chain: ethereum
+    address: "0x8798c4d96a757270e59a68e06385a4a49e913a48"
+    decimals: 18
+
+  - symbol: mBasUSDT
+    name: Gauntlet Base USDT Vault
+    slug: gauntlet-base-usdt-vault
+    chain: base
+    address: "0x48589ec936d5258e72c842b03657731766a5a92a"
+    decimals: 6
+
+  - symbol: mBasEURC
+    name: Base MetaMorpho EURC Vault
+    slug: base-metamorpho-eurc-vault
+    chain: base
+    address: "0x60a3e35cc927b5e4070a7b4699f8eb738f654b9d"
+    decimals: 6
+
+  - symbol: mBasweE
+    name: Moonwell Base weETH Vault
+    slug: moonwell-base-weeth-vault
+    chain: base
+    address: "0x7a6ae64c9bc6551b94b0ebf49e0c6563e46c75df"
+    decimals: 18
+
+  - symbol: mArbUSDC
+    name: Gauntlet Arbitrum USDC Vault
+    slug: gauntlet-arbitrum-usdc-vault
+    chain: arbitrum
+    address: "0x4465d6cce45b233a75877f0a1c1d439ec42b8744"
+    decimals: 6
+
+  - symbol: mArbUSDT
+    name: Gauntlet Arbitrum USDT Vault
+    slug: gauntlet-arbitrum-usdt-vault
+    chain: arbitrum
+    address: "0x19280d0d8fe183f5e04313f8901df6080e7293b6"
+    decimals: 6
+
+  - symbol: mArbWETH
+    name: Gauntlet Arbitrum WETH Vault
+    slug: gauntlet-arbitrum-weth-vault
+    chain: arbitrum
+    address: "0x513c7e3a9c69ca33692ad6e8b0c24b11e9b1fcdf"
+    decimals: 18
+
+  - symbol: mArbwstE
+    name: Arbitrum MetaMorpho wstETH Vault
+    slug: arbitrum-metamorpho-wsteth-vault
+    chain: arbitrum
+    address: "0x9bf86411d96ac24a98ddc4f42b36e8df81c81729"
+    decimals: 18
+
+  - symbol: mArbWBTC
+    name: Arbitrum MetaMorpho WBTC Vault
+    slug: arbitrum-metamorpho-wbtc-vault
+    chain: arbitrum
+    address: "0x078f358208685046a11c85e8ad32895ded93a909"
+    decimals: 8

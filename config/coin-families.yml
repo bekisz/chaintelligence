@@ -45,6 +45,11 @@ coin-families:
       - mwstETH
       - mBasWETH
       - mBascbE
+      - mweETH
+      - mezETH
+      - mBasweE
+      - mArbWETH
+      - mArbwstE
       - weETH
       - EETH
       - sFRXETH
@@ -104,6 +109,10 @@ coin-families:
       - mUSDe
       - msUSDe
       - mBasUSDC
+      - maUSDC
+      - mBasUSDT
+      - mArbUSDC
+      - mArbUSDT
       - DOLA
     regexp-rule: ".*USD.*"
 
@@ -122,6 +131,7 @@ coin-families:
       - EUROP
       - WERC
       - REUR
+      - mBasEURC
   - name: BTC
     correlated: true
     coin-list:
@@ -137,6 +147,8 @@ coin-families:
       - aArbWBTC
       - mWBTC
       - mBascbBT
+      - mtBTC
+      - mArbWBTC
   - name: GOLD
     correlated: true
     coin-list:
