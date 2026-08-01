@@ -711,7 +711,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const updateColumnVisibility = () => {
-        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"], #lp-options-dropdown input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"], #lp-options-dropdown input[type="checkbox"], #table-columns-dropdown input[type="checkbox"]');
         checkboxes.forEach(cb => {
             const isVisible = cb.checked;
 
