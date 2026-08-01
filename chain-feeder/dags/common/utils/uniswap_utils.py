@@ -1,5 +1,6 @@
 import requests
 import time
+import logging
 import psycopg2
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
@@ -481,7 +482,7 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
                     if attempt < MAX_RETRIES - 1:
                         time.sleep(2 ** attempt)
                         continue
-                    logging.warning(f"⚠️ {err_msg} - skipping failed subgraph batch")
+                    self._log(f"⚠️ {err_msg} - skipping failed subgraph batch")
                     return None
                 return data
             except Exception as e:
@@ -489,7 +490,7 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
                 else:
-                    logging.warning(f"⚠️ Max retries reached for {self.network} {self.protocol} V4 query: {e} - skipping batch")
+                    self._log(f"⚠️ Max retries reached for {self.network} {self.protocol} V4 query: {e} - skipping batch")
                     return None
         return None
 
