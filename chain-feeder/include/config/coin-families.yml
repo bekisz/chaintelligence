@@ -155,6 +155,10 @@ coin-families:
       - spUSDC
       - spUSDT
       - spGHO
+      - USDY
+      - OUSG
+      - rOUSG
+      - USDYArb
       - DOLA
       - USDT0
     regexp-rule: ".*USD.*"

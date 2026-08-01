@@ -764,3 +764,31 @@ contracts:
     chain: ethereum
     address: "0x4c9edd5852cd905f086c759e8383e09bff1e68b3"
     decimals: 18
+
+  - symbol: USDY
+    name: Ondo US Dollar Yield
+    slug: ondo-us-dollar-yield
+    chain: ethereum
+    address: "0x96F6747fd57724E4B7E87771d71999818bD3a964"
+    decimals: 18
+
+  - symbol: OUSG
+    name: Ondo Short-Term US Gov Bond Fund
+    slug: ondo-short-term-us-gov-bond-fund
+    chain: ethereum
+    address: "0x1B19C19393e2d034D8Ff31ff34c81252FcBbee92"
+    decimals: 18
+
+  - symbol: rOUSG
+    name: Ondo Rebasing OUSG
+    slug: ondo-rebasing-ousg
+    chain: ethereum
+    address: "0xae1069ed0842fe42e47265a7e6b0a68dd92cc632"
+    decimals: 18
+
+  - symbol: USDYArb
+    name: Ondo US Dollar Yield Arbitrum
+    slug: ondo-us-dollar-yield-arbitrum
+    chain: arbitrum
+    address: "0xA8B08006E88a10738a9D69DF5F9d6aD13E678d46"
+    decimals: 18
