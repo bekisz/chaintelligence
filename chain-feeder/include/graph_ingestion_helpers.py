@@ -154,13 +154,26 @@ def ingest_pools_data(conn, positions: list):
             if chain_id is None or protocol_id is None:
                 continue
 
+            p_addr = (p.get('pool_address') or '').lower()
+            if p_addr:
+                cur.execute("SELECT id FROM liquidity_pool WHERE LOWER(pool_address) = %s", (p_addr,))
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute("""
+                        UPDATE liquidity_pool
+                        SET reverted = %s,
+                            fee_bps = COALESCE(%s, fee_bps)
+                        WHERE id = %s
+                    """, (rev, fee_bps, existing[0]))
+                    continue
+
             cur.execute("""
                 INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, reverted)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
                 SET pool_address = COALESCE(NULLIF(EXCLUDED.pool_address, ''), liquidity_pool.pool_address),
                     reverted = EXCLUDED.reverted
-            """, (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, p['pool_address'], rev))
+            """, (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, p.get('pool_address'), rev))
     conn.commit()
 
 def ingest_pool_stats(conn, positions: list):

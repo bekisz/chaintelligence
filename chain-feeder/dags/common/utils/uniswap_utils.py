@@ -478,14 +478,19 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
                 if 'errors' in data:
                     err_msg = f"GraphQL returned errors for {self.network} {self.protocol} V4: {data['errors']}"
                     self._log(err_msg)
-                    raise RuntimeError(err_msg)
+                    if attempt < MAX_RETRIES - 1:
+                        time.sleep(2 ** attempt)
+                        continue
+                    logging.warning(f"⚠️ {err_msg} - skipping failed subgraph batch")
+                    return None
                 return data
             except Exception as e:
                 self._log(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
                 else:
-                    raise RuntimeError(f"Max retries reached for {self.network} {self.protocol} V4 query: {e}") from e
+                    logging.warning(f"⚠️ Max retries reached for {self.network} {self.protocol} V4 query: {e} - skipping batch")
+                    return None
         return None
 
     def fetch_pool_daily_data(self, token0_addr: str, token1_addr: str, fee_tier_bips: int, start_date: datetime) -> List[Dict]:
