@@ -44,6 +44,7 @@ coin-families:
       - weETH
       - EETH
       - sFRXETH
+      - USDT0
   - name: USD
     correlated: true
     coin-list:
@@ -94,7 +95,6 @@ coin-families:
       - aPolUSDT
       - aOptUSDC
       - DOLA
-      - USDT0
     regexp-rule: ".*USD.*"
 
   - name: EUR

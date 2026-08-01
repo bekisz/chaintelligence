@@ -1,0 +1,220 @@
+# Manual contract address overrides.
+# These will be ingested with priority score 100 ('manual') and will not be overwritten by CMC/DexScreener/CoinGecko.
+contracts:
+  - symbol: ETH
+    name: Ethereum
+    slug: ethereum
+    chain: ethereum
+    address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    decimals: 18
+    is_native: true
+
+  - symbol: WETH
+    name: Wrapped Ether
+    slug: wrapped-ether
+    chain: ethereum
+    address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    decimals: 18
+
+  - symbol: USDC
+    name: USD Coin
+    slug: usd-coin
+    chain: ethereum
+    address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    decimals: 6
+
+  - symbol: USDT
+    name: Tether
+    slug: tether
+    chain: ethereum
+    address: "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    decimals: 6
+
+  - symbol: DAI
+    name: Dai
+    slug: dai
+    chain: ethereum
+    address: "0x6b175474e89094c44da98b954eedeac495271d0f"
+    decimals: 18
+
+  - symbol: WBTC
+    name: Wrapped Bitcoin
+    slug: wrapped-bitcoin
+    chain: ethereum
+    address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+    decimals: 8
+
+  - symbol: BUIDL
+    name: BUIDL
+    slug: buidl
+    chain: ethereum
+    address: "0x45cf1cd8f8702b85e05cfc4f4b14d2325ab58bb4"
+    decimals: 6
+
+  - symbol: aEthDAI
+    name: Aave Ethereum DAI
+    slug: aave-ethereum-dai
+    chain: ethereum
+    address: "0x018008bfbB39d932D1485A32a3C3e564fC623a14"
+    decimals: 18
+
+  - symbol: aEthPYUS
+    name: Aave Ethereum PYUSD
+    slug: aave-ethereum-pyusd
+    chain: ethereum
+    address: "0x2368D84e27f6770C3eb4EAEFfEb0c66F8A80e32d"
+    decimals: 6
+
+  - symbol: aEthFRAX
+    name: Aave Ethereum FRAX
+    slug: aave-ethereum-frax
+    chain: ethereum
+    address: "0x9D05e94b819266E4e8dC406A145EE9235e16BfAc"
+    decimals: 18
+
+  - symbol: aEthGHO
+    name: Aave Ethereum GHO
+    slug: aave-ethereum-gho
+    chain: ethereum
+    address: "0x00A35A82bCD997d85DF164320C274996366f571b"
+    decimals: 18
+
+  - symbol: aArbUSDC
+    name: Aave Arbitrum USDC
+    slug: aave-arbitrum-usdc
+    chain: arbitrum
+    address: "0x72E91F0741271f2240974cFc1EC88915152a5Aa4"
+    decimals: 6
+
+  - symbol: aArbUSDT
+    name: Aave Arbitrum USDT
+    slug: aave-arbitrum-usdt
+    chain: arbitrum
+    address: "0x6ab707Aca953eDAeFBc4fD23bA73294241490620"
+    decimals: 6
+
+  - symbol: aBasUSDC
+    name: Aave Base USDC
+    slug: aave-base-usdc
+    chain: base
+    address: "0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB"
+    decimals: 6
+
+  - symbol: aPolUSDC
+    name: Aave Polygon USDC
+    slug: aave-polygon-usdc
+    chain: polygon
+    address: "0x625E7708f30cA75bfd92586e17077590C60eb4cD"
+    decimals: 6
+
+  - symbol: aPolUSDT
+    name: Aave Polygon USDT
+    slug: aave-polygon-usdt
+    chain: polygon
+    address: "0x6ab707Aca953eDAeFBc4fD23bA73294241490620"
+    decimals: 6
+
+  - symbol: aOptUSDC
+    name: Aave Optimism USDC
+    slug: aave-optimism-usdc
+    chain: optimism
+    address: "0x38d6447D6B40c9F30F8703B83F3f71c4cE67b140"
+    decimals: 6
+
+  - symbol: aEthwstE
+    name: Aave Ethereum wstETH
+    slug: aave-ethereum-wsteth
+    chain: ethereum
+    address: "0x0B925eD163218f668092ae88F04eB9833630f74E"
+    decimals: 18
+
+  - symbol: aEthcbE
+    name: Aave Ethereum cbETH
+    slug: aave-ethereum-cbeth
+    chain: ethereum
+    address: "0x9777d7E2b60bB0175aD928022008099F34514B5E"
+    decimals: 18
+
+  - symbol: aEthrETH
+    name: Aave Ethereum rETH
+    slug: aave-ethereum-reth
+    chain: ethereum
+    address: "0xCc9EE9483f66209Ea65d562C26490FfE6d3dfd7E"
+    decimals: 18
+
+  - symbol: aArbWETH
+    name: Aave Arbitrum WETH
+    slug: aave-arbitrum-weth
+    chain: arbitrum
+    address: "0xeE588B409220539e379816F156363f848f07A1A9"
+    decimals: 18
+
+  - symbol: aArbwstE
+    name: Aave Arbitrum wstETH
+    slug: aave-arbitrum-wsteth
+    chain: arbitrum
+    address: "0x513c7E3a9c69cA33692AD6e8b0C24B11E9B1fCdF"
+    decimals: 18
+
+  - symbol: aBasWETH
+    name: Aave Base WETH
+    slug: aave-base-weth
+    chain: base
+    address: "0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7"
+    decimals: 18
+
+  - symbol: aBascbE
+    name: Aave Base cbETH
+    slug: aave-base-cbeth
+    chain: base
+    address: "0xb044e5480ab02a11cfb1c1e54911d33458e0a169"
+    decimals: 18
+
+  - symbol: aBaswstE
+    name: Aave Base wstETH
+    slug: aave-base-wsteth
+    chain: base
+    address: "0xc1C2b67f13d80E42C04e844Dcf60e7E3F1c7C22e"
+    decimals: 18
+
+  - symbol: aPolWETH
+    name: Aave Polygon WETH
+    slug: aave-polygon-weth
+    chain: polygon
+    address: "0xeE588B409220539e379816F156363f848f07A1A9"
+    decimals: 18
+
+  - symbol: aEthWBTC
+    name: Aave Ethereum WBTC
+    slug: aave-ethereum-wbtc
+    chain: ethereum
+    address: "0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6de8"
+    decimals: 8
+
+  - symbol: aEthtBTC
+    name: Aave Ethereum tBTC
+    slug: aave-ethereum-tbtc
+    chain: ethereum
+    address: "0x8798c4d96a757270e59a68e06385a4a49e913a48"
+    decimals: 18
+
+  - symbol: aArbWBTC
+    name: Aave Arbitrum WBTC
+    slug: aave-arbitrum-wbtc
+    chain: arbitrum
+    address: "0x078F358208685046a11C85e8ad32895DED93A909"
+    decimals: 8
+
+  - symbol: aEthLINK
+    name: Aave Ethereum LINK
+    slug: aave-ethereum-link
+    chain: ethereum
+    address: "0x5E8C8A7243651F0B45d9852A9E58A38E8E954b42"
+    decimals: 18
+
+  - symbol: aEthAAVE
+    name: Aave Ethereum AAVE
+    slug: aave-ethereum-aave
+    chain: ethereum
+    address: "0xA7006199A6f1F424c53c07Ac43B330C8638C6f2B"
+    decimals: 18
