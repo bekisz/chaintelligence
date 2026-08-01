@@ -24,3 +24,4 @@ api/tests/test-report.md
 
 # Local psycopg2 stub (shadows real package)
 psycopg2/
+venv/
