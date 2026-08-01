@@ -378,3 +378,31 @@ coin-families:
     sql-rule: "cmc_rank < 100"
     include-coin:
       - PENDLE
+
+  - name: AAVE_YBA
+    correlated: false
+    coin-list:
+      - aEthDAI
+      - aEthPYUS
+      - aEthFRAX
+      - aEthGHO
+      - aArbUSDC
+      - aArbUSDT
+      - aBasUSDC
+      - aPolUSDC
+      - aPolUSDT
+      - aOptUSDC
+      - aEthwstE
+      - aEthcbE
+      - aEthrETH
+      - aArbWETH
+      - aArbwstE
+      - aBasWETH
+      - aBascbE
+      - aBaswstE
+      - aPolWETH
+      - aEthWBTC
+      - aEthtBTC
+      - aArbWBTC
+      - aEthLINK
+      - aEthAAVE
