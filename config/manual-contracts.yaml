@@ -834,3 +834,52 @@ contracts:
     chain: ethereum
     address: "0xc1C2b67f13d80E42C04e844Dcf60e7E3F1c7C22e"
     decimals: 18
+
+  - symbol: USDf
+    name: Falcon USD
+    slug: falcon-usd
+    chain: ethereum
+    address: "0x1b790d9f0f9b6e82847a96a1a1f0a202c46f338d"
+    decimals: 18
+
+  - symbol: sUSDf
+    name: Staked Falcon USD
+    slug: staked-falcon-usd
+    chain: ethereum
+    address: "0x5e236e7d6928e469502b4859a85d778d91c1a938"
+    decimals: 18
+
+  - symbol: vUSDC
+    name: Venus USDC
+    slug: venus-usdc
+    chain: bnb
+    address: "0xecA9B2665E0F58A1Bf41365bF9063B01073d9ceA"
+    decimals: 8
+
+  - symbol: vUSDT
+    name: Venus USDT
+    slug: venus-usdt
+    chain: bnb
+    address: "0xfD5840Cd36d94D7229439859C0112a4185BC0255"
+    decimals: 8
+
+  - symbol: vDAI
+    name: Venus DAI
+    slug: venus-dai
+    chain: bnb
+    address: "0x334b3eCB4DCa50777b318f5c885D51672322306d"
+    decimals: 8
+
+  - symbol: vETH
+    name: Venus ETH
+    slug: venus-eth
+    chain: bnb
+    address: "0xf508fCD42802907729f02898940681312a9705B8"
+    decimals: 8
+
+  - symbol: vBTC
+    name: Venus BTC
+    slug: venus-btc
+    chain: bnb
+    address: "0x882C173bC7Ff3b7786CA16dfeD3DFFfb9Ee7847B"
+    decimals: 8

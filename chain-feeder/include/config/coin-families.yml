@@ -72,6 +72,7 @@ coin-families:
       - PTeETH
       - PTezETH
       - PTwstE
+      - vETH
       - weETH
       - EETH
   - name: USD
@@ -165,6 +166,10 @@ coin-families:
       - PTsUSDe
       - PTUSDe
       - PTUSDC
+      - sUSDf
+      - vUSDC
+      - vUSDT
+      - vDAI
       - DOLA
       - USDT0
     regexp-rule: ".*USD.*"
@@ -208,6 +213,7 @@ coin-families:
       - fWBTC
       - fcbBTC
       - cWBTC
+      - vBTC
   - name: GOLD
     correlated: true
     coin-list:
