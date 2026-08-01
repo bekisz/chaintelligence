@@ -289,12 +289,28 @@ coin-families:
     coin-list:
       - AAVE
       - STKAAVE
+      - aEthAAVE
+
+  - name: LINK
+    correlated: true
+    coin-list:
+      - LINK
+      - aEthLINK
+      - vLINK
+
+  - name: CRV
+    correlated: true
+    coin-list:
+      - CRV
+      - cvxCRV
+      - stkcvxCR
 
   - name: BNB
     correlated: true
     coin-list:
       - BNB
       - WBNB
+      - vBNB
 
   - name: Tier1
     correlated: false
