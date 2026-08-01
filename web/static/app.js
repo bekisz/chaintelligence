@@ -1100,12 +1100,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             lpDropdown.classList.toggle('hidden');
         });
 
-        document.addEventListener('click', (e) => {
-            if (!lpDropdown.contains(e.target) && e.target !== lpBtn) {
-                lpDropdown.classList.add('hidden');
-            }
-        });
-
         lpDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
             cb.addEventListener('change', () => {
                 updateColumnVisibility();
@@ -1120,20 +1114,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             colDropdown.classList.toggle('hidden');
         });
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!colDropdown.contains(e.target) && e.target !== colBtn) {
-                colDropdown.classList.add('hidden');
-            }
-        });
-
-        // Toggle columns on checkbox change
         colDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
             cb.addEventListener('change', () => {
                 updateColumnVisibility();
             });
         });
     }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+        if (lpDropdown && !lpDropdown.contains(e.target) && lpBtn && !lpBtn.contains(e.target)) {
+            lpDropdown.classList.add('hidden');
+        }
+        if (colDropdown && !colDropdown.contains(e.target) && colBtn && !colBtn.contains(e.target)) {
+            colDropdown.classList.add('hidden');
+        }
+    });
 
     // Input listeners for real-time filtering
     ['min-apr-filter', 'min-mkt-filter', 'min-txs-filter'].forEach(id => {

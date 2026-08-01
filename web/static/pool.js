@@ -787,19 +787,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    const lpBtn = document.getElementById('lp-options-btn');
+    const lpDropdown = document.getElementById('lp-options-dropdown');
     const colBtn = document.getElementById('column-selector-btn');
     const colDropdown = document.getElementById('column-selector-dropdown');
+
+    if (lpBtn && lpDropdown) {
+        lpBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (colDropdown) colDropdown.classList.add('hidden');
+            lpDropdown.classList.toggle('hidden');
+        });
+
+        lpDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                updateColumnVisibility();
+            });
+        });
+    }
 
     if (colBtn && colDropdown) {
         colBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (lpDropdown) lpDropdown.classList.add('hidden');
             colDropdown.classList.toggle('hidden');
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!colDropdown.contains(e.target) && e.target !== colBtn) {
-                colDropdown.classList.add('hidden');
-            }
         });
 
         colDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -808,6 +819,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
     }
+
+    document.addEventListener('click', (e) => {
+        if (lpDropdown && !lpDropdown.contains(e.target) && lpBtn && !lpBtn.contains(e.target)) {
+            lpDropdown.classList.add('hidden');
+        }
+        if (colDropdown && !colDropdown.contains(e.target) && colBtn && !colBtn.contains(e.target)) {
+            colDropdown.classList.add('hidden');
+        }
+    });
 
     ['min-apr-filter', 'min-mkt-filter', 'min-txs-filter'].forEach(id => {
         const input = document.getElementById(id);
