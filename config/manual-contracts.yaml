@@ -498,3 +498,108 @@ contracts:
     chain: ethereum
     address: "0xaa0C3f5F7DFD688C6E646F66CD2a6B66ACdbE434"
     decimals: 18
+
+  - symbol: fUSDC
+    name: Fluid USDC
+    slug: fluid-usdc
+    chain: ethereum
+    address: "0x1a96350e4b2d1d9a04a11e0029b46617a220261f"
+    decimals: 6
+
+  - symbol: fUSDT
+    name: Fluid USDT
+    slug: fluid-usdt
+    chain: ethereum
+    address: "0xf5B99047f68c34f31c5123A8C66fB8B50a6D9410"
+    decimals: 6
+
+  - symbol: fUSDe
+    name: Fluid USDe
+    slug: fluid-usde
+    chain: ethereum
+    address: "0x2A62C6F9aC98b0A11370Dac43b817A5c317E3F40"
+    decimals: 18
+
+  - symbol: fsUSDe
+    name: Fluid sUSDe
+    slug: fluid-susde
+    chain: ethereum
+    address: "0x5e2069D8F102B902A36B000C8F99CBE9c0D46d90"
+    decimals: 18
+
+  - symbol: fGHO
+    name: Fluid GHO
+    slug: fluid-gho
+    chain: ethereum
+    address: "0x696b9F65a8820B4eB1C568c07e05A01EE63e264D"
+    decimals: 18
+
+  - symbol: fBasUSDC
+    name: Fluid Base USDC
+    slug: fluid-base-usdc
+    chain: base
+    address: "0xbA6672322306d15a5f6D8A297D87b409746eD8aC"
+    decimals: 6
+
+  - symbol: fArbUSDC
+    name: Fluid Arbitrum USDC
+    slug: fluid-arbitrum-usdc
+    chain: arbitrum
+    address: "0x07fF4C30263625f1B0F4e719129037923703E678"
+    decimals: 6
+
+  - symbol: fWETH
+    name: Fluid WETH
+    slug: fluid-weth
+    chain: ethereum
+    address: "0x63399B6A1e83fBf3f982F3B904ef2434EaFf5931"
+    decimals: 18
+
+  - symbol: fwstETH
+    name: Fluid wstETH
+    slug: fluid-wsteth
+    chain: ethereum
+    address: "0xAcC02f0B4e8D0E3B68971fA86c7556fB9b897931"
+    decimals: 18
+
+  - symbol: fweETH
+    name: Fluid weETH
+    slug: fluid-weeth
+    chain: ethereum
+    address: "0x4D0c354e3dE42ED6d944c6E601B11c5E21B9827B"
+    decimals: 18
+
+  - symbol: fcbETH
+    name: Fluid cbETH
+    slug: fluid-cbeth
+    chain: ethereum
+    address: "0x93309a47EFAe2B04E5FBA2aEFdC252fD732cD931"
+    decimals: 18
+
+  - symbol: fBasWETH
+    name: Fluid Base WETH
+    slug: fluid-base-weth
+    chain: base
+    address: "0x9bB5DceB7a9eB59d0C4d326f56A86bFe296236b2"
+    decimals: 18
+
+  - symbol: fArbWETH
+    name: Fluid Arbitrum WETH
+    slug: fluid-arbitrum-weth
+    chain: arbitrum
+    address: "0x7f0e633d957d6205739c3E70d8B6eF4dFf5aD6A1"
+    decimals: 18
+
+  - symbol: fWBTC
+    name: Fluid WBTC
+    slug: fluid-wbtc
+    chain: ethereum
+    address: "0xa4B1F8308D64a4d31481dD3B620A0589a1c1d94B"
+    decimals: 8
+
+  - symbol: fcbBTC
+    name: Fluid cbBTC
+    slug: fluid-cbbtc
+    chain: ethereum
+    address: "0x8a92897483B8e4A1A7D18f0D0E2903761F033878"
+    decimals: 8

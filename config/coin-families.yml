@@ -55,6 +55,12 @@ coin-families:
       - crvRETH
       - crvFRXE
       - sFRXETH
+      - fWETH
+      - fwstETH
+      - fweETH
+      - fcbETH
+      - fBasWETH
+      - fArbWETH
       - weETH
       - EETH
       - USDT0
@@ -122,6 +128,13 @@ coin-families:
       - crvUSDC
       - crvUSDT
       - crvUSDS
+      - fUSDC
+      - fUSDT
+      - fUSDe
+      - fsUSDe
+      - fGHO
+      - fBasUSDC
+      - fArbUSDC
       - DOLA
     regexp-rule: ".*USD.*"
 
@@ -161,6 +174,8 @@ coin-families:
       - mArbWBTC
       - crvrenBT
       - crvCBBT
+      - fWBTC
+      - fcbBTC
   - name: GOLD
     correlated: true
     coin-list:
