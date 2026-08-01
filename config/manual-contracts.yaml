@@ -218,3 +218,87 @@ contracts:
     chain: ethereum
     address: "0xA7006199A6f1F424c53c07Ac43B330C8638C6f2B"
     decimals: 18
+
+  - symbol: mcUSDC
+    name: Steakhouse MetaMorpho USDC
+    slug: steakhouse-metamorpho-usdc
+    chain: ethereum
+    address: "0xBEEF01735c132Aa46DA735266d0D31CE2A117D1F"
+    decimals: 6
+
+  - symbol: mUSDT
+    name: Gauntlet USDT Core Vault
+    slug: gauntlet-usdt-core-vault
+    chain: ethereum
+    address: "0x40a62428509e5ee9f4f4699f8eb738f654b9d038"
+    decimals: 6
+
+  - symbol: mPYUSD
+    name: Steakhouse MetaMorpho PYUSD
+    slug: steakhouse-metamorpho-pyusd
+    chain: ethereum
+    address: "0xa0b1062637b83f3e1a0670830b59b3922379d4bd"
+    decimals: 6
+
+  - symbol: mUSDe
+    name: Steakhouse MetaMorpho USDe
+    slug: steakhouse-metamorpho-usde
+    chain: ethereum
+    address: "0x7a6ae64c9bc6551b94b0ebf49e0c6563e46c75df"
+    decimals: 18
+
+  - symbol: msUSDe
+    name: Reallink MetaMorpho sUSDe
+    slug: reallink-metamorpho-susde
+    chain: ethereum
+    address: "0x0f1e8e2e92c2357388e6378e9b6bf71b3e8e19e7"
+    decimals: 18
+
+  - symbol: mBasUSDC
+    name: Gauntlet Base USDC Core
+    slug: gauntlet-base-usdc-core
+    chain: base
+    address: "0xc1256Ae5FF18137280F0f8C42C67B6612b7D6d30"
+    decimals: 6
+
+  - symbol: mcWETH
+    name: Steakhouse MetaMorpho WETH
+    slug: steakhouse-metamorpho-weth
+    chain: ethereum
+    address: "0x19280d0d8fe183f5e04313f8901df6080e7293b6"
+    decimals: 18
+
+  - symbol: mwstETH
+    name: Gauntlet wstETH Prime Vault
+    slug: gauntlet-wsteth-prime-vault
+    chain: ethereum
+    address: "0x9bf86411d96ac24a98ddc4f42b36e8df81c81729"
+    decimals: 18
+
+  - symbol: mBasWETH
+    name: Gauntlet Base WETH Core
+    slug: gauntlet-base-weth-core
+    chain: base
+    address: "0x13d64c1cf6473133333333333333333333333333"
+    decimals: 18
+
+  - symbol: mBascbE
+    name: Seamless Base cbETH Vault
+    slug: seamless-base-cbeth-vault
+    chain: base
+    address: "0x892a012920239b9804b4c46f1201d418721665e8"
+    decimals: 18
+
+  - symbol: mWBTC
+    name: Gauntlet WBTC Core Vault
+    slug: gauntlet-wbtc-core-vault
+    chain: ethereum
+    address: "0x3216834b6b6697669894e1d743a3d56b063ee387"
+    decimals: 8
+
+  - symbol: mBascbBT
+    name: Gauntlet Base cbBTC Vault
+    slug: gauntlet-base-cbbtc-vault
+    chain: base
+    address: "0x0b8a1c62187b8d4f09d8d6f140df03531b67b140"
+    decimals: 8

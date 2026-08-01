@@ -41,6 +41,10 @@ coin-families:
       - aBascbE
       - aBaswstE
       - aPolWETH
+      - mcWETH
+      - mwstETH
+      - mBasWETH
+      - mBascbE
       - weETH
       - EETH
       - sFRXETH
@@ -94,6 +98,12 @@ coin-families:
       - aPolUSDC
       - aPolUSDT
       - aOptUSDC
+      - mcUSDC
+      - mUSDT
+      - mPYUSD
+      - mUSDe
+      - msUSDe
+      - mBasUSDC
       - DOLA
     regexp-rule: ".*USD.*"
 
@@ -125,6 +135,8 @@ coin-families:
       - aEthWBTC
       - aEthtBTC
       - aArbWBTC
+      - mWBTC
+      - mBascbBT
   - name: GOLD
     correlated: true
     coin-list:
