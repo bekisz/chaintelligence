@@ -664,11 +664,17 @@ class PostgresStorage:
 
                 # Load pool lookup maps
                 cur.execute("""
-                    SELECT id, pool_id, chain_id, protocol_id, coin0_id, coin1_id, fee_bps
+                    SELECT id, pool_id, chain_id, protocol_id, coin0_id, coin1_id, fee_bps, pool_address
                     FROM liquidity_pool
                 """)
                 rows = cur.fetchall()
-                pool_id_map = {row[1].lower(): row[0] for row in rows if row[1]}
+                pool_id_map = {}
+                for row in rows:
+                    lid, pid, cid, prid, c0, c1, fbps, paddr = row
+                    if pid:
+                        pool_id_map[pid.lower()] = lid
+                    if paddr:
+                        pool_id_map[paddr.lower()] = lid
                 pool_tokens_map = {(row[2], row[3], frozenset({row[4], row[5]}), row[6]): row[0] for row in rows}
 
                 # Load contract addresses for this chain, mapping LOWER(contract_address) -> {coin_id, symbol, tracked}
@@ -740,7 +746,7 @@ class PostgresStorage:
 
                     fbps = _compute_fee_bps(s.get('fee_tier'))
                     
-                    # 1. Match by on-chain pool ID
+                    # 1. Match by on-chain pool ID or pool address
                     sg_pool_id = (s.get('pool') or {}).get('id')
                     pool_id = None
                     if sg_pool_id:
@@ -768,19 +774,33 @@ class PostgresStorage:
                             seed = f"v4-fallback-{t0_id}-{t1_id}-{fbps}"
                             pool_id_val = "0x" + keccak(seed.encode('utf-8')).hex()
 
-                        cur.execute("""
-                            INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, pool_id, reverted)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, false)
-                            ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
-                            SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
-                                pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
-                            RETURNING id
-                        """, (chain_id, protocol_id, pool_name, fbps, t0_id, t1_id, pool_address_val, pool_id_val))
-                        pool_id = cur.fetchone()[0]
+                        try:
+                            cur.execute("""
+                                INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, pool_id, reverted)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, false)
+                                ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
+                                SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
+                                    pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
+                                RETURNING id
+                            """, (chain_id, protocol_id, pool_name, fbps, t0_id, t1_id, pool_address_val, pool_id_val))
+                            pool_id = cur.fetchone()[0]
+                        except Exception:
+                            cur.execute("""
+                                SELECT id FROM liquidity_pool
+                                WHERE (pool_address = %s AND %s IS NOT NULL) OR (pool_id = %s AND %s IS NOT NULL)
+                                LIMIT 1
+                            """, (pool_address_val, pool_address_val, pool_id_val, pool_id_val))
+                            res = cur.fetchone()
+                            if res:
+                                pool_id = res[0]
+                            else:
+                                raise
 
                         # Cache it in maps for the rest of this batch
                         if pool_address_val:
                             pool_id_map[pool_address_val] = pool_id
+                        if pool_id_val:
+                            pool_id_map[pool_id_val] = pool_id
                         pool_tokens_map[(chain_id, protocol_id, frozenset({t0_id, t1_id}), fbps)] = pool_id
 
                     data.append((
