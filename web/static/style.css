@@ -4501,3 +4501,18 @@ tr:hover .row-action-btn {
 .clickable-addr:hover .copy-icon-wrapper {
     opacity: 1;
 }
+
+.nav-link.secondary-link {
+    color: #64748b;
+    opacity: 0.65;
+}
+
+.nav-link.secondary-link:hover {
+    color: #94a3b8;
+    opacity: 0.9;
+}
+
+.nav-link.secondary-link.active {
+    color: var(--text-primary);
+    opacity: 1;
+}
