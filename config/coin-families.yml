@@ -406,3 +406,71 @@ coin-families:
       - aArbWBTC
       - aEthLINK
       - aEthAAVE
+
+  - name: COMP_YBA
+    correlated: false
+    coin-list:
+      - cUSDCv3
+      - cUSDTv3
+      - cWETHv3
+      - cArbUSDC
+      - cArbWETH
+      - cBasUSDC
+      - cBasWETH
+      - cPolUSDC
+      - cPolWETH
+      - cOptUSDC
+      - cUSDC
+      - cUSDT
+      - cETH
+      - cWBTC
+      - CDAI
+
+  - name: MORPHO_YBA
+    correlated: false
+    coin-list:
+      - mUSDe
+      - msUSDe
+      - mPYUSD
+      - mUSDT
+      - mcUSDC
+      - mcWETH
+      - maUSDC
+      - mBasUSDC
+      - mBasUSDT
+      - mBasWETH
+      - mBascbE
+      - mBascbBT
+      - mBasweE
+      - mBasEURC
+      - mArbUSDC
+      - mArbUSDT
+      - mArbWETH
+      - mArbwstE
+      - mArbWBTC
+      - mweETH
+      - mezETH
+      - mwstETH
+      - mWBTC
+      - mtBTC
+
+  - name: VXS_YBA
+    correlated: false
+    coin-list:
+      - vUSDC
+      - vUSDT
+      - vDAI
+      - vBUSD
+      - vTUSD
+      - vBNB
+      - vETH
+      - vBTC
+      - vBETH
+      - vCAKE
+      - vUNI
+      - vAAVE
+      - vLINK
+      - vDOGE
+      - vDOT
+      - vLTC
+      - vXRP
