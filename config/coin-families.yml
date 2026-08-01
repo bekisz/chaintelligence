@@ -73,6 +73,7 @@ coin-families:
       - PTezETH
       - PTwstE
       - vETH
+      - vBETH
       - weETH
       - EETH
       - USDT0
@@ -171,6 +172,8 @@ coin-families:
       - vUSDC
       - vUSDT
       - vDAI
+      - vBUSD
+      - vTUSD
       - DOLA
     regexp-rule: ".*USD.*"
 
@@ -219,34 +222,46 @@ coin-families:
     coin-list:
       - PAXG
       - XAUT
-      - GSX
-      - GLDX
-      - IAUon
-      - XAUM
-      - XAUT0
-
-
-
   - name: SILVER
     correlated: true
     coin-list:
-      - SLVon
-      - SLVx
-      - SLV
-  
+      - SLVON
   - name: STOCK
-    correlated: false
+    correlated: true
     coin-list:
-      - SPYon
-      - SPYx
-      - QQQx
-      - INTLCx
-      - TSLAx
-      - HOODx
+      - AAPL
+      - MSFT
+      - GOOGL
+      - AMZN
+      - NVDA
+      - TSLA
+      - META
+      - MSTR
+      - BRKB
+      - COIN
+      - AVGO
+      - UNH
+      - LLY
+      - JPM
+      - V
+      - COST
+      - MA
+      - WMT
+      - JNJ
+      - PG
+      - XOM
+      - HD
+      - BAC
+      - SPY
+      - QQQ
+      - DIA
+      - IWM
+      - AAPLx
+      - AMZNx
       - GOOGLx
       - NVDAx
-      - CRCLx
-      - AAPLx
+      - TSLAx
+      - MSTRx
       - MSFTx
       - METAx
       - VTx
@@ -290,6 +305,7 @@ coin-families:
       - AAVE
       - STKAAVE
       - aEthAAVE
+      - vAAVE
 
   - name: LINK
     correlated: true
@@ -312,9 +328,44 @@ coin-families:
       - WBNB
       - vBNB
 
+  - name: CAKE
+    correlated: true
+    coin-list:
+      - CAKE
+      - vCAKE
+
+  - name: UNI
+    correlated: true
+    coin-list:
+      - UNI
+      - vUNI
+
+  - name: XRP
+    correlated: true
+    coin-list:
+      - XRP
+      - vXRP
+
+  - name: DOGE
+    correlated: true
+    coin-list:
+      - DOGE
+      - vDOGE
+
+  - name: DOT
+    correlated: true
+    coin-list:
+      - DOT
+      - vDOT
+
+  - name: LTC
+    correlated: true
+    coin-list:
+      - LTC
+      - vLTC
+
   - name: Tier1
     correlated: false
     sql-rule: "cmc_rank < 100"
     include-coin:
-      - PENDLE 
-      - ENA
+      - PENDLE

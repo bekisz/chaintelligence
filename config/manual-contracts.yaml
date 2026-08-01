@@ -883,3 +883,80 @@ contracts:
     chain: bnb
     address: "0x882C173bC7Ff3b7786CA16dfeD3DFFfb9Ee7847B"
     decimals: 8
+
+  - symbol: vBNB
+    name: Venus BNB
+    slug: venus-bnb
+    chain: bnb
+    address: "0xA07c5b74C9B40447a98857777358510838927457"
+    decimals: 8
+
+  - symbol: vBUSD
+    name: Venus BUSD
+    slug: venus-busd
+    chain: bnb
+    address: "0x95c78E80Ea81342757b0638514360bc0f04F46A9"
+    decimals: 8
+
+  - symbol: vBETH
+    name: Venus BETH
+    slug: venus-beth
+    chain: bnb
+    address: "0x972207A639D4E8bC1682203077695604554c433c"
+    decimals: 8
+
+  - symbol: vLINK
+    name: Venus LINK
+    slug: venus-link
+    chain: bnb
+    address: "0x65c537e2b92eFcb5c5cE491B5E2E735d724B5baE"
+    decimals: 8
+
+  - symbol: vCAKE
+    name: Venus CAKE
+    slug: venus-cake
+    chain: bnb
+    address: "0x86a3c42D3b86A0424B3C8875E9a76c8965DAe505"
+    decimals: 8
+
+  - symbol: vAAVE
+    name: Venus AAVE
+    slug: venus-aave
+    chain: bnb
+    address: "0x26DA28954763B92139ED49283625ceCAf52C6f94"
+    decimals: 8
+
+  - symbol: vUNI
+    name: Venus UNI
+    slug: venus-uni
+    chain: bnb
+    address: "0x27A9711A0dF954d68A577c4580e8D086617ba343"
+    decimals: 8
+
+  - symbol: vXRP
+    name: Venus XRP
+    slug: venus-xrp
+    chain: bnb
+    address: "0xB715808a78F6041E46d61Cb123C9B4A27056AE9C"
+    decimals: 8
+
+  - symbol: vDOGE
+    name: Venus Dogecoin
+    slug: venus-dogecoin
+    chain: bnb
+    address: "0xec3422Ef92B2fb59e84c8B02B775D98207509405"
+    decimals: 8
+
+  - symbol: vDOT
+    name: Venus DOT
+    slug: venus-dot
+    chain: bnb
+    address: "0x161073A2111f591215E8295956803C2FA372716d"
+    decimals: 8
+
+  - symbol: vLTC
+    name: Venus LTC
+    slug: venus-ltc
+    chain: bnb
+    address: "0x57A5297F2CB2c0AaC9D554660cad6da368bd5010"
+    decimals: 8
