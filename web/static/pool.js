@@ -8,6 +8,7 @@ const getCmcUrl = (tokenSymbol) => {
 
 const formatAprPercent = (pct) => {
     if (pct === null || pct === undefined || isNaN(pct)) return 'N/A';
+    if (pct >= 10) return Math.round(pct) + '%';
     return Number(pct.toFixed(1)) + '%';
 };
 

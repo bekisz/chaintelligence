@@ -114,6 +114,8 @@ def format_apr(apr_val):
     if apr_val is None:
         return "N/A"
     pct = apr_val * 100
+    if pct >= 10:
+        return f"{int(round(pct))}%"
     rounded = round(pct + 1e-9, 1)
     if rounded == 0.0:
         return "0%"
