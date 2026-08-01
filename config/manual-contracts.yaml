@@ -603,3 +603,101 @@ contracts:
     chain: ethereum
     address: "0x8a92897483B8e4A1A7D18f0D0E2903761F033878"
     decimals: 8
+
+  - symbol: cUSDCv3
+    name: Compound v3 USDC
+    slug: compound-v3-usdc
+    chain: ethereum
+    address: "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+    decimals: 6
+
+  - symbol: cUSDTv3
+    name: Compound v3 USDT
+    slug: compound-v3-usdt
+    chain: ethereum
+    address: "0x3AD9B21358b45705515A20a1334E6038A6A4E216"
+    decimals: 6
+
+  - symbol: cArbUSDC
+    name: Compound v3 Arbitrum USDC
+    slug: compound-v3-arbitrum-usdc
+    chain: arbitrum
+    address: "0x9c4ec760c29dC044F1e0747638d6f905B27c627C"
+    decimals: 6
+
+  - symbol: cBasUSDC
+    name: Compound v3 Base USDC
+    slug: compound-v3-base-usdc
+    chain: base
+    address: "0xb125E6687d4313864e53df431d5425969c15Eb2F"
+    decimals: 6
+
+  - symbol: cPolUSDC
+    name: Compound v3 Polygon USDC
+    slug: compound-v3-polygon-usdc
+    chain: polygon
+    address: "0xF25212E797D4ac79a49392e2197A2Ac59bFAFe09"
+    decimals: 6
+
+  - symbol: cOptUSDC
+    name: Compound v3 Optimism USDC
+    slug: compound-v3-optimism-usdc
+    chain: optimism
+    address: "0x2e44e12c73d254b9d07374b5952d79d714578b88"
+    decimals: 6
+
+  - symbol: cWETHv3
+    name: Compound v3 WETH
+    slug: compound-v3-weth
+    chain: ethereum
+    address: "0xA17581A9E335D07308dE99468943f9a77E6A9330"
+    decimals: 18
+
+  - symbol: cArbWETH
+    name: Compound v3 Arbitrum WETH
+    slug: compound-v3-arbitrum-weth
+    chain: arbitrum
+    address: "0x6F7D514bbD4aFf3BcD1140B7344b56f063dE488b"
+    decimals: 18
+
+  - symbol: cBasWETH
+    name: Compound v3 Base WETH
+    slug: compound-v3-base-weth
+    chain: base
+    address: "0x46e6b214b524310239732D51387075E0e70970bf"
+    decimals: 18
+
+  - symbol: cPolWETH
+    name: Compound v3 Polygon WETH
+    slug: compound-v3-polygon-weth
+    chain: polygon
+    address: "0x406d203D0b8e970aB4f6fB0E59c55b5f6efEaE3f"
+    decimals: 18
+
+  - symbol: cUSDC
+    name: Compound v2 USDC
+    slug: compound-v2-usdc
+    chain: ethereum
+    address: "0x39AA380371D14454E15174659D4971094C38102d"
+    decimals: 8
+
+  - symbol: cUSDT
+    name: Compound v2 USDT
+    slug: compound-v2-usdt
+    chain: ethereum
+    address: "0xf650C3B88D12db855b8bf7D11Be6C55A4e07dCC9"
+    decimals: 8
+
+  - symbol: cETH
+    name: Compound v2 ETH
+    slug: compound-v2-eth
+    chain: ethereum
+    address: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5"
+    decimals: 8
+
+  - symbol: cWBTC
+    name: Compound v2 WBTC
+    slug: compound-v2-wbtc
+    chain: ethereum
+    address: "0xccF4429DB6322D5C611ee964527D42E5d685DD6a"
+    decimals: 8
