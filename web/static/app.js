@@ -131,6 +131,76 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Error fetching token images:', error);
         });
 
+    let symbolFamilyMap = {};
+    let familySymbolsMap = {};
+
+    const getTokenFamily = (sym) => {
+        if (!sym) return null;
+        const upper = sym.trim().toUpperCase();
+        if (familySymbolsMap[upper]) {
+            return upper;
+        }
+        if (symbolFamilyMap[upper]) {
+            return symbolFamilyMap[upper];
+        }
+        if (upper.includes('USD') || upper.includes('DAI') || upper.includes('GHO') || upper.includes('FRAX')) return 'USD';
+        if (upper.includes('ETH') || upper.includes('WETH')) return 'ETH';
+        if (upper.includes('BTC') || upper.includes('WBTC')) return 'BTC';
+        if (upper.includes('EUR')) return 'EUR';
+        return upper;
+    };
+
+    const updateStableShortcutState = () => {
+        const startToken = startTokenInput ? startTokenInput.value.trim() : '';
+        const endToken = endTokenInput ? endTokenInput.value.trim() : '';
+        const stableShortcutCheckbox = document.getElementById('stable-shortcut-filter');
+        const stableShortcutWrapper = document.getElementById('stable-shortcut-wrapper');
+
+        if (!startToken || !endToken) {
+            if (stableShortcutCheckbox) {
+                stableShortcutCheckbox.disabled = true;
+                stableShortcutCheckbox.checked = false;
+            }
+            if (stableShortcutWrapper) {
+                stableShortcutWrapper.style.opacity = '0.5';
+                stableShortcutWrapper.title = 'Only enabled when querying tokens within the same family (e.g. USD-USD, ETH-ETH, BTC-BTC).';
+            }
+            return;
+        }
+
+        const famA = getTokenFamily(startToken);
+        const famB = getTokenFamily(endToken);
+        const isSameFamily = Boolean(famA && famB && famA === famB);
+
+        if (stableShortcutCheckbox && stableShortcutWrapper) {
+            if (isSameFamily) {
+                stableShortcutCheckbox.disabled = false;
+                stableShortcutWrapper.style.opacity = '1.0';
+                stableShortcutWrapper.title = `Filter to routes with >1 hop where a middle token is not part of the ${famA} family.`;
+            } else {
+                stableShortcutCheckbox.disabled = true;
+                stableShortcutCheckbox.checked = false;
+                stableShortcutWrapper.style.opacity = '0.5';
+                stableShortcutWrapper.title = `Only enabled when querying tokens within the same family (e.g. USD-USD, ETH-ETH, BTC-BTC). Currently queried: ${famA || startToken} - ${famB || endToken}.`;
+            }
+        }
+    };
+
+    fetch('/api/coin-families')
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.symbol_family_map) {
+                symbolFamilyMap = data.symbol_family_map;
+            }
+            if (data && data.families) {
+                familySymbolsMap = data.families;
+            }
+            updateStableShortcutState();
+        })
+        .catch(error => {
+            console.error('Error fetching coin families:', error);
+        });
+
     const formatUSD = (amount) => {
         const fractionDigits = amount >= 10 ? 0 : 2;
         return new Intl.NumberFormat('en-US', {
@@ -240,6 +310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const minTxsInput = document.getElementById('min-txs-filter');
         const acyclicCheckbox = document.getElementById('acyclic-filter');
         const directOnlyCheckbox = document.getElementById('direct-only-filter');
+        const stableShortcutCheckbox = document.getElementById('stable-shortcut-filter');
         const networkFilter = document.getElementById('network-filter');
         const protocolFilter = document.getElementById('protocol-filter');
 
@@ -248,6 +319,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const minTxsVal = minTxsInput ? parseInt(minTxsInput.value) || 0 : 0;
         const acyclicOnly = acyclicCheckbox ? acyclicCheckbox.checked : false;
         const directOnly = directOnlyCheckbox ? directOnlyCheckbox.checked : false;
+        const stableShortcutOnly = stableShortcutCheckbox ? (stableShortcutCheckbox.checked && !stableShortcutCheckbox.disabled) : false;
         const selectedNetwork = networkFilter ? networkFilter.value : 'all';
         const selectedProtocol = protocolFilter ? protocolFilter.value : 'all';
 
@@ -306,6 +378,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
                 if (tokenCount !== 2) return false;
+            }
+
+            // Stable Pair Shortcut filter:
+            // Keeps routes with >1 hop where at least one middle token is not part of the queried token family
+            if (stableShortcutOnly) {
+                let tokens = [];
+                if (route.path_tokens) {
+                    for (let i = 0; i < route.path_tokens.length; i += 2) {
+                        tokens.push(route.path_tokens[i]);
+                    }
+                } else if (route.path) {
+                    const parts = route.path.split(' ');
+                    for (let i = 0; i < parts.length; i += 4) {
+                        tokens.push(parts[i]);
+                    }
+                }
+                // Must be multi-hop (> 1 hop => > 2 tokens)
+                if (tokens.length <= 2) return false;
+
+                const startToken = startTokenInput ? startTokenInput.value.trim() : '';
+                const queriedFamily = getTokenFamily(startToken);
+
+                // Check middle tokens (between start and end token)
+                const middleTokens = tokens.slice(1, tokens.length - 1);
+                const hasNonFamilyMiddleToken = middleTokens.some(t => getTokenFamily(t) !== queriedFamily);
+
+                if (!hasNonFamilyMiddleToken) return false;
             }
 
             return true;
@@ -410,6 +509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Update stats
             currentRoutes = data.routes;
+            updateStableShortcutState();
             // Default sort: Volume descending for the selected time period
             if (currentRoutes && currentRoutes.length > 0) {
                 sortRoutes('volume', 'sort-vol', 'desc');
@@ -1034,6 +1134,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             filterAndRenderRoutes();
         });
     }
+
+    const stableShortcutCheckbox = document.getElementById('stable-shortcut-filter');
+    if (stableShortcutCheckbox) {
+        stableShortcutCheckbox.addEventListener('change', () => {
+            filterAndRenderRoutes();
+        });
+    }
+
+    [startTokenInput, endTokenInput].forEach(input => {
+        if (input) {
+            input.addEventListener('input', () => {
+                updateStableShortcutState();
+            });
+        }
+    });
 
     const networkFilterSelect = document.getElementById('network-filter');
     if (networkFilterSelect) {

@@ -582,7 +582,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status"]
+    exempt_paths = ["/api/coin/list", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -2417,6 +2417,32 @@ async def get_coins():
                 rows = cur.fetchall()
                 coins = [dict(zip(colnames, row)) for row in rows]
                 return coins
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/coin-families", tags=["Coins"])
+async def get_coin_families():
+    """Get mapping of coin families and their member symbols."""
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT UPPER(f.name) as family, UPPER(c.symbol) as symbol
+                    FROM coin_family f
+                    JOIN coin c ON f.coin_id = c.coin_id
+                """)
+                families_map = {}
+                symbol_family_map = {}
+                for fam, sym in cur.fetchall():
+                    if fam not in families_map:
+                        families_map[fam] = []
+                    families_map[fam].append(sym)
+                    symbol_family_map[sym] = fam
+                return {
+                    "families": families_map,
+                    "symbol_family_map": symbol_family_map
+                }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
