@@ -30,6 +30,25 @@ docker exec chaintelligence-server python api/tests/test_api.py \
   TestChaintelligenceAPI.test_10_price_by_cmc_id_missing -v
 ```
 
+### Generate a Markdown Report
+
+Use the report runner whenever you want the test results saved to a file. It runs
+the same API test suite and creates `api/tests/test-report.md` automatically.
+Each row includes the test's full name, its docstring description, and its
+result.
+
+```bash
+# Run all tests and create api/tests/test-report.md
+docker exec chaintelligence-server python api/tests/test_report.py
+
+# Run one test and create a report for that run
+docker exec chaintelligence-server python api/tests/test_report.py -t test_20
+
+# Choose a different report path
+docker exec chaintelligence-server python api/tests/test_report.py \
+  --report /tmp/api-test-report.md
+```
+
 ### Option 2: Locally
 
 If running tests from your local machine:

@@ -1,0 +1,30 @@
+[    1413ms] [WARNING] Solflare was registered as a Standard Wallet. The Wallet Adapter for Solflare can be removed from your app. @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    1424ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_CLOSED @ https://bsc.publicnode.com/:0
+[    1426ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_CLOSED @ https://ethereum.publicnode.com/:0
+[    1426ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_CLOSED @ https://arbitrum-one.publicnode.com/:0
+[    1859ms] [ERROR] Failed to load resource: the server responded with a status of 429 () @ https://base.meowrpc.com/:0
+[    1864ms] [WARNING] Solflare was registered as a Standard Wallet. The Wallet Adapter for Solflare can be removed from your app. @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    1877ms] [INFO] [TW] Solana not found @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    2347ms] [LOG] [wallet] init wagmi config @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    2669ms] [WARNING] Solflare was registered as a Standard Wallet. The Wallet Adapter for Solflare can be removed from your app. @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    2680ms] [INFO] [TW] Solana not found @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    2920ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bscrpc.com/:0
+[    2926ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://lite-api.jup.ag/tokens/v1/tagged/verified:0
+[    2962ms] [LOG] [wallet] init wagmi config @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    3491ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://explorer.pancakeswap.com/api/cached/pools/bsc/0x6F69dAE6E29768ba88DBfA91F3261BFC8Bbb1368:0
+[    5777ms] [WARNING] error fetch from api Error: {"name":"Error","message":"no result"}
+    at Object.onResponse (https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:2075:195369)
+    at async b (https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1802:171780)
+    at async x (https://pancakeswap.finance/_next/static/chunks/3-6765f82b8a0d3357.js:1:27971)
+    at async queryFn (https://pancakeswap.finance/_next/static/chunks/3-6765f82b8a0d3357.js:1:32247) @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    5834ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://lite-api.jup.ag/tokens/v1/tagged/verified:0
+[    5854ms] [LOG] %cWarning! color:#F16552; font-size:50px; font-weight: bold; -webkit-text-stroke: 1px black; @ https://auth.privy.io/_next/static/chunks/pages/apps/%5Bapp_id%5D/embedded-wallets-01e613d3082cbb9a.js?dpl=dpl_3T1gQtggBrJUHuL69hvWW2FVi5Am:0
+[    5854ms] [LOG] %cYou are reading this message because you opened the browser console, a developer tool. Do not enter or paste code you do not understand. Never share your tokens or any other info with anyone. If someone told you to do this, it is very likely a scam. font-size: 18px; @ https://auth.privy.io/_next/static/chunks/pages/apps/%5Bapp_id%5D/embedded-wallets-01e613d3082cbb9a.js?dpl=dpl_3T1gQtggBrJUHuL69hvWW2FVi5Am:0
+[    5963ms] [INFO] Firebase auth state changed, user: null @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    5963ms] [INFO] Firebase user signed out, token cleared @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    5963ms] [INFO] Firebase token changed, user: null @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    7864ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://lite-api.jup.ag/tokens/v1/tagged/verified:0
+[   11900ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://lite-api.jup.ag/tokens/v1/tagged/verified:0
+[   15962ms] [ERROR] [PrivyWalletAddress] ⚠️ Loading timeout after 13.28 seconds! @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[   15963ms] [ERROR] [PrivyWalletAddress] Forcing error state to prevent infinite loading @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[ 9685900ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_CLOSED @ https://nodes.pancakeswap.info/:0

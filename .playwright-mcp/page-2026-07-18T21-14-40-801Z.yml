@@ -1,0 +1,57 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - link "Chaintelligence Chaintelligence" [ref=f2e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=f2e5]
+        - generic [ref=f2e6]: Chaintelligence
+      - navigation [ref=f2e7]:
+        - link "LP Positions" [ref=f2e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=f2e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=f2e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=f2e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=f2e12] [cursor=pointer]:
+          - /url: /sps
+        - link "API" [ref=f2e13] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=f2e14]:
+    - main [ref=f2e15]:
+      - generic [ref=f2e16]:
+        - generic [ref=f2e17]:
+          - generic [ref=f2e18]:
+            - heading "Total Portfolio Value" [level=3] [ref=f2e19]
+            - paragraph [ref=f2e20]: "--"
+          - generic [ref=f2e21]:
+            - heading "Total Unclaimed Rewards" [level=3] [ref=f2e22]
+            - paragraph [ref=f2e23]: "--"
+        - generic [ref=f2e24]:
+          - generic [ref=f2e25]:
+            - generic [ref=f2e26]: "Filter:"
+            - combobox [ref=f2e27]:
+              - option "All Networks" [selected]
+              - option "Ethereum"
+              - option "Arbitrum"
+              - option "Base"
+              - option "Polygon"
+            - combobox [ref=f2e28]:
+              - option "All Protocols" [selected]
+            - combobox [ref=f2e29]:
+              - option "All Wallets" [selected]
+            - textbox "Search pair..." [ref=f2e30]
+            - generic [ref=f2e31]:
+              - checkbox "Hide Closed" [checked] [ref=f2e32]
+              - generic [ref=f2e33] [cursor=pointer]: Hide Closed
+          - generic [ref=f2e34]:
+            - generic [ref=f2e35]: "Sort by:"
+            - combobox [ref=f2e36]:
+              - option "Value (High to Low)" [selected]
+              - option "Value (Low to High)"
+              - option "Rewards (High to Low)"
+              - option "Rewards (Low to High)"
+              - option "Pair Name"
+      - paragraph [ref=f2e39]: Fetching LP snapshots from Postgres...
+    - contentinfo [ref=f2e40]

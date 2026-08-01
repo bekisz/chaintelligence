@@ -584,7 +584,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/sps", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status"]
+    exempt_paths = ["/api/coin/list", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -3805,10 +3805,6 @@ async def read_lp():
 @app.get("/pool", include_in_schema=False)
 async def read_pool():
     return FileResponse(os.path.join(STATIC_DIR, 'pool.html'))
-
-@app.get("/sps", include_in_schema=False)
-async def read_sps():
-    return FileResponse(os.path.join(STATIC_DIR, 'sps.html'))
 
 @app.get("/status", include_in_schema=False)
 @app.get("/health-status", include_in_schema=False)

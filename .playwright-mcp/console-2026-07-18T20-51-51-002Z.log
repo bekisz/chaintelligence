@@ -1,0 +1,12 @@
+[      32ms] [LOG] Backtester v11.0 Initializing... @ http://localhost:8000/backtester/app.js?v=11.0:199
+[      35ms] [LOG] Fetching coin list from /api/coin/list... @ http://localhost:8000/backtester/app.js?v=11.0:608
+[      62ms] [LOG] Successfully loaded 1469 coins. @ http://localhost:8000/backtester/app.js?v=11.0:612
+[      70ms] [LOG] Fetching history for: Base=EURC, Quote=USDC @ http://localhost:8000/backtester/app.js?v=11.0:736
+[     410ms] [ERROR] Failed to fetch history from DB for EURC: Error: No historical data found in DB for EURC
+    at Asset.fetchHistory (http://localhost:8000/backtester/logic.js?v=11.0:93:23)
+    at async Promise.all (index 0)
+    at async updateAllCharts (http://localhost:8000/backtester/app.js?v=11.0:738:9) @ http://localhost:8000/backtester/logic.js?v=11.0:100
+[     412ms] [ERROR] Global Error: Error: No historical data found in DB for EURC
+    at Asset.fetchHistory (http://localhost:8000/backtester/logic.js?v=11.0:93:23)
+    at async Promise.all (index 0)
+    at async updateAllCharts (http://localhost:8000/backtester/app.js?v=11.0:738:9) @ http://localhost:8000/backtester/app.js?v=11.0:836

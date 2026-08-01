@@ -1,0 +1,130 @@
+- generic [ref=f4e5]:
+  - generic [ref=f4e7]:
+    - generic [ref=f4e8]:
+      - link [ref=f4e9] [cursor=pointer]:
+        - /url: /
+        - img "Revert logotype" [ref=f4e10]
+      - generic [ref=f4e11]:
+        - link "NEW Create Position" [ref=f4e12] [cursor=pointer]:
+          - /url: /#/discover
+          - generic [ref=f4e13]: NEW
+          - text: Create Position
+        - generic [ref=f4e14]: Dashboard
+        - link "Top Positions" [ref=f4e15] [cursor=pointer]:
+          - /url: /#/top-positions
+        - link "NEW Lending" [ref=f4e16] [cursor=pointer]:
+          - /url: /#/lending
+          - generic [ref=f4e17]: NEW
+          - text: Lending
+        - link "Points" [ref=f4e18] [cursor=pointer]:
+          - /url: /#/points
+    - generic [ref=f4e19]:
+      - generic [ref=f4e20]: light_mode
+      - button "Connect account" [ref=f4e23] [cursor=pointer]
+  - generic [ref=f4e25]:
+    - generic [ref=f4e26]:
+      - generic [ref=f4e29]:
+        - generic [ref=f4e30]:
+          - text: /
+          - generic [ref=f4e31]: 0.00%
+        - generic [ref=f4e32]:
+          - generic [ref=f4e33]: POOL
+          - generic [ref=f4e34]: v4
+          - button "content_copy" [disabled] [ref=f4e41]
+      - generic [ref=f4e42]:
+        - generic [ref=f4e43]:
+          - generic [ref=f4e44]: current pool price
+          - generic [ref=f4e45]:
+            - generic [ref=f4e46]: "-"
+            - generic [ref=f4e47]: /
+        - generic [ref=f4e48]:
+          - generic [ref=f4e49]: TVL
+          - generic [ref=f4e50]: "-"
+        - generic [ref=f4e52]:
+          - generic [ref=f4e53]: volume 24h
+          - generic [ref=f4e54]: "-"
+        - generic [ref=f4e56]:
+          - generic [ref=f4e57]: fees generated 24h
+          - generic [ref=f4e58]: "-"
+    - generic [ref=f4e60]:
+      - generic [ref=f4e61]:
+        - generic [ref=f4e62]:
+          - button "Loading" [disabled] [ref=f4e63]
+          - button "content_copy" [disabled] [ref=f4e64]
+        - generic [ref=f4e65]:
+          - button "Loading" [disabled] [ref=f4e66]
+          - button "content_copy" [disabled] [ref=f4e67]
+        - button "Create / position" [disabled] [ref=f4e68]
+      - generic [ref=f4e70]:
+        - heading "Pool performance charts" [level=1] [ref=f4e72]
+        - generic [ref=f4e73]:
+          - button "Liquidity" [disabled] [ref=f4e74]
+          - button "Pool price" [disabled] [ref=f4e75]
+          - button "Volume" [disabled] [ref=f4e76]
+          - button "TVL" [disabled] [ref=f4e77]
+          - button "Volume/TVL" [disabled] [ref=f4e78]
+          - button "Divergence" [disabled] [ref=f4e79]
+          - button "price" [disabled] [ref=f4e80]
+          - button "price" [disabled] [ref=f4e81]
+        - generic [ref=f4e82]:
+          - generic [ref=f4e83]: Liquidity distribution
+          - generic [ref=f4e85]: Loading pool with address 0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17 -
+      - generic [ref=f4e88]:
+        - generic [ref=f4e89]:
+          - heading "/ open positions" [level=1] [ref=f4e90]
+          - paragraph [ref=f4e91]: Only showing positions with over $500 in pooled assets.
+        - generic [ref=f4e92]:
+          - generic [ref=f4e93]:
+            - generic [ref=f4e94]: add out of range
+            - generic [ref=f4e95]:
+              - checkbox [checked]
+          - generic [ref=f4e97]:
+            - generic [ref=f4e98]: no withdrawals
+            - generic [ref=f4e99]:
+              - checkbox [checked]
+      - generic [ref=f4e102]:
+        - generic [ref=f4e103]:
+          - link "NFT id" [ref=f4e105] [cursor=pointer]:
+            - /url: "#/pool/ethereum/uniswapv4/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17?sort=nft_id"
+          - generic [ref=f4e106]: owner
+          - link "position value" [ref=f4e108] [cursor=pointer]:
+            - /url: "#/pool/ethereum/uniswapv4/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17?sort=underlying_value"
+          - link "PnL" [ref=f4e110] [cursor=pointer]:
+            - /url: "#/pool/ethereum/uniswapv4/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17?sort=pnl"
+          - link "APR" [ref=f4e118] [cursor=pointer]:
+            - /url: "#/pool/ethereum/uniswapv4/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17?sort=apr"
+          - link "fee APR" [ref=f4e126] [cursor=pointer]:
+            - /url: "#/pool/ethereum/uniswapv4/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17?sort=fee_apr"
+          - link "ROI" [ref=f4e128] [cursor=pointer]:
+            - /url: "#/pool/ethereum/uniswapv4/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17?sort=roi"
+          - link "age" [ref=f4e130] [cursor=pointer]:
+            - /url: "#/pool/ethereum/uniswapv4/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17?sort=age"
+        - generic [ref=f4e131]: Fetching positions -
+  - generic [ref=f4e136]:
+    - generic [ref=f4e137]:
+      - img "Revert logotype small version" [ref=f4e138]
+      - generic [ref=f4e139]: REVERT © 2026 | ALL RIGHTS RESERVED
+    - generic [ref=f4e140]:
+      - link "Impermanent Loss" [ref=f4e142] [cursor=pointer]:
+        - /url: /learn/impermanent-loss
+      - link "Brand" [ref=f4e144] [cursor=pointer]:
+        - /url: "#/brand"
+      - link "Terms" [ref=f4e146] [cursor=pointer]:
+        - /url: "#/terms"
+  - generic [ref=f4e147]:
+    - generic [ref=f4e148]:
+      - generic [ref=f4e149]: REVERT v.f77215d
+      - generic [ref=f4e150]:
+        - link "DOCS" [ref=f4e151] [cursor=pointer]:
+          - /url: https://docs.revert.finance/
+        - link "TWITTER" [ref=f4e152] [cursor=pointer]:
+          - /url: https://twitter.com/revertfinance
+        - generic [ref=f4e153]: DISCORD
+        - generic [ref=f4e154]: TELEGRAM
+        - link "GITHUB" [ref=f4e155] [cursor=pointer]:
+          - /url: https://github.com/revert-finance
+        - link "SUPPORT" [ref=f4e156] [cursor=pointer]:
+          - /url: https://39z6rhwtqhg.typeform.com/to/lwaHfAn7
+    - generic [ref=f4e157]:
+      - generic [ref=f4e158] [cursor=pointer]: BLOCK25565135
+      - generic [ref=f4e161] [cursor=pointer]: No connected account

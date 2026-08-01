@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Chaintelligence Chaintelligence" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=e5]
+        - generic [ref=e6]: Chaintelligence
+      - navigation [ref=e7]:
+        - link "LP Positions" [ref=e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=e12] [cursor=pointer]:
+          - /url: /sps
+        - link "Status" [ref=e13] [cursor=pointer]:
+          - /url: /status
+        - link "API" [ref=e14] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=e15]:
+    - main [ref=e16]:
+      - generic [ref=e17]:
+        - heading "Pool Explorer" [level=1] [ref=e18]
+        - paragraph [ref=e19]: Analyze and explore liquidity pools across chains and protocols
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - textbox "Token" [ref=e23]: USDC
+          - generic [ref=e24]: ↔
+          - textbox "Token" [ref=e25]: USDT
+        - generic [ref=e26]:
+          - textbox [ref=e28]: 2026-07-22
+          - generic [ref=e29]: →
+          - textbox [ref=e31]: 2026-07-24
+        - combobox [ref=e32] [cursor=pointer]:
+          - option "All Chains" [selected]
+          - option "Ethereum"
+          - option "Arbitrum"
+          - option "Base"
+          - option "BNB Chain"
+        - button "Show Pools" [ref=e33] [cursor=pointer]
+    - contentinfo [ref=e34]

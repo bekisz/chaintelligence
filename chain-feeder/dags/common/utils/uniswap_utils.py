@@ -493,38 +493,19 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
         Fetches daily pool data for a specific pool defined by token pair and fee tier.
         For Uniswap V4, there can be multiple pools with the same fee tier (due to spacing/hooks),
         so we query totalValueLockedUSD and select the pool with the highest absolute TVL.
+
+        Falls back to querying without feeTier filter if the feeTier-specific query
+        returns no pools, matching by the expected fee range.
         """
         start_ts = int(start_date.timestamp())
         t0, t1 = sorted([token0_addr.lower(), token1_addr.lower()])
         
-        query = f"""
-        {{
-          pools(where: {{
-            token0: "{t0}", 
-            token1: "{t1}", 
-            feeTier: "{fee_tier_bips}"
-          }}) {{
-            id
-            totalValueLockedUSD
-            poolDayData(
-                where: {{ date_gte: {start_ts} }}
-                orderBy: date
-                orderDirection: asc
-            ) {{
-              date
-              tvlUSD
-              volumeUSD
-              txCount
-            }}
-          }}
-        }}
-        """
+        pools = self._query_v4_pools(t0, t1, fee_tier_bips, start_ts)
         
-        result = self._execute_query(query)
-        if not result or 'data' not in result:
-            return []
+        # Fallback: if no pools found with feeTier filter, try without it
+        if not pools:
+            pools = self._query_v4_pools_no_fee(t0, t1, start_ts, fee_tier_bips)
             
-        pools = result['data'].get('pools', [])
         if not pools:
             return []
             
@@ -553,8 +534,80 @@ class UniswapV4Fetcher(UniswapV3Fetcher):
                  'volume_usd': float(d.get('volumeUSD', 0) or 0),
                  'tx_count': int(d.get('txCount', 0) or 0),
              })
+        
+        # Fall back to pool entity's totalValueLockedUSD for today when poolDayData is empty
+        if not normalized_data:
+            entity_tvl = float(pool_data.get('totalValueLockedUSD') or 0)
+            if entity_tvl > 0:
+                normalized_data.append({
+                    'date': datetime.now(timezone.utc).date(),
+                    'tvl_usd': entity_tvl,
+                    'volume_usd': 0,
+                    'tx_count': 0,
+                })
              
         return normalized_data
+
+    def _query_v4_pools(self, t0: str, t1: str, fee_tier_bips: int, start_ts: int) -> List[Dict]:
+        query = f"""
+        {{
+          pools(where: {{
+            token0: "{t0}",
+            token1: "{t1}",
+            feeTier: "{fee_tier_bips}"
+          }}) {{
+            id
+            totalValueLockedUSD
+            poolDayData(
+                where: {{ date_gte: {start_ts} }}
+                orderBy: date
+                orderDirection: asc
+            ) {{
+              date
+              tvlUSD
+              volumeUSD
+              txCount
+            }}
+          }}
+        }}
+        """
+        result = self._execute_query(query)
+        if not result or 'data' not in result:
+            return []
+        return result['data'].get('pools', [])
+
+    def _query_v4_pools_no_fee(self, t0: str, t1: str, start_ts: int, expected_fee_bips: int) -> List[Dict]:
+        expected_str = str(expected_fee_bips)
+        query = f"""
+        {{
+          pools(where: {{
+            token0: "{t0}",
+            token1: "{t1}"
+          }}) {{
+            id
+            feeTier
+            totalValueLockedUSD
+            poolDayData(
+                where: {{ date_gte: {start_ts} }}
+                orderBy: date
+                orderDirection: asc
+            ) {{
+              date
+              tvlUSD
+              volumeUSD
+              txCount
+            }}
+          }}
+        }}
+        """
+        result = self._execute_query(query)
+        if not result or 'data' not in result:
+            return []
+        pools = result['data'].get('pools', [])
+        if not pools:
+            return []
+        matched = [p for p in pools if p.get('feeTier') == expected_str]
+        return matched
 
 # ---------------------------------------------------------------------------
 # Symbol → coin_id lookup for the unified swaps table
@@ -845,7 +898,7 @@ def derive_pool_identifiers(protocol: str, network: str, token0_addr: str, token
         proto_key = 'uniswap_v3' if protocol == 'Uniswap V3' else 'pancakeswap_v3'
         cfg = dex_config.get(proto_key, {}).get(chain_key)
         if cfg:
-            fee_val = int(fee_bps) if fee_bps is not None else 3000
+            fee_val = int(round(float(fee_bps) * 100)) if fee_bps is not None else 3000
             salt = keccak(b'\x00' * 12 + t0_bytes + b'\x00' * 12 + t1_bytes + fee_val.to_bytes(32, 'big'))
             f_bytes = bytes.fromhex(cfg['factory'].removeprefix('0x'))
             ih_bytes = bytes.fromhex(cfg['init_hash'].removeprefix('0x'))
@@ -853,8 +906,8 @@ def derive_pool_identifiers(protocol: str, network: str, token0_addr: str, token
             addr = to_checksum_address(derived)
             return addr, addr
     elif 'V4' in protocol:
-        # V4 default hookless pool ID derivation
-        fee_val = int(fee_bps) if fee_bps is not None else 100
+        # V4 default hookless pool ID derivation (DB stores bps, contract uses hundredths-of-a-bip)
+        fee_val = int(round(float(fee_bps) * 100)) if fee_bps is not None else 100
         _V4_TICK_SPACING = {100: 1, 500: 10, 3000: 60, 10000: 200}
         tick_spacing = _V4_TICK_SPACING.get(fee_val, 10)
         hooks = b'\x00' * 32

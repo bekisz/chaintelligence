@@ -1,0 +1,129 @@
+- generic [active] [ref=f3e1]:
+  - banner [ref=f3e2]:
+    - generic [ref=f3e3]:
+      - link "Chaintelligence Chaintelligence" [ref=f3e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=f3e5]
+        - generic [ref=f3e6]: Chaintelligence
+      - navigation [ref=f3e7]:
+        - link "LP Positions" [ref=f3e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=f3e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=f3e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=f3e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=f3e12] [cursor=pointer]:
+          - /url: /sps
+        - link "Status" [ref=f3e13] [cursor=pointer]:
+          - /url: /status
+        - link "API" [ref=f3e14] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=f3e15]:
+    - main [ref=f3e16]:
+      - generic [ref=f3e17]:
+        - heading "Route Analysis" [level=1] [ref=f3e18]
+        - paragraph [ref=f3e19]: Discover swap routes across chains and protocols
+      - generic [ref=f3e21]:
+        - generic [ref=f3e22]:
+          - textbox "Token" [ref=f3e23]: USDC
+          - generic [ref=f3e24]: →
+          - textbox "Token" [ref=f3e25]: WETH
+        - generic [ref=f3e26]:
+          - textbox [ref=f3e28]: 2026-07-21
+          - generic [ref=f3e29]: →
+          - textbox [ref=f3e31]: 2026-07-24
+        - combobox [ref=f3e32] [cursor=pointer]:
+          - option "All Chains" [selected]
+          - option "Ethereum"
+          - option "Arbitrum"
+          - option "Base"
+          - option "BNB Chain"
+        - button "Analyze Routes" [ref=f3e33] [cursor=pointer]
+      - generic [ref=f3e36]:
+        - generic [ref=f3e38]:
+          - generic [ref=f3e39]:
+            - generic [ref=f3e40]: Network
+            - combobox "Network" [ref=f3e41] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Ethereum"
+              - option "Arbitrum"
+              - option "Base"
+              - option "BNB Chain"
+          - generic [ref=f3e42]:
+            - generic [ref=f3e43]: Protocol
+            - combobox "Protocol" [ref=f3e44] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Uniswap"
+              - option "Uniswap V2"
+              - option "Uniswap V3"
+              - option "Uniswap V4"
+              - option "PancakeSwap"
+              - option "PancakeSwap V3"
+              - option "PancakeSwap V4"
+              - option "Aerodrome"
+          - generic [ref=f3e45]:
+            - generic [ref=f3e46]: Min APR %
+            - spinbutton "Min APR %" [ref=f3e47]
+          - generic [ref=f3e48]:
+            - generic [ref=f3e49]: Min Market Size $
+            - spinbutton "Min Market Size $" [ref=f3e50]
+          - generic [ref=f3e51]:
+            - generic [ref=f3e52]: Min TXs
+            - spinbutton "Min TXs" [ref=f3e53]
+        - button "Settings" [ref=f3e56] [cursor=pointer]
+        - table [ref=f3e61]:
+          - rowgroup [ref=f3e62]:
+            - row [ref=f3e63]:
+              - columnheader "Pool" [ref=f3e64]
+              - columnheader "Network ↕" [ref=f3e65] [cursor=pointer]
+              - columnheader "TXs ↕" [ref=f3e66] [cursor=pointer]
+              - columnheader "APR ↕" [ref=f3e67] [cursor=pointer]
+              - columnheader "Volume ↓" [ref=f3e68] [cursor=pointer]
+              - columnheader "Fees ↕" [ref=f3e69] [cursor=pointer]
+              - columnheader "TVL ↕" [ref=f3e70] [cursor=pointer]
+          - rowgroup [ref=f3e71]:
+            - row [ref=f3e72]:
+              - cell "WETH 0.3% USDC" [ref=f3e73]:
+                - generic [ref=f3e74]:
+                  - link [ref=f3e75] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/wrapped-ether/
+                  - generic [ref=f3e78]: 0.3%
+                  - link [ref=f3e86] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+              - cell "Ethereum" [ref=f3e89]
+              - cell "200" [ref=f3e91]
+              - cell "20%" [ref=f3e92]
+              - cell "$50,000,000" [ref=f3e93]
+              - cell "$150,000" [ref=f3e94]
+              - cell "-" [ref=f3e95]
+            - row [ref=f3e96]:
+              - cell "WETH 0.05% USDC" [ref=f3e97]:
+                - generic [ref=f3e98]:
+                  - link [ref=f3e99] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/wrapped-ether/
+                  - generic [ref=f3e102]: 0.05%
+                  - link [ref=f3e110] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+              - cell "Ethereum" [ref=f3e113]
+              - cell "100" [ref=f3e115]
+              - cell "10%" [ref=f3e116]
+              - cell "$5,000,000" [ref=f3e117]
+              - cell "$1,500" [ref=f3e118]
+              - cell "-" [ref=f3e119]
+            - row [ref=f3e120]:
+              - cell "WETH 0.01% USDC" [ref=f3e121]:
+                - generic [ref=f3e122]:
+                  - link [ref=f3e123] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/wrapped-ether/
+                  - generic [ref=f3e126]: 0.01%
+                  - link [ref=f3e134] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+              - cell "Ethereum" [ref=f3e137]
+              - cell "50" [ref=f3e139]
+              - cell "5%" [ref=f3e140]
+              - cell "$500,000" [ref=f3e141]
+              - cell "$50" [ref=f3e142]
+              - cell "-" [ref=f3e143]
+    - contentinfo [ref=f3e34]

@@ -1,0 +1,14 @@
+[     352ms] [LOG] Backtester v11.0 Initializing... @ http://localhost:8000/backtester/app.js?v=11.0:199
+[     356ms] [LOG] Fetching coin list from /api/coin/list... @ http://localhost:8000/backtester/app.js?v=11.0:608
+[     446ms] [LOG] Successfully loaded 1469 coins. @ http://localhost:8000/backtester/app.js?v=11.0:612
+[     456ms] [LOG] Fetching history for: Base=eth, Quote=usdc @ http://localhost:8000/backtester/app.js?v=11.0:736
+[    3332ms] [LOG] Fetch complete. Base data points: 1232 @ http://localhost:8000/backtester/app.js?v=11.0:741
+[ 7464783ms] [LOG] Dropdown for base-search: query "eth" -> 50 matches @ http://localhost:8000/backtester/app.js?v=11.0:655
+[ 7464813ms] [LOG] Dropdown for base-search: query "tbtc" -> 1 matches @ http://localhost:8000/backtester/app.js?v=11.0:655
+[ 7506065ms] [LOG] Selected token: TBTC @ http://localhost:8000/backtester/app.js?v=11.0:658
+[ 7506066ms] [LOG] Selected new base asset: TBTC @ http://localhost:8000/backtester/app.js?v=11.0:216
+[ 7514076ms] [LOG] Fetching history for: Base=TBTC, Quote=usdc @ http://localhost:8000/backtester/app.js?v=11.0:736
+[ 7516786ms] [LOG] Fetch complete. Base data points: 979 @ http://localhost:8000/backtester/app.js?v=11.0:741
+[11489050ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8000/api/lp/position-summary?t=1784401126062:0
+[11489051ms] [ERROR] Error fetching LP summary: Error: Failed to fetch LP summary
+    at fetchLPSummary (http://localhost:8000/static/lp.js?v=16.0:547:37) @ http://localhost:8000/static/lp.js?v=16.0:604

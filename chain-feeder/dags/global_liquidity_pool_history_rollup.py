@@ -9,6 +9,37 @@ ROUTING_DIR = os.path.join(ROOT_DIR, 'routing')
 if ROUTING_DIR not in sys.path:
     sys.path.insert(0, ROUTING_DIR)
 
+def zero_fill_dormant_pools(days_back: int = 14):
+    """
+    Creates a zero-row (tx_count=0, volume_usd=0, tvl_usd=NULL) in
+    liquidity_pool_history for every pool that does NOT already have a row
+    on each date in the lookback window. This ensures dormant pools (0 swaps)
+    still appear in coverage queries and the TVL fallback can propagate TVL
+    to them.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+    logging.info(f"Zero-filling dormant pool history rows for last {days_back} days...")
+
+    cur.execute("""
+        INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd)
+        SELECT lp.id, (CURRENT_DATE - s.day_offset)::date, 0, 0.0
+        FROM liquidity_pool lp
+        CROSS JOIN generate_series(1, %s) s(day_offset)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM liquidity_pool_history h
+            WHERE h.pool_id = lp.id AND h.date = (CURRENT_DATE - s.day_offset)::date
+        )
+        ON CONFLICT (pool_id, date) DO NOTHING
+    """, (days_back,))
+    inserted = cur.rowcount
+    conn.commit()
+    cur.close()
+    conn.close()
+    logging.info(f"Zero-filled {inserted} dormant pool-day rows.")
+    return inserted
+
+
 def get_db_connection():
     """Returns DB connection via PostgresHook (Airflow) or direct psycopg2 (CLI/standalone)."""
     try:
@@ -51,6 +82,12 @@ def run_global_volume_rollup(days_back: int = 14) -> int:
     cur.close()
     conn.close()
     logging.info(f"Global volume rollup completed. Upserted {updated_rows} rows into liquidity_pool_history.")
+
+    # Zero-fill dormant pools so every pool has a history row (even with 0 tx/vol)
+    try:
+        zero_fill_dormant_pools(days_back)
+    except Exception as e:
+        logging.warning(f"Zero-fill skipped: {e}")
 
     # Trigger TVL fallback backfill
     try:
@@ -99,4 +136,5 @@ except ImportError:
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     rows = run_global_volume_rollup(days_back=30)
-    print(f"Standalone rollup finished. Rows updated: {rows}")
+    zf = zero_fill_dormant_pools(days_back=30)
+    print(f"Standalone rollup finished. Rows updated: {rows}. Zero-filled: {zf}.")

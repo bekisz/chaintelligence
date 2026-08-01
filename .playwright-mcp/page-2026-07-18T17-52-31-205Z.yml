@@ -1,0 +1,108 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Chaintelligence Chaintelligence" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=e5]
+        - generic [ref=e6]: Chaintelligence
+      - navigation [ref=e7]:
+        - link "LP Positions" [ref=e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Backtest" [ref=e9] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=e10] [cursor=pointer]:
+          - /url: /routing
+        - link "API" [ref=e11] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=e12]:
+    - generic [ref=e14]:
+      - textbox "Target (e.g. ETH)" [ref=e16]: TBTC
+      - button "Swap Assets" [ref=e17] [cursor=pointer]
+      - textbox "Quote (e.g. USDC)" [ref=e21]: USDC
+      - generic [ref=e22]:
+        - generic [ref=e23]: Est. APR for -50% - +100% range
+        - spinbutton "20" [ref=e24]
+      - generic [ref=e25]:
+        - generic [ref=e26]: Start Date
+        - textbox [ref=e27]: 2024-07-18
+      - generic [ref=e28]:
+        - generic [ref=e29]: End Date
+        - textbox [ref=e30]: 2026-07-18
+      - generic [ref=e31]:
+        - generic [ref=e32]: Chart Scale
+        - generic [ref=e33]:
+          - generic [ref=e34] [cursor=pointer]: Lin
+          - generic [ref=e35]:
+            - checkbox
+          - generic [ref=e37] [cursor=pointer]: Log
+      - button "Add Strategy" [ref=e38] [cursor=pointer]
+      - button "Run" [ref=e41] [cursor=pointer]
+    - generic [ref=e42]:
+      - button "Strategies" [ref=e43] [cursor=pointer]
+      - button "Summary" [ref=e44] [cursor=pointer]
+    - generic [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - button "Toggle Collapse" [ref=e50] [cursor=pointer]
+          - textbox "Strategy Name" [ref=e53]: Wide Ranged Non-rebalancing
+          - generic [ref=e54]: "#1"
+        - button "Remove Strategy" [ref=e55] [cursor=pointer]
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - generic [ref=e62]:
+            - button "Toggle Parameters" [ref=e63] [cursor=pointer]
+            - generic [ref=e66]: Parameters
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - generic [ref=e70]:
+                - text: Type
+                - button "Learn about Strategy Types" [ref=e71] [cursor=pointer]
+              - generic [ref=e75]:
+                - generic [ref=e76]: Strategy
+                - combobox [ref=e77] [cursor=pointer]:
+                  - option "Non-rebalancing"
+                  - option "Time-delayed" [selected]
+                  - option "Periodic"
+                  - option "Settled"
+            - generic [ref=e78]:
+              - generic [ref=e79]: LP Range
+              - generic [ref=e80]:
+                - generic [ref=e81]:
+                  - generic [ref=e82]: Min %
+                  - spinbutton "-50" [ref=e83]
+                - generic [ref=e84]:
+                  - generic [ref=e85]: Max %
+                  - spinbutton "100" [ref=e86]
+            - generic [ref=e87]:
+              - generic [ref=e88]: Rebalance Parameters
+              - generic [ref=e90]:
+                - generic [ref=e91]:
+                  - generic [ref=e92]: Delay (Days)
+                  - spinbutton "3" [ref=e93]
+                - generic [ref=e94]:
+                  - generic [ref=e95]: Range Min %
+                  - spinbutton "-50" [ref=e96]
+                - generic [ref=e97]:
+                  - generic [ref=e98]: Range Max %
+                  - spinbutton "100" [ref=e99]
+        - generic [ref=e101]:
+          - generic [ref=e102]:
+            - button "Toggle Chart" [ref=e103] [cursor=pointer]
+            - generic [ref=e106]: Price & LP Range
+          - button "Enlarge Chart" [ref=e107] [cursor=pointer]
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - button "Toggle Chart" [ref=e120] [cursor=pointer]
+            - generic [ref=e123]: Volatility
+          - button "Enlarge Chart" [ref=e124] [cursor=pointer]
+        - generic [ref=e131]:
+          - generic [ref=e132]:
+            - button "Toggle Chart" [ref=e133] [cursor=pointer]
+            - generic [ref=e136]: Relative Return over HODL (%)
+          - button "Enlarge Chart" [ref=e137] [cursor=pointer]
+        - generic [ref=e144]:
+          - generic [ref=e145]:
+            - button "Toggle Chart" [ref=e146] [cursor=pointer]
+            - generic [ref=e149]: In-range Duration Histogram
+            - generic [ref=e150]: "Expected: 164.2 days | Break-even: 356.4 days | Beats Standard: ∞ days"
+          - button "Enlarge Chart" [ref=e151] [cursor=pointer]

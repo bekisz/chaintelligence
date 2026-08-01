@@ -137,7 +137,7 @@ def fetch_pools_batched(network: str, protocol: str, pool_params: list, is_v4: b
 
 def main():
     # Load DEX config
-    config_path = os.path.join(REPO_ROOT, 'config', 'dex_config.yaml')
+    config_path = os.path.join(REPO_ROOT, 'config', 'dex-config.yaml')
     with open(config_path, 'r') as f:
         dex_config = yaml.safe_load(f)
 
@@ -241,7 +241,7 @@ def main():
                     derived_addr = _derive_address(t0_addr_bytes, t1_addr_bytes, fee_val, cfg['factory'], cfg['init_hash'], is_v2=False)
 
             if derived_addr:
-                create2_updates.append((derived_addr, derived_addr, lp_db_id))
+                create2_updates.append((derived_addr, None, lp_db_id))
             else:
                 skipped_count += 1
         elif protocol == 'Aerodrome' or 'V4' in protocol:

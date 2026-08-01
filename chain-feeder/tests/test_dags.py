@@ -8,7 +8,7 @@ import json
 from verify_data import verify_coin_families, verify_coin_prices, verify_coin_mapping
 from conftest import run_command, wait_for_dag, wait_for_dag_run, AIRFLOW_CONTAINER
 
-FAMILY_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "../include/config/coin-families.yml")
+FAMILY_CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../config/coin-families.yml"))
 
 @pytest.fixture
 def custom_families():

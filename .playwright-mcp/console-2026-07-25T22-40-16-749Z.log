@@ -1,0 +1,2 @@
+[49950292ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8000/api/routes/date-range:0
+[49950316ms] [ERROR] Error fetching date range: SyntaxError: Unexpected token 'U', "Unauthorized" is not valid JSON @ http://localhost:8000/static/app.js?v=25.0:81

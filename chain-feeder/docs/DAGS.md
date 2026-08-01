@@ -396,10 +396,38 @@ All DAGs follow: `<source>_<chain>_<protocol>_<version>_<output_table>_<fields>`
 
 **Coin Pipeline (5):**
 - `cmc_global_coin_tiered_price` — orchestrator (triggers `yaml_global_coin_family`, `cmc_global_coin_price`)
-- `cmc_global_coin_metadata` — writes `coin`, `coin_contract`
+- `cmc_global_coin_metadata` — writes `coin`, `coin_contract` (Multi-Source Fallback: CMC -> DexScreener -> CoinGecko)
 - `cmc_global_coin_price` — updates `coin.price`
 - `yaml_global_coin_family` — writes `coin_family`
 - `defillama_global_coin_price_history` — writes `coin_price_history`
+
+#### Multi-Source Contract Address Ingestion & Conflict Resolution
+
+The `cmc_global_coin_metadata` DAG uses `MultiSourceContractEngine` ([contract_ingestion.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/contract_ingestion.py)) to discover and resolve smart contract addresses across multiple API providers.
+
+##### Ingestion Waterfall
+1. **Tier 1 (Manual Config):** Hardcoded overrides in `coin-families.yml` (`confidence_score: 100`).
+2. **Tier 2 (CoinMarketCap API):** `cmc_map_fetch` & `cmc_info_fetch` tasks (`confidence_score: 90`).
+3. **Tier 3 (On-Chain Swap Logs / Subgraphs):** Extracted on-the-fly from DEX swap events (`confidence_score: 85`).
+4. **Tier 4 (CoinGecko API):** Query platform contract mappings for tokens unmapped by CMC (`confidence_score: 80`).
+5. **Tier 5 (DexScreener API):** Query search API for DEX-native and newly launched tokens, filtering by pool liquidity ($ > $1,000) to reject scam/impostor tokens (`confidence_score: 70`).
+
+##### Conflict Resolution Rule
+When candidate contract addresses conflict or multiple sources return data for the same `(coin_id, chain_id)`:
+```sql
+INSERT INTO coin_contract (coin_id, chain_id, contract_address, decimals, is_native, source, confidence_score, verified_at, tracked)
+VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), true)
+ON CONFLICT (coin_id, chain_id) DO UPDATE SET
+    contract_address = EXCLUDED.contract_address,
+    decimals = COALESCE(EXCLUDED.decimals, coin_contract.decimals),
+    is_native = EXCLUDED.is_native,
+    source = EXCLUDED.source,
+    confidence_score = EXCLUDED.confidence_score,
+    verified_at = EXCLUDED.verified_at
+WHERE EXCLUDED.confidence_score >= coin_contract.confidence_score;
+```
+- A lower-priority source (e.g. DexScreener score 70) **cannot overwrite** an address registered by a higher-priority source (e.g. CMC score 90).
+- If a contract address is bound to another `coin_id` on the same chain (`idx_coin_contract_addr` unique index), it is updated only if the new incoming source has a higher confidence score.
 
 **Swap Pipeline (11):**
 - `graph_ethereum_uniswap_v2_swaps` — writes `swaps`

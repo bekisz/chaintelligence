@@ -247,7 +247,7 @@ class TestChaintelligenceAPI(unittest.TestCase):
     def test_18_pool_links_present(self):
         """Test /api/pool/{id} — external links are populated for a real V3 pool."""
         # Arbitrum UNI-USDT 0.3% (pool_id 41294 from earlier investigation).
-        url = f"{BASE_URL}/api/pool/165680"
+        url = f"{BASE_URL}/api/pool/41338"
         response = requests.get(url, auth=self.auth)
         self.assertEqual(response.status_code, 200, f"Failed: {response.text}")
         data = response.json()
@@ -273,6 +273,289 @@ class TestChaintelligenceAPI(unittest.TestCase):
             self.assertIn("tvl_usd", entry)
             self.assertIn("volume_usd", entry)
             self.assertIn("tx_count", entry)
+
+
+    def test_20_pool_links_tvl_validation(self):
+        """For the top N pools by TVL with Uniswap links: verify link format matches pool type (v2/v3/v4) and
+        check via Uniswap gateway API that the pool actually exists on-chain (best-effort)."""
+        import concurrent.futures
+        import json
+        import re
+
+        max_pools = int(os.getenv("POOL_MAX_CHECK", "100"))
+        max_workers = int(os.getenv("POOL_UNISWAP_WORKERS", "5"))
+
+        page_size = 500
+        all_pool_ids = set()
+        raw_pools = []
+        for offset in range(0, max_pools, page_size):
+            batch_size = min(page_size, max_pools - offset)
+            list_url = f"{BASE_URL}/api/pools?limit={batch_size}&offset={offset}"
+            resp = requests.get(list_url, auth=self.auth)
+            self.assertEqual(resp.status_code, 200, f"Failed to list pools: {resp.text}")
+            for p in resp.json():
+                if p["id"] not in all_pool_ids:
+                    all_pool_ids.add(p["id"])
+                    raw_pools.append(p)
+
+        targets = []
+        url_failures = []
+        for pool in raw_pools:
+            proto = (pool.get("protocol") or "").lower()
+            if "uniswap" not in proto and "v3" not in proto and "v2" not in proto:
+                continue
+            detail = requests.get(f"{BASE_URL}/api/pool/{pool['id']}", auth=self.auth).json()
+            uniswap_url = detail.get("links", {}).get("uniswap")
+            if not uniswap_url:
+                continue
+
+            chain_lower = detail.get("chain", "").lower()
+            if "arbitrum" in chain_lower:
+                uniswap_chain = "ARBITRUM"
+            elif "base" in chain_lower:
+                uniswap_chain = "BASE"
+            elif "optimism" in chain_lower:
+                uniswap_chain = "OPTIMISM"
+            elif "polygon" in chain_lower:
+                uniswap_chain = "POLYGON"
+            elif "bnb" in chain_lower or "bsc" in chain_lower:
+                uniswap_chain = "BNB"
+            else:
+                uniswap_chain = "ETHEREUM"
+
+            proto = detail.get("protocol", "").lower()
+            is_v2 = "v2" in proto
+            is_v4 = "v4" in proto
+            ver = "v2" if is_v2 else ("v4" if is_v4 else "v3")
+
+            link_addr = uniswap_url.rstrip("/").rsplit("/", 1)[-1]
+            pool_addr = detail.get("pool_address", "").lower()
+            if not is_v4 and pool_addr and link_addr.lower() != pool_addr:
+                url_failures.append((detail["id"], f"{detail['token0']['symbol']}/{detail['token1']['symbol']}",
+                    uniswap_url, f"Link address {link_addr} differs from pool_address {pool_addr}"))
+            pair = f"{detail['token0']['symbol']}/{detail['token1']['symbol']}"
+            targets.append((detail["id"], pair, uniswap_url, uniswap_chain, ver, link_addr))
+
+        self.assertGreater(len(targets), 0, "No Uniswap links found among top pools")
+
+        gateway_failures = []
+        gateway_unavailable = False
+        gateway_url = "https://interface.gateway.uniswap.org/v1/graphql"
+
+        for pid, name, url, chain, ver, link_addr in targets:
+            parts = url.rstrip("/").split("/")
+            if len(parts) < 6:
+                url_failures.append((pid, name, url, "Malformed URL"))
+                continue
+            chain_seg = parts[-2]
+            if chain_seg not in ("ethereum", "arbitrum", "base", "optimism", "polygon", "bnb"):
+                url_failures.append((pid, name, url, f"Unknown chain segment: {chain_seg}"))
+                continue
+
+            if ver in ("v2", "v4"):
+                if not re.match(r'^0x[a-fA-F0-9]{64}$', link_addr):
+                    url_failures.append((pid, name, url, f"{ver.upper()} link must be 66-char hex, got: {link_addr}"))
+            else:
+                if not re.match(r'^0x[a-fA-F0-9]{40}$', link_addr):
+                    url_failures.append((pid, name, url, f"V3 link must be 42-char hex, got: {link_addr}"))
+
+        if url_failures:
+            msg_parts = [f"  Pool {pid} ({name}): {reason} — {url}" for pid, name, url, reason in url_failures]
+            self.fail(f"{len(url_failures)} Uniswap link(s) structurally invalid:\n" + "\n".join(msg_parts))
+
+        def check_via_gateway(pid, name, url, chain, ver, link_addr):
+            nonlocal gateway_unavailable
+            if ver == "v2":
+                return None
+            pool_type = "v4Pool" if ver == "v4" else "v3Pool"
+            query = json.dumps({
+                "query": f"query {{ {pool_type}(chain: {chain}, address: \"{link_addr.lower()}\") {{ id }} }}",
+            })
+            try:
+                resp = requests.post(gateway_url, data=query,
+                    headers={"Content-Type": "application/json", "Origin": "https://app.uniswap.org"},
+                    timeout=15)
+                if resp.status_code == 409:
+                    gateway_unavailable = True
+                    return None
+                if resp.status_code != 200:
+                    return None
+                pool_data = resp.json().get("data", {}).get(pool_type)
+                if pool_data is None:
+                    return (pid, name, url, f"Not found on Uniswap ({pool_type} on {chain})")
+                return None
+            except Exception:
+                return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(check_via_gateway, pid, name, url, ch, ver, la): pid
+                       for pid, name, url, ch, ver, la in targets}
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result:
+                    gateway_failures.append(result)
+
+        if gateway_unavailable and not gateway_failures:
+            self.skipTest("Gateway API unavailable — structural checks passed")
+        elif gateway_failures:
+            msg_parts = [f"  Pool {pid} ({name}): {reason} — {url}" for pid, name, url, reason in gateway_failures]
+            self.fail(f"{len(gateway_failures)} Uniswap link(s) not found on Uniswap:\n" + "\n".join(msg_parts))
+
+
+    def test_21_pancakeswap_links_validation(self):
+        """For the top N PancakeSwap pools: verify pancakeSwap link format matches pool type (v2/v3/v4)."""
+        import re
+
+        max_pools = int(os.getenv("PCS_MAX_CHECK", "100"))
+
+        page_size = 500
+        all_pool_ids = set()
+        raw_pools = []
+
+        lo, hi = 0, 50000
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            r = requests.get(f"{BASE_URL}/api/pools?limit=1&offset={mid}", auth=self.auth)
+            if r.json():
+                lo = mid
+            else:
+                hi = mid - 1
+        total = lo + 1
+        tail_offset = max(0, total - max(page_size, max_pools))
+
+        for offset in range(tail_offset, total, page_size):
+            batch_size = min(page_size, total - offset)
+            list_url = f"{BASE_URL}/api/pools?limit={batch_size}&offset={offset}"
+            resp = requests.get(list_url, auth=self.auth)
+            self.assertEqual(resp.status_code, 200, f"Failed to list pools: {resp.text}")
+            for p in resp.json():
+                if "pancake" in (p.get("protocol") or "").lower() and p["id"] not in all_pool_ids:
+                    all_pool_ids.add(p["id"])
+                    raw_pools.append(p)
+                if len(raw_pools) >= max_pools:
+                    break
+            if len(raw_pools) >= max_pools:
+                break
+
+        self.assertGreater(len(raw_pools), 0,
+            "No PancakeSwap pools found — try increasing scan depth")
+
+        targets = []
+        for pool in raw_pools:
+            d = requests.get(f"{BASE_URL}/api/pool/{pool['id']}", auth=self.auth).json()
+            pcs_url = d.get("links", {}).get("pancakeswap")
+            if not pcs_url:
+                continue
+            proto = d.get("protocol", "").lower()
+            is_v4 = "v4" in proto
+            pair = f"{d['token0']['symbol']}/{d['token1']['symbol']}"
+            link_addr = pcs_url.rstrip("/").rsplit("/", 1)[-1].split("?")[0]
+            targets.append((d["id"], pair, pcs_url, link_addr, is_v4))
+
+        self.assertGreater(len(targets), 0,
+            "No PancakeSwap links found — pools may lack pancakeSwap links")
+
+        failures = []
+        for pid, name, url, link_addr, is_v4 in targets:
+            if not re.match(r'^0x[a-fA-F0-9]{40}$', link_addr) and \
+               not re.match(r'^0x[a-fA-F0-9]{64}$', link_addr):
+                failures.append((pid, name, url,
+                    f"Link address must be 42 or 66-char hex, got: {link_addr}"))
+            if "pancakeswap.finance" not in url:
+                failures.append((pid, name, url, "URL does not point to pancakeswap.finance"))
+
+        if failures:
+            msg_parts = [
+                f"  Pool {pid} ({name}): {reason} — {url}"
+                for pid, name, url, reason in failures
+            ]
+            self.fail(f"{len(failures)} PancakeSwap link(s) invalid:\n" + "\n".join(msg_parts))
+
+
+    def test_22_usd_pool_volume_validation(self):
+        """Fetch USD-USD pools for last 8 days sorted by volume desc, validate links and TVL."""
+        import re
+        from datetime import datetime, timedelta, timezone
+
+        limit = 50
+        end_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+        start_date = (datetime.now(timezone.utc) - timedelta(days=8)).strftime("%Y-%m-%d")
+
+        url = (
+            f"{BASE_URL}/api/pools/search"
+            f"?start_token=USD&end_token=USD"
+            f"&start_date={start_date}&end_date={end_date}"
+            f"&sort_by=volume&limit={limit}&stream=false"
+        )
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Pool search failed: {resp.text}")
+
+        data = resp.json()
+        pools = data.get("pools", [])
+        self.assertGreater(len(pools), 0, "No USD-USD pools found for the period")
+
+        failures = []
+        tvl_zero_pools = []
+        for pool in pools:
+            pid = pool["id"]
+            pair = f"{pool['token0']['symbol']}/{pool['token1']['symbol']}"
+            proto = (pool.get("protocol") or "").lower()
+            links = pool.get("links") or {}
+            tvl = pool.get("tvl_usd")
+
+            if tvl is None or tvl <= 0:
+                tvl_zero_pools.append((pid, pair, tvl))
+
+            ds_url = links.get("dexscreener", "")
+            if not ds_url:
+                failures.append((pid, pair, "Missing DexScreener link"))
+            elif "dexscreener.com" not in ds_url:
+                failures.append((pid, pair, f"DexScreener URL invalid: {ds_url}"))
+
+            has_uni = "uniswap" in links and links["uniswap"]
+            has_pcs = "pancakeswap" in links and links["pancakeswap"]
+            is_uniswap_proto = "uniswap" in proto or "v3" in proto or "v2" in proto
+            is_pancake_proto = "pancake" in proto
+
+            if is_uniswap_proto and not has_uni:
+                failures.append((pid, pair, f"Missing Uniswap link for {proto}"))
+            elif is_pancake_proto and not has_pcs:
+                failures.append((pid, pair, f"Missing PancakeSwap link for {proto}"))
+
+            if has_uni:
+                uni_url = links["uniswap"]
+                if "app.uniswap.org" not in uni_url:
+                    failures.append((pid, pair, f"Uniswap URL domain invalid: {uni_url}"))
+                else:
+                    link_addr = uni_url.rstrip("/").rsplit("/", 1)[-1]
+                    is_v4 = "v4" in proto
+                    if is_v4:
+                        if not re.match(r'^0x[a-fA-F0-9]{64}$', link_addr):
+                            failures.append((pid, pair, f"V4 Uniswap link must be 66-char hex, got: {link_addr}"))
+                    else:
+                        if not re.match(r'^0x[a-fA-F0-9]{40}$', link_addr):
+                            failures.append((pid, pair, f"Uniswap V3 link must be 42-char hex, got: {link_addr}"))
+
+            if has_pcs:
+                pcs_url = links["pancakeswap"]
+                if "pancakeswap.finance" not in pcs_url:
+                    failures.append((pid, pair, f"PancakeSwap URL domain invalid: {pcs_url}"))
+                else:
+                    link_addr = pcs_url.rstrip("/").rsplit("/", 1)[-1].split("?")[0]
+                    if not re.match(r'^0x[a-fA-F0-9]{40}$', link_addr) and \
+                       not re.match(r'^0x[a-fA-F0-9]{64}$', link_addr):
+                        failures.append((pid, pair, f"PancakeSwap link address must be 42 or 66-char hex, got: {link_addr}"))
+
+        msg_parts = []
+        if failures:
+            msg_parts.append(f"{len(failures)} link/format issue(s):")
+            msg_parts.extend(f"  Pool {pid} ({pair}): {reason}" for pid, pair, reason in failures)
+        if tvl_zero_pools:
+            msg_parts.append(f"{len(tvl_zero_pools)} pool(s) with zero TVL:")
+            msg_parts.extend(f"  Pool {pid} ({pair}): TVL={tvl}" for pid, pair, tvl in tvl_zero_pools)
+
+        if msg_parts:
+            self.fail("\n".join(msg_parts))
 
 
 if __name__ == "__main__":

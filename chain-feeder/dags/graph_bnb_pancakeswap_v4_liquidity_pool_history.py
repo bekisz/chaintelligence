@@ -8,6 +8,7 @@ Reads PancakeSwap V4 swaps from the unified `swaps` table (protocol =
   2. sync_v4_pool_ids — backfills `liquidity_pool.pool_id` (the V4 poolId) by
      querying the PancakeSwap V4 BNB subgraph.
   3. build_daily_history — aggregates swaps into `liquidity_pool_history`.
+  4. sync_tvl_from_graph — fetches daily TVL from the PancakeSwap V4 subgraph.
 
 This mirrors `uniswap_v4_history_sync.py` but sources from the unified `swaps`
 table (the legacy `uniswap_v4_swaps` table no longer exists) and uses the
@@ -17,6 +18,7 @@ from airflow import DAG
 from airflow.sdk import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pendulum
+from datetime import datetime, timedelta, timezone
 import logging
 
 PROTOCOL = 'PancakeSwap V4'
@@ -180,34 +182,87 @@ def sync_v4_pool_ids():
 
 
 @task
-def build_daily_history():
-    """Aggregate PancakeSwap V4 swaps into liquidity_pool_history."""
+def sync_tvl_from_graph():
+    """Fetches daily TVL/Volume/TxCount from The Graph for PancakeSwap V4 pools."""
+    from common.utils.uniswap_utils import UniswapV4Fetcher
+    from collections import defaultdict
+
     pg_hook = PostgresHook(postgres_conn_id='chaintelligence_db')
     conn = pg_hook.get_conn()
     cur = conn.cursor()
 
-    cur.execute(f"""
-    INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd)
-    SELECT
-        s.pool_id AS pool_id,
-        DATE(s.ts) AS date,
-        COUNT(*) AS tx_count,
-        SUM(s.amount_usd) AS volume_usd
-    FROM swaps s
-    JOIN liquidity_pool p ON s.pool_id = p.id
-    JOIN chain ch ON p.chain_id = ch.id
-    JOIN protocol pr ON p.protocol_id = pr.id
-    WHERE pr.name = '{PROTOCOL}' AND s.amount_usd IS NOT NULL
-    GROUP BY s.pool_id, DATE(s.ts)
-    ON CONFLICT (pool_id, date) DO UPDATE
-    SET tx_count = EXCLUDED.tx_count,
-        volume_usd = EXCLUDED.volume_usd;
+    logging.info("Building symbol->address map by network...")
+    symbol_map = defaultdict(dict)
+    cur.execute("""
+        SELECT ch.name AS chain_name, c.symbol, cc.contract_address
+        FROM coin_contract cc
+        JOIN coin c ON cc.coin_id = c.coin_id
+        JOIN chain ch ON cc.chain_id = ch.id
     """)
-    updated = cur.rowcount
-    conn.commit()
+    for row in cur.fetchall():
+        chain, sym, addr = row
+        if sym and addr:
+            symbol_map[chain.capitalize()][sym.upper()] = addr.lower()
+
+    cur.execute("""
+        SELECT lp.id, c0.symbol, c1.symbol, lp.fee_bps, ch.name AS network
+        FROM liquidity_pool lp
+        JOIN chain ch ON lp.chain_id = ch.id
+        JOIN protocol pr ON lp.protocol_id = pr.id
+        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+        WHERE pr.name = %s
+    """, (PROTOCOL,))
+    pools = cur.fetchall()
+    logging.info(f"Fetching TVL for {len(pools)} PancakeSwap V4 pools")
+
+    fetchers = {}
+    for pool in pools:
+        pool_id, c0, c1, fee, network = pool
+        if not fee:
+            continue
+        net_symbol_map = symbol_map.get(network, {})
+        addr0 = net_symbol_map.get(c0.upper())
+        addr1 = net_symbol_map.get(c1.upper())
+        if not addr0 or not addr1:
+            logging.warning(f"Skipping pool {pool_id} ({c0}-{c1}) on {network}: address not found")
+            continue
+        try:
+            fee_bips = int(float(fee) * 100)
+        except Exception:
+            continue
+
+        start_date = datetime.now(timezone.utc) - timedelta(days=90)
+        fetcher_key = network
+        if fetcher_key not in fetchers:
+            fetchers[fetcher_key] = UniswapV4Fetcher(
+                verbose=True, network=network, protocol=PROTOCOL
+            )
+        fetcher = fetchers[fetcher_key]
+        try:
+            data = fetcher.fetch_pool_daily_data(addr0, addr1, fee_bips, start_date)
+        except Exception as e:
+            logging.error(f"Graph fetch failed for {c0}-{c1} on {network}: {e}")
+            continue
+        if not data:
+            continue
+        logging.info(f"Upserting {len(data)} records for pool {c0}-{c1} (TVL/Vol)")
+        for d in data:
+            cur.execute("""
+                INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd, tvl_usd)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (pool_id, date) DO UPDATE
+                SET tvl_usd = COALESCE(NULLIF(liquidity_pool_history.tvl_usd, 0), CASE
+                    WHEN EXCLUDED.tvl_usd IS NOT NULL AND ABS(EXCLUDED.tvl_usd) > 1.0 THEN EXCLUDED.tvl_usd
+                    ELSE 0
+                END),
+                    volume_usd = EXCLUDED.volume_usd,
+                    tx_count = EXCLUDED.tx_count;
+            """, (pool_id, d['date'], d['tx_count'], d['volume_usd'], d['tvl_usd']))
+        conn.commit()
+
     cur.close()
     conn.close()
-    logging.info(f"Updated {updated} PancakeSwap V4 daily history records.")
 
 
 with DAG(
@@ -223,6 +278,6 @@ with DAG(
 
     t1 = sync_pools_from_swaps()
     t2 = sync_v4_pool_ids()
-    t3 = build_daily_history()
+    t4 = sync_tvl_from_graph()
 
-    t1 >> t2 >> t3
+    t1 >> t2 >> t4

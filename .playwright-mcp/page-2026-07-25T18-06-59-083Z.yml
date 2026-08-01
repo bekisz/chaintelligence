@@ -1,0 +1,163 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - generic [ref=f4e3]:
+      - navigation [ref=f4e5]:
+        - generic [ref=f4e6]:
+          - link [ref=f4e8] [cursor=pointer]:
+            - /url: /home
+          - generic [ref=f4e21]:
+            - link "Portfolio" [ref=f4e25] [cursor=pointer]:
+              - /url: /portfolio
+            - link "Trade" [ref=f4e29] [cursor=pointer]:
+              - /url: /swap
+            - link "Stocks New" [ref=f4e33] [cursor=pointer]:
+              - /url: /stocks
+              - text: Stocks
+              - generic [ref=f4e34]: New
+            - link "Perps" [ref=f4e38] [cursor=pointer]:
+              - /url: /perps/BTCUSDT
+            - link "Earn" [ref=f4e42] [cursor=pointer]:
+              - /url: /liquidity/pools
+            - link "More" [ref=f4e46] [cursor=pointer]:
+              - /url: /info
+        - generic [ref=f4e48]:
+          - button "Search tokens and pools" [ref=f4e50] [cursor=pointer]:
+            - generic [ref=f4e53]: Search
+            - generic [ref=f4e54]: /
+          - button [ref=f4e56] [cursor=pointer]
+      - img "pancake-3d-spinner" [ref=f4e68]
+    - generic [ref=f4e70]:
+      - generic [ref=f4e71]:
+        - list [ref=f4e72]:
+          - listitem [ref=f4e73]: Ecosystem
+          - listitem [ref=f4e74]:
+            - link "Trade" [ref=f4e75] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/swap
+          - listitem [ref=f4e76]:
+            - link "Earn" [ref=f4e77] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/liquidity/pools
+          - listitem [ref=f4e78]:
+            - link "Play" [ref=f4e79] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/prediction
+        - list [ref=f4e80]:
+          - listitem [ref=f4e81]: Business
+          - listitem [ref=f4e82]:
+            - link "CAKE Incentives" [ref=f4e83] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/ecosystem-and-partnerships/business-partnerships/syrup-pools-and-farms
+          - listitem [ref=f4e84]:
+            - link "Staking Pools" [ref=f4e85] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/pools
+          - listitem [ref=f4e86]:
+            - link "Token Launches" [ref=f4e87] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/ecosystem-and-partnerships/business-partnerships/initial-farm-offerings-ifos
+          - listitem [ref=f4e88]:
+            - link "Brand Assets" [ref=f4e89] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/ecosystem-and-partnerships/brand
+        - list [ref=f4e90]:
+          - listitem [ref=f4e91]: Developers
+          - listitem [ref=f4e92]:
+            - link "Contributing" [ref=f4e93] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/developers/contributing
+          - listitem [ref=f4e94]:
+            - link "Github" [ref=f4e95] [cursor=pointer]:
+              - /url: https://github.com/pancakeswap
+          - listitem [ref=f4e96]:
+            - link "Developer Doc" [ref=f4e97] [cursor=pointer]:
+              - /url: https://developer.pancakeswap.finance/
+          - listitem [ref=f4e98]:
+            - link "Bug Bounty" [ref=f4e99] [cursor=pointer]:
+              - /url: https://developer.pancakeswap.finance/bug-bounty#bug-bounty
+        - list [ref=f4e100]:
+          - listitem [ref=f4e101]: Support
+          - listitem [ref=f4e102]:
+            - link "Get Help" [ref=f4e103] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/welcome-to-pancakeswap/contact-us/faq/help
+          - listitem [ref=f4e104]:
+            - link "Troubleshooting" [ref=f4e105] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/readme/help/troubleshooting
+          - listitem [ref=f4e106]:
+            - link "Documentation" [ref=f4e107] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/
+          - listitem [ref=f4e108]:
+            - link "Audits" [ref=f4e109] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/readme/audits
+          - listitem [ref=f4e110]:
+            - link "Legacy products" [ref=f4e111] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/products/legacy-products
+        - list [ref=f4e112]:
+          - listitem [ref=f4e113]: About
+          - listitem [ref=f4e114]:
+            - link "FAQ" [ref=f4e115] [cursor=pointer]:
+              - /url: https://faq.pancakeswap.finance
+          - listitem [ref=f4e116]:
+            - link "Info" [ref=f4e117] [cursor=pointer]:
+              - /url: /info/v3
+          - listitem [ref=f4e118]:
+            - link "Tokenomics" [ref=f4e119] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/governance-and-tokenomics/cake-tokenomics
+          - listitem [ref=f4e120]:
+            - link "Voting" [ref=f4e121] [cursor=pointer]:
+              - /url: /voting
+          - listitem [ref=f4e122]:
+            - link "Burn Dashboard" [ref=f4e123] [cursor=pointer]:
+              - /url: /burn-dashboard
+          - listitem [ref=f4e124]:
+            - link "Blog" [ref=f4e125] [cursor=pointer]:
+              - /url: https://blog.pancakeswap.finance/
+          - listitem [ref=f4e126]:
+            - link "Careers" [ref=f4e127] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/team/become-a-chef
+          - listitem [ref=f4e128]:
+            - link "Terms Of Service" [ref=f4e129] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/terms-of-service
+      - generic [ref=f4e137]:
+        - link "X" [ref=f4e138] [cursor=pointer]:
+          - /url: https://x.com/pancakeswap
+        - generic [ref=f4e142]:
+          - generic:
+            - link "English":
+              - /url: https://t.me/pancakeswap
+            - link "Bahasa Indonesia":
+              - /url: https://t.me/pancakeswapIndonesia
+            - link "中文":
+              - /url: https://t.me/pancakeswap_CN
+            - link "Tiếng Việt":
+              - /url: https://t.me/PancakeSwapVN
+            - link "русский":
+              - /url: https://t.me/pancakeswap_ru
+            - link "Português":
+              - /url: https://t.me/pancakeswapPortuguese
+            - link "Español":
+              - /url: https://t.me/pancakeswapES
+            - link "日本語":
+              - /url: https://t.me/pancakeswapJP
+            - link "हिन्दी":
+              - /url: https://t.me/pancakeswap_INDIA
+            - link "한국어":
+              - /url: https://t.me/PancakeSwapSouthKorea
+            - link "Malaysia":
+              - /url: https://t.me/PancakeSwapMalaysia
+            - link "Philippines":
+              - /url: https://t.me/PancakeSwapPhilippines
+            - link "Thailand":
+              - /url: https://t.me/PancakeSwapThailand
+            - link "Announcements":
+              - /url: https://t.me/PancakeSwapAnn
+        - link "Reddit" [ref=f4e145] [cursor=pointer]:
+          - /url: https://reddit.com/r/pancakeswap
+        - link "Instagram" [ref=f4e150] [cursor=pointer]:
+          - /url: https://instagram.com/pancakeswapfinance
+        - link "Github" [ref=f4e154] [cursor=pointer]:
+          - /url: https://github.com/pancakeswap/
+        - link "Discord" [ref=f4e157] [cursor=pointer]:
+          - /url: https://discord.gg/pancakeswap
+        - link "Youtube" [ref=f4e160] [cursor=pointer]:
+          - /url: https://www.youtube.com/@pancakeswap_official
+      - generic [ref=f4e163]:
+        - checkbox [ref=f4e166] [cursor=pointer]
+        - generic [ref=f4e192]:
+          - link "$1.403" [ref=f4e194] [cursor=pointer]:
+            - /url: https://pancakeswap.finance/swap?outputCurrency=0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82&chainId=56
+          - link "Buy CAKE" [ref=f4e202] [cursor=pointer]:
+            - /url: /swap?outputCurrency=0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82&chainId=56
+  - alert [ref=f4e205]

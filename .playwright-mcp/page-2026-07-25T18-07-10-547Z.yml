@@ -1,0 +1,254 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - generic [ref=f4e3]:
+      - navigation [ref=f4e5]:
+        - generic [ref=f4e6]:
+          - link [ref=f4e8] [cursor=pointer]:
+            - /url: /home
+          - generic [ref=f4e21]:
+            - link "Portfolio" [ref=f4e25] [cursor=pointer]:
+              - /url: /portfolio
+            - link "Trade" [ref=f4e29] [cursor=pointer]:
+              - /url: /swap
+            - link "Stocks New" [ref=f4e33] [cursor=pointer]:
+              - /url: /stocks
+              - text: Stocks
+              - generic [ref=f4e34]: New
+            - link "Perps" [ref=f4e38] [cursor=pointer]:
+              - /url: /perps/BTCUSDT
+            - link "Earn" [ref=f4e42] [cursor=pointer]:
+              - /url: /liquidity/pools
+            - link "More" [ref=f4e46] [cursor=pointer]:
+              - /url: /info
+        - generic [ref=f4e48]:
+          - button "Search tokens and pools" [ref=f4e50] [cursor=pointer]:
+            - generic [ref=f4e53]: Search
+            - generic [ref=f4e54]: /
+          - button [ref=f4e56] [cursor=pointer]
+          - button "Connect Wallet" [ref=f4e207] [cursor=pointer]
+      - generic [ref=f4e64]:
+        - list [ref=f4e211]:
+          - listitem [ref=f4e212]:
+            - link "Farms" [ref=f4e213] [cursor=pointer]:
+              - /url: /liquidity/pools
+          - listitem [ref=f4e215]
+          - listitem [ref=f4e219]:
+            - generic [ref=f4e220]: BTCB / WBNB
+        - generic [ref=f4e222]:
+          - generic [ref=f4e226]:
+            - generic [ref=f4e227]:
+              - button [ref=f4e231] [cursor=pointer]
+              - generic [ref=f4e234]:
+                - generic [ref=f4e235]:
+                  - generic [ref=f4e238]:
+                    - img "BTCB logo" [ref=f4e240]
+                    - generic [ref=f4e241]:
+                      - img "WBNB logo" [ref=f4e242]
+                      - img "chain-56" [ref=f4e244]
+                  - generic [ref=f4e245]:
+                    - generic [ref=f4e246]: BTCB
+                    - generic [ref=f4e247]: /
+                    - generic [ref=f4e248]: WBNB
+                - generic [ref=f4e252]:
+                  - generic [ref=f4e253]: 0.05%
+                  - generic [ref=f4e257]: v3
+            - generic [ref=f4e261]:
+              - generic [ref=f4e262]:
+                - generic [ref=f4e263]: Current Price
+                - generic [ref=f4e267]:
+                  - generic [ref=f4e268]: NaN
+                  - generic [ref=f4e269]: WBNB = 1 BTCB
+              - generic [ref=f4e271]:
+                - generic [ref=f4e272]:
+                  - generic [ref=f4e273]: Est. APR
+                  - button [ref=f4e278] [cursor=pointer]
+                - generic [ref=f4e286]: 0%
+          - generic [ref=f4e291]:
+            - generic [ref=f4e293]:
+              - generic [ref=f4e295]:
+                - generic [ref=f4e296]:
+                  - button "Volume" [ref=f4e297] [cursor=pointer]
+                  - button "Liquidity" [ref=f4e298] [cursor=pointer]
+                  - button "Fees" [ref=f4e299] [cursor=pointer]
+                  - button "TVL" [ref=f4e300] [cursor=pointer]
+                - tablist "Select a tab" [ref=f4e301]:
+                  - tab "D" [selected] [ref=f4e302] [cursor=pointer]
+                  - tab "W" [ref=f4e303] [cursor=pointer]
+                  - tab "M" [ref=f4e304] [cursor=pointer]
+                  - tab "Y" [ref=f4e305] [cursor=pointer]
+              - generic [ref=f4e306]:
+                - generic [ref=f4e307]:
+                  - generic [ref=f4e308]: $0
+                  - generic [ref=f4e309]: (UTC)
+                - img [ref=f4e312]:
+                  - generic [ref=f4e314]:
+                    - generic [ref=f4e315]: "0"
+                    - generic [ref=f4e317]: auto
+            - generic [ref=f4e322]:
+              - generic [ref=f4e323]:
+                - generic [ref=f4e324]:
+                  - generic [ref=f4e325]: Total Value Locked (TVL)
+                  - heading "$0" [level=3] [ref=f4e327]
+                - generic [ref=f4e329]:
+                  - generic [ref=f4e330]:
+                    - generic [ref=f4e331]:
+                      - img "BTCB logo" [ref=f4e333]
+                      - generic [ref=f4e334]: BTCB
+                    - generic [ref=f4e335]: "0"
+                  - generic [ref=f4e336]:
+                    - generic [ref=f4e337]:
+                      - generic [ref=f4e338]: WBNB
+                      - img "WBNB logo" [ref=f4e340]
+                    - generic [ref=f4e341]: "0"
+                - generic [ref=f4e343]:
+                  - generic [ref=f4e344]: volume 24h
+                  - heading "$0" [level=3] [ref=f4e346]
+                - generic [ref=f4e347]:
+                  - generic [ref=f4e348]: fee 24h
+                  - heading "$0" [level=3] [ref=f4e349]
+              - link [ref=f4e351] [cursor=pointer]:
+                - /url: /add/0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c/BNB/500?chain=bsc&persistChain=1
+                - button "Add Liquidity" [ref=f4e352]
+          - generic [ref=f4e353]:
+            - generic [ref=f4e356]:
+              - button "My Positions" [ref=f4e357] [cursor=pointer]
+              - button "Transactions" [ref=f4e359] [cursor=pointer]
+            - generic [ref=f4e366]:
+              - generic [ref=f4e367]: Please connect wallet to view your position / add liquidity.
+              - button "Connect Wallet" [ref=f4e368] [cursor=pointer]
+    - generic [ref=f4e70]:
+      - generic [ref=f4e71]:
+        - list [ref=f4e72]:
+          - listitem [ref=f4e73]: Ecosystem
+          - listitem [ref=f4e74]:
+            - link "Trade" [ref=f4e75] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/swap
+          - listitem [ref=f4e76]:
+            - link "Earn" [ref=f4e77] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/liquidity/pools
+          - listitem [ref=f4e78]:
+            - link "Play" [ref=f4e79] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/prediction
+        - list [ref=f4e80]:
+          - listitem [ref=f4e81]: Business
+          - listitem [ref=f4e82]:
+            - link "CAKE Incentives" [ref=f4e83] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/ecosystem-and-partnerships/business-partnerships/syrup-pools-and-farms
+          - listitem [ref=f4e84]:
+            - link "Staking Pools" [ref=f4e85] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/pools
+          - listitem [ref=f4e86]:
+            - link "Token Launches" [ref=f4e87] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/ecosystem-and-partnerships/business-partnerships/initial-farm-offerings-ifos
+          - listitem [ref=f4e88]:
+            - link "Brand Assets" [ref=f4e89] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/ecosystem-and-partnerships/brand
+        - list [ref=f4e90]:
+          - listitem [ref=f4e91]: Developers
+          - listitem [ref=f4e92]:
+            - link "Contributing" [ref=f4e93] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/developers/contributing
+          - listitem [ref=f4e94]:
+            - link "Github" [ref=f4e95] [cursor=pointer]:
+              - /url: https://github.com/pancakeswap
+          - listitem [ref=f4e96]:
+            - link "Developer Doc" [ref=f4e97] [cursor=pointer]:
+              - /url: https://developer.pancakeswap.finance/
+          - listitem [ref=f4e98]:
+            - link "Bug Bounty" [ref=f4e99] [cursor=pointer]:
+              - /url: https://developer.pancakeswap.finance/bug-bounty#bug-bounty
+        - list [ref=f4e100]:
+          - listitem [ref=f4e101]: Support
+          - listitem [ref=f4e102]:
+            - link "Get Help" [ref=f4e103] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/welcome-to-pancakeswap/contact-us/faq/help
+          - listitem [ref=f4e104]:
+            - link "Troubleshooting" [ref=f4e105] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/readme/help/troubleshooting
+          - listitem [ref=f4e106]:
+            - link "Documentation" [ref=f4e107] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/
+          - listitem [ref=f4e108]:
+            - link "Audits" [ref=f4e109] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/readme/audits
+          - listitem [ref=f4e110]:
+            - link "Legacy products" [ref=f4e111] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/products/legacy-products
+        - list [ref=f4e112]:
+          - listitem [ref=f4e113]: About
+          - listitem [ref=f4e114]:
+            - link "FAQ" [ref=f4e115] [cursor=pointer]:
+              - /url: https://faq.pancakeswap.finance
+          - listitem [ref=f4e116]:
+            - link "Info" [ref=f4e117] [cursor=pointer]:
+              - /url: /info/v3
+          - listitem [ref=f4e118]:
+            - link "Tokenomics" [ref=f4e119] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/governance-and-tokenomics/cake-tokenomics
+          - listitem [ref=f4e120]:
+            - link "Voting" [ref=f4e121] [cursor=pointer]:
+              - /url: /voting
+          - listitem [ref=f4e122]:
+            - link "Burn Dashboard" [ref=f4e123] [cursor=pointer]:
+              - /url: /burn-dashboard
+          - listitem [ref=f4e124]:
+            - link "Blog" [ref=f4e125] [cursor=pointer]:
+              - /url: https://blog.pancakeswap.finance/
+          - listitem [ref=f4e126]:
+            - link "Careers" [ref=f4e127] [cursor=pointer]:
+              - /url: https://docs.pancakeswap.finance/team/become-a-chef
+          - listitem [ref=f4e128]:
+            - link "Terms Of Service" [ref=f4e129] [cursor=pointer]:
+              - /url: https://pancakeswap.finance/terms-of-service
+      - generic [ref=f4e137]:
+        - link "X" [ref=f4e138] [cursor=pointer]:
+          - /url: https://x.com/pancakeswap
+        - generic [ref=f4e142]:
+          - generic:
+            - link "English":
+              - /url: https://t.me/pancakeswap
+            - link "Bahasa Indonesia":
+              - /url: https://t.me/pancakeswapIndonesia
+            - link "中文":
+              - /url: https://t.me/pancakeswap_CN
+            - link "Tiếng Việt":
+              - /url: https://t.me/PancakeSwapVN
+            - link "русский":
+              - /url: https://t.me/pancakeswap_ru
+            - link "Português":
+              - /url: https://t.me/pancakeswapPortuguese
+            - link "Español":
+              - /url: https://t.me/pancakeswapES
+            - link "日本語":
+              - /url: https://t.me/pancakeswapJP
+            - link "हिन्दी":
+              - /url: https://t.me/pancakeswap_INDIA
+            - link "한국어":
+              - /url: https://t.me/PancakeSwapSouthKorea
+            - link "Malaysia":
+              - /url: https://t.me/PancakeSwapMalaysia
+            - link "Philippines":
+              - /url: https://t.me/PancakeSwapPhilippines
+            - link "Thailand":
+              - /url: https://t.me/PancakeSwapThailand
+            - link "Announcements":
+              - /url: https://t.me/PancakeSwapAnn
+        - link "Reddit" [ref=f4e145] [cursor=pointer]:
+          - /url: https://reddit.com/r/pancakeswap
+        - link "Instagram" [ref=f4e150] [cursor=pointer]:
+          - /url: https://instagram.com/pancakeswapfinance
+        - link "Github" [ref=f4e154] [cursor=pointer]:
+          - /url: https://github.com/pancakeswap/
+        - link "Discord" [ref=f4e157] [cursor=pointer]:
+          - /url: https://discord.gg/pancakeswap
+        - link "Youtube" [ref=f4e160] [cursor=pointer]:
+          - /url: https://www.youtube.com/@pancakeswap_official
+      - generic [ref=f4e163]:
+        - checkbox [ref=f4e166] [cursor=pointer]
+        - generic [ref=f4e192]:
+          - link "$1.403" [ref=f4e194] [cursor=pointer]:
+            - /url: https://pancakeswap.finance/swap?outputCurrency=0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82&chainId=56
+          - link "Buy CAKE" [ref=f4e202] [cursor=pointer]:
+            - /url: /swap?outputCurrency=0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82&chainId=56
+  - alert [ref=f4e205]
+  - generic [ref=f4e370]: "0"

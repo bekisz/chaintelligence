@@ -909,6 +909,239 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     `;
                     }
+
+                    // 4b. Liquidity pool history coverage matrix (pool-level passing metric)
+                    if (tablesObj.liquidity_pool_history && tablesObj.liquidity_pool_history.chains) {
+                        const activeVolFilter = window.currentMatrixVolFilter || '0';
+                        const lphVolData = (tablesObj.liquidity_pool_history.volume_filters && tablesObj.liquidity_pool_history.volume_filters[activeVolFilter])
+                            ? tablesObj.liquidity_pool_history.volume_filters[activeVolFilter]
+                            : tablesObj.liquidity_pool_history;
+                        const lphChains = lphVolData.chains || tablesObj.liquidity_pool_history.chains;
+                        const lookbackDays = tablesObj.liquidity_pool_history.lookback_days || 7;
+                        const lphChainNames = Object.keys(lphChains).sort((a, b) => {
+                            if (a.toLowerCase() === 'ethereum') return -1;
+                            if (b.toLowerCase() === 'ethereum') return 1;
+                            return a.localeCompare(b);
+                        });
+
+                        // Build proto list from unfiltered data so protocols don't disappear at higher thresholds
+                        const lphAllChains = tablesObj.liquidity_pool_history.chains;
+                        const lphProtoSet = new Set();
+                        Object.keys(lphAllChains).forEach(cName => {
+                            const protos = lphAllChains[cName].protocols || {};
+                            Object.keys(protos).forEach(p => lphProtoSet.add(p));
+                        });
+                        // Also include volume-filtered protocols if not already present
+                        lphChainNames.forEach(cName => {
+                            const protos = lphChains[cName].protocols || {};
+                            Object.keys(protos).forEach(p => lphProtoSet.add(p));
+                        });
+
+                        const getLphProtoPriority = (p) => {
+                            const name = p.toLowerCase();
+                            if (name.includes('uniswap v2')) return 1;
+                            if (name.includes('uniswap v3')) return 2;
+                            if (name.includes('uniswap v4')) return 3;
+                            if (name.includes('uniswap')) return 4;
+                            if (name.includes('pancakeswap v3')) return 10;
+                            if (name.includes('pancakeswap v4')) return 11;
+                            if (name.includes('pancakeswap')) return 12;
+                            if (name.includes('aerodrome')) return 20;
+                            return 99;
+                        };
+
+                        const lphProtoList = Array.from(lphProtoSet).sort((a, b) => {
+                            const prioA = getLphProtoPriority(a);
+                            const prioB = getLphProtoPriority(b);
+                            if (prioA !== prioB) return prioA - prioB;
+                            return a.localeCompare(b);
+                        });
+
+                        const getLphLookbackBtnStyle = (val) => {
+                            const isActive = (lookbackDays === val);
+                            return `padding:4px 10px; font-size:0.75rem; font-weight:600; border:none; border-radius:6px; cursor:pointer; transition:all 0.2s; ${isActive ? 'background:#6366f1; color:#ffffff; box-shadow:0 2px 4px rgba(99,102,241,0.4);' : 'background:transparent; color:#94a3b8;'}`;
+                        };
+
+                        const getLphVolBtnStyle = (val) => {
+                            const isActive = (activeVolFilter === val);
+                            return `padding:4px 10px; font-size:0.75rem; font-weight:600; border:none; border-radius:6px; cursor:pointer; transition:all 0.2s; ${isActive ? 'background:#6366f1; color:#ffffff; box-shadow:0 2px 4px rgba(99,102,241,0.4);' : 'background:transparent; color:#94a3b8;'}`;
+                        };
+
+                        window.setLphLookback = function(val) {
+                            fetch('/health?lph_lookback=' + val)
+                                .then(r => r.json())
+                                .then(data => {
+                                    if (data.db && data.db.table) {
+                                        const t = data.db.table;
+                                        if (currentHealthData) {
+                                            currentHealthData.db.table = t;
+                                            renderHealthUI(currentHealthData);
+                                        }
+                                    }
+                                });
+                        };
+
+                        const volBtnHtml = `
+                            <div class="matrix-filter-group" style="display:inline-flex; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:2px;">
+                                <button onclick="setMatrixVolumeFilter('0')" style="${getLphVolBtnStyle('0')}">All Pools</button>
+                                <button onclick="setMatrixVolumeFilter('1000')" style="${getLphVolBtnStyle('1000')}">&gt; $1k</button>
+                                <button onclick="setMatrixVolumeFilter('100000')" style="${getLphVolBtnStyle('100000')}">&gt; $100k</button>
+                                <button onclick="setMatrixVolumeFilter('10000000')" style="${getLphVolBtnStyle('10000000')}">&gt; $10M</button>
+                            </div>
+                            <div class="matrix-filter-group" style="display:inline-flex; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:2px; margin-left:6px;">
+                                <button onclick="setLphLookback(1)" style="${getLphLookbackBtnStyle(1)}">1d</button>
+                                <button onclick="setLphLookback(3)" style="${getLphLookbackBtnStyle(3)}">3d</button>
+                                <button onclick="setLphLookback(7)" style="${getLphLookbackBtnStyle(7)}">7d</button>
+                                <button onclick="setLphLookback(14)" style="${getLphLookbackBtnStyle(14)}">14d</button>
+                                <button onclick="setLphLookback(30)" style="${getLphLookbackBtnStyle(30)}">30d</button>
+                                <button onclick="setLphLookback(90)" style="${getLphLookbackBtnStyle(90)}">90d</button>
+                            </div>
+                        `;
+
+                        breakdownHtml += `
+                            <div class="breakdown-subpanel">
+                                <div class="subpanel-title" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                        <span>Pool History Coverage Matrix (TVL &gt; 0, last ${lookbackDays}d)</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+                                        ${volBtnHtml}
+                                    </div>
+                                </div>
+                                <div style="overflow-x: auto;">
+                                    <table class="indexer-matrix-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left;">DEX Protocol</th>
+                                                ${lphChainNames.map(c => `<th style="text-align: center;">${c}</th>`).join('')}
+                                                <th style="text-align: right;">Pools Passing</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                        `;
+
+                        const lphChainSummary = {};
+                        lphChainNames.forEach(cName => {
+                            lphChainSummary[cName] = { totalPools: 0, passingPools: 0 };
+                        });
+
+                        lphProtoList.forEach(protoName => {
+                            let protoTotal = 0;
+                            let protoPassing = 0;
+                            let rowCellsHtml = '';
+
+                            lphChainNames.forEach(cName => {
+                                const protosExistOnChain = (lphAllChains[cName] && lphAllChains[cName].protocols && lphAllChains[cName].protocols[protoName]);
+                                const pData = (lphChains[cName].protocols || {})[protoName];
+                                if (protosExistOnChain) {
+                                    if (pData) {
+                                        protoTotal += (pData.total_pools || 0);
+                                        protoPassing += (pData.passing_pools || 0);
+                                        lphChainSummary[cName].totalPools += (pData.total_pools || 0);
+                                        lphChainSummary[cName].passingPools += (pData.passing_pools || 0);
+
+                                        const passing = pData.passing_pools || 0;
+                                        const total = pData.total_pools || 0;
+                                        const pct = pData.passing_pct || 0;
+                                        const pctColor = pct >= 80 ? '#34d399' : (pct >= 50 ? '#fbbf24' : '#ef4444');
+
+                                        rowCellsHtml += `
+                                            <td style="text-align: center;">
+                                                <div class="matrix-cell">
+                                                    <div style="font-size:0.9rem; font-weight:700;" class="font-mono">
+                                                        <span style="color:${pctColor};">${pct}%</span>
+                                                    </div>
+                                                    <div style="font-size:0.7rem; color:#6b7280;" class="font-mono">
+                                                        <span>${formatNumber(passing)}</span>
+                                                        <span class="dim-text"> / ${formatNumber(total)} pools</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        `;
+                                    } else {
+                                        rowCellsHtml += `
+                                            <td style="text-align: center;">
+                                                <div class="matrix-cell">
+                                                    <div style="font-size:0.9rem; font-weight:700;" class="font-mono">
+                                                        <span style="color:#6b7280;">—%</span>
+                                                    </div>
+                                                    <div style="font-size:0.7rem; color:#6b7280;" class="font-mono">
+                                                        <span>0</span>
+                                                        <span class="dim-text"> / 0 pools</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        `;
+                                    }
+                                } else {
+                                    rowCellsHtml += `<td style="text-align: center;"></td>`;
+                                }
+                            });
+
+                            const protoPct = protoTotal > 0 ? Math.round(protoPassing / protoTotal * 100) : 0;
+                            breakdownHtml += `
+                                <tr>
+                                    <td class="font-bold font-mono" style="color:#60a5fa; text-align: left;">${protoName}</td>
+                                    ${rowCellsHtml}
+                                    <td class="font-mono font-bold" style="text-align: right;">
+                                        <span style="color:#34d399;">${formatNumber(protoPassing)}</span>
+                                        <span class="dim-text"> / ${formatNumber(protoTotal)}</span>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+
+                        let footerCellsHtml = '';
+                        lphChainNames.forEach(cName => {
+                            const cs = lphChainSummary[cName];
+                            if (cs.totalPools > 0) {
+                                const aggPct = Math.round(cs.passingPools / cs.totalPools * 100);
+                                footerCellsHtml += `
+                                    <td style="text-align: center; border-top: 2px solid rgba(99,102,241,0.75); padding-top: 10px;">
+                                        <div class="matrix-cell">
+                                            <div style="font-size:0.82rem; color:#a78bfa;" class="font-mono">
+                                                <span style="font-weight:600;">${formatNumber(cs.passingPools)}</span>
+                                                <span class="dim-text"> / ${formatNumber(cs.totalPools)} pools</span>
+                                                <br>
+                                                <span style="font-weight:600; font-size:0.72rem;">${aggPct}%</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                `;
+                            } else {
+                                footerCellsHtml += `<td style="border-top: 2px solid rgba(99,102,241,0.75);"></td>`;
+                            }
+                        });
+
+                        const lphGrandTotal = lphChainNames.reduce((s, c) => s + lphChainSummary[c].totalPools, 0);
+                        const lphGrandPassing = lphChainNames.reduce((s, c) => s + lphChainSummary[c].passingPools, 0);
+
+                        breakdownHtml += `
+                                <tr>
+                                    <td class="font-bold" style="text-align: left; border-top: 2px solid rgba(99,102,241,0.75); color:#a78bfa; padding-top: 10px;">
+                                        Σ Chain Total
+                                    </td>
+                                    ${footerCellsHtml}
+                                    <td class="font-mono font-bold" style="text-align: right; border-top: 2px solid rgba(99,102,241,0.75); color:#a78bfa; padding-top: 10px;">
+                                        <span style="color:#a78bfa;">${formatNumber(lphGrandPassing)}</span>
+                                        <span class="dim-text"> / ${formatNumber(lphGrandTotal)}</span>
+                                    </td>
+                                </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:10px; padding:8px 12px; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:6px; font-size:0.75rem;">
+                                    <span style="color:#94a3b8; font-weight:600;">Legend:</span>
+                                    <span style="color:#e2e8f0;">🟢 Passing</span>
+                                    <span style="color:#e2e8f0;">🟡 Partial</span>
+                                    <span style="color:#e2e8f0;">🔴 Failing</span>
+                                    <span style="color:#6b7280;">|</span>
+                                    <span style="color:#94a3b8;">A pool <em>passes</em> if every day in the lookback window has TVL &gt; 0. Dormant pools (0 tx, 0 vol) with healthy TVL are considered passing.</span>
+                                </div>
+                            </div>
+                        `;
+                    }
                 }
 
                 // 5. Coin price history coverage breakdown
@@ -932,17 +1165,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // 6. Liquidity pool history coverage breakdown
-                if (tName === 'liquidity_pool_history' && tables.liquidity_pool) {
+                if (tName === 'liquidity_pool_history' && tablesObj.liquidity_pool) {
                     const activeVolFilter = window.currentMatrixVolFilter || '0';
-                    const matrixData = (tables.liquidity_pool.volume_filters && tables.liquidity_pool.volume_filters[activeVolFilter]) ? tables.liquidity_pool.volume_filters[activeVolFilter] : (tData.covered_pools ? tData : tables.liquidity_pool);
+                    const matrixData = (tablesObj.liquidity_pool.volume_filters && tablesObj.liquidity_pool.volume_filters[activeVolFilter]) ? tablesObj.liquidity_pool.volume_filters[activeVolFilter] : (tData.covered_pools ? tData : tablesObj.liquidity_pool);
                     const cp = matrixData.covered_pools || tData.covered_pools;
                     if (cp) {
                         const formatVolLabel = (v) => {
                             if (v === '0') return 'All Pools';
-                            if (v === '1000') return '> $1k 7d Vol';
-                            if (v === '100000') return '> $100k 7d Vol';
-                            if (v === '10000000') return '> $10M 7d Vol';
-                            return `> $${v} 7d Vol`;
+                            if (v === '1000') return '> $1k';
+                            if (v === '100000') return '> $100k';
+                            if (v === '10000000') return '> $10M';
+                            return `> $${v}`;
                         };
                         const filterLabel = formatVolLabel(activeVolFilter);
                         breakdownHtml += `

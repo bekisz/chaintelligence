@@ -1,0 +1,168 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - link "Chaintelligence Chaintelligence" [ref=f2e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=f2e5]
+        - generic [ref=f2e6]: Chaintelligence
+      - navigation [ref=f2e7]:
+        - link "LP Positions" [ref=f2e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=f2e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=f2e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=f2e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=f2e12] [cursor=pointer]:
+          - /url: /sps
+        - link "Status" [ref=f2e13] [cursor=pointer]:
+          - /url: /status
+        - link "API" [ref=f2e14] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=f2e15]:
+    - main [ref=f2e16]:
+      - generic [ref=f2e17]:
+        - heading "Pool Explorer" [level=1] [ref=f2e18]
+        - paragraph [ref=f2e19]: Analyze and explore liquidity pools across chains and protocols
+      - generic [ref=f2e21]:
+        - generic [ref=f2e22]:
+          - textbox "Token" [ref=f2e23]: WETH
+          - generic [ref=f2e24]: ↔
+          - textbox "Token" [ref=f2e25]: USDC
+        - generic [ref=f2e26]:
+          - textbox [ref=f2e28]: 2026-07-21
+          - generic [ref=f2e29]: →
+          - textbox [ref=f2e31]: 2026-07-24
+        - combobox [ref=f2e32] [cursor=pointer]:
+          - option "All Chains" [selected]
+          - option "Ethereum"
+          - option "Arbitrum"
+          - option "Base"
+          - option "BNB Chain"
+        - button "Show Pools" [ref=f2e33] [cursor=pointer]
+      - generic [ref=f2e36]:
+        - generic [ref=f2e38]:
+          - generic [ref=f2e39]:
+            - generic [ref=f2e40]: Network
+            - combobox "Network" [ref=f2e41] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Ethereum"
+              - option "Arbitrum"
+              - option "Base"
+              - option "BNB Chain"
+          - generic [ref=f2e42]:
+            - generic [ref=f2e43]: Protocol
+            - combobox "Protocol" [ref=f2e44] [cursor=pointer]:
+              - option "All" [selected]
+              - option "Uniswap"
+              - option "Uniswap V2"
+              - option "Uniswap V3"
+              - option "Uniswap V4"
+              - option "PancakeSwap"
+              - option "PancakeSwap V3"
+              - option "PancakeSwap V4"
+              - option "Aerodrome"
+          - generic [ref=f2e45]:
+            - generic [ref=f2e46]: Min APR %
+            - spinbutton "Min APR %" [ref=f2e47]
+          - generic [ref=f2e48]:
+            - generic [ref=f2e49]: Min Market Size $
+            - spinbutton "Min Market Size $" [ref=f2e50]
+          - generic [ref=f2e51]:
+            - generic [ref=f2e52]: Min TXs
+            - spinbutton "Min TXs" [ref=f2e53]
+        - button "Settings" [ref=f2e56] [cursor=pointer]
+        - table [ref=f2e61]:
+          - rowgroup [ref=f2e62]:
+            - row [ref=f2e63]:
+              - columnheader "Pool" [ref=f2e64]
+              - columnheader "Network ↕" [ref=f2e65] [cursor=pointer]
+              - columnheader "TXs ↕" [ref=f2e66] [cursor=pointer]
+              - columnheader "APR ↕" [ref=f2e67] [cursor=pointer]
+              - columnheader "Volume ↓" [ref=f2e68] [cursor=pointer]
+              - columnheader "Fees ↕" [ref=f2e69] [cursor=pointer]
+              - columnheader "TVL ↕" [ref=f2e70] [cursor=pointer]
+          - rowgroup [ref=f2e71]:
+            - row [ref=f2e72]:
+              - cell "WETH 0.3% 20% Revert Finance DexScreener USDC Backtest" [ref=f2e73]:
+                - generic [ref=f2e74]:
+                  - link [ref=f2e75] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/wrapped-ether/
+                  - generic [ref=f2e83]:
+                    - generic [ref=f2e84]: 0.3%
+                    - generic [ref=f2e86]: 20%
+                    - generic [ref=f2e88]:
+                      - link [ref=f2e89] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xbbb
+                      - link [ref=f2e100] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0xbbb
+                        - img "Revert Finance" [ref=f2e101]
+                      - link [ref=f2e102] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0xbbb
+                        - img "DexScreener" [ref=f2e103]
+                  - link [ref=f2e106] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                - generic:
+                  - button "Backtest"
+              - cell "Ethereum" [ref=f2e109]
+              - cell "200" [ref=f2e111]
+              - cell "20%" [ref=f2e112]
+              - cell "$50,000,000" [ref=f2e113]
+              - cell "$0.00" [ref=f2e114]
+              - cell "$5,000,000" [ref=f2e115]
+            - row [ref=f2e116]:
+              - cell "WETH 0.05% 10% Revert Finance DexScreener USDC Backtest" [ref=f2e117]:
+                - generic [ref=f2e118]:
+                  - link [ref=f2e119] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/wrapped-ether/
+                  - generic [ref=f2e127]:
+                    - generic [ref=f2e128]: 0.05%
+                    - generic [ref=f2e130]: 10%
+                    - generic [ref=f2e132]:
+                      - link [ref=f2e133] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xaaa
+                      - link [ref=f2e144] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0xaaa
+                        - img "Revert Finance" [ref=f2e145]
+                      - link [ref=f2e146] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0xaaa
+                        - img "DexScreener" [ref=f2e147]
+                  - link [ref=f2e150] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                - generic:
+                  - button "Backtest"
+              - cell "Ethereum" [ref=f2e153]
+              - cell "100" [ref=f2e155]
+              - cell "10%" [ref=f2e156]
+              - cell "$5,000,000" [ref=f2e157]
+              - cell "$0.00" [ref=f2e158]
+              - cell "$1,000,000" [ref=f2e159]
+            - row [ref=f2e160]:
+              - cell "WETH 0.01% 5% Revert Finance DexScreener USDC Backtest" [ref=f2e161]:
+                - generic [ref=f2e162]:
+                  - link [ref=f2e163] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/wrapped-ether/
+                  - generic [ref=f2e171]:
+                    - generic [ref=f2e172]: 0.01%
+                    - generic [ref=f2e174]: 5%
+                    - generic [ref=f2e176]:
+                      - link [ref=f2e177] [cursor=pointer]:
+                        - /url: https://app.uniswap.org/explore/pools/ethereum/0xccc
+                      - link [ref=f2e188] [cursor=pointer]:
+                        - /url: https://revert.finance/#/pool/mainnet/uniswapv3/0xccc
+                        - img "Revert Finance" [ref=f2e189]
+                      - link [ref=f2e190] [cursor=pointer]:
+                        - /url: https://dexscreener.com/ethereum/0xccc
+                        - img "DexScreener" [ref=f2e191]
+                  - link [ref=f2e194] [cursor=pointer]:
+                    - /url: https://coinmarketcap.com/currencies/usd-coin/
+                - generic:
+                  - button "Backtest"
+              - cell "Ethereum" [ref=f2e197]
+              - cell "50" [ref=f2e199]
+              - cell "5%" [ref=f2e200]
+              - cell "$500,000" [ref=f2e201]
+              - cell "$0.00" [ref=f2e202]
+              - cell "$200,000" [ref=f2e203]
+    - contentinfo [ref=f2e34]

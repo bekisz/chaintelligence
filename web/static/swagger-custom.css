@@ -128,3 +128,24 @@ body {
 .swagger-ui .dialog-ux .modal-ux-content h4 {
     color: white !important;
 }
+
+/* Syntax Highlighting for JSON Examples & Responses */
+.swagger-ui pre.microlight,
+.swagger-ui .highlight-code pre,
+.swagger-ui .example-code pre {
+    background: #0f1115 !important;
+    border-radius: 8px !important;
+    padding: 14px 16px !important;
+    border: 1px solid #2d313a !important;
+}
+
+/* Brighten Swagger endpoint description texts */
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .opblock-description,
+.swagger-ui .opblock-description p,
+.swagger-ui .opblock-body .opblock-description p,
+.swagger-ui .opblock-body .opblock-description {
+    color: #e2e8f0 !important;
+    font-size: 0.88rem !important;
+    line-height: 1.5 !important;
+}

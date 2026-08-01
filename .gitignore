@@ -20,6 +20,7 @@ logs/
 *.sqlite
 recordings/
 test-results/
+api/tests/test-report.md
 
 # Local psycopg2 stub (shadows real package)
 psycopg2/

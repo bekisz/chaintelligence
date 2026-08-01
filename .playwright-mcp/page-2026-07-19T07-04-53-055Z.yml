@@ -1,0 +1,841 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - link [ref=e5] [cursor=pointer]:
+        - /url: /
+        - heading [level=1] [ref=e6]
+      - button "Collapse menu" [ref=e21] [cursor=pointer]
+    - button "Search /" [ref=e26] [cursor=pointer]:
+      - generic [ref=e29]:
+        - generic [ref=e30]: Search
+        - generic [ref=e31]: /
+    - generic [ref=e34]:
+      - button "Get the App!" [ref=e35] [cursor=pointer]
+      - list [ref=e41]:
+        - listitem [ref=e42]:
+          - link "Watchlist" [ref=e43] [cursor=pointer]:
+            - /url: /watchlist
+        - listitem [ref=e47]:
+          - button [ref=e48]:
+            - paragraph [ref=e52]: Alerts
+        - listitem [ref=e53]:
+          - link "Multicharts" [ref=e54] [cursor=pointer]:
+            - /url: /multicharts
+        - listitem [ref=e58]:
+          - link "New Pairs" [ref=e59] [cursor=pointer]:
+            - /url: /new-pairs
+        - listitem [ref=e63]:
+          - link "Gainers & Losers" [ref=e64] [cursor=pointer]:
+            - /url: /gainers
+        - listitem [ref=e69]:
+          - link "API" [ref=e70] [cursor=pointer]:
+            - /url: https://docs.dexscreener.com/api/reference
+        - listitem [ref=e74]:
+          - link "Advertise" [ref=e75] [cursor=pointer]:
+            - /url: https://marketplace.dexscreener.com/product/ad
+      - separator [ref=e79]
+      - list [ref=e80]:
+        - listitem [ref=e81]:
+          - link "Solana Solana" [ref=e82] [cursor=pointer]:
+            - /url: /solana
+            - img "Solana" [ref=e83]
+            - generic [ref=e84]: Solana
+        - listitem [ref=e85]:
+          - link "Robinhood Robinhood" [ref=e86] [cursor=pointer]:
+            - /url: /robinhood
+            - img "Robinhood" [ref=e87]
+            - generic [ref=e88]: Robinhood
+        - listitem [ref=e89]:
+          - link "Base Base" [ref=e90] [cursor=pointer]:
+            - /url: /base
+            - img "Base" [ref=e91]
+            - generic [ref=e92]: Base
+        - listitem [ref=e93]:
+          - link "BSC BSC" [ref=e94] [cursor=pointer]:
+            - /url: /bsc
+            - img "BSC" [ref=e95]
+            - generic [ref=e96]: BSC
+        - listitem [ref=e97]:
+          - link "Ethereum Ethereum" [ref=e98] [cursor=pointer]:
+            - /url: /ethereum
+            - img "Ethereum" [ref=e99]
+            - generic [ref=e100]: Ethereum
+        - listitem [ref=e101]:
+          - link "Polygon Polygon" [ref=e102] [cursor=pointer]:
+            - /url: /polygon
+            - img "Polygon" [ref=e103]
+            - generic [ref=e104]: Polygon
+        - listitem [ref=e105]:
+          - link "PulseChain PulseChain" [ref=e106] [cursor=pointer]:
+            - /url: /pulsechain
+            - img "PulseChain" [ref=e107]
+            - generic [ref=e108]: PulseChain
+        - listitem [ref=e109]:
+          - link "TON TON" [ref=e110] [cursor=pointer]:
+            - /url: /ton
+            - img "TON" [ref=e111]
+            - generic [ref=e112]: TON
+        - listitem [ref=e113]:
+          - link "Sui Sui" [ref=e114] [cursor=pointer]:
+            - /url: /sui
+            - img "Sui" [ref=e115]
+            - generic [ref=e116]: Sui
+        - listitem [ref=e117]:
+          - link "Avalanche Avalanche" [ref=e118] [cursor=pointer]:
+            - /url: /avalanche
+            - img "Avalanche" [ref=e119]
+            - generic [ref=e120]: Avalanche
+        - listitem [ref=e121]:
+          - link "XRPL XRPL" [ref=e122] [cursor=pointer]:
+            - /url: /xrpl
+            - img "XRPL" [ref=e123]
+            - generic [ref=e124]: XRPL
+        - listitem [ref=e125]:
+          - link "Cronos Cronos" [ref=e126] [cursor=pointer]:
+            - /url: /cronos
+            - img "Cronos" [ref=e127]
+            - generic [ref=e128]: Cronos
+        - listitem [ref=e129]:
+          - link "Hyperliquid Hyperliquid" [ref=e130] [cursor=pointer]:
+            - /url: /hyperliquid
+            - img "Hyperliquid" [ref=e131]
+            - generic [ref=e132]: Hyperliquid
+        - listitem [ref=e133]:
+          - link "Arbitrum Arbitrum" [ref=e134] [cursor=pointer]:
+            - /url: /arbitrum
+            - img "Arbitrum" [ref=e135]
+            - generic [ref=e136]: Arbitrum
+        - listitem [ref=e137]:
+          - link "Monad Monad" [ref=e138] [cursor=pointer]:
+            - /url: /monad
+            - img "Monad" [ref=e139]
+            - generic [ref=e140]: Monad
+        - listitem [ref=e141]:
+          - link "World Chain World Chain" [ref=e142] [cursor=pointer]:
+            - /url: /worldchain
+            - img "World Chain" [ref=e143]
+            - generic [ref=e144]: World Chain
+        - listitem [ref=e145]:
+          - link "HyperEVM HyperEVM" [ref=e146] [cursor=pointer]:
+            - /url: /hyperevm
+            - img "HyperEVM" [ref=e147]
+            - generic [ref=e148]: HyperEVM
+        - listitem [ref=e149]:
+          - link "Tron Tron" [ref=e150] [cursor=pointer]:
+            - /url: /tron
+            - img "Tron" [ref=e151]
+            - generic [ref=e152]: Tron
+        - listitem [ref=e153]:
+          - link "Sonic Sonic" [ref=e154] [cursor=pointer]:
+            - /url: /sonic
+            - img "Sonic" [ref=e155]
+            - generic [ref=e156]: Sonic
+        - listitem [ref=e157]:
+          - link "Hedera Hedera" [ref=e158] [cursor=pointer]:
+            - /url: /hedera
+            - img "Hedera" [ref=e159]
+            - generic [ref=e160]: Hedera
+        - listitem [ref=e161]:
+          - link "Abstract Abstract" [ref=e162] [cursor=pointer]:
+            - /url: /abstract
+            - img "Abstract" [ref=e163]
+            - generic [ref=e164]: Abstract
+        - listitem [ref=e165]:
+          - link "NEAR NEAR" [ref=e166] [cursor=pointer]:
+            - /url: /near
+            - img "NEAR" [ref=e167]
+            - generic [ref=e168]: NEAR
+        - listitem [ref=e169]:
+          - link "Linea Linea" [ref=e170] [cursor=pointer]:
+            - /url: /linea
+            - img "Linea" [ref=e171]
+            - generic [ref=e172]: Linea
+        - listitem [ref=e173]:
+          - link "Ink Ink" [ref=e174] [cursor=pointer]:
+            - /url: /ink
+            - img "Ink" [ref=e175]
+            - generic [ref=e176]: Ink
+        - listitem [ref=e177]:
+          - link "Optimism Optimism" [ref=e178] [cursor=pointer]:
+            - /url: /optimism
+            - img "Optimism" [ref=e179]
+            - generic [ref=e180]: Optimism
+        - listitem [ref=e181]:
+          - link "MultiversX MultiversX" [ref=e182] [cursor=pointer]:
+            - /url: /multiversx
+            - img "MultiversX" [ref=e183]
+            - generic [ref=e184]: MultiversX
+        - listitem [ref=e185]:
+          - link "MegaETH MegaETH" [ref=e186] [cursor=pointer]:
+            - /url: /megaeth
+            - img "MegaETH" [ref=e187]
+            - generic [ref=e188]: MegaETH
+        - listitem [ref=e189]:
+          - link "Plasma Plasma" [ref=e190] [cursor=pointer]:
+            - /url: /plasma
+            - img "Plasma" [ref=e191]
+            - generic [ref=e192]: Plasma
+        - listitem [ref=e193]:
+          - link "Berachain Berachain" [ref=e194] [cursor=pointer]:
+            - /url: /berachain
+            - img "Berachain" [ref=e195]
+            - generic [ref=e196]: Berachain
+        - listitem [ref=e197]:
+          - link "Sei V2 Sei V2" [ref=e198] [cursor=pointer]:
+            - /url: /seiv2
+            - img "Sei V2" [ref=e199]
+            - generic [ref=e200]: Sei V2
+        - listitem [ref=e201]:
+          - link "ICP ICP" [ref=e202] [cursor=pointer]:
+            - /url: /icp
+            - img "ICP" [ref=e203]
+            - generic [ref=e204]: ICP
+        - listitem [ref=e205]:
+          - link "Aptos Aptos" [ref=e206] [cursor=pointer]:
+            - /url: /aptos
+            - img "Aptos" [ref=e207]
+            - generic [ref=e208]: Aptos
+        - listitem [ref=e209]:
+          - link "Algorand Algorand" [ref=e210] [cursor=pointer]:
+            - /url: /algorand
+            - img "Algorand" [ref=e211]
+            - generic [ref=e212]: Algorand
+        - listitem [ref=e213]:
+          - link "Fantom Fantom" [ref=e214] [cursor=pointer]:
+            - /url: /fantom
+            - img "Fantom" [ref=e215]
+            - generic [ref=e216]: Fantom
+        - listitem [ref=e217]:
+          - link "zkSync zkSync" [ref=e218] [cursor=pointer]:
+            - /url: /zksync
+            - img "zkSync" [ref=e219]
+            - generic [ref=e220]: zkSync
+        - listitem [ref=e221]:
+          - link "opBNB opBNB" [ref=e222] [cursor=pointer]:
+            - /url: /opbnb
+            - img "opBNB" [ref=e223]
+            - generic [ref=e224]: opBNB
+        - listitem [ref=e225]:
+          - link "Soneium Soneium" [ref=e226] [cursor=pointer]:
+            - /url: /soneium
+            - img "Soneium" [ref=e227]
+            - generic [ref=e228]: Soneium
+        - listitem [ref=e229]:
+          - link "Polkadot Polkadot" [ref=e230] [cursor=pointer]:
+            - /url: /polkadot
+            - img "Polkadot" [ref=e231]
+            - generic [ref=e232]: Polkadot
+        - listitem [ref=e233]:
+          - link "Mantle Mantle" [ref=e234] [cursor=pointer]:
+            - /url: /mantle
+            - img "Mantle" [ref=e235]
+            - generic [ref=e236]: Mantle
+        - listitem [ref=e237]:
+          - link "Flare Flare" [ref=e238] [cursor=pointer]:
+            - /url: /flare
+            - img "Flare" [ref=e239]
+            - generic [ref=e240]: Flare
+        - listitem [ref=e241]:
+          - link "Flow EVM Flow EVM" [ref=e242] [cursor=pointer]:
+            - /url: /flowevm
+            - img "Flow EVM" [ref=e243]
+            - generic [ref=e244]: Flow EVM
+        - listitem [ref=e245]:
+          - link "Starknet Starknet" [ref=e246] [cursor=pointer]:
+            - /url: /starknet
+            - img "Starknet" [ref=e247]
+            - generic [ref=e248]: Starknet
+        - listitem [ref=e249]:
+          - link "ApeChain ApeChain" [ref=e250] [cursor=pointer]:
+            - /url: /apechain
+            - img "ApeChain" [ref=e251]
+            - generic [ref=e252]: ApeChain
+        - listitem [ref=e253]:
+          - link "Blast Blast" [ref=e254] [cursor=pointer]:
+            - /url: /blast
+            - img "Blast" [ref=e255]
+            - generic [ref=e256]: Blast
+        - listitem [ref=e257]:
+          - link "Dogechain Dogechain" [ref=e258] [cursor=pointer]:
+            - /url: /dogechain
+            - img "Dogechain" [ref=e259]
+            - generic [ref=e260]: Dogechain
+        - listitem [ref=e261]:
+          - link "Cardano Cardano" [ref=e262] [cursor=pointer]:
+            - /url: /cardano
+            - img "Cardano" [ref=e263]
+            - generic [ref=e264]: Cardano
+        - listitem [ref=e265]:
+          - link "Harmony Harmony" [ref=e266] [cursor=pointer]:
+            - /url: /harmony
+            - img "Harmony" [ref=e267]
+            - generic [ref=e268]: Harmony
+        - listitem [ref=e269]:
+          - link "Metis Metis" [ref=e270] [cursor=pointer]:
+            - /url: /metis
+            - img "Metis" [ref=e271]
+            - generic [ref=e272]: Metis
+        - listitem [ref=e273]:
+          - link "Unichain Unichain" [ref=e274] [cursor=pointer]:
+            - /url: /unichain
+            - img "Unichain" [ref=e275]
+            - generic [ref=e276]: Unichain
+        - listitem [ref=e277]:
+          - link "Celo Celo" [ref=e278] [cursor=pointer]:
+            - /url: /celo
+            - img "Celo" [ref=e279]
+            - generic [ref=e280]: Celo
+        - listitem [ref=e281]:
+          - link "Katana Katana" [ref=e282] [cursor=pointer]:
+            - /url: /katana
+            - img "Katana" [ref=e283]
+            - generic [ref=e284]: Katana
+        - listitem [ref=e285]:
+          - link "Injective Injective" [ref=e286] [cursor=pointer]:
+            - /url: /injective
+            - img "Injective" [ref=e287]
+            - generic [ref=e288]: Injective
+        - listitem [ref=e289]:
+          - link "Beam Beam" [ref=e290] [cursor=pointer]:
+            - /url: /beam
+            - img "Beam" [ref=e291]
+            - generic [ref=e292]: Beam
+        - listitem [ref=e293]:
+          - link "Stacks Stacks" [ref=e294] [cursor=pointer]:
+            - /url: /stacks
+            - img "Stacks" [ref=e295]
+            - generic [ref=e296]: Stacks
+        - listitem [ref=e297]:
+          - link "Scroll Scroll" [ref=e298] [cursor=pointer]:
+            - /url: /scroll
+            - img "Scroll" [ref=e299]
+            - generic [ref=e300]: Scroll
+        - listitem [ref=e301]:
+          - link "Conflux Conflux" [ref=e302] [cursor=pointer]:
+            - /url: /conflux
+            - img "Conflux" [ref=e303]
+            - generic [ref=e304]: Conflux
+        - listitem [ref=e305]:
+          - link "Taiko Taiko" [ref=e306] [cursor=pointer]:
+            - /url: /taiko
+            - img "Taiko" [ref=e307]
+            - generic [ref=e308]: Taiko
+        - listitem [ref=e309]:
+          - link "Kava Kava" [ref=e310] [cursor=pointer]:
+            - /url: /kava
+            - img "Kava" [ref=e311]
+            - generic [ref=e312]: Kava
+        - listitem [ref=e313]:
+          - link "Fogo Fogo" [ref=e314] [cursor=pointer]:
+            - /url: /fogo
+            - img "Fogo" [ref=e315]
+            - generic [ref=e316]: Fogo
+        - listitem [ref=e317]:
+          - link "Moonriver Moonriver" [ref=e318] [cursor=pointer]:
+            - /url: /moonriver
+            - img "Moonriver" [ref=e319]
+            - generic [ref=e320]: Moonriver
+        - listitem [ref=e321]:
+          - link "Merlin Chain Merlin Chain" [ref=e322] [cursor=pointer]:
+            - /url: /merlinchain
+            - img "Merlin Chain" [ref=e323]
+            - generic [ref=e324]: Merlin Chain
+        - listitem [ref=e325]:
+          - link "Mode Mode" [ref=e326] [cursor=pointer]:
+            - /url: /mode
+            - img "Mode" [ref=e327]
+            - generic [ref=e328]: Mode
+        - listitem [ref=e329]:
+          - link "Story Story" [ref=e330] [cursor=pointer]:
+            - /url: /story
+            - img "Story" [ref=e331]
+            - generic [ref=e332]: Story
+        - listitem [ref=e333]:
+          - link "Manta Manta" [ref=e334] [cursor=pointer]:
+            - /url: /manta
+            - img "Manta" [ref=e335]
+            - generic [ref=e336]: Manta
+        - listitem [ref=e337]:
+          - link "Fuse Fuse" [ref=e338] [cursor=pointer]:
+            - /url: /fuse
+            - img "Fuse" [ref=e339]
+            - generic [ref=e340]: Fuse
+        - listitem [ref=e341]:
+          - link "Venom Venom" [ref=e342] [cursor=pointer]:
+            - /url: /venom
+            - img "Venom" [ref=e343]
+            - generic [ref=e344]: Venom
+        - listitem [ref=e345]:
+          - link "Elastos Elastos" [ref=e346] [cursor=pointer]:
+            - /url: /elastos
+            - img "Elastos" [ref=e347]
+            - generic [ref=e348]: Elastos
+        - listitem [ref=e349]:
+          - link "Oasis Sapphire Oasis Sapphire" [ref=e350] [cursor=pointer]:
+            - /url: /oasissapphire
+            - img "Oasis Sapphire" [ref=e351]
+            - generic [ref=e352]: Oasis Sapphire
+        - listitem [ref=e353]:
+          - link "Telos Telos" [ref=e354] [cursor=pointer]:
+            - /url: /telos
+            - img "Telos" [ref=e355]
+            - generic [ref=e356]: Telos
+        - listitem [ref=e357]:
+          - link "Vana Vana" [ref=e358] [cursor=pointer]:
+            - /url: /vana
+            - img "Vana" [ref=e359]
+            - generic [ref=e360]: Vana
+        - listitem [ref=e361]:
+          - link "Movement Movement" [ref=e362] [cursor=pointer]:
+            - /url: /movement
+            - img "Movement" [ref=e363]
+            - generic [ref=e364]: Movement
+        - listitem [ref=e365]:
+          - link "ZKFair ZKFair" [ref=e366] [cursor=pointer]:
+            - /url: /zkfair
+            - img "ZKFair" [ref=e367]
+            - generic [ref=e368]: ZKFair
+        - listitem [ref=e369]:
+          - link "Neon EVM Neon EVM" [ref=e370] [cursor=pointer]:
+            - /url: /neonevm
+            - img "Neon EVM" [ref=e371]
+            - generic [ref=e372]: Neon EVM
+        - listitem [ref=e373]:
+          - link "Step Network Step Network" [ref=e374] [cursor=pointer]:
+            - /url: /stepnetwork
+            - img "Step Network" [ref=e375]
+            - generic [ref=e376]: Step Network
+    - generic [ref=e378]:
+      - link "Twitter" [ref=e379] [cursor=pointer]:
+        - /url: https://twitter.com/dexscreener
+      - link "Telegram" [ref=e382] [cursor=pointer]:
+        - /url: https://telegram.me/dexscreenerchat
+      - link "Telegram" [ref=e385] [cursor=pointer]:
+        - /url: https://discord.gg/XNgMb5tQN7
+      - button "Lights on" [ref=e388] [cursor=pointer]
+  - main [ref=e391]:
+    - generic [ref=e393]:
+      - generic [ref=e395]:
+        - generic [ref=e396]:
+          - generic [ref=e397]: "?"
+          - heading "Euro Coin" [level=2] [ref=e398]
+          - button "More" [ref=e401] [cursor=pointer]
+        - generic [ref=e404]:
+          - generic [ref=e406]:
+            - heading "EURC Copy token address / USDC" [level=2] [ref=e408]:
+              - generic [ref=e409]: EURC
+              - img "Copy token address" [ref=e410]
+              - generic [ref=e412]: /
+              - generic [ref=e413]: USDC
+            - list [ref=e415]:
+              - link "Ethereum" [ref=e416] [cursor=pointer]:
+                - /url: /ethereum
+              - link "Uniswap" [ref=e421] [cursor=pointer]:
+                - /url: /ethereum/uniswap
+              - listitem [ref=e423]:
+                - generic [ref=e424]: v4
+          - generic [ref=e429]:
+            - generic [ref=e430]:
+              - generic [ref=e431]:
+                - generic [ref=e432]:
+                  - generic [ref=e433]: Price USD
+                  - generic [ref=e434]: $1.14
+                - generic [ref=e436]:
+                  - generic [ref=e437]: Price
+                  - generic [ref=e438]: 1.1428 USDC
+              - generic [ref=e441]:
+                - generic [ref=e442]:
+                  - generic [ref=e443]: Liquidity
+                  - generic [ref=e444]: $289K
+                - generic [ref=e446]:
+                  - generic [ref=e447]: FDV
+                  - generic [ref=e448]: $308.8M
+                - generic [ref=e449]:
+                  - generic [ref=e450]: Mkt Cap
+                  - generic [ref=e451]: $428.9M
+            - generic [ref=e453]:
+              - generic [ref=e454] [cursor=pointer]:
+                - generic [ref=e455]: Ad
+                - generic [ref=e458]:
+                  - paragraph [ref=e459]: GOLD MINE - Fully Audited Code
+                  - paragraph [ref=e460]: Mine Gold for "Real Gold" or Bitcoin, you choose your path - Will you stake your claim?
+                - list [ref=e462]:
+                  - link [ref=e463]:
+                    - /url: /ethereum/0xfF5FAB9b60955dA5726A5787b9cbf2B4B298A197
+                  - link [ref=e468]:
+                    - /url: https://mine4gold.app/
+                  - link [ref=e472]:
+                    - /url: https://x.com/Mine_4Gold
+                  - link [ref=e476]:
+                    - /url: https://t.me/mine_4_gold
+              - generic [ref=e480]:
+                - link [ref=e481] [cursor=pointer]:
+                  - /url: https://marketplace.dexscreener.com/product/ad
+                - button "Hide ad" [ref=e485] [cursor=pointer]
+            - generic [ref=e486]:
+              - tablist [ref=e487]:
+                - tab "5M 0%" [ref=e488] [cursor=pointer]:
+                  - generic [ref=e489]:
+                    - generic [ref=e490]: 5M
+                    - generic [ref=e491]: 0%
+                - tab "1H -0.01%" [ref=e493] [cursor=pointer]:
+                  - generic [ref=e494]:
+                    - generic [ref=e495]: 1H
+                    - generic [ref=e496]: "-0.01%"
+                - tab "6H -0.02%" [ref=e497] [cursor=pointer]:
+                  - generic [ref=e498]:
+                    - generic [ref=e499]: 6H
+                    - generic [ref=e500]: "-0.02%"
+                - tab "24H -0.07%" [ref=e501] [cursor=pointer]:
+                  - generic [ref=e502]:
+                    - generic [ref=e503]: 24H
+                    - generic [ref=e504]: "-0.07%"
+              - tabpanel [ref=e506]:
+                - generic [ref=e507]:
+                  - generic [ref=e508]:
+                    - generic [ref=e509]: Txns
+                    - generic [ref=e510]: "85"
+                  - generic [ref=e511]:
+                    - generic [ref=e512]: Volume
+                    - generic [ref=e513]: $193K
+                  - generic [ref=e514]:
+                    - generic [ref=e515]: Traders
+                    - generic [ref=e516]: "70"
+                - generic [ref=e517]:
+                  - generic [ref=e519]:
+                    - generic [ref=e520]:
+                      - generic [ref=e521]: Buys
+                      - generic [ref=e522]: "41"
+                    - generic [ref=e523]:
+                      - generic [ref=e524]: Sells
+                      - generic [ref=e525]: "44"
+                  - generic [ref=e531]:
+                    - generic [ref=e532]:
+                      - generic [ref=e533]: Buy Vol
+                      - generic [ref=e534]: $89K
+                    - generic [ref=e535]:
+                      - generic [ref=e536]: Sell Vol
+                      - generic [ref=e537]: $104K
+                  - generic [ref=e543]:
+                    - generic [ref=e544]:
+                      - generic [ref=e545]: Buyers
+                      - generic [ref=e546]: "37"
+                    - generic [ref=e547]:
+                      - generic [ref=e548]: Sellers
+                      - generic [ref=e549]: "36"
+            - generic [ref=e554]:
+              - generic [ref=e555]:
+                - button [disabled] [ref=e556]
+                - button "Alerts" [disabled] [ref=e560]
+              - generic [ref=e565]:
+                - button "Trade on Uniswap" [ref=e566] [cursor=pointer]
+                - link "External Link" [ref=e571] [cursor=pointer]:
+                  - /url: https://app.uniswap.org/swap?outputCurrency=0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c&chain=ethereum
+          - generic [ref=e575]:
+            - generic [ref=e576]:
+              - generic [ref=e577]:
+                - generic [ref=e578]: Pair created
+                - generic [ref=e579]: 1y 10d ago
+              - generic [ref=e581]:
+                - generic [ref=e582]: Pooled EURC
+                - generic [ref=e583]: 132,975
+                - generic [ref=e584]: $151K
+              - generic [ref=e586]:
+                - generic [ref=e587]: Pooled USDC
+                - generic [ref=e588]: 137,581
+                - generic [ref=e589]: $137K
+              - generic [ref=e591]:
+                - generic "0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17" [ref=e592]: Pair
+                - generic [ref=e593]:
+                  - button [ref=e594] [cursor=pointer]
+                  - link [ref=e598] [cursor=pointer]:
+                    - /url: https://etherscan.io/address/0xb2b92b56988a4edbe255989792c6ea239b25eaf66b42093145cbf8f630db3a17
+              - generic [ref=e603]:
+                - generic "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c" [ref=e604]: EURC
+                - generic [ref=e605]:
+                  - button [ref=e606] [cursor=pointer]
+                  - link [ref=e610] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/tokenholderchart/0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c
+                  - link [ref=e614] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c
+              - generic [ref=e619]:
+                - generic "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" [ref=e620]: USDC
+                - generic [ref=e621]:
+                  - button [ref=e622] [cursor=pointer]
+                  - link [ref=e626] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/tokenholderchart/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+                  - link [ref=e630] [cursor=pointer]:
+                    - /url: https://etherscan.io/token/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+            - generic [ref=e634]:
+              - button [disabled] [ref=e636]
+              - button [ref=e640] [cursor=pointer]
+          - generic [ref=e645]:
+            - generic [ref=e646]:
+              - generic [ref=e648]:
+                - generic [ref=e649]: Go+ Security
+                - generic [ref=e650]: 2 issues
+              - generic [ref=e660]:
+                - generic [ref=e661]: Quick Intel
+                - generic [ref=e662]: 3 issues
+            - generic [ref=e671]:
+              - text: Warning! Audits may not be 100% accurate!
+              - generic [ref=e672]: More.
+            - group [ref=e673] [cursor=pointer]:
+              - generic [ref=e674]: Boost
+            - group [ref=e678]:
+              - button "-"
+              - button "-"
+              - button "-"
+              - button "-"
+          - generic [ref=e680]:
+            - generic [ref=e681]:
+              - textbox [disabled] [ref=e682]: "1"
+              - generic "EURC" [ref=e684]
+            - generic [ref=e688]:
+              - textbox [disabled] [ref=e689]: "1.14"
+              - generic [ref=e691]:
+                - button "USD" [ref=e692] [cursor=pointer]
+                - button "USDC" [ref=e697] [cursor=pointer]
+          - generic [ref=e703]:
+            - img "Euro Coin" [ref=e705]
+            - paragraph [ref=e706]: Euro Coin is a stablecoin issued by Circle under the same reserve model as USD Coin (USDC). It is designed to be stable and 100% backed by euros held in euro denominated banking accounts. An Euro Coin (EUROC) will be redeemable 1:1 for the euro currency.
+            - list [ref=e708]:
+              - link [ref=e709] [cursor=pointer]:
+                - /url: https://www.circle.com
+              - link [ref=e713] [cursor=pointer]:
+                - /url: https://twitter.com/circlepay
+            - generic [ref=e718]:
+              - link [ref=e719] [cursor=pointer]:
+                - /url: https://marketplace.dexscreener.com/product/token-info/order?chainId=ethereum&tokenAddress=0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c
+              - paragraph [ref=e723]:
+                - link "Learn more" [ref=e724] [cursor=pointer]:
+                  - /url: https://docs.dexscreener.com/token-listing
+      - generic [ref=e725]:
+        - generic [ref=e726]:
+          - generic [ref=e729]:
+            - generic [ref=e730]: Loading...
+            - generic [ref=e733]: Loading chart settings...
+          - generic [ref=e737]:
+            - generic [ref=e740]:
+              - button "Txns" [ref=e741] [cursor=pointer]
+              - button [ref=e746] [cursor=pointer]
+              - button [ref=e750] [cursor=pointer]
+              - button [ref=e754] [cursor=pointer]
+              - button [ref=e758] [cursor=pointer]
+            - generic [ref=e763]:
+              - button "Minimize" [ref=e764] [cursor=pointer]
+              - button "Maximize" [ref=e767] [cursor=pointer]
+        - generic [ref=e779]:
+          - generic [ref=e784]:
+            - link [ref=e785] [cursor=pointer]:
+              - /url: https://metawin.com/t/dexscreener-2
+            - link "#1 c8ntinuum CTM 2%" [ref=e788] [cursor=pointer]:
+              - /url: /ethereum/0xdb4c4d91f12ce76f5c9ac0eae193cf3b4d6684cd5f09bf35d03dd9ae6d8a43b1
+              - generic [ref=e789]:
+                - generic [ref=e790]: "#1"
+                - img "c8ntinuum" [ref=e791]
+                - generic [ref=e792]: CTM
+                - generic [ref=e793]: 2%
+            - link "#2 Asteroid Shiba ASTEROID 3%" [ref=e794] [cursor=pointer]:
+              - /url: /ethereum/0x76a411f14a704099ba476ce8dffc288a53295218
+              - generic [ref=e795]:
+                - generic [ref=e796]: "#2"
+                - img "Asteroid Shiba" [ref=e797]
+                - generic [ref=e798]: ASTEROID
+                - generic [ref=e799]: 3%
+            - link "#3 wojak wojak 17%" [ref=e800] [cursor=pointer]:
+              - /url: /ethereum/0xcaa3a16f8440f85303afaab1992f2b97d12469b1
+              - generic [ref=e801]:
+                - generic [ref=e802]: "#3"
+                - img "wojak" [ref=e803]
+                - generic [ref=e804]: wojak
+                - generic [ref=e805]: 17%
+            - link "#4 Gensyn AI -0.08%" [ref=e806] [cursor=pointer]:
+              - /url: /ethereum/0x3198ca64ebff6d008860f2c450cfcbf1faac7677
+              - generic [ref=e807]:
+                - generic [ref=e808]: "#4"
+                - img "Gensyn" [ref=e809]
+                - generic [ref=e810]: AI
+                - generic [ref=e811]: "-0.08%"
+            - link "#5 ADI ADI -3%" [ref=e812] [cursor=pointer]:
+              - /url: /ethereum/0x41a561b972039a9ccb975a4c17b84c9f95099e15
+              - generic [ref=e813]:
+                - generic [ref=e814]: "#5"
+                - img "ADI" [ref=e815]
+                - generic [ref=e816]: ADI
+                - generic [ref=e817]: "-3%"
+            - link "#6 SPX6900 SPX -2%" [ref=e818] [cursor=pointer]:
+              - /url: /ethereum/0x52c77b0cb827afbad022e6d6caf2c44452edbc39
+              - generic [ref=e819]:
+                - generic [ref=e820]: "#6"
+                - img "SPX6900" [ref=e821]
+                - generic [ref=e822]: SPX
+                - generic [ref=e823]: "-2%"
+            - link "#7 REAL ASSET -1%" [ref=e824] [cursor=pointer]:
+              - /url: /ethereum/0xe76532bae172876b6c7170ce02309715502c360b
+              - generic [ref=e825]:
+                - generic [ref=e826]: "#7"
+                - img "REAL" [ref=e827]
+                - generic [ref=e828]: ASSET
+                - generic [ref=e829]: "-1%"
+            - link "#8 Asteroid ASTEROID -11%" [ref=e830] [cursor=pointer]:
+              - /url: /ethereum/0x7dfc9dd51638573a812b39d33eded20df468e7bc
+              - generic [ref=e831]:
+                - generic [ref=e832]: "#8"
+                - img "Asteroid" [ref=e833]
+                - generic [ref=e834]: ASTEROID
+                - generic [ref=e835]: "-11%"
+            - link "#9 Pepe PEPE 2%" [ref=e836] [cursor=pointer]:
+              - /url: /ethereum/0xa43fe16908251ee70ef74718545e4fe6c5ccec9f
+              - generic [ref=e837]:
+                - generic [ref=e838]: "#9"
+                - img "Pepe" [ref=e839]
+                - generic [ref=e840]: PEPE
+                - generic [ref=e841]: 2%
+            - link "#10 Unipeg uPEG 4%" [ref=e842] [cursor=pointer]:
+              - /url: /ethereum/0x94af294207a2c592c08a39c82a7df42a18613d986eeb520b7164fe9ccd66a000
+              - generic [ref=e843]:
+                - generic [ref=e844]: "#10"
+                - img "Unipeg" [ref=e845]
+                - generic [ref=e846]: uPEG
+                - generic [ref=e847]: 4%
+            - link "#11 Yee Token Yee -2%" [ref=e848] [cursor=pointer]:
+              - /url: /ethereum/0xbc7ce7b6b5437d7d715fbb1cc7b4ec12399c5516
+              - generic [ref=e849]:
+                - generic [ref=e850]: "#11"
+                - img "Yee Token" [ref=e851]
+                - generic [ref=e852]: Yee
+                - generic [ref=e853]: "-2%"
+            - link "#12 Joe Coin JOE 1%" [ref=e854] [cursor=pointer]:
+              - /url: /ethereum/0x704ad8d95c12d7fea531738faa94402725acb035
+              - generic [ref=e855]:
+                - generic [ref=e856]: "#12"
+                - img "Joe Coin" [ref=e857]
+                - generic [ref=e858]: JOE
+                - generic [ref=e859]: 1%
+            - link "#13 Zama ZAMA -2%" [ref=e860] [cursor=pointer]:
+              - /url: /ethereum/0x4d68b530920d26c3b01c99fecc19e21011b72bbd
+              - generic [ref=e861]:
+                - generic [ref=e862]: "#13"
+                - img "Zama" [ref=e863]
+                - generic [ref=e864]: ZAMA
+                - generic [ref=e865]: "-2%"
+            - link "#14 Mog Coin Mog -0.75%" [ref=e866] [cursor=pointer]:
+              - /url: /ethereum/0xc2eab7d33d3cb97692ecb231a5d0e4a649cb539d
+              - generic [ref=e867]:
+                - generic [ref=e868]: "#14"
+                - img "Mog Coin" [ref=e869]
+                - generic [ref=e870]: Mog
+                - generic [ref=e871]: "-0.75%"
+            - link "#15 Apu Apustaja APU 0.7%" [ref=e872] [cursor=pointer]:
+              - /url: /ethereum/0x5ced44f03ff443bbe14d8ea23bc24425fb89e3ed
+              - generic [ref=e873]:
+                - generic [ref=e874]: "#15"
+                - img "Apu Apustaja" [ref=e875]
+                - generic [ref=e876]: APU
+                - generic [ref=e877]: 0.7%
+            - link "#16 TITAN X TITANX -4%" [ref=e878] [cursor=pointer]:
+              - /url: /ethereum/0xc45a81bc23a64ea556ab4cdf08a86b61cdceea8b
+              - generic [ref=e879]:
+                - generic [ref=e880]: "#16"
+                - img "TITAN X" [ref=e881]
+                - generic [ref=e882]: TITANX
+                - generic [ref=e883]: "-4%"
+            - link "#17 HLX 0.76%" [ref=e884] [cursor=pointer]:
+              - /url: /ethereum/0x2c2226a6381e68a86c1a8dcb8d9fdab050959dd5
+              - generic [ref=e885]:
+                - generic [ref=e886]: "#17"
+                - generic [ref=e887]: HLX
+                - generic [ref=e888]: 0.76%
+            - link "#18 FIFA FIFA -53%" [ref=e889] [cursor=pointer]:
+              - /url: /ethereum/0x5d5507b5f4d65343ea7a5d9816fa7bed0b2e922e
+              - generic [ref=e890]:
+                - generic [ref=e891]: "#18"
+                - img "FIFA" [ref=e892]
+                - generic [ref=e893]: FIFA
+                - generic [ref=e894]: "-53%"
+            - link "#19 Octra OCT 1%" [ref=e895] [cursor=pointer]:
+              - /url: /ethereum/0x5eb459d3fc44f3f412ef43f93fa1e44ecb4ca9cb62a16bcbd94b5d0b834ff854
+              - generic [ref=e896]:
+                - generic [ref=e897]: "#19"
+                - img "Octra" [ref=e898]
+                - generic [ref=e899]: OCT
+                - generic [ref=e900]: 1%
+            - link "#20 Non-Playable Coin NPC 3%" [ref=e901] [cursor=pointer]:
+              - /url: /ethereum/0x69c7bd26512f52bf6f76fab834140d13dda673ca
+              - generic [ref=e902]:
+                - generic [ref=e903]: "#20"
+                - img "Non-Playable Coin" [ref=e904]
+                - generic [ref=e905]: NPC
+                - generic [ref=e906]: 3%
+            - link "#21 Kekius Maximus KEKIUS 6%" [ref=e907] [cursor=pointer]:
+              - /url: /ethereum/0xfff8d5fff6ee3226fa2f5d7d5d8c3ff785be9c74
+              - generic [ref=e908]:
+                - generic [ref=e909]: "#21"
+                - img "Kekius Maximus" [ref=e910]
+                - generic [ref=e911]: KEKIUS
+                - generic [ref=e912]: 6%
+            - link "#22 01 01 -6%" [ref=e913] [cursor=pointer]:
+              - /url: /ethereum/0x15d657e5b397f126387281f813af11d4a4f2d49c88b72f9b94d20a1f83381935
+              - generic [ref=e914]:
+                - generic [ref=e915]: "#22"
+                - img "01" [ref=e916]
+                - generic [ref=e917]: "01"
+                - generic [ref=e918]: "-6%"
+            - link "#23 ANyONe Protocol ANYONE 16%" [ref=e919] [cursor=pointer]:
+              - /url: /ethereum/0xc593fe9193b745447e86b45ea0bf62565ee030cc
+              - generic [ref=e920]:
+                - generic [ref=e921]: "#23"
+                - img "ANyONe Protocol" [ref=e922]
+                - generic [ref=e923]: ANYONE
+                - generic [ref=e924]: 16%
+            - link "#24 Book of Ethereum BOOE -4%" [ref=e925] [cursor=pointer]:
+              - /url: /ethereum/0xdeba8fd61c1c87b6321a501ebb19e61e610421bf
+              - generic [ref=e926]:
+                - generic [ref=e927]: "#24"
+                - img "Book of Ethereum" [ref=e928]
+                - generic [ref=e929]: BOOE
+                - generic [ref=e930]: "-4%"
+            - link "#25 ChainLink Token LINK 1%" [ref=e931] [cursor=pointer]:
+              - /url: /ethereum/0xb2b5618903d74bbac9e9049a035c3827afc4487cde3b994a1568b050f4c8e2e4
+              - generic [ref=e932]:
+                - generic [ref=e933]: "#25"
+                - img "ChainLink Token" [ref=e934]
+                - generic [ref=e935]: LINK
+                - generic [ref=e936]: 1%
+            - link "#26 Department Of Government Efficiency DOGE 6%" [ref=e937] [cursor=pointer]:
+              - /url: /ethereum/0x308c6fbd6a14881af333649f17f2fde9cd75e2a6
+              - generic [ref=e938]:
+                - generic [ref=e939]: "#26"
+                - img "Department Of Government Efficiency" [ref=e940]
+                - generic [ref=e941]: DOGE
+                - generic [ref=e942]: 6%
+            - link "#27 PRDCTR PRD -0.98%" [ref=e943] [cursor=pointer]:
+              - /url: /ethereum/0x45aecbbcc9b5414bcfd84f1ae5f3d9f5488ba403
+              - generic [ref=e944]:
+                - generic [ref=e945]: "#27"
+                - img "PRDCTR" [ref=e946]
+                - generic [ref=e947]: PRD
+                - generic [ref=e948]: "-0.98%"
+            - link "#28 Shiro Neko SHIRO 1%" [ref=e949] [cursor=pointer]:
+              - /url: /ethereum/0xd293d05e83035a757d510e2a5ebfe705c4f05b1f
+              - generic [ref=e950]:
+                - generic [ref=e951]: "#28"
+                - img "Shiro Neko" [ref=e952]
+                - generic [ref=e953]: SHIRO
+                - generic [ref=e954]: 1%
+            - link "#29 Brett BRETT 15%" [ref=e955] [cursor=pointer]:
+              - /url: /ethereum/0x16ac64ddfacca437be7fe0da0c45bcd97227588a
+              - generic [ref=e956]:
+                - generic [ref=e957]: "#29"
+                - img "Brett" [ref=e958]
+                - generic [ref=e959]: BRETT
+                - generic [ref=e960]: 15%
+            - link "#30 PeiPei PEIPEI 1%" [ref=e961] [cursor=pointer]:
+              - /url: /ethereum/0xbf16540c857b4e32ce6c37d2f7725c8eec869b8b
+              - generic [ref=e962]:
+                - generic [ref=e963]: "#30"
+                - img "PeiPei" [ref=e964]
+                - generic [ref=e965]: PEIPEI
+                - generic [ref=e966]: 1%
+          - button [ref=e968] [cursor=pointer]

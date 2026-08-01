@@ -262,6 +262,12 @@ def cmc_fetch_and_upsert_to_db(mapping_data: dict) -> int:
                 """, (symbol[:10], name, slug, mc_decimals, now))
                 coin_id = cur.fetchone()[0]
                 
+                # Delete conflicting contract address mapping if bound to a different coin_id
+                cur.execute("""
+                    DELETE FROM coin_contract
+                    WHERE chain_id = %s AND LOWER(contract_address) = %s AND coin_id != %s
+                """, (chain_id, contract_addr.lower(), coin_id))
+
                 # Insert/update contract address with manual priority (score 100)
                 cur.execute("""
                     INSERT INTO coin_contract (

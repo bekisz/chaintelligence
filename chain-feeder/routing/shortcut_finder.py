@@ -118,7 +118,7 @@ class ShortcutFinder:
         self.tvl_targets = tvl_targets or DEFAULT_TVL_TARGETS
         self.verbose = verbose
 
-        config_path = os.path.join(INCLUDE_DIR, 'config', 'coin-families.yml')
+        config_path = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(ROUTING_DIR)), 'config', 'coin-families.yml'))
         self.family_resolver = CoinFamilyResolver(config_path, DATA_WAREHOUSE_DB)
         self.fetcher = PostgresFetcher(verbose=verbose)
         self.prices = {}

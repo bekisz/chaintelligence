@@ -1,0 +1,3 @@
+[     119ms] [ERROR] Error fetching LP summary: TypeError: Failed to execute 'fetch' on 'Window': Request cannot be constructed from a URL that includes credentials: /api/lp/position-summary?t=1784402175545
+    at fetchLPSummary (http://admin:chaintelligence77@localhost:8000/static/lp.js?v=16.0:546:36)
+    at HTMLDocument.<anonymous> (http://admin:chaintelligence77@localhost:8000/static/lp.js?v=16.0:656:5) @ http://admin:chaintelligence77@localhost:8000/static/lp.js?v=16.0:604

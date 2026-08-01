@@ -1,0 +1,22 @@
+[    4511ms] [WARNING] Solflare was registered as a Standard Wallet. The Wallet Adapter for Solflare can be removed from your app. @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    5040ms] [WARNING] Solflare was registered as a Standard Wallet. The Wallet Adapter for Solflare can be removed from your app. @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    5070ms] [INFO] [TW] Solana not found @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    5882ms] [LOG] [wallet] init wagmi config @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    5988ms] [WARNING] Solflare was registered as a Standard Wallet. The Wallet Adapter for Solflare can be removed from your app. @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    6006ms] [INFO] [TW] Solana not found @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    7164ms] [LOG] [wallet] init wagmi config @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    7359ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bscrpc.com/:0
+[    7366ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://3rdparty-apis.coinmarketcap.com/v1/cryptocurrency/contract?address=0x28df0835942396b7a1b7ae1cd068728e6ddbbafd:0
+[    7372ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://explorer.pancakeswap.com/api/cached/tokens/infinityCl/bsc/0x28df0835942396b7a1b7ae1cd068728e6ddbbafd:0
+[    8709ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://explorer.pancakeswap.com/api/cached/tokens/infinityBin/bsc/0x28df0835942396b7a1b7ae1cd068728e6ddbbafd:0
+[    9839ms] [INFO] Firebase auth state changed, user: null @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    9839ms] [INFO] Firebase user signed out, token cleared @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[    9840ms] [INFO] Firebase token changed, user: null @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[   10346ms] [LOG] %cWarning! color:#F16552; font-size:50px; font-weight: bold; -webkit-text-stroke: 1px black; @ https://auth.privy.io/_next/static/chunks/pages/apps/%5Bapp_id%5D/embedded-wallets-01e613d3082cbb9a.js?dpl=dpl_3T1gQtggBrJUHuL69hvWW2FVi5Am:0
+[   10346ms] [LOG] %cYou are reading this message because you opened the browser console, a developer tool. Do not enter or paste code you do not understand. Never share your tokens or any other info with anyone. If someone told you to do this, it is very likely a scam. font-size: 18px; @ https://auth.privy.io/_next/static/chunks/pages/apps/%5Bapp_id%5D/embedded-wallets-01e613d3082cbb9a.js?dpl=dpl_3T1gQtggBrJUHuL69hvWW2FVi5Am:0
+[   24511ms] [ERROR] [PrivyWalletAddress] ⚠️ Loading timeout after 18.50 seconds! @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[   24511ms] [ERROR] [PrivyWalletAddress] Forcing error state to prevent infinite loading @ https://pancakeswap.finance/_next/static/chunks/pages/_app-8bd059203419c5b9.js:1808
+[   25348ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://explorer.pancakeswap.com/api/cached/tokens/infinityCl/bsc/0x28df0835942396b7a1b7ae1cd068728e6ddbbafd:0
+[   25792ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://explorer.pancakeswap.com/api/cached/tokens/infinityBin/bsc/0x28df0835942396b7a1b7ae1cd068728e6ddbbafd:0
+[   41548ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://explorer.pancakeswap.com/api/cached/tokens/infinityBin/bsc/0x28df0835942396b7a1b7ae1cd068728e6ddbbafd:0
+[   41654ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://explorer.pancakeswap.com/api/cached/tokens/infinityCl/bsc/0x28df0835942396b7a1b7ae1cd068728e6ddbbafd:0

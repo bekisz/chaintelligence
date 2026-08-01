@@ -20,10 +20,16 @@ x-airflow-common: &airflow-common
     AIRFLOW__SIMPLE_AUTH_MANAGER__USERS: 'airflow:airflow'
 
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 10
+    AIRFLOW__SCHEDULER__TASK_INSTANCE_HEARTBEAT_TIMEOUT: 1800
     AIRFLOW__CORE__INTERNAL_API_URL: 'http://airflow-webserver:8080'
     AIRFLOW__FAB__ENABLE_PROXY_FIX: True
     AIRFLOW__API__EXPOSE_CONFIG: True
     AIRFLOW__API__BASE_URL: http://localhost:8081
+    # Internal API (Execution API) JWT lifetime. The default (600s / 10 min)
+    # is too short for long-running DAGs (e.g. per-pool subgraph fetches that
+    # run 60-80 min); the token expires before the task can report its result,
+    # failing runs that actually completed their work. 4h gives headroom.
+    AIRFLOW__EXECUTION_API__JWT_EXPIRATION_TIME: '14400'
     AIRFLOW_CONN_CHAINTELLIGENCE_DB: postgresql://airflow:airflow@postgres:5432/chaintelligence
     RPC_LOG_BATCH_SIZE: 500
 

@@ -1,0 +1,57 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Chaintelligence Chaintelligence" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Chaintelligence" [ref=e5]
+        - generic [ref=e6]: Chaintelligence
+      - navigation [ref=e7]:
+        - link "LP Positions" [ref=e8] [cursor=pointer]:
+          - /url: /lp
+        - link "Pool Explorer" [ref=e9] [cursor=pointer]:
+          - /url: /pool
+        - link "Backtest" [ref=e10] [cursor=pointer]:
+          - /url: /backtester
+        - link "Route Analysis" [ref=e11] [cursor=pointer]:
+          - /url: /routing
+        - link "SPS" [ref=e12] [cursor=pointer]:
+          - /url: /sps
+        - link "API" [ref=e13] [cursor=pointer]:
+          - /url: /docs
+  - generic [ref=e14]:
+    - main [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - heading "Total Portfolio Value" [level=3] [ref=e19]
+            - paragraph [ref=e20]: "--"
+          - generic [ref=e21]:
+            - heading "Total Unclaimed Rewards" [level=3] [ref=e22]
+            - paragraph [ref=e23]: "--"
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: "Filter:"
+            - combobox [ref=e27]:
+              - option "All Networks" [selected]
+              - option "Ethereum"
+              - option "Arbitrum"
+              - option "Base"
+              - option "Polygon"
+            - combobox [ref=e28]:
+              - option "All Protocols" [selected]
+            - combobox [ref=e29]:
+              - option "All Wallets" [selected]
+            - textbox "Search pair..." [ref=e30]
+            - generic [ref=e31]:
+              - checkbox "Hide Closed" [checked] [ref=e32]
+              - generic [ref=e33] [cursor=pointer]: Hide Closed
+          - generic [ref=e34]:
+            - generic [ref=e35]: "Sort by:"
+            - combobox [ref=e36]:
+              - option "Value (High to Low)" [selected]
+              - option "Value (Low to High)"
+              - option "Rewards (High to Low)"
+              - option "Rewards (Low to High)"
+              - option "Pair Name"
+      - generic [ref=e37]: "Error: Failed to execute 'fetch' on 'Window': Request cannot be constructed from a URL that includes credentials: /api/lp/position-summary?t=1784402175545"
+    - contentinfo [ref=e38]
