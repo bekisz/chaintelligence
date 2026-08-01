@@ -26,6 +26,22 @@ const formatFeeTier = (value) => {
     return parseFloat(num.toFixed(decimalPlaces)) + '%';
 };
 
+const getQueryDays = () => {
+    const startDateInput = document.getElementById('start-date');
+    const endDateInput = document.getElementById('end-date');
+    let days = 1;
+    const startStr = startDateInput ? startDateInput.value : '';
+    const endStr = endDateInput ? endDateInput.value : '';
+    if (startStr && endStr) {
+        const s = new Date(startStr);
+        const e = new Date(endStr);
+        const diffTime = Math.abs(e - s);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) days = diffDays;
+    }
+    return days;
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const analyzeBtn = document.getElementById('analyze-btn');
     const startTokenInput = document.getElementById('start-token');
@@ -463,6 +479,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
             const startDateVal = startDateInput ? startDateInput.value : '';
 
+            const queryDays = getQueryDays();
+            const dailyVolume = pool.daily_volume !== undefined ? pool.daily_volume : (vol / queryDays);
+            const dailyFees = pool.daily_fees !== undefined ? pool.daily_fees : ((pool.fees_usd || 0) / queryDays);
+
             row.innerHTML = `
                 <td class="path-cell">
                     ${renderPath(pool)}
@@ -484,7 +504,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="col-volume font-bold">${formatUSD(vol)}</td>
                 <td class="col-market-size">${formatUSD(pool.fees_usd || 0)}</td>
                 <td class="col-tvl">${tvlDisplay}</td>
-                <td class="col-avg-volume">${formatUSD(0)}</td>
+                <td class="col-avg-volume hidden-column">${formatUSD(dailyVolume)}</td>
+                <td class="col-daily-fees hidden-column">${formatUSD(dailyFees)}</td>
                 <td class="col-pct-volume accent-text">0%</td>
             `;
             routesBody.appendChild(row);
@@ -678,8 +699,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 valA = getRouteTvl(a);
                 valB = getRouteTvl(b);
             } else if (key === 'avg') {
-                valA = 0;
-                valB = 0;
+                const days = getQueryDays();
+                valA = a.daily_volume !== undefined ? a.daily_volume : ((a.volume_usd || a.volume || 0) / days);
+                valB = b.daily_volume !== undefined ? b.daily_volume : ((b.volume_usd || b.volume || 0) / days);
+            } else if (key === 'daily-fees') {
+                const days = getQueryDays();
+                valA = a.daily_fees !== undefined ? a.daily_fees : ((a.fees_usd || 0) / days);
+                valB = b.daily_fees !== undefined ? b.daily_fees : ((b.fees_usd || 0) / days);
             } else if (key === 'pct') {
                 valA = 0;
                 valB = 0;
@@ -736,6 +762,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sort-mkt').addEventListener('click', () => sortRoutes('mkt', 'sort-mkt'));
     document.getElementById('sort-tvl').addEventListener('click', () => sortRoutes('tvl', 'sort-tvl'));
     document.getElementById('sort-avg').addEventListener('click', () => sortRoutes('avg', 'sort-avg'));
+    const sortDailyFeesEl = document.getElementById('sort-daily-fees');
+    if (sortDailyFeesEl) sortDailyFeesEl.addEventListener('click', () => sortRoutes('daily-fees', 'sort-daily-fees'));
+    document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
     const sortPoolAddrEl = document.getElementById('sort-pool-addr');
     if (sortPoolAddrEl) sortPoolAddrEl.addEventListener('click', () => sortRoutes('pool_addr', 'sort-pool-addr'));
