@@ -1334,3 +1334,18 @@ input:checked+.slider:before {
 input:focus+.slider {
     box-shadow: 0 0 1px var(--uniswap-pink);
 }
+
+.nav-link.secondary-link {
+    color: #64748b;
+    opacity: 0.65;
+}
+
+.nav-link.secondary-link:hover {
+    color: #94a3b8;
+    opacity: 0.9;
+}
+
+.nav-link.secondary-link.active {
+    color: var(--text-primary);
+    opacity: 1;
+}
