@@ -392,9 +392,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             currentRoutes = poolsList;
             updateStableShortcutState();
-            // Default sort: Volume descending for the selected time period
+            // Default sort: Daily fees descending for the selected time period
             if (currentRoutes && currentRoutes.length > 0) {
-                sortRoutes('volume', 'sort-vol', 'desc');
+                sortRoutes('daily-fees', 'sort-daily-fees', 'desc');
             } else {
                 filterAndRenderRoutes();
             }
