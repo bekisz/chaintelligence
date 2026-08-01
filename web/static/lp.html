@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
-    <link rel="stylesheet" href="/static/style.css?v=29.0">
+    <link rel="stylesheet" href="/static/style.css?v=29.1">
     <script src="/static/lp.js?v=29.0"></script>
 </head>
 
@@ -87,7 +87,18 @@
                                 style="margin-left:0.4rem; font-size:0.8rem; cursor:pointer; text-transform:none;">Hide
                                 Closed</label>
                         </div>
-                        <div class="column-selector-container" style="margin-left: 0.5rem; display: inline-block; vertical-align: middle;">
+                    </div>
+                    <div class="sort-group">
+                        <label>Sort by:</label>
+                        <select id="sort-by">
+                            <option value="value-desc">Value (High to Low)</option>
+                            <option value="value-asc">Value (Low to High)</option>
+                            <option value="rewards-desc">Rewards (High to Low)</option>
+                            <option value="rewards-asc">Rewards (Low to High)</option>
+                            <option value="pair">Pair Name</option>
+                        </select>
+                    </div>
+                    <div class="column-selector-container" style="margin-left: 0.5rem; display: inline-block; vertical-align: middle;">
                             <button id="lp-options-btn" class="secondary-btn flex-center" title="Liquidity Pool Link Options" style="padding: 6px 8px; border-radius: 8px;">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
                                      <!-- Small Eye -->
@@ -114,17 +125,6 @@
                             </div>
                         </div>
                     </div>
-                    <div class="sort-group">
-                        <label>Sort by:</label>
-                        <select id="sort-by">
-                            <option value="value-desc">Value (High to Low)</option>
-                            <option value="value-asc">Value (Low to High)</option>
-                            <option value="rewards-desc">Rewards (High to Low)</option>
-                            <option value="rewards-asc">Rewards (Low to High)</option>
-                            <option value="pair">Pair Name</option>
-                        </select>
-                    </div>
-                </div>
 
                 <div id="positions-grid" class="positions-grid">
                     <!-- Position cards will be injected here -->
