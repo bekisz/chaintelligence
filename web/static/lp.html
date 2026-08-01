@@ -88,24 +88,28 @@
                                 Closed</label>
                         </div>
                         <div class="column-selector-container" style="margin-left: 0.5rem; display: inline-block; vertical-align: middle;">
-                            <button id="column-selector-btn" class="secondary-btn flex-center" title="Settings" style="padding: 6px 8px; border-radius: 8px;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
-                                    <circle cx="12" cy="12" r="3"/>
-                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                            <button id="lp-options-btn" class="secondary-btn flex-center" title="Liquidity Pool Link Options" style="padding: 6px 8px; border-radius: 8px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                                     <!-- Small Eye -->
+                                     <path d="M5 7.5s2.5-3.5 7-3.5 7 3.5 7 3.5-2.5 3.5-7 3.5-7-3.5-7-3.5z" stroke-width="1.6"/>
+                                     <circle cx="12" cy="7.5" r="1.5" fill="currentColor"/>
+                                     <!-- Wide Left-Right Arrow -->
+                                     <path d="M6 19l-4-3 4-3"/>
+                                     <path d="M2 16h20"/>
+                                     <path d="M18 13l4 3-4 3"/>
                                 </svg>
                             </button>
-                            <div id="column-selector-dropdown" class="column-dropdown hidden">
+                            <div id="lp-options-dropdown" class="column-dropdown hidden">
                                 <div class="dropdown-section">
-                                    <div class="dropdown-section-title">Liquidity Pool Link Options</div>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="tier" checked> Tier</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="apr" checked> APR</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="dex" checked> Dex Link</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="revert" checked> Revert Link</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="dexscreener" checked> DexScreener</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="defillama" checked> DeFi Llama</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="explorer" checked> Explorer</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="geckoterminal" checked> GeckoTerminal</label>
-                                    <label class="checkbox-label"><input type="checkbox" data-lp="defined" checked> Defined.fi</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="tier" checked> <span class="fee-pill" style="font-size: 0.65rem; padding: 1px 4px; margin: 0 4px 0 2px;">%</span> Tier</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="apr" checked> <span class="apr-label" style="font-size: 0.65rem; padding: 1px 4px; margin: 0 4px 0 2px;">%</span> APR</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="dex" checked> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin: 0 4px 0 2px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Dex Link</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="revert" checked> <img src="/static/assets/revert.svg" alt="" style="width: 14px; height: 14px; vertical-align: middle; margin: 0 4px 0 2px;" /> Revert Link</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="dexscreener" checked> <img src="/static/assets/dexscreener.ico" alt="" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin: 0 4px 0 2px;" /> DexScreener</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="defillama" checked> <img src="/static/assets/defillama.ico" alt="" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin: 0 4px 0 2px;" /> DeFi Llama</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="explorer"> <img src="/static/assets/explorer.ico" alt="" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin: 0 4px 0 2px;" /> Explorer</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="geckoterminal"> <img src="/static/assets/geckoterminal.ico" alt="" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin: 0 4px 0 2px;" /> GeckoTerminal</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="defined"> <img src="/static/assets/defined.ico" alt="" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin: 0 4px 0 2px;" /> Defined.fi</label>
                                 </div>
                             </div>
                         </div>

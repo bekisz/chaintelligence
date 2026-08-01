@@ -771,7 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const updateColumnVisibility = () => {
-        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll('#lp-options-dropdown input[type="checkbox"], #column-selector-dropdown input[type="checkbox"]');
         const lpScope = document.getElementById('positions-grid');
         if (!lpScope) return;
         checkboxes.forEach(cb => {
@@ -782,8 +782,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const colBtn = document.getElementById('column-selector-btn');
-    const colDropdown = document.getElementById('column-selector-dropdown');
+    const colBtn = document.getElementById('lp-options-btn') || document.getElementById('column-selector-btn');
+    const colDropdown = document.getElementById('lp-options-dropdown') || document.getElementById('column-selector-dropdown');
     if (colBtn && colDropdown) {
         colBtn.addEventListener('click', (e) => {
             e.stopPropagation();
