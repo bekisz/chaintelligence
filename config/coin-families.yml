@@ -66,6 +66,9 @@ coin-families:
       - cBasWETH
       - cPolWETH
       - cETH
+      - spWETH
+      - spwstE
+      - sprETH
       - weETH
       - EETH
       - USDT0
@@ -149,6 +152,10 @@ coin-families:
       - cUSDC
       - cUSDT
       - CDAI
+      - sDAI
+      - spUSDC
+      - spUSDT
+      - spGHO
       - DOLA
     regexp-rule: ".*USD.*"
 

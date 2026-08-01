@@ -701,3 +701,66 @@ contracts:
     chain: ethereum
     address: "0xccF4429DB6322D5C611ee964527D42E5d685DD6a"
     decimals: 8
+
+  - symbol: sUSDS
+    name: Savings USDS
+    slug: savings-usds
+    chain: ethereum
+    address: "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD"
+    decimals: 18
+
+  - symbol: sDAI
+    name: Savings DAI
+    slug: savings-dai
+    chain: ethereum
+    address: "0x83F20F44975D03b1b09e64809B757c47f942BEea"
+    decimals: 18
+
+  - symbol: USDS
+    name: Sky Dollar
+    slug: sky-dollar
+    chain: ethereum
+    address: "0xdC035D45d973E3EC169d2276DDab16f1e407384F"
+    decimals: 18
+
+  - symbol: spUSDC
+    name: Spark USDC
+    slug: spark-usdc
+    chain: ethereum
+    address: "0x39a164b38d381014cc61ec812aa20d8848d53efc"
+    decimals: 6
+
+  - symbol: spUSDT
+    name: Spark USDT
+    slug: spark-usdt
+    chain: ethereum
+    address: "0x16b6770281b3796d19ec55d0a64bd2dbbf807da8"
+    decimals: 6
+
+  - symbol: spGHO
+    name: Spark GHO
+    slug: spark-gho
+    chain: ethereum
+    address: "0x12c4bf88a4ef7b5387431e780775d7b561c2ca05"
+    decimals: 18
+
+  - symbol: spWETH
+    name: Spark WETH
+    slug: spark-weth
+    chain: ethereum
+    address: "0x59cD1C87501baF68A15cb86E955Cd8b056A8F0e0"
+    decimals: 18
+
+  - symbol: spwstE
+    name: Spark wstETH
+    slug: spark-wsteth
+    chain: ethereum
+    address: "0x12b54025c112aa61fAce2CAd7118549112a32194"
+    decimals: 18
+
+  - symbol: sprETH
+    name: Spark rETH
+    slug: spark-reth
+    chain: ethereum
+    address: "0x4c9edd5852cd905f086c759e8383e09bff1e68b3"
+    decimals: 18
