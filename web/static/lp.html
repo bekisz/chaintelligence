@@ -10,8 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
-    <link rel="stylesheet" href="/static/style.css?v=25.3">
-    <script src="/static/lp.js?v=18.4"></script>
+    <link rel="stylesheet" href="/static/style.css?v=29.0">
+    <script src="/static/lp.js?v=29.0"></script>
 </head>
 
 <body>
@@ -29,6 +29,7 @@
                 <a href="/backtester" class="nav-link">Backtest</a>
                 <a href="/routing" class="nav-link">Route Analysis</a>
                 <a href="/sps" class="nav-link">SPS</a>
+                <a href="/status" class="nav-link">Status</a>
                 <a href="/docs" class="nav-link">API</a>
             </nav>
         </div>
@@ -86,6 +87,28 @@
                             <label for="hide-closed-filter"
                                 style="margin-left:0.4rem; font-size:0.8rem; cursor:pointer; text-transform:none;">Hide
                                 Closed</label>
+                        </div>
+                        <div class="column-selector-container" style="margin-left: 0.5rem; display: inline-block; vertical-align: middle;">
+                            <button id="column-selector-btn" class="secondary-btn flex-center" title="Settings" style="padding: 6px 8px; border-radius: 8px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                </svg>
+                            </button>
+                            <div id="column-selector-dropdown" class="column-dropdown hidden">
+                                <div class="dropdown-section">
+                                    <div class="dropdown-section-title">Liquidity Pool Link Options</div>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="tier" checked> Tier</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="apr" checked> APR</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="dex" checked> Dex Link</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="revert" checked> Revert Link</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="dexscreener" checked> DexScreener</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="defillama" checked> DeFi Llama</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="explorer" checked> Explorer</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="geckoterminal" checked> GeckoTerminal</label>
+                                    <label class="checkbox-label"><input type="checkbox" data-lp="defined" checked> Defined.fi</label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="sort-group">

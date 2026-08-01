@@ -50,9 +50,15 @@ const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid, tokenId,
 
     if (links) {
         if (links.pancakeswap) {
-            html += `<a href="${links.pancakeswap}" target="_blank" class="pool-label-link pool-label-link--pancakeswap" data-tooltip="View on PancakeSwap" onclick="event.stopPropagation();">${LP_PANCAKE_SVG}</a>`;
+            html += `<a href="${links.pancakeswap}" target="_blank" class="pool-label-link pool-label-link--pancakeswap dex-link" data-tooltip="View on PancakeSwap" onclick="event.stopPropagation();">${LP_PANCAKE_SVG}</a>`;
         } else if (links.uniswap) {
-            html += `<a href="${links.uniswap}" target="_blank" class="pool-label-link pool-label-link--uniswap" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
+            html += `<a href="${links.uniswap}" target="_blank" class="pool-label-link pool-label-link--uniswap dex-link" data-tooltip="View on Uniswap" onclick="event.stopPropagation();">${LP_UNI_SVG}</a>`;
+        }
+        if (links.revert) {
+            html += `<a href="${links.revert}" target="_blank" class="lp-link revert-link" data-tooltip="View on Revert Finance" onclick="event.stopPropagation();"><img src="/static/assets/revert.svg" alt="Revert Finance" class="revert-icon" /></a>`;
+        } else {
+            const revertPosHtml = revertLink(poolAddress, protocol, network, tokenId);
+            if (revertPosHtml) html += revertPosHtml;
         }
         if (links.dexscreener) {
             html += `<a href="${links.dexscreener}" target="_blank" class="lp-link dexscreener-link" data-tooltip="View on DexScreener" onclick="event.stopPropagation();"><img src="/static/assets/dexscreener.ico" alt="DexScreener" class="lp-link-icon dexscreener-icon" style="border-radius: 50%;" /></a>`;
@@ -60,11 +66,19 @@ const renderPoolLinks = (poolAddress, protocol, network, defillamaUuid, tokenId,
         if (links.defillama) {
             html += `<a href="${links.defillama}" target="_blank" class="lp-link defillama-link" data-tooltip="View on DeFi Llama" onclick="event.stopPropagation();"><img src="/static/assets/defillama.ico" alt="DeFi Llama" class="lp-link-icon defillama-icon" style="border-radius: 50%;" /></a>`;
         }
+        if (links.explorer) {
+            html += `<a href="${links.explorer}" target="_blank" class="lp-link explorer-link" data-tooltip="View on Block Explorer" onclick="event.stopPropagation();"><img src="/static/assets/explorer.ico" alt="Explorer" class="lp-link-icon explorer-icon" style="border-radius: 50%;" /></a>`;
+        }
+        if (links.geckoterminal) {
+            html += `<a href="${links.geckoterminal}" target="_blank" class="lp-link geckoterminal-link" data-tooltip="View on GeckoTerminal" onclick="event.stopPropagation();"><img src="/static/assets/geckoterminal.ico" alt="GeckoTerminal" class="lp-link-icon geckoterminal-icon" style="border-radius: 50%;" /></a>`;
+        }
+        if (links.defined) {
+            html += `<a href="${links.defined}" target="_blank" class="lp-link defined-link" data-tooltip="View on Defined.fi" onclick="event.stopPropagation();"><img src="/static/assets/defined.ico" alt="Defined.fi" class="lp-link-icon defined-icon" style="border-radius: 50%;" /></a>`;
+        }
+    } else {
+        const revertPosHtml = revertLink(poolAddress, protocol, network, tokenId);
+        if (revertPosHtml) html += revertPosHtml;
     }
-
-    // Position-level Revert link (tokenId-based) — backend doesn't have tokenId
-    const revertPosHtml = revertLink(poolAddress, protocol, network, tokenId);
-    if (revertPosHtml) html += revertPosHtml;
 
     return html ? `<div class="label-pane links-pane">${html}</div>` : '';
 };
@@ -349,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const linksPane = renderPoolLinks(poolAddress, protocol, network, defillamaUuid, tokenId, links);
         return `<div class="lp-pair-path ${getProtocolClass(protocol)}" aria-label="${asset0.symbol} to ${asset1.symbol} liquidity pair">
             ${token(asset0, images[0])}
-            <div class="lp-pair-arrow" aria-hidden="true"><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" style="transform: scaleX(-1);"><polyline points="1,1 7,7 1,13"/></svg><div class="lp-pair-line"><div class="lp-pair-label"><span>${fee}</span><span>${apr}</span>${linksPane}</div></div><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="1,1 7,7 1,13"/></svg></div>
+            <div class="lp-pair-arrow" aria-hidden="true"><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" style="transform: scaleX(-1);"><polyline points="1,1 7,7 1,13"/></svg><div class="lp-pair-line"><div class="lp-pair-label"><div class="label-pane fee-pane" data-tooltip="Tier"><span class="fee-pill">${fee}</span></div><div class="label-pane apr-pane" data-tooltip="APR"><span class="apr-label">${apr}</span></div>${linksPane}</div></div><svg viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="1,1 7,7 1,13"/></svg></div>
             ${token(asset1, images[1])}
         </div>`;
     };
@@ -521,6 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             positionsGrid.appendChild(row);
         });
+        updateColumnVisibility();
     };
 
     const calculateRangeData = (position) => {
@@ -752,6 +767,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (hideClosedCheckbox) {
         hideClosedCheckbox.addEventListener('change', () => {
             applyFiltersAndSort();
+        });
+    }
+
+    const updateColumnVisibility = () => {
+        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"]');
+        const lpScope = document.getElementById('positions-grid');
+        if (!lpScope) return;
+        checkboxes.forEach(cb => {
+            const isVisible = cb.checked;
+            if (cb.dataset.lp) {
+                lpScope.classList.toggle(`hide-lp-${cb.dataset.lp}`, !isVisible);
+            }
+        });
+    };
+
+    const colBtn = document.getElementById('column-selector-btn');
+    const colDropdown = document.getElementById('column-selector-dropdown');
+    if (colBtn && colDropdown) {
+        colBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            colDropdown.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e) => {
+            if (!colDropdown.contains(e.target) && !colBtn.contains(e.target)) {
+                colDropdown.classList.add('hidden');
+            }
+        });
+        colDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', updateColumnVisibility);
         });
     }
 
