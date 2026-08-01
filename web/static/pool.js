@@ -745,8 +745,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const updateColumnVisibility = () => {
-        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"]');
-        const lpScope = routesBody;
+        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"], #lp-options-dropdown input[type="checkbox"]');
         checkboxes.forEach(cb => {
             const isVisible = cb.checked;
 
@@ -758,7 +757,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (cb.dataset.lp) {
-                lpScope.classList.toggle(`hide-lp-${cb.dataset.lp}`, !isVisible);
+                const lpClass = `hide-lp-${cb.dataset.lp}`;
+                if (routesBody) routesBody.classList.toggle(lpClass, !isVisible);
+                document.body.classList.toggle(lpClass, !isVisible);
             }
         });
     };
