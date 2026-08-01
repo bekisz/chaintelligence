@@ -417,7 +417,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 filterAndRenderRoutes();
             }
             
-            updateNetworkFilterOptions();
+            const posthocNetwork = document.getElementById('network-filter');
+            if (posthocNetwork) {
+                const isAllQuery = !selectedNetwork || selectedNetwork === 'all';
+                [...posthocNetwork.options].forEach(opt => {
+                    opt.disabled = !isAllQuery && opt.value !== 'all' && opt.value !== selectedNetwork;
+                });
+                posthocNetwork.disabled = false;
+                posthocNetwork.value = isAllQuery ? 'all' : selectedNetwork;
+            }
+
             loader.classList.add('hidden');
             resultsSection.classList.remove('hidden');
             updateColumnVisibility();
