@@ -50,9 +50,13 @@ coin-families:
       - mBasweE
       - mArbWETH
       - mArbwstE
+      - crvSTETH
+      - crvWSTE
+      - crvRETH
+      - crvFRXE
+      - sFRXETH
       - weETH
       - EETH
-      - sFRXETH
       - USDT0
   - name: USD
     correlated: true
@@ -113,6 +117,11 @@ coin-families:
       - mBasUSDT
       - mArbUSDC
       - mArbUSDT
+      - crvUSD
+      - crv3cryp
+      - crvUSDC
+      - crvUSDT
+      - crvUSDS
       - DOLA
     regexp-rule: ".*USD.*"
 
@@ -132,6 +141,7 @@ coin-families:
       - WERC
       - REUR
       - mBasEURC
+      - crvEURC
   - name: BTC
     correlated: true
     coin-list:
@@ -149,6 +159,8 @@ coin-families:
       - mBascbBT
       - mtBTC
       - mArbWBTC
+      - crvrenBT
+      - crvCBBT
   - name: GOLD
     correlated: true
     coin-list:

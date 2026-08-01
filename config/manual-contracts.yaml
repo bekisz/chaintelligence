@@ -386,3 +386,115 @@ contracts:
     chain: arbitrum
     address: "0x078f358208685046a11c85e8ad32895ded93a909"
     decimals: 8
+
+  - symbol: sCRVUSD
+    name: Savings crvUSD
+    slug: savings-crvusd
+    chain: ethereum
+    address: "0x0655977FEb2f289A4aB78af661074aE63301ed3E"
+    decimals: 18
+
+  - symbol: crvUSD
+    name: Curve USD Stablecoin
+    slug: curve-usd-stablecoin
+    chain: ethereum
+    address: "0xf939E0A03FB07F59A73314E73794Be08D3584501"
+    decimals: 18
+
+  - symbol: crv3cryp
+    name: Curve Tricrypto2 Pool LP
+    slug: curve-tricrypto2-pool-lp
+    chain: ethereum
+    address: "0xc4AD7B2D0C0a38b8416E9284993040f54F6eE918"
+    decimals: 18
+
+  - symbol: crvUSDC
+    name: Curve crvUSD USDC Market LP
+    slug: curve-crvusd-usdc-market-lp
+    chain: ethereum
+    address: "0x4dece946ba53b2847d88cd6259eb39de0daf72a0"
+    decimals: 18
+
+  - symbol: crvUSDT
+    name: Curve crvUSD USDT Market LP
+    slug: curve-crvusd-usdt-market-lp
+    chain: ethereum
+    address: "0x390f3595bca2df7d23783dfd126427cceb997bf4"
+    decimals: 18
+
+  - symbol: crvUSDS
+    name: Curve crvUSD USDS Market LP
+    slug: curve-crvusd-usds-market-lp
+    chain: ethereum
+    address: "0x4c9edd5852cd905f086c759e8383e09bff1e68b3"
+    decimals: 18
+
+  - symbol: crvEURC
+    name: Curve EURC Pool LP
+    slug: curve-eurc-pool-lp
+    chain: ethereum
+    address: "0x19b080fe1ffA0553469D20Ca36595457aF5CC0b4"
+    decimals: 18
+
+  - symbol: crvSTETH
+    name: Curve stETH ETH Pool LP
+    slug: curve-steth-eth-pool-lp
+    chain: ethereum
+    address: "0x06325440D014e39736583c165C2963BA99fAf14E"
+    decimals: 18
+
+  - symbol: crvWSTE
+    name: Curve wstETH ETH Pool LP
+    slug: curve-wsteth-eth-pool-lp
+    chain: ethereum
+    address: "0x21E27a5E5513D6e65C4f830167390997aA84843a"
+    decimals: 18
+
+  - symbol: crvRETH
+    name: Curve rETH ETH Pool LP
+    slug: curve-reth-eth-pool-lp
+    chain: ethereum
+    address: "0xF1B7670A80207861515785860552615456DB0D7D"
+    decimals: 18
+
+  - symbol: crvFRXE
+    name: Curve frxETH ETH Pool LP
+    slug: curve-frxeth-eth-pool-lp
+    chain: ethereum
+    address: "0xf43754c6650080f9a44457298923670c4466e1c2"
+    decimals: 18
+
+  - symbol: sFRXETH
+    name: Staked frxETH
+    slug: staked-frxeth
+    chain: ethereum
+    address: "0xac3e018457b222d93114458476f3e3416abbbe88"
+    decimals: 18
+
+  - symbol: crvrenBT
+    name: Curve sBTC renBTC Pool LP
+    slug: curve-sbtc-renbtc-pool-lp
+    chain: ethereum
+    address: "0x49343635Bf7748331F48674E80E29d5CEa0872c9"
+    decimals: 18
+
+  - symbol: crvCBBT
+    name: Curve cbBTC WBTC Pool LP
+    slug: curve-cbbtc-wbtc-pool-lp
+    chain: ethereum
+    address: "0xf5f5B97624542D72A9E06f04808B70A10099f8d3"
+    decimals: 18
+
+  - symbol: cvxCRV
+    name: Convex CRV
+    slug: convex-crv
+    chain: ethereum
+    address: "0x62B9c018BDc94157F07A2A1481220539E5b14F7e"
+    decimals: 18
+
+  - symbol: stkcvxCR
+    name: Staked Convex CRV
+    slug: staked-convex-crv
+    chain: ethereum
+    address: "0xaa0C3f5F7DFD688C6E646F66CD2a6B66ACdbE434"
+    decimals: 18
