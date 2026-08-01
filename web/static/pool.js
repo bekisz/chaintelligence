@@ -253,18 +253,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const minTxsInput = document.getElementById('min-txs-filter');
         const networkFilter = document.getElementById('network-filter');
         const protocolFilter = document.getElementById('protocol-filter');
-        const acyclicCheckbox = document.getElementById('acyclic-filter');
-        const directOnlyCheckbox = document.getElementById('direct-only-filter');
-        const stableShortcutCheckbox = document.getElementById('stable-shortcut-filter');
 
         const minAprVal = minAprInput ? parseFloat(minAprInput.value) || 0 : 0;
         const minMktVal = minMktInput ? parseFloat(minMktInput.value) || 0 : 0;
         const minTxsVal = minTxsInput ? parseInt(minTxsInput.value) || 0 : 0;
         const selectedNetwork = networkFilter ? networkFilter.value : 'all';
         const selectedProtocol = protocolFilter ? protocolFilter.value : 'all';
-        const acyclicOnly = acyclicCheckbox ? acyclicCheckbox.checked : false;
-        const directOnly = directOnlyCheckbox ? directOnlyCheckbox.checked : false;
-        const stableShortcutOnly = stableShortcutCheckbox ? (stableShortcutCheckbox.checked && !stableShortcutCheckbox.disabled) : false;
 
         const filtered = currentRoutes.filter(pool => {
             if (selectedNetwork !== 'all' && (pool.chain || 'Ethereum') !== selectedNetwork) {
@@ -283,34 +277,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const txCount = pool.tx_count || 0;
             if (txCount < minTxsVal) return false;
-
-            if (acyclicOnly) {
-                let tokens = [];
-                if (pool.path_tokens) {
-                    for (let i = 0; i < pool.path_tokens.length; i += 2) {
-                        tokens.push(pool.path_tokens[i]);
-                    }
-                    if (new Set(tokens).size !== tokens.length) return false;
-                }
-            }
-
-            if (directOnly) {
-                if (pool.path_tokens && pool.path_tokens.length > 3) return false;
-            }
-
-            if (stableShortcutOnly) {
-                let tokens = [];
-                if (pool.path_tokens) {
-                    for (let i = 0; i < pool.path_tokens.length; i += 2) {
-                        tokens.push(pool.path_tokens[i]);
-                    }
-                }
-                if (tokens.length <= 2) return false;
-                const startToken = startTokenInput ? startTokenInput.value.trim() : '';
-                const queriedFamily = getTokenFamily(startToken);
-                const middleTokens = tokens.slice(1, tokens.length - 1);
-                if (!middleTokens.some(t => getTokenFamily(t) !== queriedFamily)) return false;
-            }
 
             return true;
         });
