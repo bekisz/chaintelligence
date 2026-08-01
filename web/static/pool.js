@@ -453,6 +453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const renderRoutes = (pools) => {
         routesBody.innerHTML = '';
+        const totalVolumeAllPools = currentRoutes ? currentRoutes.reduce((sum, p) => sum + (p.volume_usd || p.volume || 0), 0) : 0;
         pools.forEach((pool, idx) => {
             const tvlUsd = pool.tvl_usd || 0;
             const aprPct = pool.apr_percent || 0;
@@ -482,6 +483,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const queryDays = getQueryDays();
             const dailyVolume = pool.daily_volume !== undefined ? pool.daily_volume : (vol / queryDays);
             const dailyFees = pool.daily_fees !== undefined ? pool.daily_fees : ((pool.fees_usd || 0) / queryDays);
+            const pctVol = totalVolumeAllPools > 0 ? ((vol / totalVolumeAllPools) * 100) : 0;
 
             row.innerHTML = `
                 <td class="path-cell">
@@ -501,12 +503,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocol}</td>
                 <td class="col-tx-count">${txCount.toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
-                <td class="col-volume font-bold">${formatUSD(vol)}</td>
-                <td class="col-market-size">${formatUSD(pool.fees_usd || 0)}</td>
+                <td class="col-volume hidden-column font-bold">${formatUSD(vol)}</td>
+                <td class="col-market-size hidden-column">${formatUSD(pool.fees_usd || 0)}</td>
                 <td class="col-tvl">${tvlDisplay}</td>
-                <td class="col-avg-volume hidden-column">${formatUSD(dailyVolume)}</td>
-                <td class="col-daily-fees hidden-column">${formatUSD(dailyFees)}</td>
-                <td class="col-pct-volume accent-text">0%</td>
+                <td class="col-avg-volume">${formatUSD(dailyVolume)}</td>
+                <td class="col-daily-fees">${formatUSD(dailyFees)}</td>
+                <td class="col-pct-volume accent-text">${pctVol.toFixed(1)}%</td>
             `;
             routesBody.appendChild(row);
         });
