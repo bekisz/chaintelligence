@@ -521,27 +521,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${s}.png`;
     };
 
+    const getPrincipalSymbol = (symbol) => {
+        if (!symbol) return '';
+        let u = symbol.toUpperCase();
+        
+        const logoMappings = {
+            'WETH': 'ETH', 'WBTC': 'BTC', 'CBBTC': 'BTC', 'TBTC': 'BTC',
+            'KBTC': 'BTC', 'LBTC': 'BTC', 'FBTC': 'BTC', 'WBNB': 'BNB',
+            'RETH': 'ETH', 'WSTETH': 'ETH', 'CBETH': 'ETH', 'EZETH': 'ETH',
+            'WEETH': 'ETH', 'STETH': 'ETH', 'SYPUSDT': 'USDT'
+        };
+        if (logoMappings[u]) return logoMappings[u];
+
+        let stripped = u;
+        if (/^(AETH|AARB|ABAS|APOL|AOPT|CETH|CARB|CBAS|COPT|CPOL)/.test(stripped)) {
+            stripped = stripped.replace(/^(AETH|AARB|ABAS|APOL|AOPT|CETH|CARB|CBAS|COPT|CPOL)/, '');
+        } else if (/^(A|C|V|M)/.test(stripped) && stripped.length > 3) {
+            stripped = stripped.replace(/^(A|C|V|M)/, '');
+        }
+        
+        if (stripped === 'WSTE') stripped = 'WSTETH';
+        if (stripped === 'CBE') stripped = 'CBETH';
+        stripped = stripped.replace(/V[234]$/, '');
+
+        if (logoMappings[stripped]) return logoMappings[stripped];
+        return stripped;
+    };
+
     const tokenIconHtml = (symbol, size = 16) => {
         const uppercaseSymbol = symbol.toUpperCase();
         let url = tokenImageMap[uppercaseSymbol];
         
         if (!url) {
-            const logoMappings = {
-                'WETH': 'ETH',
-                'WBTC': 'BTC',
-                'CBBTC': 'BTC',
-                'TBTC': 'BTC',
-                'KBTC': 'BTC',
-                'LBTC': 'BTC',
-                'FBTC': 'BTC',
-                'WBNB': 'BNB'
-            };
-            
-            let mappedSymbol = uppercaseSymbol;
-            if (logoMappings[uppercaseSymbol]) {
-                mappedSymbol = logoMappings[uppercaseSymbol];
-            }
-            url = tokenImageMap[mappedSymbol] || tokenIconUrl(mappedSymbol);
+            const principal = getPrincipalSymbol(uppercaseSymbol);
+            url = tokenImageMap[principal] || tokenIconUrl(principal) || tokenIconUrl(uppercaseSymbol);
         }
         
         return `<img src="${url}" width="${size}" height="${size}" onerror="this.src='/static/favicon.png'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;">`;

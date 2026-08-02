@@ -1,1046 +1,959 @@
-# Manual contract address overrides.
-# These will be ingested with priority score 100 ('manual') and will not be overwritten by CMC/DexScreener/CoinGecko.
 contracts:
-  - symbol: ETH
-    name: Ethereum
-    slug: ethereum
-    chain: ethereum
-    address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    decimals: 18
-    is_native: true
-
-  - symbol: WETH
-    name: Wrapped Ether
-    slug: wrapped-ether
-    chain: ethereum
-    address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-    decimals: 18
-
-  - symbol: USDC
-    name: USD Coin
-    slug: usd-coin
-    chain: ethereum
-    address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-    decimals: 6
-
-  - symbol: USDT
-    name: Tether
-    slug: tether
-    chain: ethereum
-    address: "0xdac17f958d2ee523a2206206994597c13d831ec7"
-    decimals: 6
-
-  - symbol: DAI
-    name: Dai
-    slug: dai
-    chain: ethereum
-    address: "0x6b175474e89094c44da98b954eedeac495271d0f"
-    decimals: 18
-
-  - symbol: WBTC
-    name: Wrapped Bitcoin
-    slug: wrapped-bitcoin
-    chain: ethereum
-    address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
-    decimals: 8
-
-  - symbol: BUIDL
-    name: BUIDL
-    slug: buidl
-    chain: ethereum
-    address: "0x45cf1cd8f8702b85e05cfc4f4b14d2325ab58bb4"
-    decimals: 6
-
-  - symbol: aEthDAI
-    name: Aave Ethereum DAI
-    slug: aave-ethereum-dai
-    chain: ethereum
-    address: "0x018008bfbB39d932D1485A32a3C3e564fC623a14"
-    decimals: 18
-
-  - symbol: aEthPYUS
-    name: Aave Ethereum PYUSD
-    slug: aave-ethereum-pyusd
-    chain: ethereum
-    address: "0x2368D84e27f6770C3eb4EAEFfEb0c66F8A80e32d"
-    decimals: 6
-
-  - symbol: aEthFRAX
-    name: Aave Ethereum FRAX
-    slug: aave-ethereum-frax
-    chain: ethereum
-    address: "0x9D05e94b819266E4e8dC406A145EE9235e16BfAc"
-    decimals: 18
-
-  - symbol: aEthGHO
-    name: Aave Ethereum GHO
-    slug: aave-ethereum-gho
-    chain: ethereum
-    address: "0x00A35A82bCD997d85DF164320C274996366f571b"
-    decimals: 18
-
-  - symbol: aArbUSDC
-    name: Aave Arbitrum USDC
-    slug: aave-arbitrum-usdc
-    chain: arbitrum
-    address: "0x72E91F0741271f2240974cFc1EC88915152a5Aa4"
-    decimals: 6
-
-  - symbol: aArbUSDT
-    name: Aave Arbitrum USDT
-    slug: aave-arbitrum-usdt
-    chain: arbitrum
-    address: "0x6ab707Aca953eDAeFBc4fD23bA73294241490620"
-    decimals: 6
-
-  - symbol: aBasUSDC
-    name: Aave Base USDC
-    slug: aave-base-usdc
-    chain: base
-    address: "0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB"
-    decimals: 6
-
-  - symbol: aPolUSDC
-    name: Aave Polygon USDC
-    slug: aave-polygon-usdc
-    chain: polygon
-    address: "0x625E7708f30cA75bfd92586e17077590C60eb4cD"
-    decimals: 6
-
-  - symbol: aPolUSDT
-    name: Aave Polygon USDT
-    slug: aave-polygon-usdt
-    chain: polygon
-    address: "0x6ab707Aca953eDAeFBc4fD23bA73294241490620"
-    decimals: 6
-
-  - symbol: aOptUSDC
-    name: Aave Optimism USDC
-    slug: aave-optimism-usdc
-    chain: optimism
-    address: "0x38d6447D6B40c9F30F8703B83F3f71c4cE67b140"
-    decimals: 6
-
-  - symbol: aEthwstE
-    name: Aave Ethereum wstETH
-    slug: aave-ethereum-wsteth
-    chain: ethereum
-    address: "0x0B925eD163218f668092ae88F04eB9833630f74E"
-    decimals: 18
-
-  - symbol: aEthcbE
-    name: Aave Ethereum cbETH
-    slug: aave-ethereum-cbeth
-    chain: ethereum
-    address: "0x9777d7E2b60bB0175aD928022008099F34514B5E"
-    decimals: 18
-
-  - symbol: aEthrETH
-    name: Aave Ethereum rETH
-    slug: aave-ethereum-reth
-    chain: ethereum
-    address: "0xCc9EE9483f66209Ea65d562C26490FfE6d3dfd7E"
-    decimals: 18
-
-  - symbol: aArbWETH
-    name: Aave Arbitrum WETH
-    slug: aave-arbitrum-weth
-    chain: arbitrum
-    address: "0xeE588B409220539e379816F156363f848f07A1A9"
-    decimals: 18
-
-  - symbol: aArbwstE
-    name: Aave Arbitrum wstETH
-    slug: aave-arbitrum-wsteth
-    chain: arbitrum
-    address: "0x513c7E3a9c69cA33692AD6e8b0C24B11E9B1fCdF"
-    decimals: 18
-
-  - symbol: aBasWETH
-    name: Aave Base WETH
-    slug: aave-base-weth
-    chain: base
-    address: "0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7"
-    decimals: 18
-
-  - symbol: aBascbE
-    name: Aave Base cbETH
-    slug: aave-base-cbeth
-    chain: base
-    address: "0xb044e5480ab02a11cfb1c1e54911d33458e0a169"
-    decimals: 18
-
-  - symbol: aBaswstE
-    name: Aave Base wstETH
-    slug: aave-base-wsteth
-    chain: base
-    address: "0xc1C2b67f13d80E42C04e844Dcf60e7E3F1c7C22e"
-    decimals: 18
-
-  - symbol: aPolWETH
-    name: Aave Polygon WETH
-    slug: aave-polygon-weth
-    chain: polygon
-    address: "0xeE588B409220539e379816F156363f848f07A1A9"
-    decimals: 18
-
-  - symbol: aEthWBTC
-    name: Aave Ethereum WBTC
-    slug: aave-ethereum-wbtc
-    chain: ethereum
-    address: "0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6de8"
-    decimals: 8
-
-  - symbol: aEthtBTC
-    name: Aave Ethereum tBTC
-    slug: aave-ethereum-tbtc
-    chain: ethereum
-    address: "0x8798c4d96a757270e59a68e06385a4a49e913a48"
-    decimals: 18
-
-  - symbol: aArbWBTC
-    name: Aave Arbitrum WBTC
-    slug: aave-arbitrum-wbtc
-    chain: arbitrum
-    address: "0x078F358208685046a11C85e8ad32895DED93A909"
-    decimals: 8
-
-  - symbol: aEthLINK
-    name: Aave Ethereum LINK
-    slug: aave-ethereum-link
-    chain: ethereum
-    address: "0x5E8C8A7243651F0B45d9852A9E58A38E8E954b42"
-    decimals: 18
-
-  - symbol: aEthAAVE
-    name: Aave Ethereum AAVE
-    slug: aave-ethereum-aave
-    chain: ethereum
-    address: "0xA7006199A6f1F424c53c07Ac43B330C8638C6f2B"
-    decimals: 18
-
-  - symbol: mcUSDC
-    name: Steakhouse MetaMorpho USDC
-    slug: steakhouse-metamorpho-usdc
-    chain: ethereum
-    address: "0xBEEF01735c132Aa46DA735266d0D31CE2A117D1F"
-    decimals: 6
-
-  - symbol: mUSDT
-    name: Gauntlet USDT Core Vault
-    slug: gauntlet-usdt-core-vault
-    chain: ethereum
-    address: "0x40a62428509e5ee9f4f4699f8eb738f654b9d038"
-    decimals: 6
-
-  - symbol: mPYUSD
-    name: Steakhouse MetaMorpho PYUSD
-    slug: steakhouse-metamorpho-pyusd
-    chain: ethereum
-    address: "0xa0b1062637b83f3e1a0670830b59b3922379d4bd"
-    decimals: 6
-
-  - symbol: mUSDe
-    name: Steakhouse MetaMorpho USDe
-    slug: steakhouse-metamorpho-usde
-    chain: ethereum
-    address: "0x7a6ae64c9bc6551b94b0ebf49e0c6563e46c75df"
-    decimals: 18
-
-  - symbol: msUSDe
-    name: Reallink MetaMorpho sUSDe
-    slug: reallink-metamorpho-susde
-    chain: ethereum
-    address: "0x0f1e8e2e92c2357388e6378e9b6bf71b3e8e19e7"
-    decimals: 18
-
-  - symbol: mBasUSDC
-    name: Gauntlet Base USDC Core
-    slug: gauntlet-base-usdc-core
-    chain: base
-    address: "0xc1256Ae5FF18137280F0f8C42C67B6612b7D6d30"
-    decimals: 6
-
-  - symbol: mcWETH
-    name: Steakhouse MetaMorpho WETH
-    slug: steakhouse-metamorpho-weth
-    chain: ethereum
-    address: "0x19280d0d8fe183f5e04313f8901df6080e7293b6"
-    decimals: 18
-
-  - symbol: mwstETH
-    name: Gauntlet wstETH Prime Vault
-    slug: gauntlet-wsteth-prime-vault
-    chain: ethereum
-    address: "0x9bf86411d96ac24a98ddc4f42b36e8df81c81729"
-    decimals: 18
-
-  - symbol: mBasWETH
-    name: Gauntlet Base WETH Core
-    slug: gauntlet-base-weth-core
-    chain: base
-    address: "0x13d64c1cf6473133333333333333333333333333"
-    decimals: 18
-
-  - symbol: mBascbE
-    name: Seamless Base cbETH Vault
-    slug: seamless-base-cbeth-vault
-    chain: base
-    address: "0x892a012920239b9804b4c46f1201d418721665e8"
-    decimals: 18
-
-  - symbol: mWBTC
-    name: Gauntlet WBTC Core Vault
-    slug: gauntlet-wbtc-core-vault
-    chain: ethereum
-    address: "0x3216834b6b6697669894e1d743a3d56b063ee387"
-    decimals: 8
-
-  - symbol: mBascbBT
-    name: Gauntlet Base cbBTC Vault
-    slug: gauntlet-base-cbbtc-vault
-    chain: base
-    address: "0x0b8a1c62187b8d4f09d8d6f140df03531b67b140"
-    decimals: 8
-
-  - symbol: maUSDC
-    name: B.Protocol MetaMorpho USDC
-    slug: b-protocol-metamorpho-usdc
-    chain: ethereum
-    address: "0xb8a2f8d070b4ec2b8ef42bc02e6c51fa80c85c27"
-    decimals: 6
-
-  - symbol: mweETH
-    name: Gauntlet Ethereum weETH Vault
-    slug: gauntlet-ethereum-weeth-vault
-    chain: ethereum
-    address: "0xbe694c7b8e5c1d6835a6435645638c4b1257d07c"
-    decimals: 18
-
-  - symbol: mezETH
-    name: Renzo Ethereum ezETH Vault
-    slug: renzo-ethereum-ezeth-vault
-    chain: ethereum
-    address: "0x1d4a822008099f34514b5e0b925ed163218f6680"
-    decimals: 18
-
-  - symbol: mtBTC
-    name: Threshold Ethereum tBTC Vault
-    slug: threshold-ethereum-tbtc-vault
-    chain: ethereum
-    address: "0x8798c4d96a757270e59a68e06385a4a49e913a48"
-    decimals: 18
-
-  - symbol: mBasUSDT
-    name: Gauntlet Base USDT Vault
-    slug: gauntlet-base-usdt-vault
-    chain: base
-    address: "0x48589ec936d5258e72c842b03657731766a5a92a"
-    decimals: 6
-
-  - symbol: mBasEURC
-    name: Base MetaMorpho EURC Vault
-    slug: base-metamorpho-eurc-vault
-    chain: base
-    address: "0x60a3e35cc927b5e4070a7b4699f8eb738f654b9d"
-    decimals: 6
-
-  - symbol: mBasweE
-    name: Moonwell Base weETH Vault
-    slug: moonwell-base-weeth-vault
-    chain: base
-    address: "0x7a6ae64c9bc6551b94b0ebf49e0c6563e46c75df"
-    decimals: 18
-
-  - symbol: mArbUSDC
-    name: Gauntlet Arbitrum USDC Vault
-    slug: gauntlet-arbitrum-usdc-vault
-    chain: arbitrum
-    address: "0x4465d6cce45b233a75877f0a1c1d439ec42b8744"
-    decimals: 6
-
-  - symbol: mArbUSDT
-    name: Gauntlet Arbitrum USDT Vault
-    slug: gauntlet-arbitrum-usdt-vault
-    chain: arbitrum
-    address: "0x19280d0d8fe183f5e04313f8901df6080e7293b6"
-    decimals: 6
-
-  - symbol: mArbWETH
-    name: Gauntlet Arbitrum WETH Vault
-    slug: gauntlet-arbitrum-weth-vault
-    chain: arbitrum
-    address: "0x513c7e3a9c69ca33692ad6e8b0c24b11e9b1fcdf"
-    decimals: 18
-
-  - symbol: mArbwstE
-    name: Arbitrum MetaMorpho wstETH Vault
-    slug: arbitrum-metamorpho-wsteth-vault
-    chain: arbitrum
-    address: "0x9bf86411d96ac24a98ddc4f42b36e8df81c81729"
-    decimals: 18
-
-  - symbol: mArbWBTC
-    name: Arbitrum MetaMorpho WBTC Vault
-    slug: arbitrum-metamorpho-wbtc-vault
-    chain: arbitrum
-    address: "0x078f358208685046a11c85e8ad32895ded93a909"
-    decimals: 8
-
-  - symbol: sCRVUSD
-    name: Savings crvUSD
-    slug: savings-crvusd
-    chain: ethereum
-    address: "0x0655977FEb2f289A4aB78af661074aE63301ed3E"
-    decimals: 18
-
-  - symbol: crvUSD
-    name: Curve USD Stablecoin
-    slug: curve-usd-stablecoin
-    chain: ethereum
-    address: "0xf939E0A03FB07F59A73314E73794Be08D3584501"
-    decimals: 18
-
-  - symbol: crv3cryp
-    name: Curve Tricrypto2 Pool LP
-    slug: curve-tricrypto2-pool-lp
-    chain: ethereum
-    address: "0xc4AD7B2D0C0a38b8416E9284993040f54F6eE918"
-    decimals: 18
-
-  - symbol: crvUSDC
-    name: Curve crvUSD USDC Market LP
-    slug: curve-crvusd-usdc-market-lp
-    chain: ethereum
-    address: "0x4dece946ba53b2847d88cd6259eb39de0daf72a0"
-    decimals: 18
-
-  - symbol: crvUSDT
-    name: Curve crvUSD USDT Market LP
-    slug: curve-crvusd-usdt-market-lp
-    chain: ethereum
-    address: "0x390f3595bca2df7d23783dfd126427cceb997bf4"
-    decimals: 18
-
-  - symbol: crvUSDS
-    name: Curve crvUSD USDS Market LP
-    slug: curve-crvusd-usds-market-lp
-    chain: ethereum
-    address: "0x4c9edd5852cd905f086c759e8383e09bff1e68b3"
-    decimals: 18
-
-  - symbol: crvEURC
-    name: Curve EURC Pool LP
-    slug: curve-eurc-pool-lp
-    chain: ethereum
-    address: "0x19b080fe1ffA0553469D20Ca36595457aF5CC0b4"
-    decimals: 18
-
-  - symbol: crvSTETH
-    name: Curve stETH ETH Pool LP
-    slug: curve-steth-eth-pool-lp
-    chain: ethereum
-    address: "0x06325440D014e39736583c165C2963BA99fAf14E"
-    decimals: 18
-
-  - symbol: crvWSTE
-    name: Curve wstETH ETH Pool LP
-    slug: curve-wsteth-eth-pool-lp
-    chain: ethereum
-    address: "0x21E27a5E5513D6e65C4f830167390997aA84843a"
-    decimals: 18
-
-  - symbol: crvRETH
-    name: Curve rETH ETH Pool LP
-    slug: curve-reth-eth-pool-lp
-    chain: ethereum
-    address: "0xF1B7670A80207861515785860552615456DB0D7D"
-    decimals: 18
-
-  - symbol: crvFRXE
-    name: Curve frxETH ETH Pool LP
-    slug: curve-frxeth-eth-pool-lp
-    chain: ethereum
-    address: "0xf43754c6650080f9a44457298923670c4466e1c2"
-    decimals: 18
-
-  - symbol: sFRXETH
-    name: Staked frxETH
-    slug: staked-frxeth
-    chain: ethereum
-    address: "0xac3e018457b222d93114458476f3e3416abbbe88"
-    decimals: 18
-
-  - symbol: crvrenBT
-    name: Curve sBTC renBTC Pool LP
-    slug: curve-sbtc-renbtc-pool-lp
-    chain: ethereum
-    address: "0x49343635Bf7748331F48674E80E29d5CEa0872c9"
-    decimals: 18
-
-  - symbol: crvCBBT
-    name: Curve cbBTC WBTC Pool LP
-    slug: curve-cbbtc-wbtc-pool-lp
-    chain: ethereum
-    address: "0xf5f5B97624542D72A9E06f04808B70A10099f8d3"
-    decimals: 18
-
-  - symbol: cvxCRV
-    name: Convex CRV
-    slug: convex-crv
-    chain: ethereum
-    address: "0x62B9c018BDc94157F07A2A1481220539E5b14F7e"
-    decimals: 18
-
-  - symbol: stkcvxCR
-    name: Staked Convex CRV
-    slug: staked-convex-crv
-    chain: ethereum
-    address: "0xaa0C3f5F7DFD688C6E646F66CD2a6B66ACdbE434"
-    decimals: 18
-
-  - symbol: fUSDC
-    name: Fluid USDC
-    slug: fluid-usdc
-    chain: ethereum
-    address: "0x1a96350e4b2d1d9a04a11e0029b46617a220261f"
-    decimals: 6
-
-  - symbol: fUSDT
-    name: Fluid USDT
-    slug: fluid-usdt
-    chain: ethereum
-    address: "0xf5B99047f68c34f31c5123A8C66fB8B50a6D9410"
-    decimals: 6
-
-  - symbol: fUSDe
-    name: Fluid USDe
-    slug: fluid-usde
-    chain: ethereum
-    address: "0x2A62C6F9aC98b0A11370Dac43b817A5c317E3F40"
-    decimals: 18
-
-  - symbol: fsUSDe
-    name: Fluid sUSDe
-    slug: fluid-susde
-    chain: ethereum
-    address: "0x5e2069D8F102B902A36B000C8F99CBE9c0D46d90"
-    decimals: 18
-
-  - symbol: fGHO
-    name: Fluid GHO
-    slug: fluid-gho
-    chain: ethereum
-    address: "0x696b9F65a8820B4eB1C568c07e05A01EE63e264D"
-    decimals: 18
-
-  - symbol: fBasUSDC
-    name: Fluid Base USDC
-    slug: fluid-base-usdc
-    chain: base
-    address: "0xbA6672322306d15a5f6D8A297D87b409746eD8aC"
-    decimals: 6
-
-  - symbol: fArbUSDC
-    name: Fluid Arbitrum USDC
-    slug: fluid-arbitrum-usdc
-    chain: arbitrum
-    address: "0x07fF4C30263625f1B0F4e719129037923703E678"
-    decimals: 6
-
-  - symbol: fWETH
-    name: Fluid WETH
-    slug: fluid-weth
-    chain: ethereum
-    address: "0x63399B6A1e83fBf3f982F3B904ef2434EaFf5931"
-    decimals: 18
-
-  - symbol: fwstETH
-    name: Fluid wstETH
-    slug: fluid-wsteth
-    chain: ethereum
-    address: "0xAcC02f0B4e8D0E3B68971fA86c7556fB9b897931"
-    decimals: 18
-
-  - symbol: fweETH
-    name: Fluid weETH
-    slug: fluid-weeth
-    chain: ethereum
-    address: "0x4D0c354e3dE42ED6d944c6E601B11c5E21B9827B"
-    decimals: 18
-
-  - symbol: fcbETH
-    name: Fluid cbETH
-    slug: fluid-cbeth
-    chain: ethereum
-    address: "0x93309a47EFAe2B04E5FBA2aEFdC252fD732cD931"
-    decimals: 18
-
-  - symbol: fBasWETH
-    name: Fluid Base WETH
-    slug: fluid-base-weth
-    chain: base
-    address: "0x9bB5DceB7a9eB59d0C4d326f56A86bFe296236b2"
-    decimals: 18
-
-  - symbol: fArbWETH
-    name: Fluid Arbitrum WETH
-    slug: fluid-arbitrum-weth
-    chain: arbitrum
-    address: "0x7f0e633d957d6205739c3E70d8B6eF4dFf5aD6A1"
-    decimals: 18
-
-  - symbol: fWBTC
-    name: Fluid WBTC
-    slug: fluid-wbtc
-    chain: ethereum
-    address: "0xa4B1F8308D64a4d31481dD3B620A0589a1c1d94B"
-    decimals: 8
-
-  - symbol: fcbBTC
-    name: Fluid cbBTC
-    slug: fluid-cbbtc
-    chain: ethereum
-    address: "0x8a92897483B8e4A1A7D18f0D0E2903761F033878"
-    decimals: 8
-
-  - symbol: cUSDCv3
-    name: Compound v3 USDC
-    slug: compound-v3-usdc
-    chain: ethereum
-    address: "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
-    decimals: 6
-
-  - symbol: cUSDTv3
-    name: Compound v3 USDT
-    slug: compound-v3-usdt
-    chain: ethereum
-    address: "0x3AD9B21358b45705515A20a1334E6038A6A4E216"
-    decimals: 6
-
-  - symbol: cArbUSDC
-    name: Compound v3 Arbitrum USDC
-    slug: compound-v3-arbitrum-usdc
-    chain: arbitrum
-    address: "0x9c4ec760c29dC044F1e0747638d6f905B27c627C"
-    decimals: 6
-
-  - symbol: cBasUSDC
-    name: Compound v3 Base USDC
-    slug: compound-v3-base-usdc
-    chain: base
-    address: "0xb125E6687d4313864e53df431d5425969c15Eb2F"
-    decimals: 6
-
-  - symbol: cPolUSDC
-    name: Compound v3 Polygon USDC
-    slug: compound-v3-polygon-usdc
-    chain: polygon
-    address: "0xF25212E797D4ac79a49392e2197A2Ac59bFAFe09"
-    decimals: 6
-
-  - symbol: cOptUSDC
-    name: Compound v3 Optimism USDC
-    slug: compound-v3-optimism-usdc
-    chain: optimism
-    address: "0x2e44e12c73d254b9d07374b5952d79d714578b88"
-    decimals: 6
-
-  - symbol: cWETHv3
-    name: Compound v3 WETH
-    slug: compound-v3-weth
-    chain: ethereum
-    address: "0xA17581A9E335D07308dE99468943f9a77E6A9330"
-    decimals: 18
-
-  - symbol: cArbWETH
-    name: Compound v3 Arbitrum WETH
-    slug: compound-v3-arbitrum-weth
-    chain: arbitrum
-    address: "0x6F7D514bbD4aFf3BcD1140B7344b56f063dE488b"
-    decimals: 18
-
-  - symbol: cBasWETH
-    name: Compound v3 Base WETH
-    slug: compound-v3-base-weth
-    chain: base
-    address: "0x46e6b214b524310239732D51387075E0e70970bf"
-    decimals: 18
-
-  - symbol: cPolWETH
-    name: Compound v3 Polygon WETH
-    slug: compound-v3-polygon-weth
-    chain: polygon
-    address: "0x406d203D0b8e970aB4f6fB0E59c55b5f6efEaE3f"
-    decimals: 18
-
-  - symbol: cUSDC
-    name: Compound v2 USDC
-    slug: compound-v2-usdc
-    chain: ethereum
-    address: "0x39AA380371D14454E15174659D4971094C38102d"
-    decimals: 8
-
-  - symbol: cUSDT
-    name: Compound v2 USDT
-    slug: compound-v2-usdt
-    chain: ethereum
-    address: "0xf650C3B88D12db855b8bf7D11Be6C55A4e07dCC9"
-    decimals: 8
-
-  - symbol: cETH
-    name: Compound v2 ETH
-    slug: compound-v2-eth
-    chain: ethereum
-    address: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5"
-    decimals: 8
-
-  - symbol: cWBTC
-    name: Compound v2 WBTC
-    slug: compound-v2-wbtc
-    chain: ethereum
-    address: "0xccF4429DB6322D5C611ee964527D42E5d685DD6a"
-    decimals: 8
-
-  - symbol: sUSDS
-    name: Savings USDS
-    slug: savings-usds
-    chain: ethereum
-    address: "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD"
-    decimals: 18
-
-  - symbol: sDAI
-    name: Savings DAI
-    slug: savings-dai
-    chain: ethereum
-    address: "0x83F20F44975D03b1b09e64809B757c47f942BEea"
-    decimals: 18
-
-  - symbol: USDS
-    name: Sky Dollar
-    slug: sky-dollar
-    chain: ethereum
-    address: "0xdC035D45d973E3EC169d2276DDab16f1e407384F"
-    decimals: 18
-
-  - symbol: spUSDC
-    name: Spark USDC
-    slug: spark-usdc
-    chain: ethereum
-    address: "0x39a164b38d381014cc61ec812aa20d8848d53efc"
-    decimals: 6
-
-  - symbol: spUSDT
-    name: Spark USDT
-    slug: spark-usdt
-    chain: ethereum
-    address: "0x16b6770281b3796d19ec55d0a64bd2dbbf807da8"
-    decimals: 6
-
-  - symbol: spGHO
-    name: Spark GHO
-    slug: spark-gho
-    chain: ethereum
-    address: "0x12c4bf88a4ef7b5387431e780775d7b561c2ca05"
-    decimals: 18
-
-  - symbol: spWETH
-    name: Spark WETH
-    slug: spark-weth
-    chain: ethereum
-    address: "0x59cD1C87501baF68A15cb86E955Cd8b056A8F0e0"
-    decimals: 18
-
-  - symbol: spwstE
-    name: Spark wstETH
-    slug: spark-wsteth
-    chain: ethereum
-    address: "0x12b54025c112aa61fAce2CAd7118549112a32194"
-    decimals: 18
-
-  - symbol: sprETH
-    name: Spark rETH
-    slug: spark-reth
-    chain: ethereum
-    address: "0x4c9edd5852cd905f086c759e8383e09bff1e68b3"
-    decimals: 18
-
-  - symbol: USDY
-    name: Ondo US Dollar Yield
-    slug: ondo-us-dollar-yield
-    chain: ethereum
-    address: "0x96F6747fd57724E4B7E87771d71999818bD3a964"
-    decimals: 18
-
-  - symbol: OUSG
-    name: Ondo Short-Term US Gov Bond Fund
-    slug: ondo-short-term-us-gov-bond-fund
-    chain: ethereum
-    address: "0x1B19C19393e2d034D8Ff31ff34c81252FcBbee92"
-    decimals: 18
-
-  - symbol: rOUSG
-    name: Ondo Rebasing OUSG
-    slug: ondo-rebasing-ousg
-    chain: ethereum
-    address: "0xae1069ed0842fe42e47265a7e6b0a68dd92cc632"
-    decimals: 18
-
-  - symbol: USDYArb
-    name: Ondo US Dollar Yield Arbitrum
-    slug: ondo-us-dollar-yield-arbitrum
-    chain: arbitrum
-    address: "0xA8B08006E88a10738a9D69DF5F9d6aD13E678d46"
-    decimals: 18
-
-  - symbol: PTsUSDe
-    name: Pendle PT sUSDe
-    slug: pendle-pt-susde
-    chain: ethereum
-    address: "0x9b0499648fe627341e309fb13ebf6ce1301c2cb1"
-    decimals: 18
-
-  - symbol: PTUSDe
-    name: Pendle PT USDe
-    slug: pendle-pt-usde
-    chain: ethereum
-    address: "0xb13e9a7e6b0a68dd92cc632357388e6378e9b6bf"
-    decimals: 18
-
-  - symbol: PTUSDC
-    name: Pendle PT USDC
-    slug: pendle-pt-usdc
-    chain: ethereum
-    address: "0x0e24177d6ee037e42d72a9e06f04808b70a10099"
-    decimals: 6
-
-  - symbol: PTeETH
-    name: Pendle PT eETH
-    slug: pendle-pt-eeth
-    chain: ethereum
-    address: "0xd468641a293630f74e32d645638c4b1257d07c01"
-    decimals: 18
-
-  - symbol: PTezETH
-    name: Pendle PT ezETH
-    slug: pendle-pt-ezeth
-    chain: ethereum
-    address: "0x13d64c1cf647313333333333333333333333333"
-    decimals: 18
-
-  - symbol: PTwstE
-    name: Pendle PT wstETH
-    slug: pendle-pt-wsteth
-    chain: ethereum
-    address: "0xc1C2b67f13d80E42C04e844Dcf60e7E3F1c7C22e"
-    decimals: 18
-
-  - symbol: USDf
-    name: Falcon USD
-    slug: falcon-usd
-    chain: ethereum
-    address: "0x1b790d9f0f9b6e82847a96a1a1f0a202c46f338d"
-    decimals: 18
-
-  - symbol: sUSDf
-    name: Staked Falcon USD
-    slug: staked-falcon-usd
-    chain: ethereum
-    address: "0x5e236e7d6928e469502b4859a85d778d91c1a938"
-    decimals: 18
-
-  - symbol: vUSDC
-    name: Venus USDC
-    slug: venus-usdc
-    chain: bnb
-    address: "0xecA9B2665E0F58A1Bf41365bF9063B01073d9ceA"
-    decimals: 8
-
-  - symbol: vUSDT
-    name: Venus USDT
-    slug: venus-usdt
-    chain: bnb
-    address: "0xfD5840Cd36d94D7229439859C0112a4185BC0255"
-    decimals: 8
-
-  - symbol: vDAI
-    name: Venus DAI
-    slug: venus-dai
-    chain: bnb
-    address: "0x334b3eCB4DCa50777b318f5c885D51672322306d"
-    decimals: 8
-
-  - symbol: vETH
-    name: Venus ETH
-    slug: venus-eth
-    chain: bnb
-    address: "0xf508fCD42802907729f02898940681312a9705B8"
-    decimals: 8
-
-  - symbol: vBTC
-    name: Venus BTC
-    slug: venus-btc
-    chain: bnb
-    address: "0x882C173bC7Ff3b7786CA16dfeD3DFFfb9Ee7847B"
-    decimals: 8
-
-  - symbol: vBNB
-    name: Venus BNB
-    slug: venus-bnb
-    chain: bnb
-    address: "0xA07c5b74C9B40447a98857777358510838927457"
-    decimals: 8
-
-  - symbol: vBUSD
-    name: Venus BUSD
-    slug: venus-busd
-    chain: bnb
-    address: "0x95c78E80Ea81342757b0638514360bc0f04F46A9"
-    decimals: 8
-
-  - symbol: vBETH
-    name: Venus BETH
-    slug: venus-beth
-    chain: bnb
-    address: "0x972207A639D4E8bC1682203077695604554c433c"
-    decimals: 8
-
-  - symbol: vLINK
-    name: Venus LINK
-    slug: venus-link
-    chain: bnb
-    address: "0x65c537e2b92eFcb5c5cE491B5E2E735d724B5baE"
-    decimals: 8
-
-  - symbol: vCAKE
-    name: Venus CAKE
-    slug: venus-cake
-    chain: bnb
-    address: "0x86a3c42D3b86A0424B3C8875E9a76c8965DAe505"
-    decimals: 8
-
-  - symbol: vAAVE
-    name: Venus AAVE
-    slug: venus-aave
-    chain: bnb
-    address: "0x26DA28954763B92139ED49283625ceCAf52C6f94"
-    decimals: 8
-
-  - symbol: vUNI
-    name: Venus UNI
-    slug: venus-uni
-    chain: bnb
-    address: "0x27A9711A0dF954d68A577c4580e8D086617ba343"
-    decimals: 8
-
-  - symbol: vXRP
-    name: Venus XRP
-    slug: venus-xrp
-    chain: bnb
-    address: "0xB715808a78F6041E46d61Cb123C9B4A27056AE9C"
-    decimals: 8
-
-  - symbol: vDOGE
-    name: Venus Dogecoin
-    slug: venus-dogecoin
-    chain: bnb
-    address: "0xec3422Ef92B2fb59e84c8B02B775D98207509405"
-    decimals: 8
-
-  - symbol: vDOT
-    name: Venus DOT
-    slug: venus-dot
-    chain: bnb
-    address: "0x161073A2111f591215E8295956803C2FA372716d"
-    decimals: 8
-
-  - symbol: vLTC
-    name: Venus LTC
-    slug: venus-ltc
-    chain: bnb
-    address: "0x57A5297F2CB2c0AaC9D554660cad6da368bd5010"
-    decimals: 8
-
-  - symbol: sypUSDC
-    name: Syrup USDC
-    slug: syrup-usdc
-    chain: ethereum
-    address: "0x8a927a4d5e75525547636e0932c0d860d5b78b54"
-    decimals: 6
-
-  - symbol: sypUSDT
-    name: Syrup USDT
-    slug: syrup-usdt
-    chain: ethereum
-    address: "0x0f2C558F485Bcf3526c82d499FfAEdc2A6C4b03C"
-    decimals: 6
-
-  - symbol: MPL
-    name: Maple Token
-    slug: maple-token
-    chain: ethereum
-    address: "0x33349B282065b0284d756F0577FB39c158F935e6"
-    decimals: 18
-
-  - symbol: SYRUP
-    name: Syrup Token
-    slug: syrup-token
-    chain: ethereum
-    address: "0x643C4E15d7d62Ad0aBeC4a9DA4Bf225776691037"
-    decimals: 18
-
-  - symbol: USD0++
-    name: Usual Liquid Yield USD
-    slug: usual-liquid-yield-usd
-    chain: ethereum
-    address: "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0"
-    decimals: 18
-
-  - symbol: syrupUSDC
-    name: Syrup USDC
-    slug: syrup-usdc
-    chain: ethereum
-    address: "0x85780a405bc1167b0d06856519e868a773ff1f35"
-    decimals: 6
-
-  - symbol: deUSD
-    name: Elixir Decentralized USD
-    slug: elixir-deusd
-    chain: ethereum
-    address: "0x151D833446059c38F6bA3d4bcfB45B3f26E7b308"
-    decimals: 18
-
-  - symbol: sdeUSD
-    name: Elixir Staked Decentralized USD
-    slug: elixir-staked-deusd
-    chain: ethereum
-    address: "0x6f4520A453d8C2652B0959E7A31c26fA2906eF38"
-    decimals: 18
-
-  - symbol: apxETH
-    name: Auto-PxETH
-    slug: auto-pxeth
-    chain: ethereum
-    address: "0x9Ba00D6856a4eDF46a5B3c08170994f293DE3871"
-    decimals: 18
-
-  - symbol: pufETH
-    name: Puffer ETH
-    slug: puffer-eth
-    chain: ethereum
-    address: "0xD9A442856C234a39a81a089C06451EBAa43D6a7D"
-    decimals: 18
-
-  - symbol: solvBTC
-    name: Solv BTC
-    slug: solv-btc
-    chain: ethereum
-    address: "0xCC96675eF06c4058b329830025d1536719A55c13"
-    decimals: 18
-
-  - symbol: solvBTC.BBN
-    name: Solv BTC Babylon
-    slug: solv-btc-babylon
-    chain: ethereum
-    address: "0xCC96675eF06c4058b329830025d1536719A55c13"
-    decimals: 18
+- symbol: ETH
+  name: Ethereum
+  slug: ethereum
+  chain: ethereum
+  address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+  decimals: 18
+  is_native: true
+- symbol: WETH
+  name: Wrapped Ether
+  slug: wrapped-ether
+  chain: ethereum
+  address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+  decimals: 18
+- symbol: USDC
+  name: USD Coin
+  slug: usd-coin
+  chain: ethereum
+  address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+  decimals: 6
+- symbol: USDT
+  name: Tether
+  slug: tether
+  chain: ethereum
+  address: '0xdac17f958d2ee523a2206206994597c13d831ec7'
+  decimals: 6
+- symbol: DAI
+  name: Dai
+  slug: dai
+  chain: ethereum
+  address: '0x6b175474e89094c44da98b954eedeac495271d0f'
+  decimals: 18
+- symbol: WBTC
+  name: Wrapped Bitcoin
+  slug: wrapped-bitcoin
+  chain: ethereum
+  address: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599'
+  decimals: 8
+- symbol: BUIDL
+  name: BUIDL
+  slug: buidl
+  chain: ethereum
+  address: '0x45cf1cd8f8702b85e05cfc4f4b14d2325ab58bb4'
+  decimals: 6
+- symbol: aEthDAI
+  name: Aave Ethereum DAI
+  slug: aave-ethereum-dai
+  chain: ethereum
+  address: '0x018008bfbB39d932D1485A32a3C3e564fC623a14'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/dai.png
+- symbol: aEthPYUS
+  name: Aave Ethereum PYUSD
+  slug: aave-ethereum-pyusd
+  chain: ethereum
+  address: '0x2368D84e27f6770C3eb4EAEFfEb0c66F8A80e32d'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/pyus.png
+- symbol: aEthFRAX
+  name: Aave Ethereum FRAX
+  slug: aave-ethereum-frax
+  chain: ethereum
+  address: '0x9D05e94b819266E4e8dC406A145EE9235e16BfAc'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/frax.png
+- symbol: aEthGHO
+  name: Aave Ethereum GHO
+  slug: aave-ethereum-gho
+  chain: ethereum
+  address: '0x00A35A82bCD997d85DF164320C274996366f571b'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/gho.png
+- symbol: aArbUSDC
+  name: Aave Arbitrum USDC
+  slug: aave-arbitrum-usdc
+  chain: arbitrum
+  address: '0x72E91F0741271f2240974cFc1EC88915152a5Aa4'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: aArbUSDT
+  name: Aave Arbitrum USDT
+  slug: aave-arbitrum-usdt
+  chain: arbitrum
+  address: '0x6ab707Aca953eDAeFBc4fD23bA73294241490620'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdt.png
+- symbol: aBasUSDC
+  name: Aave Base USDC
+  slug: aave-base-usdc
+  chain: base
+  address: '0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: aPolUSDC
+  name: Aave Polygon USDC
+  slug: aave-polygon-usdc
+  chain: polygon
+  address: '0x625E7708f30cA75bfd92586e17077590C60eb4cD'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: aPolUSDT
+  name: Aave Polygon USDT
+  slug: aave-polygon-usdt
+  chain: polygon
+  address: '0x6ab707Aca953eDAeFBc4fD23bA73294241490620'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdt.png
+- symbol: aOptUSDC
+  name: Aave Optimism USDC
+  slug: aave-optimism-usdc
+  chain: optimism
+  address: '0x38d6447D6B40c9F30F8703B83F3f71c4cE67b140'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: aEthwstE
+  name: Aave Ethereum wstETH
+  slug: aave-ethereum-wsteth
+  chain: ethereum
+  address: '0x0B925eD163218f668092ae88F04eB9833630f74E'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aEthcbE
+  name: Aave Ethereum cbETH
+  slug: aave-ethereum-cbeth
+  chain: ethereum
+  address: '0x9777d7E2b60bB0175aD928022008099F34514B5E'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aEthrETH
+  name: Aave Ethereum rETH
+  slug: aave-ethereum-reth
+  chain: ethereum
+  address: '0xCc9EE9483f66209Ea65d562C26490FfE6d3dfd7E'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aArbWETH
+  name: Aave Arbitrum WETH
+  slug: aave-arbitrum-weth
+  chain: arbitrum
+  address: '0xeE588B409220539e379816F156363f848f07A1A9'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aArbwstE
+  name: Aave Arbitrum wstETH
+  slug: aave-arbitrum-wsteth
+  chain: arbitrum
+  address: '0x513c7E3a9c69cA33692AD6e8b0C24B11E9B1fCdF'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aBasWETH
+  name: Aave Base WETH
+  slug: aave-base-weth
+  chain: base
+  address: '0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aBascbE
+  name: Aave Base cbETH
+  slug: aave-base-cbeth
+  chain: base
+  address: '0xb044e5480ab02a11cfb1c1e54911d33458e0a169'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aBaswstE
+  name: Aave Base wstETH
+  slug: aave-base-wsteth
+  chain: base
+  address: '0xc1C2b67f13d80E42C04e844Dcf60e7E3F1c7C22e'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aPolWETH
+  name: Aave Polygon WETH
+  slug: aave-polygon-weth
+  chain: polygon
+  address: '0xeE588B409220539e379816F156363f848f07A1A9'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: aEthWBTC
+  name: Aave Ethereum WBTC
+  slug: aave-ethereum-wbtc
+  chain: ethereum
+  address: '0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6de8'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/btc.png
+- symbol: aEthtBTC
+  name: Aave Ethereum tBTC
+  slug: aave-ethereum-tbtc
+  chain: ethereum
+  address: '0x8798c4d96a757270e59a68e06385a4a49e913a48'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/btc.png
+- symbol: aArbWBTC
+  name: Aave Arbitrum WBTC
+  slug: aave-arbitrum-wbtc
+  chain: arbitrum
+  address: '0x078F358208685046a11C85e8ad32895DED93A909'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/btc.png
+- symbol: aEthLINK
+  name: Aave Ethereum LINK
+  slug: aave-ethereum-link
+  chain: ethereum
+  address: '0x5E8C8A7243651F0B45d9852A9E58A38E8E954b42'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/link.png
+- symbol: aEthAAVE
+  name: Aave Ethereum AAVE
+  slug: aave-ethereum-aave
+  chain: ethereum
+  address: '0xA7006199A6f1F424c53c07Ac43B330C8638C6f2B'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/aave.png
+- symbol: mcUSDC
+  name: Steakhouse MetaMorpho USDC
+  slug: steakhouse-metamorpho-usdc
+  chain: ethereum
+  address: '0xBEEF01735c132Aa46DA735266d0D31CE2A117D1F'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/cusdc.png
+- symbol: mUSDT
+  name: Gauntlet USDT Core Vault
+  slug: gauntlet-usdt-core-vault
+  chain: ethereum
+  address: '0x40a62428509e5ee9f4f4699f8eb738f654b9d038'
+  decimals: 6
+- symbol: mPYUSD
+  name: Steakhouse MetaMorpho PYUSD
+  slug: steakhouse-metamorpho-pyusd
+  chain: ethereum
+  address: '0xa0b1062637b83f3e1a0670830b59b3922379d4bd'
+  decimals: 6
+- symbol: mUSDe
+  name: Steakhouse MetaMorpho USDe
+  slug: steakhouse-metamorpho-usde
+  chain: ethereum
+  address: '0x7a6ae64c9bc6551b94b0ebf49e0c6563e46c75df'
+  decimals: 18
+- symbol: msUSDe
+  name: Reallink MetaMorpho sUSDe
+  slug: reallink-metamorpho-susde
+  chain: ethereum
+  address: '0x0f1e8e2e92c2357388e6378e9b6bf71b3e8e19e7'
+  decimals: 18
+- symbol: mBasUSDC
+  name: Gauntlet Base USDC Core
+  slug: gauntlet-base-usdc-core
+  chain: base
+  address: '0xc1256Ae5FF18137280F0f8C42C67B6612b7D6d30'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/basusdc.png
+- symbol: mcWETH
+  name: Steakhouse MetaMorpho WETH
+  slug: steakhouse-metamorpho-weth
+  chain: ethereum
+  address: '0x19280d0d8fe183f5e04313f8901df6080e7293b6'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/cweth.png
+- symbol: mwstETH
+  name: Gauntlet wstETH Prime Vault
+  slug: gauntlet-wsteth-prime-vault
+  chain: ethereum
+  address: '0x9bf86411d96ac24a98ddc4f42b36e8df81c81729'
+  decimals: 18
+- symbol: mBasWETH
+  name: Gauntlet Base WETH Core
+  slug: gauntlet-base-weth-core
+  chain: base
+  address: '0x13d64c1cf6473133333333333333333333333333'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/basweth.png
+- symbol: mBascbE
+  name: Seamless Base cbETH Vault
+  slug: seamless-base-cbeth-vault
+  chain: base
+  address: '0x892a012920239b9804b4c46f1201d418721665e8'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/bascbe.png
+- symbol: mWBTC
+  name: Gauntlet WBTC Core Vault
+  slug: gauntlet-wbtc-core-vault
+  chain: ethereum
+  address: '0x3216834b6b6697669894e1d743a3d56b063ee387'
+  decimals: 8
+- symbol: mBascbBT
+  name: Gauntlet Base cbBTC Vault
+  slug: gauntlet-base-cbbtc-vault
+  chain: base
+  address: '0x0b8a1c62187b8d4f09d8d6f140df03531b67b140'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/bascbbt.png
+- symbol: maUSDC
+  name: B.Protocol MetaMorpho USDC
+  slug: b-protocol-metamorpho-usdc
+  chain: ethereum
+  address: '0xb8a2f8d070b4ec2b8ef42bc02e6c51fa80c85c27'
+  decimals: 6
+- symbol: mweETH
+  name: Gauntlet Ethereum weETH Vault
+  slug: gauntlet-ethereum-weeth-vault
+  chain: ethereum
+  address: '0xbe694c7b8e5c1d6835a6435645638c4b1257d07c'
+  decimals: 18
+- symbol: mezETH
+  name: Renzo Ethereum ezETH Vault
+  slug: renzo-ethereum-ezeth-vault
+  chain: ethereum
+  address: '0x1d4a822008099f34514b5e0b925ed163218f6680'
+  decimals: 18
+- symbol: mtBTC
+  name: Threshold Ethereum tBTC Vault
+  slug: threshold-ethereum-tbtc-vault
+  chain: ethereum
+  address: '0x8798c4d96a757270e59a68e06385a4a49e913a48'
+  decimals: 18
+- symbol: mBasUSDT
+  name: Gauntlet Base USDT Vault
+  slug: gauntlet-base-usdt-vault
+  chain: base
+  address: '0x48589ec936d5258e72c842b03657731766a5a92a'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/basusdt.png
+- symbol: mBasEURC
+  name: Base MetaMorpho EURC Vault
+  slug: base-metamorpho-eurc-vault
+  chain: base
+  address: '0x60a3e35cc927b5e4070a7b4699f8eb738f654b9d'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/baseurc.png
+- symbol: mBasweE
+  name: Moonwell Base weETH Vault
+  slug: moonwell-base-weeth-vault
+  chain: base
+  address: '0x7a6ae64c9bc6551b94b0ebf49e0c6563e46c75df'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/baswee.png
+- symbol: mArbUSDC
+  name: Gauntlet Arbitrum USDC Vault
+  slug: gauntlet-arbitrum-usdc-vault
+  chain: arbitrum
+  address: '0x4465d6cce45b233a75877f0a1c1d439ec42b8744'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/arbusdc.png
+- symbol: mArbUSDT
+  name: Gauntlet Arbitrum USDT Vault
+  slug: gauntlet-arbitrum-usdt-vault
+  chain: arbitrum
+  address: '0x19280d0d8fe183f5e04313f8901df6080e7293b6'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/arbusdt.png
+- symbol: mArbWETH
+  name: Gauntlet Arbitrum WETH Vault
+  slug: gauntlet-arbitrum-weth-vault
+  chain: arbitrum
+  address: '0x513c7e3a9c69ca33692ad6e8b0c24b11e9b1fcdf'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/arbweth.png
+- symbol: mArbwstE
+  name: Arbitrum MetaMorpho wstETH Vault
+  slug: arbitrum-metamorpho-wsteth-vault
+  chain: arbitrum
+  address: '0x9bf86411d96ac24a98ddc4f42b36e8df81c81729'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/arbwste.png
+- symbol: mArbWBTC
+  name: Arbitrum MetaMorpho WBTC Vault
+  slug: arbitrum-metamorpho-wbtc-vault
+  chain: arbitrum
+  address: '0x078f358208685046a11c85e8ad32895ded93a909'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/arbwbtc.png
+- symbol: sCRVUSD
+  name: Savings crvUSD
+  slug: savings-crvusd
+  chain: ethereum
+  address: '0x0655977FEb2f289A4aB78af661074aE63301ed3E'
+  decimals: 18
+- symbol: crvUSD
+  name: Curve USD Stablecoin
+  slug: curve-usd-stablecoin
+  chain: ethereum
+  address: '0xf939E0A03FB07F59A73314E73794Be08D3584501'
+  decimals: 18
+- symbol: crv3cryp
+  name: Curve Tricrypto2 Pool LP
+  slug: curve-tricrypto2-pool-lp
+  chain: ethereum
+  address: '0xc4AD7B2D0C0a38b8416E9284993040f54F6eE918'
+  decimals: 18
+- symbol: crvUSDC
+  name: Curve crvUSD USDC Market LP
+  slug: curve-crvusd-usdc-market-lp
+  chain: ethereum
+  address: '0x4dece946ba53b2847d88cd6259eb39de0daf72a0'
+  decimals: 18
+- symbol: crvUSDT
+  name: Curve crvUSD USDT Market LP
+  slug: curve-crvusd-usdt-market-lp
+  chain: ethereum
+  address: '0x390f3595bca2df7d23783dfd126427cceb997bf4'
+  decimals: 18
+- symbol: crvUSDS
+  name: Curve crvUSD USDS Market LP
+  slug: curve-crvusd-usds-market-lp
+  chain: ethereum
+  address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3'
+  decimals: 18
+- symbol: crvEURC
+  name: Curve EURC Pool LP
+  slug: curve-eurc-pool-lp
+  chain: ethereum
+  address: '0x19b080fe1ffA0553469D20Ca36595457aF5CC0b4'
+  decimals: 18
+- symbol: crvSTETH
+  name: Curve stETH ETH Pool LP
+  slug: curve-steth-eth-pool-lp
+  chain: ethereum
+  address: '0x06325440D014e39736583c165C2963BA99fAf14E'
+  decimals: 18
+- symbol: crvWSTE
+  name: Curve wstETH ETH Pool LP
+  slug: curve-wsteth-eth-pool-lp
+  chain: ethereum
+  address: '0x21E27a5E5513D6e65C4f830167390997aA84843a'
+  decimals: 18
+- symbol: crvRETH
+  name: Curve rETH ETH Pool LP
+  slug: curve-reth-eth-pool-lp
+  chain: ethereum
+  address: '0xF1B7670A80207861515785860552615456DB0D7D'
+  decimals: 18
+- symbol: crvFRXE
+  name: Curve frxETH ETH Pool LP
+  slug: curve-frxeth-eth-pool-lp
+  chain: ethereum
+  address: '0xf43754c6650080f9a44457298923670c4466e1c2'
+  decimals: 18
+- symbol: sFRXETH
+  name: Staked frxETH
+  slug: staked-frxeth
+  chain: ethereum
+  address: '0xac3e018457b222d93114458476f3e3416abbbe88'
+  decimals: 18
+- symbol: crvrenBT
+  name: Curve sBTC renBTC Pool LP
+  slug: curve-sbtc-renbtc-pool-lp
+  chain: ethereum
+  address: '0x49343635Bf7748331F48674E80E29d5CEa0872c9'
+  decimals: 18
+- symbol: crvCBBT
+  name: Curve cbBTC WBTC Pool LP
+  slug: curve-cbbtc-wbtc-pool-lp
+  chain: ethereum
+  address: '0xf5f5B97624542D72A9E06f04808B70A10099f8d3'
+  decimals: 18
+- symbol: cvxCRV
+  name: Convex CRV
+  slug: convex-crv
+  chain: ethereum
+  address: '0x62B9c018BDc94157F07A2A1481220539E5b14F7e'
+  decimals: 18
+- symbol: stkcvxCR
+  name: Staked Convex CRV
+  slug: staked-convex-crv
+  chain: ethereum
+  address: '0xaa0C3f5F7DFD688C6E646F66CD2a6B66ACdbE434'
+  decimals: 18
+- symbol: fUSDC
+  name: Fluid USDC
+  slug: fluid-usdc
+  chain: ethereum
+  address: '0x1a96350e4b2d1d9a04a11e0029b46617a220261f'
+  decimals: 6
+- symbol: fUSDT
+  name: Fluid USDT
+  slug: fluid-usdt
+  chain: ethereum
+  address: '0xf5B99047f68c34f31c5123A8C66fB8B50a6D9410'
+  decimals: 6
+- symbol: fUSDe
+  name: Fluid USDe
+  slug: fluid-usde
+  chain: ethereum
+  address: '0x2A62C6F9aC98b0A11370Dac43b817A5c317E3F40'
+  decimals: 18
+- symbol: fsUSDe
+  name: Fluid sUSDe
+  slug: fluid-susde
+  chain: ethereum
+  address: '0x5e2069D8F102B902A36B000C8F99CBE9c0D46d90'
+  decimals: 18
+- symbol: fGHO
+  name: Fluid GHO
+  slug: fluid-gho
+  chain: ethereum
+  address: '0x696b9F65a8820B4eB1C568c07e05A01EE63e264D'
+  decimals: 18
+- symbol: fBasUSDC
+  name: Fluid Base USDC
+  slug: fluid-base-usdc
+  chain: base
+  address: '0xbA6672322306d15a5f6D8A297D87b409746eD8aC'
+  decimals: 6
+- symbol: fArbUSDC
+  name: Fluid Arbitrum USDC
+  slug: fluid-arbitrum-usdc
+  chain: arbitrum
+  address: '0x07fF4C30263625f1B0F4e719129037923703E678'
+  decimals: 6
+- symbol: fWETH
+  name: Fluid WETH
+  slug: fluid-weth
+  chain: ethereum
+  address: '0x63399B6A1e83fBf3f982F3B904ef2434EaFf5931'
+  decimals: 18
+- symbol: fwstETH
+  name: Fluid wstETH
+  slug: fluid-wsteth
+  chain: ethereum
+  address: '0xAcC02f0B4e8D0E3B68971fA86c7556fB9b897931'
+  decimals: 18
+- symbol: fweETH
+  name: Fluid weETH
+  slug: fluid-weeth
+  chain: ethereum
+  address: '0x4D0c354e3dE42ED6d944c6E601B11c5E21B9827B'
+  decimals: 18
+- symbol: fcbETH
+  name: Fluid cbETH
+  slug: fluid-cbeth
+  chain: ethereum
+  address: '0x93309a47EFAe2B04E5FBA2aEFdC252fD732cD931'
+  decimals: 18
+- symbol: fBasWETH
+  name: Fluid Base WETH
+  slug: fluid-base-weth
+  chain: base
+  address: '0x9bB5DceB7a9eB59d0C4d326f56A86bFe296236b2'
+  decimals: 18
+- symbol: fArbWETH
+  name: Fluid Arbitrum WETH
+  slug: fluid-arbitrum-weth
+  chain: arbitrum
+  address: '0x7f0e633d957d6205739c3E70d8B6eF4dFf5aD6A1'
+  decimals: 18
+- symbol: fWBTC
+  name: Fluid WBTC
+  slug: fluid-wbtc
+  chain: ethereum
+  address: '0xa4B1F8308D64a4d31481dD3B620A0589a1c1d94B'
+  decimals: 8
+- symbol: fcbBTC
+  name: Fluid cbBTC
+  slug: fluid-cbbtc
+  chain: ethereum
+  address: '0x8a92897483B8e4A1A7D18f0D0E2903761F033878'
+  decimals: 8
+- symbol: cUSDCv3
+  name: Compound v3 USDC
+  slug: compound-v3-usdc
+  chain: ethereum
+  address: '0xc3d688B66703497DAA19211EEdff47f25384cdc3'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: cUSDTv3
+  name: Compound v3 USDT
+  slug: compound-v3-usdt
+  chain: ethereum
+  address: '0x3AD9B21358b45705515A20a1334E6038A6A4E216'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdt.png
+- symbol: cArbUSDC
+  name: Compound v3 Arbitrum USDC
+  slug: compound-v3-arbitrum-usdc
+  chain: arbitrum
+  address: '0x9c4ec760c29dC044F1e0747638d6f905B27c627C'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: cBasUSDC
+  name: Compound v3 Base USDC
+  slug: compound-v3-base-usdc
+  chain: base
+  address: '0xb125E6687d4313864e53df431d5425969c15Eb2F'
+  decimals: 6
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: cPolUSDC
+  name: Compound v3 Polygon USDC
+  slug: compound-v3-polygon-usdc
+  chain: polygon
+  address: '0xF25212E797D4ac79a49392e2197A2Ac59bFAFe09'
+  decimals: 6
+- symbol: cOptUSDC
+  name: Compound v3 Optimism USDC
+  slug: compound-v3-optimism-usdc
+  chain: optimism
+  address: '0x2e44e12c73d254b9d07374b5952d79d714578b88'
+  decimals: 6
+- symbol: cWETHv3
+  name: Compound v3 WETH
+  slug: compound-v3-weth
+  chain: ethereum
+  address: '0xA17581A9E335D07308dE99468943f9a77E6A9330'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: cArbWETH
+  name: Compound v3 Arbitrum WETH
+  slug: compound-v3-arbitrum-weth
+  chain: arbitrum
+  address: '0x6F7D514bbD4aFf3BcD1140B7344b56f063dE488b'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: cBasWETH
+  name: Compound v3 Base WETH
+  slug: compound-v3-base-weth
+  chain: base
+  address: '0x46e6b214b524310239732D51387075E0e70970bf'
+  decimals: 18
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: cPolWETH
+  name: Compound v3 Polygon WETH
+  slug: compound-v3-polygon-weth
+  chain: polygon
+  address: '0x406d203D0b8e970aB4f6fB0E59c55b5f6efEaE3f'
+  decimals: 18
+- symbol: cUSDC
+  name: Compound v2 USDC
+  slug: compound-v2-usdc
+  chain: ethereum
+  address: '0x39AA380371D14454E15174659D4971094C38102d'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: cUSDT
+  name: Compound v2 USDT
+  slug: compound-v2-usdt
+  chain: ethereum
+  address: '0xf650C3B88D12db855b8bf7D11Be6C55A4e07dCC9'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdt.png
+- symbol: cETH
+  name: Compound v2 ETH
+  slug: compound-v2-eth
+  chain: ethereum
+  address: '0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5'
+  decimals: 8
+- symbol: cWBTC
+  name: Compound v2 WBTC
+  slug: compound-v2-wbtc
+  chain: ethereum
+  address: '0xccF4429DB6322D5C611ee964527D42E5d685DD6a'
+  decimals: 8
+- symbol: sUSDS
+  name: Savings USDS
+  slug: savings-usds
+  chain: ethereum
+  address: '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD'
+  decimals: 18
+- symbol: sDAI
+  name: Savings DAI
+  slug: savings-dai
+  chain: ethereum
+  address: '0x83F20F44975D03b1b09e64809B757c47f942BEea'
+  decimals: 18
+- symbol: USDS
+  name: Sky Dollar
+  slug: sky-dollar
+  chain: ethereum
+  address: '0xdC035D45d973E3EC169d2276DDab16f1e407384F'
+  decimals: 18
+- symbol: spUSDC
+  name: Spark USDC
+  slug: spark-usdc
+  chain: ethereum
+  address: '0x39a164b38d381014cc61ec812aa20d8848d53efc'
+  decimals: 6
+- symbol: spUSDT
+  name: Spark USDT
+  slug: spark-usdt
+  chain: ethereum
+  address: '0x16b6770281b3796d19ec55d0a64bd2dbbf807da8'
+  decimals: 6
+- symbol: spGHO
+  name: Spark GHO
+  slug: spark-gho
+  chain: ethereum
+  address: '0x12c4bf88a4ef7b5387431e780775d7b561c2ca05'
+  decimals: 18
+- symbol: spWETH
+  name: Spark WETH
+  slug: spark-weth
+  chain: ethereum
+  address: '0x59cD1C87501baF68A15cb86E955Cd8b056A8F0e0'
+  decimals: 18
+- symbol: spwstE
+  name: Spark wstETH
+  slug: spark-wsteth
+  chain: ethereum
+  address: '0x12b54025c112aa61fAce2CAd7118549112a32194'
+  decimals: 18
+- symbol: sprETH
+  name: Spark rETH
+  slug: spark-reth
+  chain: ethereum
+  address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3'
+  decimals: 18
+- symbol: USDY
+  name: Ondo US Dollar Yield
+  slug: ondo-us-dollar-yield
+  chain: ethereum
+  address: '0x96F6747fd57724E4B7E87771d71999818bD3a964'
+  decimals: 18
+- symbol: OUSG
+  name: Ondo Short-Term US Gov Bond Fund
+  slug: ondo-short-term-us-gov-bond-fund
+  chain: ethereum
+  address: '0x1B19C19393e2d034D8Ff31ff34c81252FcBbee92'
+  decimals: 18
+- symbol: rOUSG
+  name: Ondo Rebasing OUSG
+  slug: ondo-rebasing-ousg
+  chain: ethereum
+  address: '0xae1069ed0842fe42e47265a7e6b0a68dd92cc632'
+  decimals: 18
+- symbol: USDYArb
+  name: Ondo US Dollar Yield Arbitrum
+  slug: ondo-us-dollar-yield-arbitrum
+  chain: arbitrum
+  address: '0xA8B08006E88a10738a9D69DF5F9d6aD13E678d46'
+  decimals: 18
+- symbol: PTsUSDe
+  name: Pendle PT sUSDe
+  slug: pendle-pt-susde
+  chain: ethereum
+  address: '0x9b0499648fe627341e309fb13ebf6ce1301c2cb1'
+  decimals: 18
+- symbol: PTUSDe
+  name: Pendle PT USDe
+  slug: pendle-pt-usde
+  chain: ethereum
+  address: '0xb13e9a7e6b0a68dd92cc632357388e6378e9b6bf'
+  decimals: 18
+- symbol: PTUSDC
+  name: Pendle PT USDC
+  slug: pendle-pt-usdc
+  chain: ethereum
+  address: '0x0e24177d6ee037e42d72a9e06f04808b70a10099'
+  decimals: 6
+- symbol: PTeETH
+  name: Pendle PT eETH
+  slug: pendle-pt-eeth
+  chain: ethereum
+  address: '0xd468641a293630f74e32d645638c4b1257d07c01'
+  decimals: 18
+- symbol: PTezETH
+  name: Pendle PT ezETH
+  slug: pendle-pt-ezeth
+  chain: ethereum
+  address: '0x13d64c1cf647313333333333333333333333333'
+  decimals: 18
+- symbol: PTwstE
+  name: Pendle PT wstETH
+  slug: pendle-pt-wsteth
+  chain: ethereum
+  address: '0xc1C2b67f13d80E42C04e844Dcf60e7E3F1c7C22e'
+  decimals: 18
+- symbol: USDf
+  name: Falcon USD
+  slug: falcon-usd
+  chain: ethereum
+  address: '0x1b790d9f0f9b6e82847a96a1a1f0a202c46f338d'
+  decimals: 18
+- symbol: sUSDf
+  name: Staked Falcon USD
+  slug: staked-falcon-usd
+  chain: ethereum
+  address: '0x5e236e7d6928e469502b4859a85d778d91c1a938'
+  decimals: 18
+- symbol: vUSDC
+  name: Venus USDC
+  slug: venus-usdc
+  chain: bnb
+  address: '0xecA9B2665E0F58A1Bf41365bF9063B01073d9ceA'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdc.png
+- symbol: vUSDT
+  name: Venus USDT
+  slug: venus-usdt
+  chain: bnb
+  address: '0xfD5840Cd36d94D7229439859C0112a4185BC0255'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/usdt.png
+- symbol: vDAI
+  name: Venus DAI
+  slug: venus-dai
+  chain: bnb
+  address: '0x334b3eCB4DCa50777b318f5c885D51672322306d'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/dai.png
+- symbol: vETH
+  name: Venus ETH
+  slug: venus-eth
+  chain: bnb
+  address: '0xf508fCD42802907729f02898940681312a9705B8'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png
+- symbol: vBTC
+  name: Venus BTC
+  slug: venus-btc
+  chain: bnb
+  address: '0x882C173bC7Ff3b7786CA16dfeD3DFFfb9Ee7847B'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/btc.png
+- symbol: vBNB
+  name: Venus BNB
+  slug: venus-bnb
+  chain: bnb
+  address: '0xA07c5b74C9B40447a98857777358510838927457'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/bnb.png
+- symbol: vBUSD
+  name: Venus BUSD
+  slug: venus-busd
+  chain: bnb
+  address: '0x95c78E80Ea81342757b0638514360bc0f04F46A9'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/busd.png
+- symbol: vBETH
+  name: Venus BETH
+  slug: venus-beth
+  chain: bnb
+  address: '0x972207A639D4E8bC1682203077695604554c433c'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/beth.png
+- symbol: vLINK
+  name: Venus LINK
+  slug: venus-link
+  chain: bnb
+  address: '0x65c537e2b92eFcb5c5cE491B5E2E735d724B5baE'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/link.png
+- symbol: vCAKE
+  name: Venus CAKE
+  slug: venus-cake
+  chain: bnb
+  address: '0x86a3c42D3b86A0424B3C8875E9a76c8965DAe505'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/cake.png
+- symbol: vAAVE
+  name: Venus AAVE
+  slug: venus-aave
+  chain: bnb
+  address: '0x26DA28954763B92139ED49283625ceCAf52C6f94'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/aave.png
+- symbol: vUNI
+  name: Venus UNI
+  slug: venus-uni
+  chain: bnb
+  address: '0x27A9711A0dF954d68A577c4580e8D086617ba343'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/uni.png
+- symbol: vXRP
+  name: Venus XRP
+  slug: venus-xrp
+  chain: bnb
+  address: '0xB715808a78F6041E46d61Cb123C9B4A27056AE9C'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/xrp.png
+- symbol: vDOGE
+  name: Venus Dogecoin
+  slug: venus-dogecoin
+  chain: bnb
+  address: '0xec3422Ef92B2fb59e84c8B02B775D98207509405'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/doge.png
+- symbol: vDOT
+  name: Venus DOT
+  slug: venus-dot
+  chain: bnb
+  address: '0x161073A2111f591215E8295956803C2FA372716d'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/dot.png
+- symbol: vLTC
+  name: Venus LTC
+  slug: venus-ltc
+  chain: bnb
+  address: '0x57A5297F2CB2c0AaC9D554660cad6da368bd5010'
+  decimals: 8
+  image_url: https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/ltc.png
+- symbol: sypUSDC
+  name: Syrup USDC
+  slug: syrup-usdc
+  chain: ethereum
+  address: '0x8a927a4d5e75525547636e0932c0d860d5b78b54'
+  decimals: 6
+- symbol: sypUSDT
+  name: Syrup USDT
+  slug: syrup-usdt
+  chain: ethereum
+  address: '0x0f2C558F485Bcf3526c82d499FfAEdc2A6C4b03C'
+  decimals: 6
+- symbol: MPL
+  name: Maple Token
+  slug: maple-token
+  chain: ethereum
+  address: '0x33349B282065b0284d756F0577FB39c158F935e6'
+  decimals: 18
+- symbol: SYRUP
+  name: Syrup Token
+  slug: syrup-token
+  chain: ethereum
+  address: '0x643C4E15d7d62Ad0aBeC4a9DA4Bf225776691037'
+  decimals: 18
+- symbol: USD0++
+  name: Usual Liquid Yield USD
+  slug: usual-liquid-yield-usd
+  chain: ethereum
+  address: '0x35D8949372D46B7a3D5A56006AE77B215fc69bC0'
+  decimals: 18
+- symbol: syrupUSDC
+  name: Syrup USDC
+  slug: syrup-usdc
+  chain: ethereum
+  address: '0x85780a405bc1167b0d06856519e868a773ff1f35'
+  decimals: 6
+- symbol: deUSD
+  name: Elixir Decentralized USD
+  slug: elixir-deusd
+  chain: ethereum
+  address: '0x151D833446059c38F6bA3d4bcfB45B3f26E7b308'
+  decimals: 18
+- symbol: sdeUSD
+  name: Elixir Staked Decentralized USD
+  slug: elixir-staked-deusd
+  chain: ethereum
+  address: '0x6f4520A453d8C2652B0959E7A31c26fA2906eF38'
+  decimals: 18
+- symbol: apxETH
+  name: Auto-PxETH
+  slug: auto-pxeth
+  chain: ethereum
+  address: '0x9Ba00D6856a4eDF46a5B3c08170994f293DE3871'
+  decimals: 18
+- symbol: pufETH
+  name: Puffer ETH
+  slug: puffer-eth
+  chain: ethereum
+  address: '0xD9A442856C234a39a81a089C06451EBAa43D6a7D'
+  decimals: 18
+- symbol: solvBTC
+  name: Solv BTC
+  slug: solv-btc
+  chain: ethereum
+  address: '0xCC96675eF06c4058b329830025d1536719A55c13'
+  decimals: 18
+- symbol: solvBTC.BBN
+  name: Solv BTC Babylon
+  slug: solv-btc-babylon
+  chain: ethereum
+  address: '0xCC96675eF06c4058b329830025d1536719A55c13'
+  decimals: 18

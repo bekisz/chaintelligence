@@ -242,6 +242,7 @@ def cmc_fetch_and_upsert_to_db(mapping_data: dict) -> int:
                 contract_addr = mc.get('address')
                 mc_decimals = mc.get('decimals', 18)
                 is_native = mc.get('is_native', False)
+                image_url = mc.get('image_url') or mc.get('icon_url')
                 
                 if not symbol or not chain_name or not contract_addr:
                     continue
@@ -253,13 +254,14 @@ def cmc_fetch_and_upsert_to_db(mapping_data: dict) -> int:
                 
                 # Insert/update coin record
                 cur.execute("""
-                    INSERT INTO coin (symbol, name, slug, decimals, cmc_last_updated)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO coin (symbol, name, slug, decimals, image_url, cmc_last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (symbol) DO UPDATE SET
                         name = COALESCE(EXCLUDED.name, coin.name),
-                        slug = COALESCE(EXCLUDED.slug, coin.slug)
+                        slug = COALESCE(EXCLUDED.slug, coin.slug),
+                        image_url = COALESCE(EXCLUDED.image_url, coin.image_url)
                     RETURNING coin_id
-                """, (symbol[:10], name, slug, mc_decimals, now))
+                """, (symbol[:10], name, slug, mc_decimals, image_url, now))
                 coin_id = cur.fetchone()[0]
                 
                 # Delete conflicting contract address mapping if bound to a different coin_id
