@@ -382,6 +382,9 @@ coin-families:
   - name: AAVE_YBA
     correlated: false
     coin-list:
+      - AETHWETH
+      - AETHUSDC
+      - AETHUSDT
       - aEthDAI
       - aEthPYUS
       - aEthFRAX
