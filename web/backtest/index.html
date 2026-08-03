@@ -46,7 +46,8 @@
         <!-- Removed Liquidity Pool Backtester Logo and Labels as requested -->
 
         <div class="controls-wrapper">
-            <div class="selection-row">
+            <!-- Primary Search Bar (Aligned with Pools & Swaps pages) -->
+            <div class="selection-row" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
                 <!-- Base Asset & Quote Asset Pair -->
                 <div class="input-group-pair">
                     <input type="text" id="base-search" placeholder="Target Token" class="token-input-field" autocomplete="off">
@@ -60,50 +61,56 @@
                     <input type="text" id="quote-search" placeholder="Quote Token" class="token-input-field" autocomplete="off">
                 </div>
 
-                <div class="input-group">
-                    <label for="apr-input">Est. APR (-50% - +100%)</label>
-                    <input type="number" id="apr-input" value="20" placeholder="20" class="token-input-field" style="width: 140px;">
-                </div>
-
                 <!-- Date Range Selection -->
                 <div class="input-group-pair">
                     <div class="input-group date-input">
-                        <label for="start-date">Start Date</label>
+                        <label for="start-date" style="display: none;">Start Date</label>
                         <input type="date" id="start-date">
                     </div>
-                    <span class="date-arrow" style="align-self: flex-end; margin-bottom: 10px;">
+                    <span class="date-arrow">
                         <svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="2" y1="12" x2="38" y2="12"></line>
                             <polyline points="28 5 38 12 28 19"></polyline>
                         </svg>
                     </span>
                     <div class="input-group date-input">
-                        <label for="end-date">End Date</label>
+                        <label for="end-date" style="display: none;">End Date</label>
                         <input type="date" id="end-date">
                     </div>
                 </div>
 
-                <div class="input-group">
-                    <label>Chart Scale</label>
-                    <div class="display-toggle-wrapper mode-linear" id="scale-toggle-wrapper">
-                        <span class="toggle-label" id="label-linear">Lin</span>
-                        <label class="switch">
-                            <input type="checkbox" id="chart-scale-toggle">
-                            <span class="slider"></span>
-                        </label>
-                        <span class="toggle-label" id="label-log">Log</span>
+                <!-- Primary Run Button -->
+                <button id="run-btn" class="primary-btn" style="padding: 0.75rem 1.75rem; border-radius: 12px; height: 48px; min-width: 120px;">Run</button>
+            </div>
+
+            <!-- Secondary Configuration Sub-bar -->
+            <div class="secondary-controls-row" style="display: flex; align-items: center; justify-content: space-between; gap: 1.2rem; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--uniswap-border); flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+                    <div class="input-group" style="flex-direction: row; align-items: center; gap: 0.6rem;">
+                        <label for="apr-input" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; margin: 0; white-space: nowrap;">Est. APR (-50% - +100%):</label>
+                        <input type="number" id="apr-input" value="20" placeholder="20" class="token-input-field" style="width: 90px; padding: 0.5rem 0.75rem; height: 38px;">
+                    </div>
+
+                    <div class="input-group" style="flex-direction: row; align-items: center; gap: 0.6rem;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; margin: 0; white-space: nowrap;">Chart Scale:</label>
+                        <div class="display-toggle-wrapper mode-linear" id="scale-toggle-wrapper" style="margin: 0;">
+                            <span class="toggle-label" id="label-linear">Lin</span>
+                            <label class="switch">
+                                <input type="checkbox" id="chart-scale-toggle">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label" id="label-log">Log</span>
+                        </div>
                     </div>
                 </div>
 
-                <button id="add-strategy-btn" class="secondary-btn" title="Add New Strategy" style="padding: 0.75rem 1rem; border-radius: 12px; height: 48px; align-self: flex-end;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+                <button id="add-strategy-btn" class="secondary-btn" title="Add New Strategy" style="padding: 0.5rem 1rem; border-radius: 10px; height: 38px; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 4px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
                     <span>Add Strategy</span>
                 </button>
-
-                <button id="run-btn" class="primary-btn" style="padding: 0.75rem 1.5rem; border-radius: 12px; height: 48px; align-self: flex-end;">Run</button>
             </div>
         </div>
 
