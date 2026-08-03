@@ -800,11 +800,14 @@ header h1 {
 
 .token-input-field::placeholder {
     color: #565A69;
+}
+
 /* Token Autocomplete Wrapper & Dropdown */
 .token-autocomplete-container {
     position: relative;
-    display: inline-block;
+    display: inline-flex;
     flex: 0 0 135px;
+    width: 135px;
 }
 
 .token-autocomplete-container .token-input-field {
@@ -815,16 +818,16 @@ header h1 {
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    min-width: 250px;
-    max-height: 290px;
+    width: 260px;
+    max-height: 280px;
     overflow-y: auto;
     background: rgba(18, 20, 29, 0.96);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 0, 122, 0.15);
-    z-index: 99999;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 25px rgba(255, 0, 122, 0.2);
+    z-index: 999999;
     display: none;
     padding: 6px;
 }
@@ -834,20 +837,22 @@ header h1 {
 }
 
 .token-autocomplete-item {
-    display: flex;
-    align-items: center;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
     gap: 10px;
     padding: 8px 10px;
     border-radius: 8px;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease;
     user-select: none;
+    border: 1px solid transparent;
 }
 
 .token-autocomplete-item:hover,
 .token-autocomplete-item.selected {
-    background: rgba(255, 0, 122, 0.18);
-    border: 1px solid rgba(255, 0, 122, 0.35);
+    background: rgba(255, 0, 122, 0.18) !important;
+    border-color: rgba(255, 0, 122, 0.35) !important;
 }
 
 .token-autocomplete-item img {
@@ -862,6 +867,7 @@ header h1 {
     font-weight: 700;
     font-size: 0.9rem;
     color: #ffffff;
+    white-space: nowrap;
 }
 
 .token-autocomplete-item .token-sub {
