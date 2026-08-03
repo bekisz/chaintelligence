@@ -775,7 +775,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         resultsSection.classList.add('hidden');
         noDataMsg.classList.add('hidden');
         const undercutPanel = document.getElementById('undercut-section');
-        if (undercutPanel) undercutPanel.classList.add('disabled');
+        if (undercutPanel) {
+            undercutPanel.classList.add('disabled');
+            undercutPanel.classList.add('hidden');
+        }
         const undercutResults = document.getElementById('undercut-results-section');
         if (undercutResults) undercutResults.classList.add('hidden');
         const ucNetworkSelect = document.getElementById('undercut-network');
@@ -878,7 +881,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Show results
             resultsSection.classList.remove('hidden');
             const undercutPanel = document.getElementById('undercut-section');
-            if (undercutPanel) undercutPanel.classList.remove('disabled');
+            if (undercutPanel) {
+                undercutPanel.classList.remove('disabled');
+                undercutPanel.classList.remove('hidden');
+            }
             populateUndercutNetwork();
         } catch (error) {
             console.error('Error during analysis:', error);
