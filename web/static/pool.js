@@ -442,7 +442,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initCustomChainSelector(document.getElementById('query-network-filter'));
     initCustomChainSelector(document.getElementById('network-filter'));
-    initCustomChainSelector(document.getElementById('undercut-network'));
 
     let symbolFamilyMap = {};
     let familySymbolsMap = {};

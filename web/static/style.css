@@ -808,7 +808,9 @@ header h1 {
 .custom-network-container {
     position: relative;
     display: inline-block;
-    flex: 0 0 160px;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 220px;
 }
 
 .custom-network-trigger {
