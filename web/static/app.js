@@ -446,6 +446,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     initCustomChainSelector(document.getElementById('network-filter'));
     initCustomChainSelector(document.getElementById('undercut-network'));
 
+    const getNetworkIconBadge = (netName) => {
+        if (!netName) return '';
+        const lower = netName.toLowerCase();
+        let iconUrl = '/static/favicon.png';
+        if (lower.includes('ethereum') || lower === 'eth') iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+        else if (lower.includes('arbitrum') || lower === 'arb') iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png';
+        else if (lower.includes('base')) iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png';
+        else if (lower.includes('bnb') || lower.includes('binance') || lower === 'bsc') iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png';
+
+        return `<span class="network-icon-badge" title="${netName}"><img src="${iconUrl}" alt="${netName}" onerror="this.src='/static/favicon.png'"></span>`;
+    };
+
     let symbolFamilyMap = {};
     let familySymbolsMap = {};
 
@@ -1041,7 +1053,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </td>
                 <td class="col-cid hidden-column">${cidDisplay}</td>
                 <td class="col-pool-id hidden-column">${poolIdDisplay || poolAddrDisplay}</td>
-                <td class="col-network"><span class="badge ${networkClass}">${networkVal}</span></td>
+                <td class="col-network">${getNetworkIconBadge(networkVal)}</td>
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocolDisplay}</td>
                 <td class="col-tx-count">${route.count.toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
@@ -1633,7 +1645,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="path-cell"${tooltipAttr}>${renderPath(pathTokens)}</td>
                 <td class="uc-col-cid hidden-column"${tooltipAttr}>${cidDisplay}</td>
                 <td class="uc-col-pool-id hidden-column monospace"${tooltipAttr}>${poolIdDisplay}</td>
-                <td class="uc-col-network"${tooltipAttr}><span class="badge ${network.toLowerCase()}">${network}</span></td>
+                <td class="uc-col-network"${tooltipAttr}>${getNetworkIconBadge(network)}</td>
                 <td class="uc-col-protocol hidden-column font-bold"${tooltipAttr}>${protocolDisplay}</td>
                 <td class="uc-col-tx-count"${tooltipAttr}>${cells.count.toLocaleString()}</td>
                 <td class="uc-col-apr ${aprClass}"${tooltipAttr}>${formatAprPercent(cells.apr)}</td>

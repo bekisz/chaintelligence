@@ -444,6 +444,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     initCustomChainSelector(document.getElementById('network-filter'));
     initCustomChainSelector(document.getElementById('undercut-network'));
 
+    const getNetworkIconBadge = (netName) => {
+        if (!netName) return '';
+        const lower = netName.toLowerCase();
+        let iconUrl = '/static/favicon.png';
+        if (lower.includes('ethereum') || lower === 'eth') iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+        else if (lower.includes('arbitrum') || lower === 'arb') iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png';
+        else if (lower.includes('base')) iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png';
+        else if (lower.includes('bnb') || lower.includes('binance') || lower === 'bsc') iconUrl = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png';
+
+        return `<span class="network-icon-badge" title="${netName}"><img src="${iconUrl}" alt="${netName}" onerror="this.src='/static/favicon.png'"></span>`;
+    };
+
     let symbolFamilyMap = {};
     let familySymbolsMap = {};
 
@@ -821,7 +833,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </td>
                 <td class="col-cid hidden-column">${cid || '-'}</td>
                 <td class="col-pool-id hidden-column">${formatAddress(poolId || poolAddr)}</td>
-                <td class="col-network"><span class="badge ${networkClass}">${chain}</span></td>
+                <td class="col-network">${getNetworkIconBadge(chain)}</td>
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocol}</td>
                 <td class="col-tx-count">${txCount.toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
