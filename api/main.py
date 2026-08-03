@@ -565,6 +565,7 @@ try:
     from route_analyzer import RouteAnalyzer
     from shortcut_finder import ShortcutFinder
     from config import DATA_WAREHOUSE_DB
+    import undercut_analyzer as ua
 except ImportError as e:
     print(f"Error importing routing modules from {CHAIN_FEEDER_ROUTING}: {e}")
     sys.exit(1)
@@ -1276,6 +1277,311 @@ async def analyze(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/routes/undercut", tags=["Route Analytics"])
+async def undercut(
+    start_token: str,
+    end_token: str,
+    start_date: Optional[str] = Query(None, description="ISO format start date"),
+    end_date: Optional[str] = Query(None, description="ISO format end date"),
+    network: Optional[str] = Query(None, description="Filter swaps by network"),
+    fee_bps: float = Query(..., description="Hypothetical pool fee in basis points (e.g. 97 for 0.97%)"),
+    liquidity_usd: float = Query(..., description="Total USD liquidity to deposit in the hypothetical pool"),
+    range_pct: float = Query(..., description="Hypothetical pool range as +/- percent (e.g. 0.25 for +/-0.25%)"),
+):
+    """Counterfactual 'undercut' experiment: how much of a token pair's swap
+    traffic a max-expected-output router would divert to a hypothetical 4th pool
+    with the given fee tier, liquidity and range. Returns the hypothetical pool
+    row plus the existing pools' rows with hypothetical post-diversion stats."""
+    try:
+        now = datetime.now()
+        if start_date:
+            s = start_date.replace('Z', '+00:00').strip()
+            try:
+                start_dt = datetime.fromisoformat(s)
+            except ValueError:
+                date_part = s.split('T')[0]
+                parts = date_part.split('-')
+                if len(parts) == 3:
+                    import calendar
+                    yr, mo, dy = int(parts[0]), int(parts[1]), int(parts[2])
+                    max_d = calendar.monthrange(yr, mo)[1]
+                    if dy > max_d:
+                        s_fixed = f"{yr:04d}-{mo:02d}-{max_d:02d}"
+                        if 'T' in s:
+                            s_fixed += 'T' + s.split('T')[1]
+                        return HTTPException(status_code=400, detail=f"Invalid start_date: {start_date}")
+                raise
+            if start_date.endswith('Z') or 'T' in start_date:
+                if start_dt.tzinfo is None:
+                    start_dt = start_dt.replace(tzinfo=timezone.utc)
+            else:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+        else:
+            start_dt = now - timedelta(days=30)
+
+        if end_date:
+            s = end_date.replace('Z', '+00:00').strip()
+            try:
+                end_dt = datetime.fromisoformat(s)
+            except ValueError:
+                date_part = s.split('T')[0]
+                parts = date_part.split('-')
+                if len(parts) == 3:
+                    import calendar
+                    yr, mo, dy = int(parts[0]), int(parts[1]), int(parts[2])
+                    max_d = calendar.monthrange(yr, mo)[1]
+                    if dy > max_d:
+                        s_fixed = f"{yr:04d}-{mo:02d}-{max_d:02d}"
+                        if 'T' in s:
+                            s_fixed += 'T' + s.split('T')[1]
+                        return HTTPException(status_code=400, detail=f"Invalid end_date: {end_date}")
+                raise
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+            if end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
+                end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            end_dt = now
+
+        if start_dt >= end_dt:
+            raise HTTPException(status_code=400, detail="start_date must be before end_date")
+
+        t0_sym, t1_sym = start_token.strip().upper(), end_token.strip().upper()
+        if t0_sym == '*' or t1_sym == '*':
+            raise HTTPException(status_code=400, detail="Wildcard tokens are not supported for the undercut experiment")
+
+        fetcher = PostgresFetcher(verbose=False)
+        import asyncio
+        import math
+        from fractions import Fraction
+
+        # Resolve token families (mirror /api/routes/analyze) so the backtest
+        # competes against the real market pools that route the pair's traffic.
+        # E.g. STETH->ETH flows through the STETH-WETH 1% V3 pool (the live
+        # competitor) because WETH is in the ETH coin family; only fetching the
+        # exact STETH<->ETH pair would miss it and show only dead V4 pools.
+        start_tokens_list = resolve_token_input(t0_sym)
+        end_tokens_list = resolve_token_input(t1_sym)
+        if not start_tokens_list:
+            start_tokens_list = [t0_sym]
+        if not end_tokens_list:
+            end_tokens_list = [t1_sym]
+
+        token_filter = []
+        if "*" not in start_tokens_list:
+            token_filter.extend(start_tokens_list)
+        if "*" not in end_tokens_list:
+            token_filter.extend(end_tokens_list)
+        if not token_filter:
+            token_filter = None
+
+        raw_swaps = await asyncio.to_thread(
+            fetcher.fetch_swaps, start_dt, end_dt,
+            token_filter=token_filter, network=network,
+            start_tokens=start_tokens_list, end_tokens=end_tokens_list
+        )
+
+        swaps = []
+        for r in raw_swaps:
+            a0f, a1f = float(r.get('amount0', 0) or 0), float(r.get('amount1', 0) or 0)
+            usd = float(r.get('amountUSD', r.get('amount_usd', 0)) or 0)
+            if a0f == 0 or a1f == 0 or not (math.isfinite(a0f) and math.isfinite(a1f)):
+                continue
+            t0_in = a0f > 0
+            s0 = (r.get('token0_symbol') or '').upper()
+            s1 = (r.get('token1_symbol') or '').upper()
+
+            # Filter swaps directionally to match start_token -> end_token
+            in_sym = s0 if t0_in else s1
+            out_sym = s1 if t0_in else s0
+            if start_tokens_list and end_tokens_list:
+                if in_sym not in start_tokens_list or out_sym not in end_tokens_list:
+                    continue
+
+            swaps.append({
+                "ts": datetime.fromtimestamp(r['timestamp'], tz=timezone.utc),
+                "fee_bps": float(r.get('fee_bps') or 0),
+                "fee_tier": r.get('fee_tier') or '',
+                "t0_in": t0_in,
+                "input": abs(a0f if t0_in else a1f),
+                "output": abs(a1f if t0_in else a0f),
+                "usd": usd,
+                "price": Fraction(abs(a1f)) / Fraction(abs(a0f)),
+                "protocol": r.get('protocol', 'Uniswap V3'),
+                "network": r.get('network', 'Ethereum'),
+                "cid": r.get('cid'),
+                "pool_address": r.get('pool_address') or '',
+                "pool_id": r.get('pool_id') or '',
+                "s0": s0,
+                "s1": s1,
+            })
+
+        if not swaps:
+            return {"hypothetical": None, "pools": [], "total_volume": 0,
+                    "total_tx": 0, "days": max(1, (end_dt - start_dt).days),
+                    "start_token": t0_sym, "end_token": t1_sym, "network": network or "Ethereum",
+                    "fee_bps": fee_bps, "liquidity_usd": liquidity_usd, "range_pct": range_pct}
+
+        # market_prices() needs chronological order
+        swaps.sort(key=lambda s: s["ts"])
+
+        # Fee-free price per swap for market-price estimation
+        for s in swaps:
+            fee_frac = ua.fee_fraction_from_bps(s["fee_bps"])
+            s["fee_free_price"] = ua.fee_free_price(s["price"], s["t0_in"], fee_frac)
+
+        total_usd = sum(s["usd"] for s in swaps)
+        days = max(1, (end_dt - start_dt).days)
+
+        # Market price anchor: median of the fee-free market estimates (the mean
+        # is skewed by whale swaps with huge slippage). The band is centered on
+        # the market median, NOT the opening raw price.
+        markets = ua.market_prices(swaps)
+        sorted_mk = sorted(float(m) for m in markets)
+        center = sorted_mk[len(sorted_mk) // 2]
+        opening_px, p0_usd, p1_usd = ua.opening_price_and_usd(swaps)
+
+        # Fallback token USD prices (only used to size the hypothetical pool)
+        if p0_usd is None or p1_usd is None:
+            prices = fetcher.fetch_latest_prices([t0_sym, t1_sym])
+            if p0_usd is None:
+                p0_usd = prices.get(t0_sym, 1.0 if 'USD' in t0_sym else 100.0)
+            if p1_usd is None:
+                p1_usd = prices.get(t1_sym, 1.0 if 'USD' in t1_sym else 100.0)
+
+        fee_pips = int(round(fee_bps * 100))
+        res = ua.simulate(liquidity_usd / 2.0, range_pct, fee_pips, swaps,
+                          Fraction(center), p0_usd, p1_usd, total_usd, markets=markets)
+
+        # Group swaps by fee tier -> existing pool stats
+        from collections import defaultdict
+        by_tier = defaultdict(lambda: {"count": 0, "volume": 0.0, "cid": None,
+                                       "pool_address": '', "pool_id": '',
+                                       "protocol": 'Uniswap V3', "s0": '', "s1": '',
+                                       "last_ts": None})
+        for s in swaps:
+            b = by_tier[s["fee_bps"]]
+            b["count"] += 1
+            b["volume"] += s["usd"]
+            if b["last_ts"] is None or s["ts"] > b["last_ts"]:
+                b["last_ts"] = s["ts"]
+            if b["cid"] is None and s.get("cid") is not None:
+                b["cid"] = s["cid"]
+            if not b["pool_address"] and s.get("pool_address"):
+                b["pool_address"] = s["pool_address"]
+            if not b["pool_id"] and s.get("pool_id"):
+                b["pool_id"] = s["pool_id"]
+            if not b["s0"] and s.get("s0"):
+                b["s0"] = s["s0"]
+            if not b["s1"] and s.get("s1"):
+                b["s1"] = s["s1"]
+            b["protocol"] = s.get("protocol") or b.get("protocol", 'Uniswap V3')
+
+        pools = []
+        if by_tier:
+            net_label = network or "Ethereum"
+            def _fee_label(fb):
+                return 'Dynamic' if fb is None else f"{fb / 100.0:g}%"
+            try:
+                pool_stats = await asyncio.to_thread(
+                    fetcher.fetch_pool_stats,
+                    [[by_tier[fb]["s0"] or t0_sym, by_tier[fb]["s1"] or t1_sym,
+                      f"{_fee_label(fb)}|{by_tier[fb]['protocol']}|{net_label}"] for fb in by_tier],
+                    start_dt, end_dt,
+                    tvl_mode='latest',
+                )
+            except Exception:
+                pool_stats = {}
+        else:
+            pool_stats = {}
+
+        for fee_b, st in sorted(by_tier.items(), key=lambda kv: (kv[0] is not None, kv[0] or 0)):
+            orig_fees = st["volume"] * (ua.fee_fraction_from_bps(fee_b))
+            div_cnt, div_vol = res["by_fee_bps"].get(fee_b, [0, 0.0])
+            hyp_vol = max(0.0, st["volume"] - div_vol)
+            hyp_fees = hyp_vol * (ua.fee_fraction_from_bps(fee_b))
+            s0 = st["s0"] or t0_sym
+            s1 = st["s1"] or t1_sym
+            pool_key = f"{s0}-{s1}-{_fee_label(fee_b)}|{st['protocol']}|{net_label}"
+            rev_pool_key = f"{s1}-{s0}-{_fee_label(fee_b)}|{st['protocol']}|{net_label}"
+            stat = pool_stats.get(pool_key) or pool_stats.get(rev_pool_key)
+            real_tvl = (stat or {}).get("tvl", 0.0) or 0.0
+            real_vol = (stat or {}).get("volume", 0.0) or 0.0
+
+            # Mirror the Show Routes enrichment: when the DB TVL is missing or
+            # unreliable, fall back to DexScreener / DeFi Llama for the real TVL
+            # so the backtest competitor pools match the routes table.
+            if st.get("pool_address"):
+                enriched = await get_enriched_pool_stat(
+                    key=pool_key,
+                    rev_key=rev_pool_key,
+                    aprs=pool_stats,
+                    pool_addr=st["pool_address"],
+                    pool_network=net_label,
+                    period_days=days,
+                    fee_tier=f"{_fee_label(fee_b)}|{st['protocol']}|{net_label}",
+                )
+                real_tvl = enriched.get('tvl') or 0.0
+            if real_tvl <= 1.0 and real_vol > 0:
+                pass
+            hyp_apr_pct = (hyp_fees / real_tvl) * (365.0 / days) * 100.0 if (hyp_vol > 0 and real_tvl > 0) else 0.0
+            real_apr_pct = (orig_fees / real_tvl) * (365.0 / days) * 100.0 if (orig_fees > 0 and real_tvl > 0) else 0.0
+            pools.append({
+                "fee_bps": fee_b,
+                "fee_display": _fee_label(fee_b),
+                "protocol": st["protocol"],
+                "count": st["count"],
+                "volume": st["volume"],
+                "fees": orig_fees,
+                "tvl": real_tvl,
+                "apr_pct": real_apr_pct,
+                "last_activity": st["last_ts"].isoformat() if st["last_ts"] is not None else None,
+                "cid": st["cid"],
+                "pool_address": st["pool_address"],
+                "pool_id": st["pool_id"],
+                "diverted_count": div_cnt,
+                "diverted_volume": div_vol,
+                "hyp_count": st["count"] - div_cnt,
+                "hyp_volume": hyp_vol,
+                "hyp_fees": hyp_fees,
+                "hyp_apr_pct": hyp_apr_pct,
+            })
+
+        hyp_apr_pct = (res["fee_usd"] / liquidity_usd) * (365.0 / days) * 100.0 if liquidity_usd > 0 else 0.0
+
+        return {
+            "hypothetical": {
+                "fee_bps": fee_bps,
+                "fee_display": f"{fee_bps / 100.0:g}%",
+                "liquidity_usd": liquidity_usd,
+                "range_pct": range_pct,
+                "diverted_count": res["div_count"],
+                "diverted_volume": res["div_usd"],
+                "diverted_pct": res["pct"],
+                "fee_usd": res["fee_usd"],
+                "apr_pct": hyp_apr_pct,
+                "in_range": res["in_range"],
+            },
+            "pools": pools,
+            "total_volume": total_usd,
+            "total_tx": len(swaps),
+            "days": days,
+            "start_token": t0_sym,
+            "end_token": t1_sym,
+            "network": network or "Ethereum",
+            "fee_bps": fee_bps,
+            "liquidity_usd": liquidity_usd,
+            "range_pct": range_pct,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/pools/search", tags=["Liquidity Pools"])
 async def analyze_pools(
     start_token: str,
@@ -1412,6 +1718,7 @@ async def analyze_pools(
                     'fees_usd': fees_usd,
                     'tx_count': p['tx_count'],
                     'apr_percent': round(apr_val * 100, 1),
+                    'last_activity': p['last_activity'].isoformat() if p['last_activity'] else None,
                     'links': build_pool_links(pool_addr, p.get('v4_pool_id'), p['protocol'], p['network'], defillama_uuid),
                 })
 
