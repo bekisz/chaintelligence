@@ -809,8 +809,7 @@ header h1 {
     position: relative;
     display: inline-flex;
     align-items: center;
-    flex: 0 0 150px;
-    width: 150px;
+    width: 100%;
 }
 
 .selection-row .custom-network-container {
@@ -818,8 +817,11 @@ header h1 {
     width: 150px;
 }
 
+.input-group .custom-network-container,
 .advanced-grid .custom-network-container {
-    height: 100%;
+    flex: 1 1 100%;
+    width: 100%;
+    height: auto;
 }
 
 .custom-network-trigger {
