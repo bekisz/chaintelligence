@@ -1532,9 +1532,11 @@ table th.sortable.sorted-active {
 }
 
 table th span {
-    font-size: 0.8em;
-    margin-left: 4px;
-    opacity: 0.5;
+    display: block;
+    font-size: 0.75em;
+    line-height: 1;
+    margin-top: 4px;
+    opacity: 0.6;
 }
 
 table td {
