@@ -212,24 +212,255 @@ async function init() {
     chartScaleToggle = document.getElementById('chart-scale-toggle');
     scaleToggleWrapper = document.getElementById('scale-toggle-wrapper');
 
-    // Attach Global Listeners
-    if (baseSearchInput && baseResults) setupSearch(baseSearchInput, baseResults, (coin) => {
-        console.log("Selected new base asset:", coin.symbol);
-        baseAsset = new Asset(coin.symbol);
-        updateURLParams();
-    });
-    if (quoteSearchInput && quoteResults) setupSearch(quoteSearchInput, quoteResults, (coin) => {
-        quoteAsset = new Asset(coin.symbol);
-        updateURLParams();
-    });
+    // Token Autocomplete & Icons Setup
+    let allTokensList = [];
+    let allFamiliesList = [];
+    let tokenImageMap = {};
+
+    const loadTokensAndFamilies = async () => {
+        try {
+            const [cRes, fRes] = await Promise.all([
+                fetch('/api/coin/list'),
+                fetch('/api/coin-families')
+            ]);
+            if (cRes.ok) {
+                const cData = await cRes.json();
+                allTokensList = cData.coins || [];
+                allTokensList.forEach(c => {
+                    if (c.symbol && c.icon_url) {
+                        tokenImageMap[c.symbol.toUpperCase()] = c.icon_url;
+                    }
+                });
+            }
+            if (fRes.ok) {
+                const fData = await fRes.json();
+                allFamiliesList = fData.families || [];
+            }
+        } catch (e) {
+            console.warn('Failed to fetch coin list or families:', e);
+        }
+    };
+    loadTokensAndFamilies();
+
+    const tokenIconUrl = (symbol) => {
+        if (!symbol) return '/static/favicon.png';
+        const s = symbol.toLowerCase();
+        return `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${s}.png`;
+    };
+
+    const getPrincipalSymbol = (symbol) => {
+        if (!symbol) return '';
+        let u = symbol.toUpperCase();
+        const logoMappings = {
+            'AAVE_YBA': 'AAVE', 'COMP_YBA': 'COMP', 'MORPHO_YBA': 'MORPHO',
+            'VXS_YBA': 'VXS', 'USD': 'USDC', 'ETH': 'ETH', 'BTC': 'WBTC'
+        };
+        return logoMappings[u] || u;
+    };
+
+    const initTokenAutocomplete = (inputEl) => {
+        if (!inputEl || inputEl.dataset.autocompleteInitialized) return;
+        inputEl.dataset.autocompleteInitialized = 'true';
+
+        let wrapper = inputEl.parentElement;
+        if (!wrapper.classList.contains('token-autocomplete-container')) {
+            const newWrapper = document.createElement('div');
+            newWrapper.className = 'token-autocomplete-container';
+            wrapper.insertBefore(newWrapper, inputEl);
+            newWrapper.appendChild(inputEl);
+            wrapper = newWrapper;
+        }
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'token-autocomplete-dropdown';
+        wrapper.appendChild(dropdown);
+
+        const inputIcon = document.createElement('img');
+        inputIcon.className = 'token-input-icon';
+        wrapper.appendChild(inputIcon);
+
+        const updateInputIcon = () => {
+            const sym = (inputEl.value || '').trim().toUpperCase();
+            if (!sym || sym === '*') {
+                inputIcon.style.display = 'none';
+                inputEl.style.paddingLeft = '1rem';
+                return;
+            }
+            const principal = getPrincipalSymbol(sym.replace('_YBA', ''));
+            const iconSrc = tokenImageMap[sym] || tokenImageMap[principal] || tokenIconUrl(principal) || tokenIconUrl(sym);
+            if (iconSrc) {
+                inputIcon.src = iconSrc;
+                inputIcon.onerror = () => {
+                    inputIcon.src = '/static/favicon.png';
+                };
+                inputIcon.style.display = 'block';
+                inputEl.style.paddingLeft = '2.3rem';
+            } else {
+                inputIcon.style.display = 'none';
+                inputEl.style.paddingLeft = '1rem';
+            }
+        };
+
+        let selectedIndex = -1;
+
+        const renderDropdown = (query) => {
+            updateInputIcon();
+            const q = (query || '').trim().toUpperCase();
+            dropdown.innerHTML = '';
+            selectedIndex = -1;
+
+            let matches = [];
+            if (q === '' || q === '*') {
+                matches.push({ type: 'wildcard', symbol: '*', name: 'Any Token (Wildcard)', icon: '/static/favicon.png' });
+            }
+
+            allFamiliesList.forEach(fam => {
+                if (q === '' || fam.name.includes(q)) {
+                    matches.push({
+                        type: 'family',
+                        symbol: fam.name,
+                        name: `Family (${fam.membersCount} coins)`,
+                        icon: getPrincipalSymbol(fam.name.replace('_YBA', ''))
+                    });
+                }
+            });
+
+            let coinMatches = [];
+            allTokensList.forEach(coin => {
+                const sym = (coin.symbol || '').toUpperCase();
+                const name = coin.name || '';
+                if (sym.includes(q) || name.toUpperCase().includes(q)) {
+                    coinMatches.push({
+                        type: 'coin',
+                        symbol: sym,
+                        name: name,
+                        rank: coin.cmc_rank || 99999,
+                        exact: sym === q
+                    });
+                }
+            });
+
+            coinMatches.sort((a, b) => {
+                if (a.exact !== b.exact) return a.exact ? -1 : 1;
+                return a.rank - b.rank;
+            });
+
+            matches = matches.concat(coinMatches.slice(0, 25));
+
+            if (matches.length === 0) {
+                dropdown.innerHTML = '<div style="padding: 10px; color: #94a3b8; font-size: 0.82rem; text-align: center;">No matching tokens</div>';
+                dropdown.classList.add('active');
+                return;
+            }
+
+            let html = '';
+            let currentGroup = '';
+
+            matches.forEach((item, idx) => {
+                const groupName = item.type === 'wildcard' ? 'Wildcard' : (item.type === 'family' ? 'Coin Families' : 'Tokens');
+                if (groupName !== currentGroup) {
+                    currentGroup = groupName;
+                    html += `<div class="token-autocomplete-group-title">${currentGroup}</div>`;
+                }
+
+                let iconSrc = item.icon;
+                if (!iconSrc || item.type === 'coin' || item.type === 'family') {
+                    const principal = getPrincipalSymbol(item.symbol);
+                    iconSrc = tokenImageMap[item.symbol] || tokenImageMap[principal] || tokenIconUrl(principal) || tokenIconUrl(item.symbol);
+                }
+
+                html += `
+                    <div class="token-autocomplete-item" data-index="${idx}" data-symbol="${item.symbol}">
+                        <img src="${iconSrc}" onerror="this.src='/static/favicon.png'">
+                        <div class="token-sym">${item.symbol}</div>
+                        <div class="token-sub">${item.name}</div>
+                    </div>
+                `;
+            });
+
+            dropdown.innerHTML = html;
+            dropdown.classList.add('active');
+
+            dropdown.querySelectorAll('.token-autocomplete-item').forEach(el => {
+                el.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    selectSymbol(el.dataset.symbol);
+                });
+            });
+        };
+
+        const selectSymbol = (sym) => {
+            inputEl.value = sym;
+            updateInputIcon();
+            dropdown.classList.remove('active');
+            inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+            inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        inputEl.addEventListener('focus', () => renderDropdown(inputEl.value));
+        inputEl.addEventListener('input', () => {
+            updateInputIcon();
+            renderDropdown(inputEl.value);
+        });
+
+        inputEl.addEventListener('keydown', (e) => {
+            const items = dropdown.querySelectorAll('.token-autocomplete-item');
+            if (!dropdown.classList.contains('active') || items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex + 1) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'Enter') {
+                if (selectedIndex >= 0 && selectedIndex < items.length) {
+                    e.preventDefault();
+                    selectSymbol(items[selectedIndex].dataset.symbol);
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        const updateSelection = (items) => {
+            items.forEach((item, i) => {
+                if (i === selectedIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        };
+
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        setTimeout(updateInputIcon, 200);
+        setTimeout(updateInputIcon, 1000);
+    };
+
+    if (baseSearchInput) initTokenAutocomplete(baseSearchInput);
+    if (quoteSearchInput) initTokenAutocomplete(quoteSearchInput);
 
     if (swapBtn) {
         swapBtn.addEventListener('click', () => {
-            const temp = baseAsset;
+            const tempVal = baseSearchInput ? baseSearchInput.value : '';
+            if (baseSearchInput && quoteSearchInput) {
+                baseSearchInput.value = quoteSearchInput.value;
+                quoteSearchInput.value = tempVal;
+                baseSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                quoteSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            const tempAsset = baseAsset;
             baseAsset = quoteAsset;
-            quoteAsset = temp;
-            if (baseSearchInput) baseSearchInput.value = baseAsset.symbol.toUpperCase();
-            if (quoteSearchInput) quoteSearchInput.value = quoteAsset.symbol.toUpperCase();
+            quoteAsset = tempAsset;
             updateURLParams();
         });
     }
