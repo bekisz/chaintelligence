@@ -804,7 +804,110 @@ header h1 {
     color: #565A69;
 }
 
-/* Token Autocomplete Wrapper & Dropdown */
+/* Custom Chain Selector Component */
+.custom-network-container {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 160px;
+}
+
+.custom-network-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 0.75rem 0.85rem;
+    background: var(--uniswap-input-bg, #191B1F);
+    border: 1px solid var(--uniswap-border, rgba(255, 255, 255, 0.12));
+    border-radius: 12px;
+    color: var(--text-primary, #ffffff);
+    font-size: 0.95rem;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.custom-network-trigger:hover {
+    border-color: #565A69;
+}
+
+.custom-network-trigger:focus {
+    border-color: var(--uniswap-pink, #ff007a);
+    box-shadow: 0 0 0 1px var(--uniswap-pink, #ff007a), 0 0 15px rgba(255, 0, 122, 0.15);
+}
+
+.network-select-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.network-select-label {
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+.network-select-caret {
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.custom-network-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    width: 100%;
+    min-width: 170px;
+    background: rgba(18, 20, 29, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 0, 122, 0.15);
+    z-index: 999999;
+    display: none;
+    padding: 6px;
+}
+
+.custom-network-dropdown.active {
+    display: block;
+}
+
+.custom-network-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+
+.custom-network-option:hover,
+.custom-network-option.selected {
+    background: rgba(255, 0, 122, 0.18);
+    border-color: rgba(255, 0, 122, 0.35);
+}
+
+.custom-network-option img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
 .token-autocomplete-container {
     position: relative;
     display: inline-flex;

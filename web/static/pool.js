@@ -352,6 +352,95 @@ document.addEventListener('DOMContentLoaded', async () => {
     initTokenAutocomplete(startTokenInput);
     initTokenAutocomplete(endTokenInput);
 
+    const initCustomChainSelector = (selectEl) => {
+        if (!selectEl || selectEl.dataset.customSelectorInitialized) return;
+        selectEl.dataset.customSelectorInitialized = 'true';
+
+        const networkIcons = {
+            'all': '/static/favicon.png',
+            'Ethereum': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+            'Arbitrum': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+            'Base': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+            'BNB': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png'
+        };
+
+        selectEl.style.display = 'none';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'custom-network-container';
+        selectEl.parentElement.insertBefore(wrapper, selectEl);
+        wrapper.appendChild(selectEl);
+
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'custom-network-trigger';
+        wrapper.appendChild(trigger);
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'custom-network-dropdown';
+        wrapper.appendChild(dropdown);
+
+        const updateTrigger = () => {
+            const val = selectEl.value || 'all';
+            const selectedOpt = selectEl.options[selectEl.selectedIndex];
+            const label = selectedOpt ? selectedOpt.text : 'All Chains';
+            const iconSrc = networkIcons[val] || networkIcons['all'];
+
+            trigger.innerHTML = `
+                <img class="network-select-icon" src="${iconSrc}" onerror="this.src='/static/favicon.png'">
+                <span class="network-select-label">${label}</span>
+                <svg class="network-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            `;
+        };
+
+        const renderDropdown = () => {
+            let html = '';
+            Array.from(selectEl.options).forEach(opt => {
+                const val = opt.value;
+                const label = opt.text;
+                const iconSrc = networkIcons[val] || networkIcons['all'];
+                const isSelected = val === selectEl.value;
+                html += `
+                    <div class="custom-network-option ${isSelected ? 'selected' : ''}" data-value="${val}">
+                        <img src="${iconSrc}" onerror="this.src='/static/favicon.png'">
+                        <span>${label}</span>
+                    </div>
+                `;
+            });
+            dropdown.innerHTML = html;
+
+            dropdown.querySelectorAll('.custom-network-option').forEach(el => {
+                el.addEventListener('click', () => {
+                    selectEl.value = el.dataset.value;
+                    updateTrigger();
+                    dropdown.classList.remove('active');
+                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+        };
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isActive = dropdown.classList.contains('active');
+            document.querySelectorAll('.custom-network-dropdown').forEach(d => d.classList.remove('active'));
+            if (!isActive) {
+                renderDropdown();
+                dropdown.classList.add('active');
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        updateTrigger();
+    };
+
+    initCustomChainSelector(document.getElementById('query-network-filter'));
+    initCustomChainSelector(document.getElementById('network-filter'));
+
     let symbolFamilyMap = {};
     let familySymbolsMap = {};
 
