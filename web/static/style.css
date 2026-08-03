@@ -859,9 +859,9 @@ header h1 {
 
 .filter-input-group .custom-network-trigger {
     height: 32px;
-    padding: 3px 8px;
-    font-size: 0.8rem;
-    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    border-radius: 20px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--uniswap-border);
 }
