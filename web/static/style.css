@@ -852,6 +852,20 @@ header h1 {
     height: auto;
 }
 
+.filter-input-group .custom-network-container {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.filter-input-group .custom-network-trigger {
+    height: 32px;
+    padding: 3px 8px;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--uniswap-border);
+}
+
 .custom-network-trigger {
     display: flex;
     align-items: center;
