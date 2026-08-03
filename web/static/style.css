@@ -806,12 +806,27 @@ header h1 {
 .token-autocomplete-container {
     position: relative;
     display: inline-flex;
-    flex: 0 0 135px;
-    width: 135px;
+    align-items: center;
+    flex: 0 0 145px;
+    width: 145px;
 }
 
 .token-autocomplete-container .token-input-field {
     width: 100%;
+}
+
+.token-input-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    pointer-events: none;
+    z-index: 2;
+    display: none;
 }
 
 .token-autocomplete-dropdown {

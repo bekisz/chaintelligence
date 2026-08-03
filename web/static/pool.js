@@ -176,9 +176,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         dropdown.className = 'token-autocomplete-dropdown';
         container.appendChild(dropdown);
 
+        const inputIcon = document.createElement('img');
+        inputIcon.className = 'token-input-icon';
+        container.appendChild(inputIcon);
+
+        const updateInputIcon = () => {
+            const sym = (inputEl.value || '').trim().toUpperCase();
+            if (!sym || sym === '*') {
+                inputIcon.style.display = 'none';
+                inputEl.style.paddingLeft = '1rem';
+                return;
+            }
+            const principal = getPrincipalSymbol(sym.replace('_YBA', ''));
+            const iconSrc = tokenImageMap[sym] || tokenImageMap[principal] || tokenIconUrl(principal) || tokenIconUrl(sym);
+            if (iconSrc) {
+                inputIcon.src = iconSrc;
+                inputIcon.onerror = () => {
+                    inputIcon.src = '/static/favicon.png';
+                };
+                inputIcon.style.display = 'block';
+                inputEl.style.paddingLeft = '2.3rem';
+            } else {
+                inputIcon.style.display = 'none';
+                inputEl.style.paddingLeft = '1rem';
+            }
+        };
+
         let selectedIndex = -1;
 
         const renderDropdown = (query) => {
+            updateInputIcon();
             const q = (query || '').trim().toUpperCase();
             dropdown.innerHTML = '';
             selectedIndex = -1;
@@ -266,13 +293,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const selectSymbol = (sym) => {
             inputEl.value = sym;
+            updateInputIcon();
             dropdown.classList.remove('active');
             inputEl.dispatchEvent(new Event('change', { bubbles: true }));
             inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         };
 
         inputEl.addEventListener('focus', () => renderDropdown(inputEl.value));
-        inputEl.addEventListener('input', () => renderDropdown(inputEl.value));
+        inputEl.addEventListener('input', () => {
+            updateInputIcon();
+            renderDropdown(inputEl.value);
+        });
 
         inputEl.addEventListener('keydown', (e) => {
             const items = dropdown.querySelectorAll('.token-autocomplete-item');
@@ -312,6 +343,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 dropdown.classList.remove('active');
             }
         });
+
+        // Initialize icon for pre-populated values
+        setTimeout(updateInputIcon, 200);
+        setTimeout(updateInputIcon, 1000);
     };
 
     initTokenAutocomplete(startTokenInput);
