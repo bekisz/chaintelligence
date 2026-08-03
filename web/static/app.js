@@ -438,6 +438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
+        selectEl.updateCustomSelectorUI = updateTrigger;
         updateTrigger();
     };
 
@@ -1524,6 +1525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             select.selectedIndex = networks.size > 0 ? 0 : -1;
         }
         select.disabled = networks.size === 0;
+        if (select.updateCustomSelectorUI) select.updateCustomSelectorUI();
     };
 
     const renderUndercut = (data) => {
