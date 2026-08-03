@@ -127,25 +127,195 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Fetch official token logos from backend
+    let allTokensList = [];
+    let allFamiliesList = [];
+
+    // Fetch official token logos & metadata from backend for lookahead autocomplete
     fetch('/api/coin/list')
         .then(response => response.json())
         .then(coins => {
+            allTokensList = coins;
             coins.forEach(coin => {
                 if (coin.symbol) {
                     const upperSymbol = coin.symbol.toUpperCase();
-                    if (coin.image) {
-                        tokenImageMap[upperSymbol] = coin.image;
-                    }
-                    if (coin.slug) {
-                        tokenSlugMap[upperSymbol] = coin.slug;
-                    }
+                    if (coin.image) tokenImageMap[upperSymbol] = coin.image;
+                    if (coin.slug) tokenSlugMap[upperSymbol] = coin.slug;
                 }
             });
         })
         .catch(error => {
             console.error('Error fetching token images:', error);
         });
+
+    fetch('/api/coin-families')
+        .then(res => res.json())
+        .then(data => {
+            const fams = data.families || {};
+            allFamiliesList = Object.keys(fams).map(f => ({
+                name: f,
+                membersCount: fams[f]?.length || 0
+            }));
+        })
+        .catch(err => console.error('Error fetching coin families:', err));
+
+    const initTokenAutocomplete = (inputEl) => {
+        if (!inputEl || inputEl.dataset.autocompleteInitialized) return;
+        inputEl.dataset.autocompleteInitialized = 'true';
+        inputEl.setAttribute('autocomplete', 'off');
+
+        let container = inputEl.parentElement;
+        if (!container.classList.contains('token-autocomplete-container')) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'token-autocomplete-container';
+            container.insertBefore(wrapper, inputEl);
+            wrapper.appendChild(inputEl);
+            container = wrapper;
+        }
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'token-autocomplete-dropdown';
+        container.appendChild(dropdown);
+
+        let selectedIndex = -1;
+
+        const renderDropdown = (query) => {
+            const q = (query || '').trim().toUpperCase();
+            dropdown.innerHTML = '';
+            selectedIndex = -1;
+
+            let matches = [];
+
+            if (q === '' || q === '*') {
+                matches.push({ type: 'wildcard', symbol: '*', name: 'Any Token (Wildcard)', icon: '/static/favicon.png' });
+            }
+
+            allFamiliesList.forEach(fam => {
+                if (q === '' || fam.name.includes(q)) {
+                    matches.push({
+                        type: 'family',
+                        symbol: fam.name,
+                        name: `Family (${fam.membersCount} coins)`,
+                        icon: getPrincipalSymbol(fam.name.replace('_YBA', ''))
+                    });
+                }
+            });
+
+            let coinMatches = [];
+            allTokensList.forEach(coin => {
+                const sym = (coin.symbol || '').toUpperCase();
+                const name = coin.name || '';
+                if (sym.includes(q) || name.toUpperCase().includes(q)) {
+                    coinMatches.push({
+                        type: 'coin',
+                        symbol: sym,
+                        name: name,
+                        rank: coin.cmc_rank || 99999,
+                        exact: sym === q
+                    });
+                }
+            });
+
+            coinMatches.sort((a, b) => {
+                if (a.exact !== b.exact) return a.exact ? -1 : 1;
+                return a.rank - b.rank;
+            });
+
+            matches = matches.concat(coinMatches.slice(0, 25));
+
+            if (matches.length === 0) {
+                dropdown.innerHTML = '<div style="padding: 10px; color: #94a3b8; font-size: 0.82rem; text-align: center;">No matching tokens</div>';
+                dropdown.classList.add('active');
+                return;
+            }
+
+            let html = '';
+            let currentGroup = '';
+
+            matches.forEach((item, idx) => {
+                const groupName = item.type === 'wildcard' ? 'Wildcard' : (item.type === 'family' ? 'Coin Families' : 'Tokens');
+                if (groupName !== currentGroup) {
+                    currentGroup = groupName;
+                    html += `<div class="token-autocomplete-group-title">${currentGroup}</div>`;
+                }
+
+                let iconSrc = item.icon;
+                if (!iconSrc || item.type === 'coin' || item.type === 'family') {
+                    const principal = getPrincipalSymbol(item.symbol);
+                    iconSrc = tokenImageMap[item.symbol] || tokenImageMap[principal] || tokenIconUrl(principal) || tokenIconUrl(item.symbol);
+                }
+
+                html += `
+                    <div class="token-autocomplete-item" data-index="${idx}" data-symbol="${item.symbol}">
+                        <img src="${iconSrc}" onerror="this.src='/static/favicon.png'">
+                        <div class="token-sym">${item.symbol}</div>
+                        <div class="token-sub">${item.name}</div>
+                    </div>
+                `;
+            });
+
+            dropdown.innerHTML = html;
+            dropdown.classList.add('active');
+
+            dropdown.querySelectorAll('.token-autocomplete-item').forEach(el => {
+                el.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    selectSymbol(el.dataset.symbol);
+                });
+            });
+        };
+
+        const selectSymbol = (sym) => {
+            inputEl.value = sym;
+            dropdown.classList.remove('active');
+            inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+            inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        inputEl.addEventListener('focus', () => renderDropdown(inputEl.value));
+        inputEl.addEventListener('input', () => renderDropdown(inputEl.value));
+
+        inputEl.addEventListener('keydown', (e) => {
+            const items = dropdown.querySelectorAll('.token-autocomplete-item');
+            if (!dropdown.classList.contains('active') || items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex + 1) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'Enter') {
+                if (selectedIndex >= 0 && selectedIndex < items.length) {
+                    e.preventDefault();
+                    selectSymbol(items[selectedIndex].dataset.symbol);
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        const updateSelection = (items) => {
+            items.forEach((item, i) => {
+                if (i === selectedIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        };
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+    };
+
+    initTokenAutocomplete(startTokenInput);
+    initTokenAutocomplete(endTokenInput);
 
     let symbolFamilyMap = {};
     let familySymbolsMap = {};
@@ -225,6 +395,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             minimumFractionDigits: fractionDigits,
             maximumFractionDigits: fractionDigits
         }).format(amount);
+    };
+
+    const formatRelativeTime = (iso) => {
+        if (!iso) return '-';
+        const ts = new Date(iso).getTime();
+        if (isNaN(ts)) return '-';
+        const diffMs = Date.now() - ts;
+        if (diffMs < 0) return 'now';
+        const sec = Math.floor(diffMs / 1000);
+        if (sec < 60) return `${sec}s ago`;
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `${min}m ago`;
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return `${hr}h ago`;
+        const day = Math.floor(hr / 24);
+        if (day < 30) return `${day}d ago`;
+        const mo = Math.floor(day / 30);
+        if (mo < 12) return `${mo}mo ago`;
+        const yr = Math.floor(mo / 12);
+        return `${yr}y ago`;
     };
 
     const getRouteAvgApr = (route) => {
@@ -477,6 +667,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const row = document.createElement('tr');
             row.classList.add('fade-in');
             row.style.animationDelay = `${idx * 30}ms`;
+            // Dead pool (no current liquidity) is greyed out but not excluded
+            if (tvlUsd <= 0) {
+                row.classList.add('dead-pool');
+            }
             const today = new Date();
             const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
             const startDateVal = startDateInput ? startDateInput.value : '';
@@ -510,6 +704,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="col-avg-volume">${formatUSD(dailyVolume)}</td>
                 <td class="col-daily-fees">${formatUSD(dailyFees)}</td>
                 <td class="col-pct-volume accent-text">${pctVol.toFixed(1)}%</td>
+                <td class="col-last-activity hidden-column">${formatRelativeTime(pool.last_activity)}</td>
             `;
             routesBody.appendChild(row);
         });
@@ -725,6 +920,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (key === 'pct') {
                 valA = 0;
                 valB = 0;
+            } else if (key === 'last-activity') {
+                valA = a.last_activity ? new Date(a.last_activity).getTime() : 0;
+                valB = b.last_activity ? new Date(b.last_activity).getTime() : 0;
             } else if (key === 'cid') {
                 valA = getRouteCid(a);
                 valB = getRouteCid(b);
@@ -781,7 +979,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sortDailyFeesEl = document.getElementById('sort-daily-fees');
     if (sortDailyFeesEl) sortDailyFeesEl.addEventListener('click', () => sortRoutes('daily-fees', 'sort-daily-fees'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
-    document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
+    const sortLastActivityEl = document.getElementById('sort-last-activity');
+    if (sortLastActivityEl) sortLastActivityEl.addEventListener('click', () => sortRoutes('last-activity', 'sort-last-activity'));
     const sortPoolAddrEl = document.getElementById('sort-pool-addr');
     if (sortPoolAddrEl) sortPoolAddrEl.addEventListener('click', () => sortRoutes('pool_addr', 'sort-pool-addr'));
     const sortPoolIdEl = document.getElementById('sort-pool-id');
