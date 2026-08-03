@@ -237,25 +237,25 @@
             <section id="undercut-section" class="advanced-options disabled hidden">
                 <details>
                     <summary><span style="font-weight: 600; font-size: 0.95rem;">New Pool Backtest</span> <span style="color: var(--text-tertiary); font-weight: 400; font-size: 0.8rem;">Simulate adding a hypothetical extra pool for this token pair</span></summary>
-                    <div class="advanced-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
-                        <div class="input-group">
+                    <div class="advanced-grid" style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem;">
+                        <div class="input-group" style="flex: 1 1 140px;">
                             <label for="undercut-fee">Fee tier (%)</label>
                             <input type="number" id="undercut-fee" value="0.97" step="0.01" min="0" max="5" class="token-input-field" style="width: 100%;">
                         </div>
-                        <div class="input-group">
+                        <div class="input-group" style="flex: 1 1 140px;">
                             <label for="undercut-liquidity">Liquidity (USD)</label>
                             <input type="number" id="undercut-liquidity" value="100000" step="5000" min="0" class="token-input-field" style="width: 100%;">
                         </div>
-                        <div class="input-group">
+                        <div class="input-group" style="flex: 1 1 140px;">
                             <label for="undercut-range">Range (± %)</label>
                             <input type="number" id="undercut-range" value="0.25" step="0.05" min="0" max="50" class="token-input-field" style="width: 100%;">
                         </div>
-                        <div class="input-group">
+                        <div class="input-group" style="flex: 1 1 160px;">
                             <label for="undercut-network">Network</label>
                             <select id="undercut-network" class="token-input-field" style="width: 100%;" disabled></select>
                         </div>
-                        <div class="input-group" style="justify-content: flex-end;">
-                            <button id="undercut-btn" class="primary-btn" style="align-self: flex-end;">Backtest</button>
+                        <div class="input-group" style="flex: 0 0 auto; margin-left: auto;">
+                            <button id="undercut-btn" class="primary-btn">Backtest</button>
                         </div>
                     </div>
                 </details>
