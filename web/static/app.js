@@ -228,6 +228,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         }).format(amount);
     };
 
+    const formatRelativeTime = (iso) => {
+        if (!iso) return '-';
+        const ts = new Date(iso).getTime();
+        if (isNaN(ts)) return '-';
+        const diffMs = Date.now() - ts;
+        if (diffMs < 0) return 'now';
+        const sec = Math.floor(diffMs / 1000);
+        if (sec < 60) return `${sec}s ago`;
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `${min}m ago`;
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return `${hr}h ago`;
+        const day = Math.floor(hr / 24);
+        if (day < 30) return `${day}d ago`;
+        const mo = Math.floor(day / 30);
+        if (mo < 12) return `${mo}mo ago`;
+        const yr = Math.floor(mo / 12);
+        return `${yr}y ago`;
+    };
+
     const getRouteAvgApr = (route) => {
         let totalApr = 0;
         let hopCount = 0;
@@ -456,6 +476,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         loader.classList.remove('hidden');
         resultsSection.classList.add('hidden');
         noDataMsg.classList.add('hidden');
+        const undercutPanel = document.getElementById('undercut-section');
+        if (undercutPanel) undercutPanel.classList.add('disabled');
+        const undercutResults = document.getElementById('undercut-results-section');
+        if (undercutResults) undercutResults.classList.add('hidden');
+        const ucNetworkSelect = document.getElementById('undercut-network');
+        if (ucNetworkSelect) {
+            ucNetworkSelect.innerHTML = '';
+            ucNetworkSelect.disabled = true;
+        }
         const posthoc = document.getElementById('network-filter');
         if (posthoc) posthoc.disabled = false;
 
@@ -550,6 +579,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Show results
             resultsSection.classList.remove('hidden');
+            const undercutPanel = document.getElementById('undercut-section');
+            if (undercutPanel) undercutPanel.classList.remove('disabled');
+            populateUndercutNetwork();
         } catch (error) {
             console.error('Error during analysis:', error);
             showError(error.message || 'Unknown error');
@@ -661,6 +693,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Staggered fade-in animation
             row.classList.add('fade-in');
             row.style.animationDelay = `${idx * 30}ms`;
+            // Dead pool (no current liquidity) is greyed out but not excluded
+            if (hopCount === 1 && (routeTvl <= 0)) {
+                row.classList.add('dead-pool');
+            }
             
             const cidDisplay = hopCount === 1 && cid !== null && cid !== undefined ? cid : '-';
             const poolIdDisplay = hopCount === 1 ? formatAddress(poolId) : '-';
@@ -711,6 +747,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="col-avg-volume">${formatUSD(dailyVolume)}</td>
                 <td class="col-daily-fees">${formatUSD(dailyFees)}</td>
                 <td class="col-pct-volume accent-text">${pctVol.toFixed(1)}%</td>
+                <td class="col-last-activity hidden-column">${formatRelativeTime(route.last_activity)}</td>
             `;
             routesBody.appendChild(row);
         });
@@ -1052,6 +1089,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (key === 'pct') {
                 valA = a.pct_volume;
                 valB = b.pct_volume;
+            } else if (key === 'last-activity') {
+                valA = a.last_activity ? new Date(a.last_activity).getTime() : 0;
+                valB = b.last_activity ? new Date(b.last_activity).getTime() : 0;
             } else if (key === 'cid') {
                 valA = getRouteCid(a);
                 valB = getRouteCid(b);
@@ -1099,6 +1139,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.body.classList.toggle(lpClass, !isVisible);
             }
         });
+
+        // Undercut table columns (data-uc-col) — toggle header + cells
+        document.querySelectorAll('#uc-columns-dropdown input[type="checkbox"]').forEach(cb => {
+            if (cb.dataset.ucCol) {
+                const ucColClass = `uc-col-${cb.dataset.ucCol}`;
+                document.querySelectorAll(`.${ucColClass}`).forEach(el => {
+                    el.classList.toggle('hidden-column', !cb.checked);
+                });
+            }
+        });
     };
 
     // Event listeners for sorting
@@ -1111,7 +1161,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sortDailyFeesEl = document.getElementById('sort-daily-fees');
     if (sortDailyFeesEl) sortDailyFeesEl.addEventListener('click', () => sortRoutes('daily-fees', 'sort-daily-fees'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
-    document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
+    const sortLastActivityEl = document.getElementById('sort-last-activity');
+    if (sortLastActivityEl) sortLastActivityEl.addEventListener('click', () => sortRoutes('last-activity', 'sort-last-activity'));
     const sortPoolAddrEl = document.getElementById('sort-pool-addr');
     if (sortPoolAddrEl) sortPoolAddrEl.addEventListener('click', () => sortRoutes('pool_addr', 'sort-pool-addr'));
     const sortPoolIdEl = document.getElementById('sort-pool-id');
@@ -1120,6 +1171,306 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sort-protocol').addEventListener('click', () => sortRoutes('protocol', 'sort-protocol'));
 
     analyzeBtn.addEventListener('click', performAnalysis);
+
+    // Collapse / expand the swap results table
+    const collapseResultsBtn = document.getElementById('collapse-results-btn');
+    const routesTableResponsive = document.querySelector('#results-section .table-responsive');
+    if (collapseResultsBtn && routesTableResponsive) {
+        collapseResultsBtn.addEventListener('click', () => {
+            routesTableResponsive.classList.toggle('collapsed');
+        });
+    }
+
+    // Collapse / expand the undercut results table
+    const collapseUndercutBtn = document.getElementById('collapse-undercut-btn');
+    const undercutTableResponsive = document.getElementById('undercut-table-responsive');
+    if (collapseUndercutBtn && undercutTableResponsive) {
+        collapseUndercutBtn.addEventListener('click', () => {
+            undercutTableResponsive.classList.toggle('collapsed');
+        });
+    }
+
+    // Undercut backtest: simulate a hypothetical extra pool for the pair
+    let currentUndercutData = null;
+
+    const populateUndercutNetwork = () => {
+        const select = document.getElementById('undercut-network');
+        if (!select) return;
+        const networks = new Set();
+        (currentRoutes || []).forEach(route => {
+            const net = route.network || 'Ethereum';
+            let protocols = new Set();
+            if (route.path_tokens) {
+                route.path_tokens.forEach((item, idx) => {
+                    if (idx % 2 === 1 && typeof item === 'object' && item.fee) {
+                        const parts = item.fee.split('|');
+                        if (parts.length >= 2) protocols.add(parts[1].trim());
+                    }
+                });
+            }
+            if (protocols.size === 0 && route.protocol) protocols.add(route.protocol);
+            // Only Uniswap-kind pools are allowed at the backtest
+            const hasUniswap = [...protocols].some(p => p && p.toLowerCase().startsWith('uniswap'));
+            if (hasUniswap) networks.add(net);
+        });
+        const prev = select.value;
+        select.innerHTML = '';
+        [...networks].sort().forEach(net => {
+            const opt = document.createElement('option');
+            opt.value = net;
+            opt.textContent = net;
+            select.appendChild(opt);
+        });
+        if (networks.has(prev)) {
+            select.value = prev;
+        } else {
+            select.selectedIndex = networks.size > 0 ? 0 : -1;
+        }
+        select.disabled = networks.size === 0;
+    };
+
+    const renderUndercut = (data) => {
+        currentUndercutData = data;
+        updateUndercutDefaultFee(data);
+        filterAndRenderUndercut();
+    };
+
+    const updateUndercutDefaultFee = (data) => {
+        const feeInput = document.getElementById('undercut-fee');
+        const pools = (data && data.pools) || [];
+        // Only pools with real current liquidity are competitors: dead pools
+        // (tvl = 0) carry huge historical volume at low fees and would drag the
+        // volume-weighted average down to near zero. Also drop near-dead pools
+        // whose TVL is negligible relative to the market leader, so the default
+        // fee undercuts the pool(s) that actually route the pair's traffic.
+        const live = pools.filter(p => (p.tvl || 0) > 0);
+        if (live.length === 0) return;
+        const maxTvl = Math.max(...live.map(p => p.tvl));
+        const competitors = live.filter(p => p.tvl >= 0.2 * maxTvl);
+        if (competitors.length === 0) return;
+        let volSum = 0;
+        let feeVolSum = 0;
+        competitors.forEach(p => {
+            const vol = p.volume || 0;
+            const feeBps = p.fee_bps || 0;
+            if (vol > 0 && feeBps > 0) {
+                volSum += vol;
+                feeVolSum += feeBps * vol;
+            }
+        });
+        if (volSum <= 0 || feeVolSum <= 0) return;
+        const vwapBps = feeVolSum / volSum;
+        let recBps = vwapBps * 0.9;
+        recBps = Math.round(recBps / 5) * 5;
+        recBps = Math.max(1, Math.min(500, recBps));
+        if (feeInput) feeInput.value = (recBps / 100).toFixed(2);
+    };
+
+    const filterAndRenderUndercut = () => {
+        const data = currentUndercutData;
+        const body = document.getElementById('undercut-body');
+        if (!data || !body) return;
+        body.innerHTML = '';
+        const t0 = data.start_token;
+        const t1 = data.end_token;
+        const network = data.network || 'Ethereum';
+        const days = data.days || 1;
+
+        const minAprVal = parseFloat(document.getElementById('uc-min-apr-filter')?.value) || 0;
+        const minMktVal = parseFloat(document.getElementById('uc-min-mkt-filter')?.value) || 0;
+        const minTxsVal = parseInt(document.getElementById('uc-min-txs-filter')?.value) || 0;
+        const ucProtocol = document.getElementById('uc-protocol-filter')?.value || 'all';
+
+        const hyp = data.hypothetical;
+        const pools = data.pools || [];
+        const totalVol = data.total_volume || 0;
+
+        const buildPathTokens = (feeDisplay, protocolName, aprPct) => ({
+            path_tokens: [t0, {
+                fee: `${feeDisplay}|${protocolName}|${network}`,
+                apr: aprPct / 100,
+                apr_str: formatAprPercent(aprPct)
+            }, t1]
+        });
+        const appendRow = (pathTokens, cells, isHypothetical, protocolName) => {
+            const row = document.createElement('tr');
+            row.classList.add('fade-in');
+            let tooltip = null;
+            if (isHypothetical) {
+                row.classList.add('hypothetical-row');
+                tooltip = 'Hypothetical Pool';
+            } else if (cells.tvl === null || cells.tvl === undefined || cells.tvl <= 0) {
+                // Dead pool (no current liquidity): grey out but do not exclude
+                row.classList.add('dead-pool');
+            } else if (cells.realApr != null && cells.apr != null) {
+                const dApr = cells.apr - cells.realApr;
+                const dTx = cells.count - cells.realCount;
+                const dVol = cells.volume - cells.realVolume;
+                const parts = [];
+                if (cells.realCount !== undefined && cells.realCount != null) parts.push(`TXs ${cells.realCount} → ${cells.count}${dTx > 0 ? ` (+${dTx})` : dTx < 0 ? ` (${dTx})` : ''}`);
+                if (cells.realApr != null && cells.realApr !== undefined) parts.push(`APR ${formatAprPercent(cells.realApr)} → ${formatAprPercent(cells.apr)} (${dApr >= 0 ? '+' : ''}${dApr.toFixed(2)}%)`);
+                if (cells.realVolume !== undefined) parts.push(`Vol ${formatUSD(cells.realVolume)} → ${formatUSD(cells.volume)} (${dVol >= 0 ? '+' : ''}${formatUSD(dVol)})`);
+                tooltip = parts.join(' · ');
+            }
+            const tooltipAttr = tooltip ? ` title="${tooltip.replace(/"/g, '&quot;')}"` : '';
+
+            const aprClass = cells.apr > 0.5 ? 'text-success font-bold' : (cells.apr > 0 ? 'text-success' : 'text-muted');
+            const tvlDisplay = cells.tvl !== null && cells.tvl !== undefined ? formatUSD(cells.tvl) : '-';
+
+            // For the hypothetical pool: CID shows "N/A", Pool Address / ID is left empty
+            const cidDisplay = isHypothetical
+                ? 'N/A'
+                : (cells.cid !== null && cells.cid !== undefined ? cells.cid : '-');
+            const poolIdDisplay = isHypothetical ? '' : (cells.poolId || '');
+            const protocolDisplay = protocolName || (isHypothetical ? 'Uniswap V4' : 'Uniswap V3');
+
+            row.innerHTML = `
+                <td class="path-cell"${tooltipAttr}>${renderPath(pathTokens)}</td>
+                <td class="uc-col-cid hidden-column"${tooltipAttr}>${cidDisplay}</td>
+                <td class="uc-col-pool-id hidden-column monospace"${tooltipAttr}>${poolIdDisplay}</td>
+                <td class="uc-col-network"${tooltipAttr}><span class="badge ${network.toLowerCase()}">${network}</span></td>
+                <td class="uc-col-protocol hidden-column font-bold"${tooltipAttr}>${protocolDisplay}</td>
+                <td class="uc-col-tx-count"${tooltipAttr}>${cells.count.toLocaleString()}</td>
+                <td class="uc-col-apr ${aprClass}"${tooltipAttr}>${formatAprPercent(cells.apr)}</td>
+                <td class="uc-col-volume hidden-column font-bold"${tooltipAttr}>${formatUSD(cells.volume)}</td>
+                <td class="uc-col-market-size hidden-column"${tooltipAttr}>${formatUSD(cells.fees)}</td>
+                <td class="uc-col-tvl"${tooltipAttr}>${tvlDisplay}</td>
+                <td class="uc-col-avg-volume"${tooltipAttr}>${formatUSD(cells.volume / days)}</td>
+                <td class="uc-col-daily-fees"${tooltipAttr}>${formatUSD(cells.fees / days)}</td>
+                <td class="uc-col-pct-volume hidden-column accent-text"${tooltipAttr}>${cells.pct.toFixed(1)}%</td>
+                <td class="uc-col-last-activity hidden-column"${tooltipAttr}>${formatRelativeTime(cells.lastActivity)}</td>
+            `;
+            body.appendChild(row);
+        };
+
+        const rowSpecs = [];
+        // Hypothetical pool first, highlighted with a different background
+        if (hyp) {
+            rowSpecs.push({
+                pathTokens: buildPathTokens(hyp.fee_display, 'Uniswap V4', hyp.apr_pct),
+                cells: {
+                    count: hyp.diverted_count,
+                    apr: hyp.apr_pct,
+                    volume: hyp.diverted_volume,
+                    fees: hyp.fee_usd,
+                    tvl: hyp.liquidity_usd,
+                    pct: hyp.diverted_pct
+                },
+                isHypothetical: true,
+                network: network,
+                protocol: 'Uniswap V4'
+            });
+        }
+
+        // Existing pools with hypothetical post-diversion stats
+        pools.forEach(p => {
+            const proto = p.protocol || 'Uniswap V3';
+            rowSpecs.push({
+                pathTokens: buildPathTokens(p.fee_display, proto, p.hyp_apr_pct),
+                cells: {
+                    count: p.hyp_count,
+                    apr: p.hyp_apr_pct,
+                    volume: p.hyp_volume,
+                    fees: p.hyp_fees,
+                    tvl: p.tvl,
+                    pct: totalVol > 0 ? (p.hyp_volume / totalVol) * 100 : 0,
+                    cid: p.cid,
+                    poolId: p.pool_id || p.pool_address,
+                    realCount: p.count,
+                    realApr: p.apr_pct !== undefined ? p.apr_pct : null,
+                    realVolume: p.volume,
+                    lastActivity: p.last_activity
+                },
+                isHypothetical: false,
+                network: network,
+                protocol: proto
+            });
+        });
+
+        rowSpecs.forEach(({ pathTokens, cells, isHypothetical, protocol: rowProtocol }) => {
+            if (ucProtocol !== 'all') {
+                const protoMatch = rowProtocol === ucProtocol || (ucProtocol === 'Uniswap' && rowProtocol.startsWith('Uniswap'));
+                if (!protoMatch) return;
+            }
+            if (cells.apr < minAprVal) return;
+            if (cells.fees < minMktVal) return;
+            if (cells.count < minTxsVal) return;
+            appendRow(pathTokens, cells, isHypothetical, rowProtocol);
+        });
+        updateColumnVisibility();
+    };
+
+    const performUndercut = async () => {
+        const startToken = startTokenInput.value.trim().toUpperCase();
+        const endToken = endTokenInput.value.trim().toUpperCase();
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+
+        if (!startToken || !endToken) {
+            alert('Please enter both start and end tokens.');
+            return;
+        }
+        if (startToken === '*' || endToken === '*') {
+            alert('Undercut backtest requires a specific token pair (no wildcards).');
+            return;
+        }
+
+        const parseNumInput = (id) => {
+            const raw = document.getElementById(id)?.value || '';
+            return parseFloat(raw.replace(',', '.'));
+        };
+        const feeVal = parseNumInput('undercut-fee');
+        const liqVal = parseNumInput('undercut-liquidity');
+        const rangeVal = parseNumInput('undercut-range');
+        if (isNaN(feeVal) || feeVal < 0 || isNaN(liqVal) || liqVal <= 0 || isNaN(rangeVal) || rangeVal <= 0) {
+            alert('Please enter valid fee tier, liquidity and range values.');
+            return;
+        }
+
+        const undercutBtn = document.getElementById('undercut-btn');
+        const undercutSection = document.getElementById('undercut-results-section');
+        undercutBtn.disabled = true;
+        undercutSection.classList.add('hidden');
+        noDataMsg.classList.add('hidden');
+
+        try {
+            const selectedNetwork = document.getElementById('undercut-network')?.value || '';
+            const feeBps = Math.round(feeVal * 100);
+            let url = `/api/routes/undercut?start_token=${startToken}&end_token=${endToken}&fee_bps=${feeBps}&liquidity_usd=${liqVal}&range_pct=${rangeVal}`;
+            if (startDate) url += `&start_date=${startDate}`;
+            if (endDate) url += `&end_date=${endDate}`;
+            if (selectedNetwork && selectedNetwork !== 'all') url += `&network=${selectedNetwork}`;
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                let detail = `API request failed with status ${response.status}`;
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.detail) detail = errData.detail;
+                } catch (e) {}
+                throw new Error(detail);
+            }
+
+            const data = await response.json();
+            if (!data.hypothetical || data.pools.length === 0) {
+                showError('No swap data found for the specified period and tokens.');
+                return;
+            }
+
+            renderUndercut(data);
+            undercutSection.classList.remove('hidden');
+        } catch (error) {
+            console.error('Error during undercut backtest:', error);
+            showError(error.message || 'Unknown error');
+        } finally {
+            undercutBtn.disabled = false;
+        }
+    };
+
+    const undercutBtn = document.getElementById('undercut-btn');
+    if (undercutBtn) {
+        undercutBtn.addEventListener('click', performUndercut);
+    }
 
     // Allow Enter key to trigger analysis
     [startTokenInput, endTokenInput, startDateInput, endDateInput].forEach(input => {
@@ -1134,7 +1485,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dropdownPairs = [
         { btn: document.getElementById('lp-options-btn'), dropdown: document.getElementById('lp-options-dropdown') },
         { btn: document.getElementById('table-columns-btn'), dropdown: document.getElementById('table-columns-dropdown') },
-        { btn: document.getElementById('column-selector-btn'), dropdown: document.getElementById('column-selector-dropdown') }
+        { btn: document.getElementById('column-selector-btn'), dropdown: document.getElementById('column-selector-dropdown') },
+        { btn: document.getElementById('uc-columns-btn'), dropdown: document.getElementById('uc-columns-dropdown') }
     ];
 
     dropdownPairs.forEach(({ btn, dropdown }) => {
@@ -1175,6 +1527,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
     });
+
+    // Undercut table real-time filters
+    ['uc-min-apr-filter', 'uc-min-mkt-filter', 'uc-min-txs-filter'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                filterAndRenderUndercut();
+            });
+        }
+    });
+
+    const ucProtocolFilter = document.getElementById('uc-protocol-filter');
+    if (ucProtocolFilter) {
+        ucProtocolFilter.addEventListener('change', () => {
+            filterAndRenderUndercut();
+        });
+    }
 
     const acyclicCheckbox = document.getElementById('acyclic-filter');
     if (acyclicCheckbox) {
