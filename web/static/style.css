@@ -771,7 +771,8 @@ header h1 {
 .input-group-pair {
     display: flex;
     align-items: center;
-    gap: 0.15rem;
+    justify-content: center;
+    gap: 0.5rem;
 }
 
 /* Token input fields — bare inputs, no wrapper panel */
@@ -942,15 +943,21 @@ header h1 {
 }
 
 /* Token arrow — same style as date arrow */
-.token-arrow {
-    display: flex;
+/* Token arrow & date arrow — centered symmetrically */
+.token-arrow,
+.date-arrow {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    min-width: 20px;
+    text-align: center;
     color: var(--text-secondary);
-    font-size: 1.2rem;
-    padding: 0 2px;
+    font-size: 1.1rem;
+    line-height: 1;
     user-select: none;
     flex-shrink: 0;
+    margin: 0;
+    padding: 0;
 }
 
 .icon-btn {
