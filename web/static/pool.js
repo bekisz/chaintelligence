@@ -356,8 +356,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!selectEl || selectEl.dataset.customSelectorInitialized) return;
         selectEl.dataset.customSelectorInitialized = 'true';
 
+        const allChainsIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff007a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 2 7 12 12 22 7 12 2'%3E%3C/polygon%3E%3Cpolyline points='2 17 12 22 22 17'%3E%3C/polyline%3E%3Cpolyline points='2 12 12 17 22 12'%3E%3C/polyline%3E%3C/svg%3E";
+
         const networkIcons = {
-            'all': '/static/favicon.png',
+            'all': allChainsIcon,
             'Ethereum': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
             'Arbitrum': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
             'Base': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
@@ -440,6 +442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initCustomChainSelector(document.getElementById('query-network-filter'));
     initCustomChainSelector(document.getElementById('network-filter'));
+    initCustomChainSelector(document.getElementById('undercut-network'));
 
     let symbolFamilyMap = {};
     let familySymbolsMap = {};
