@@ -777,7 +777,8 @@ header h1 {
 
 /* Token input fields — bare inputs, no wrapper panel */
 .token-input-field {
-    flex: 0 0 105px;
+    flex: 1 1 auto;
+    width: 100%;
     min-width: 0;
     padding: 0.875rem 1rem;
     background: var(--uniswap-input-bg);
@@ -808,12 +809,13 @@ header h1 {
     position: relative;
     display: inline-flex;
     align-items: center;
-    flex: 0 0 145px;
-    width: 145px;
+    flex: 0 0 135px;
+    width: 135px;
 }
 
 .token-autocomplete-container .token-input-field {
-    width: 100%;
+    width: 100% !important;
+    flex: 1 1 100% !important;
 }
 
 .token-input-icon {
