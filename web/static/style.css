@@ -807,10 +807,15 @@ header h1 {
 /* Custom Chain Selector Component */
 .custom-network-container {
     position: relative;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    width: 100%;
-    flex: 1 1 auto;
+    flex: 0 0 150px;
+    width: 150px;
+}
+
+.selection-row .custom-network-container {
+    flex: 0 0 150px;
+    width: 150px;
 }
 
 .advanced-grid .custom-network-container {
