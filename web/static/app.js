@@ -1682,22 +1682,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Align backtest pools with the active routes from the top table (N active pools -> N+1 backtest rows)
         const activeRouteCids = new Set();
         const activeRouteAddrs = new Set();
+        const activeRouteKeys = new Set();
         (currentRoutes || []).forEach(route => {
             if (route.path_tokens) {
                 route.path_tokens.forEach((item, idx) => {
-                    if (idx % 2 === 1 && typeof item === 'object') {
+                    if (idx % 2 === 1 && typeof item === 'object' && item !== null) {
                         if (item.cid !== null && item.cid !== undefined) activeRouteCids.add(String(item.cid));
                         if (item.pool_address) activeRouteAddrs.add(item.pool_address.toLowerCase());
+                        if (item.fee) {
+                            const parts = item.fee.split('|');
+                            const feeDisp = parts[0] ? parts[0].trim() : '';
+                            const protoName = parts[1] ? parts[1].trim().toLowerCase() : '';
+                            if (feeDisp && protoName) activeRouteKeys.add(`${feeDisp}|${protoName}`);
+                        }
                     }
                 });
             }
         });
 
         const activePools = pools.filter(p => {
-            if (activeRouteCids.size > 0 || activeRouteAddrs.size > 0) {
+            if (activeRouteCids.size > 0 || activeRouteAddrs.size > 0 || activeRouteKeys.size > 0) {
                 const matchCid = p.cid !== null && p.cid !== undefined && activeRouteCids.has(String(p.cid));
                 const matchAddr = p.pool_address && activeRouteAddrs.has(p.pool_address.toLowerCase());
-                return matchCid || matchAddr;
+                const pKey = `${p.fee_display || ''}|${(p.protocol || '').toLowerCase()}`;
+                const matchKey = activeRouteKeys.has(pKey);
+                return matchCid || matchAddr || matchKey;
             }
             return (p.tvl || 0) > 1.0;
         });
@@ -1780,9 +1789,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         undercutBtn.disabled = true;
         undercutSection.classList.add('hidden');
         noDataMsg.classList.add('hidden');
-
-        // Automatically sync top routes table for the selected date range
-        performAnalysis();
 
         try {
             const selectedNetwork = document.getElementById('undercut-network')?.value || '';
