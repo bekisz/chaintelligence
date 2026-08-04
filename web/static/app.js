@@ -1758,6 +1758,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         undercutSection.classList.add('hidden');
         noDataMsg.classList.add('hidden');
 
+        // Automatically sync top routes table for the selected date range
+        performAnalysis();
+
         try {
             const selectedNetwork = document.getElementById('undercut-network')?.value || '';
             const feeBps = Math.round(feeVal * 100);
