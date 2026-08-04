@@ -265,7 +265,7 @@ def simulate(cap, range_pct, fee_pips, swaps, opening_px, p0_usd, p1_usd,
             b = res["by_fee_bps"].setdefault(s["fee_bps"], [0, 0.0])
             b[0] += 1
             b[1] += s["usd"]
-            pkey = (s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
+            pkey = (s.get("cid"), s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
             bp = res["by_pool"].setdefault(pkey, [0, 0.0])
             bp[0] += 1
             bp[1] += s["usd"]

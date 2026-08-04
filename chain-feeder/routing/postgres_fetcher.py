@@ -331,7 +331,7 @@ class PostgresFetcher:
                     JOIN coin c0 ON lp.coin0_id = c0.coin_id
                     JOIN coin c1 ON lp.coin1_id = c1.coin_id
                     WHERE s.ts >= %s AND s.ts <= %s
-                      AND s.amount_usd >= 10.0
+                      AND (s.amount_usd >= 10.0 OR s.amount_usd = 0 OR s.amount_usd IS NULL)
                 """
                 params = [start_date, end_date]
                 if token_where:
@@ -567,10 +567,17 @@ class PostgresFetcher:
                 pass
             conn.close()
 
-    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None) -> Dict[str, Dict[str, float]]:
+    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None, tvl_mode: str = 'avg') -> Dict[str, Dict[str, float]]:
         """
         Fetch stats (APR) for a list of pools [(t0, t1, fee), ...] within date range.
         Returns dict: { "T0-T1-FEE": apr_float }
+
+        tvl_mode: 'avg'   -> TVL is the row-count-weighted average over the range
+                            (with a latest-snapshot fallback when the range has no
+                            non-zero TVL), matching the old per-pool AVG behavior.
+                  'latest' -> TVL is the most recent non-zero snapshot in the DB
+                            (across all history), i.e. the pool's current size.
+        
 
         Implementation note: this used to build one UNION ALL subquery *per pool*
         (plus a correlated TVL-fallback subquery per pool) and join
@@ -596,22 +603,19 @@ class PostgresFetcher:
             def is_fee_match(lp_fee_bps, fee_raw_str):
                 if lp_fee_bps is None:
                     return fee_raw_str == 'Dynamic' or not fee_raw_str
-                clean = str(fee_raw_str).split('|')[0].replace('%', '').strip()
+                raw = str(fee_raw_str)
+                clean = raw.split('|')[0].replace('%', '').strip()
                 try:
                     val = float(clean)
-                    candidates = {
-                        val,
-                        val * 100.0,
-                        val * 10000.0,
-                        val / 100.0,
-                        val / 10000.0
-                    }
-                    for cand in candidates:
-                        if abs(lp_fee_bps - cand) < 1e-4:
-                            return True
                 except Exception:
-                    pass
-                return False
+                    return False
+                if '%' in raw:
+                    # Percentage string ("0.01%", "1%", "0.3%") -> bps = val*100.
+                    # Never fall back to the raw number: that would conflate a
+                    # 0.01% (1 bps) pool with a 1% (100 bps) pool.
+                    return abs(lp_fee_bps - val * 100.0) < 1e-4
+                # Bare numeric: accept raw bps or its percent form.
+                return any(abs(lp_fee_bps - c) < 1e-4 for c in (val, val * 100.0))
 
             # ------------------------------------------------------------------
             # Phase 0: normalize every requested pool into pool_meta[key].
@@ -649,7 +653,7 @@ class PostgresFetcher:
                 pool_meta[key] = {
                     't0_sym': t0_sym, 't1_sym': t1_sym, 'network': network_lower,
                     'protocol': protocol, 'fee_raw_full': fee_raw_full,
-                    'pool_ids': [], 'total_vol': 0.0, 'avg_tvl': 0.0,
+                    'pool_ids': [], 'total_vol': 0.0, 'avg_tvl': 0.0, 'latest_tvl': 0.0,
                 }
 
                 all_networks.add(network_lower)
@@ -736,38 +740,40 @@ class PostgresFetcher:
                     pool_meta[k]['avg_tvl'] = (weighted / n) if n > 0 else 0.0
 
             # ------------------------------------------------------------------
-            # Phase 2b: TVL fallback for keys with no non-zero TVL in range.
-            # ONE batched DISTINCT ON query across every such pool_id, picking the
-            # most recent non-zero TVL per pool_id; per key we take the latest by
-            # date across its pool_ids (matches the old LIMIT-1 intent).
+            # Phase 2b: latest non-zero TVL snapshot per pool_id. ONE batched
+            # DISTINCT ON query across every requested pool_id. In 'avg' mode this
+            # is used only as a fallback for keys with no non-zero TVL in range
+            # (picking the most recent non-zero TVL per pool_id; per key we take
+            # the latest by date across its pool_ids, matching the old LIMIT-1
+            # intent). In 'latest' mode the snapshot IS the reported TVL.
             # ------------------------------------------------------------------
-            null_tvl_keys = [k for k, m in pool_meta.items() if m['avg_tvl'] <= 1.0 and m['pool_ids']]
-            null_pool_ids = sorted({pid for k in null_tvl_keys for pid in pool_meta[k]['pool_ids']})
-            if null_pool_ids:
+            latest_tvl = {}
+            if all_pool_ids:
                 cur.execute("""
                     SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, date
                     FROM liquidity_pool_history
                     WHERE pool_id = ANY(%s) AND tvl_usd <> 0
                     ORDER BY pool_id, date DESC
-                """, (null_pool_ids,))
-                # pool_id -> (date, tvl)
-                fallback = {}
+                """, (all_pool_ids,))
                 for pid, tvl, dt in cur.fetchall():
-                    fallback[pid] = (dt, float(tvl or 0))
-                for k in null_tvl_keys:
-                    best_date = None
-                    best_tvl = 0.0
-                    for pid in pool_meta[k]['pool_ids']:
-                        fb = fallback.get(pid)
-                        if not fb:
-                            continue
-                        fb_date, fb_tvl = fb
-                        if fb_tvl <= 0:
-                            continue
-                        if best_date is None or (fb_date is not None and (best_date is None or fb_date > best_date)):
-                            best_date = fb_date
-                            best_tvl = fb_tvl
-                    if best_tvl > 0:
+                    latest_tvl[pid] = (dt, float(tvl or 0))
+
+            for k in pool_meta:
+                best_date = None
+                best_tvl = 0.0
+                for pid in pool_meta[k]['pool_ids']:
+                    fb = latest_tvl.get(pid)
+                    if not fb:
+                        continue
+                    fb_date, fb_tvl = fb
+                    if fb_tvl <= 0:
+                        continue
+                    if best_date is None or (fb_date is not None and (best_date is None or fb_date > best_date)):
+                        best_date = fb_date
+                        best_tvl = fb_tvl
+                if best_tvl > 0:
+                    pool_meta[k]['latest_tvl'] = best_tvl
+                    if tvl_mode == 'latest' or (tvl_mode == 'avg' and pool_meta[k]['avg_tvl'] <= 1.0):
                         pool_meta[k]['avg_tvl'] = best_tvl
 
             # ------------------------------------------------------------------
@@ -960,14 +966,15 @@ class PostgresFetcher:
                 END AS fee_display,
                 COALESCE(SUM(lph.tx_count), 0) AS total_tx,
                 COALESCE(SUM(ABS(lph.volume_usd)), 0) AS total_vol,
-                COALESCE(
-                    AVG(ABS(lph.tvl_usd)) FILTER (WHERE lph.tvl_usd <> 0),
-                    lt.tvl_usd,
-                    0.0
-                ) AS avg_tvl,
-                cc0.contract_address AS addr0,
-                cc1.contract_address AS addr1,
-                lp.created_at
+                 COALESCE(
+                     AVG(ABS(lph.tvl_usd)) FILTER (WHERE lph.tvl_usd <> 0),
+                     lt.tvl_usd,
+                     0.0
+                 ) AS avg_tvl,
+                 MAX(lph.date) FILTER (WHERE lph.volume_usd <> 0) AS last_activity,
+                 cc0.contract_address AS addr0,
+                 cc1.contract_address AS addr1,
+                 lp.created_at
             FROM liquidity_pool lp
             JOIN chain ch ON lp.chain_id = ch.id
             JOIN protocol pr ON lp.protocol_id = pr.id
@@ -1029,8 +1036,8 @@ class PostgresFetcher:
                     net_val = r[3]
                     proto_val = r[4]
                     fee_bps_val = r[11]
-                    addr0_val = r[16]
-                    addr1_val = r[17]
+                    addr0_val = r[17]
+                    addr1_val = r[18]
 
                     canonical = _derive_canonical_address(proto_val, net_val, fee_bps_val, addr0_val, addr1_val)
                     if canonical:
@@ -1054,9 +1061,10 @@ class PostgresFetcher:
                         'tx_count': int(r[13] or 0),
                         'volume_usd': float(r[14] or 0.0),
                         'avg_tvl': float(r[15]) if r[15] is not None else 0.0,
-                        'addr0': r[16],
-                        'addr1': r[17],
-                        'created_at': r[18],
+                        'last_activity': r[16],
+                        'addr0': r[17],
+                        'addr1': r[18],
+                        'created_at': r[19],
                     })
                 cur.close()
         except Exception as e:

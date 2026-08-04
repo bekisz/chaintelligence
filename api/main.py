@@ -1385,19 +1385,13 @@ async def undercut(
         swaps = []
         for r in raw_swaps:
             a0f, a1f = float(r.get('amount0', 0) or 0), float(r.get('amount1', 0) or 0)
-            usd = float(r.get('amountUSD', r.get('amount_usd', 0)) or 0)
-            if a0f == 0 or a1f == 0 or not (math.isfinite(a0f) and math.isfinite(a1f)):
-                continue
-            t0_in = a0f > 0
-            s0 = (r.get('token0_symbol') or '').upper()
-            s1 = (r.get('token1_symbol') or '').upper()
-
-            # Filter swaps directionally to match start_token -> end_token
-            in_sym = s0 if t0_in else s1
-            out_sym = s1 if t0_in else s0
-            if start_tokens_list and end_tokens_list:
-                if in_sym not in start_tokens_list or out_sym not in end_tokens_list:
-                    continue
+            if usd <= 0 and (abs(a0f) > 0 or abs(a1f) > 0):
+                p0 = latest_prices.get(s0, 0.0) if 'latest_prices' in locals() else 0.0
+                p1 = latest_prices.get(s1, 0.0) if 'latest_prices' in locals() else 0.0
+                if p0 > 0:
+                    usd = abs(a0f) * p0
+                elif p1 > 0:
+                    usd = abs(a1f) * p1
 
             swaps.append({
                 "ts": datetime.fromtimestamp(r['timestamp'], tz=timezone.utc),
@@ -1454,15 +1448,14 @@ async def undercut(
         res = ua.simulate(liquidity_usd / 2.0, range_pct, fee_pips, swaps,
                           Fraction(center), p0_usd, p1_usd, total_usd, markets=markets)
 
-        # Group swaps by fee tier -> existing pool stats
-        # Group swaps by pool (fee_bps, protocol, pool_address) so all distinct competitor pools are retained
+        # Group swaps by pool (cid, fee_bps, protocol, pool_address) so all distinct competitor pools are retained
         from collections import defaultdict
         by_pool = defaultdict(lambda: {"count": 0, "volume": 0.0, "cid": None,
                                        "pool_address": '', "pool_id": '',
                                        "protocol": 'Uniswap V3', "fee_bps": 0, "s0": '', "s1": '',
                                        "last_ts": None})
         for s in swaps:
-            pkey = (s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
+            pkey = (s.get("cid"), s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
             b = by_pool[pkey]
             b["fee_bps"] = s["fee_bps"]
             b["protocol"] = s.get("protocol") or "Uniswap V3"
