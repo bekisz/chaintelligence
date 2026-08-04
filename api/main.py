@@ -1424,6 +1424,7 @@ async def undercut(
                 "pool_id": r.get('pool_id') or '',
                 "s0": s0,
                 "s1": s1,
+                "tx_hash": r.get('tx_hash') or '',
             })
 
         if not swaps:
@@ -1431,6 +1432,17 @@ async def undercut(
                     "total_tx": 0, "days": max(1, (end_dt - start_dt).days),
                     "start_token": t0_sym, "end_token": t1_sym, "network": network or "Ethereum",
                     "fee_bps": fee_bps, "liquidity_usd": liquidity_usd, "range_pct": range_pct}
+
+        # Deduplicate by (tx_hash, pool) so each unique transaction is counted
+        # once per pool – matching how the Route Analyzer counts TXs.  When a
+        # single transaction emits multiple swap events in the same pool (e.g.
+        # aggregator splits), keep the event with the highest USD value.
+        seen_tx_pool = {}
+        for s in swaps:
+            key = (s["tx_hash"], s.get("cid"))
+            if key not in seen_tx_pool or s["usd"] > seen_tx_pool[key]["usd"]:
+                seen_tx_pool[key] = s
+        swaps = list(seen_tx_pool.values())
 
         # market_prices() needs chronological order
         swaps.sort(key=lambda s: s["ts"])
