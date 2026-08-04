@@ -1511,8 +1511,6 @@ async def undercut(
             fee_b = st["fee_bps"]
             orig_fees = st["volume"] * (ua.fee_fraction_from_bps(fee_b))
             div_cnt, div_vol = res.get("by_pool", {}).get(pkey, [0, 0.0])
-            if div_vol == 0.0 and fee_b in res.get("by_fee_bps", {}):
-                div_cnt, div_vol = res["by_fee_bps"].get(fee_b, [0, 0.0])
             hyp_vol = max(0.0, st["volume"] - div_vol)
             hyp_fees = hyp_vol * (ua.fee_fraction_from_bps(fee_b))
             s0 = st["s0"] or t0_sym
