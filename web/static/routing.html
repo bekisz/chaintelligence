@@ -175,7 +175,7 @@
                                             <label class="checkbox-label"><input type="checkbox" data-col="avg-volume" checked> Daily Vol</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="daily-fees" checked> Daily Fees</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="pct-volume"> % Volume</label>
-                                            <label class="checkbox-label"><input type="checkbox" data-col="last-activity"> Last Activity</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="last-activity"> Last Swap</label>
                                         </div>
                                     </div>
                                 </div>
@@ -223,7 +223,7 @@
                                     <th id="sort-avg" class="sortable col-avg-volume">Daily Vol <span>↕</span></th>
                                     <th id="sort-daily-fees" class="sortable col-daily-fees">Daily Fees <span>↕</span></th>
                                     <th id="sort-pct" class="sortable col-pct-volume">% Volume <span>↕</span></th>
-                                    <th id="sort-last-activity" class="sortable col-last-activity hidden-column">Last Activity <span>↕</span></th>
+                                    <th id="sort-last-activity" class="sortable col-last-activity hidden-column">Last Swap <span>↕</span></th>
                                 </tr>
                             </thead>
                             <tbody id="routes-body">
@@ -244,7 +244,7 @@
                         </div>
                         <div class="input-group" style="flex: 1 1 140px;">
                             <label for="undercut-liquidity">Liquidity (USD)</label>
-                            <input type="number" id="undercut-liquidity" value="100000" step="5000" min="0" class="token-input-field" style="width: 100%;">
+                            <input type="text" id="undercut-liquidity" value="10,000" inputmode="numeric" autocomplete="off" class="token-input-field" style="width: 100%;">
                         </div>
                         <div class="input-group" style="flex: 1 1 140px;">
                             <label for="undercut-range">Range (± %)</label>
@@ -310,7 +310,7 @@
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="avg-volume" checked> Daily Vol</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="daily-fees" checked> Daily Fees</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="pct-volume"> % Volume</label>
-                                            <label class="checkbox-label"><input type="checkbox" data-uc-col="last-activity"> Last Activity</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-uc-col="last-activity"> Last Swap</label>
                                         </div>
                                     </div>
                                 </div>
@@ -339,7 +339,7 @@
                                     <th class="uc-col-avg-volume">Daily Vol</th>
                                     <th class="uc-col-daily-fees">Daily Fees</th>
                                     <th class="uc-col-pct-volume hidden-column">% Volume</th>
-                                    <th class="uc-col-last-activity hidden-column">Last Activity</th>
+                                    <th class="uc-col-last-activity hidden-column">Last Swap</th>
                                 </tr>
                             </thead>
                             <tbody id="undercut-body">

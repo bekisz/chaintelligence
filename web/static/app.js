@@ -1736,8 +1736,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const raw = document.getElementById(id)?.value || '';
             return parseFloat(raw.replace(',', '.'));
         };
+        const parseLiquidityInput = (id) => {
+            const raw = document.getElementById(id)?.value || '';
+            return parseFloat(raw.replace(/[,\s]/g, ''));
+        };
         const feeVal = parseNumInput('undercut-fee');
-        const liqVal = parseNumInput('undercut-liquidity');
+        const liqVal = parseLiquidityInput('undercut-liquidity');
         const rangeVal = parseNumInput('undercut-range');
         if (isNaN(feeVal) || feeVal < 0 || isNaN(liqVal) || liqVal <= 0 || isNaN(rangeVal) || rangeVal <= 0) {
             alert('Please enter valid fee tier, liquidity and range values.');
@@ -1854,6 +1858,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
     });
+
+    // Comma-format the undercut liquidity input as the user types
+    const undercutLiqInput = document.getElementById('undercut-liquidity');
+    if (undercutLiqInput) {
+        const formatLiquidityInput = (el) => {
+            const digits = (el.value || '').replace(/[^\d]/g, '');
+            el.value = digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+        };
+        undercutLiqInput.addEventListener('input', () => {
+            const pos = undercutLiqInput.selectionStart;
+            const raw = undercutLiqInput.value;
+            formatLiquidityInput(undercutLiqInput);
+            const delta = undercutLiqInput.value.length - raw.length;
+            undercutLiqInput.setSelectionRange(pos + delta, pos + delta);
+        });
+    }
 
     const ucProtocolFilter = document.getElementById('uc-protocol-filter');
     if (ucProtocolFilter) {

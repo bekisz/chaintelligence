@@ -1455,13 +1455,17 @@ async def undercut(
                           Fraction(center), p0_usd, p1_usd, total_usd, markets=markets)
 
         # Group swaps by fee tier -> existing pool stats
+        # Group swaps by pool (fee_bps, protocol, pool_address) so all distinct competitor pools are retained
         from collections import defaultdict
-        by_tier = defaultdict(lambda: {"count": 0, "volume": 0.0, "cid": None,
+        by_pool = defaultdict(lambda: {"count": 0, "volume": 0.0, "cid": None,
                                        "pool_address": '', "pool_id": '',
-                                       "protocol": 'Uniswap V3', "s0": '', "s1": '',
+                                       "protocol": 'Uniswap V3', "fee_bps": 0, "s0": '', "s1": '',
                                        "last_ts": None})
         for s in swaps:
-            b = by_tier[s["fee_bps"]]
+            pkey = (s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
+            b = by_pool[pkey]
+            b["fee_bps"] = s["fee_bps"]
+            b["protocol"] = s.get("protocol") or "Uniswap V3"
             b["count"] += 1
             b["volume"] += s["usd"]
             if b["last_ts"] is None or s["ts"] > b["last_ts"]:
@@ -1476,18 +1480,17 @@ async def undercut(
                 b["s0"] = s["s0"]
             if not b["s1"] and s.get("s1"):
                 b["s1"] = s["s1"]
-            b["protocol"] = s.get("protocol") or b.get("protocol", 'Uniswap V3')
 
         pools = []
-        if by_tier:
+        if by_pool:
             net_label = network or "Ethereum"
             def _fee_label(fb):
                 return 'Dynamic' if fb is None else f"{fb / 100.0:g}%"
             try:
                 pool_stats = await asyncio.to_thread(
                     fetcher.fetch_pool_stats,
-                    [[by_tier[fb]["s0"] or t0_sym, by_tier[fb]["s1"] or t1_sym,
-                      f"{_fee_label(fb)}|{by_tier[fb]['protocol']}|{net_label}"] for fb in by_tier],
+                    [[st["s0"] or t0_sym, st["s1"] or t1_sym,
+                      f"{_fee_label(st['fee_bps'])}|{st['protocol']}|{net_label}"] for st in by_pool.values()],
                     start_dt, end_dt,
                     tvl_mode='latest',
                 )
@@ -1496,9 +1499,12 @@ async def undercut(
         else:
             pool_stats = {}
 
-        for fee_b, st in sorted(by_tier.items(), key=lambda kv: (kv[0] is not None, kv[0] or 0)):
+        for pkey, st in sorted(by_pool.items(), key=lambda kv: (kv[1]["volume"] or 0), reverse=True):
+            fee_b = st["fee_bps"]
             orig_fees = st["volume"] * (ua.fee_fraction_from_bps(fee_b))
-            div_cnt, div_vol = res["by_fee_bps"].get(fee_b, [0, 0.0])
+            div_cnt, div_vol = res.get("by_pool", {}).get(pkey, [0, 0.0])
+            if div_vol == 0.0 and fee_b in res.get("by_fee_bps", {}):
+                div_cnt, div_vol = res["by_fee_bps"].get(fee_b, [0, 0.0])
             hyp_vol = max(0.0, st["volume"] - div_vol)
             hyp_fees = hyp_vol * (ua.fee_fraction_from_bps(fee_b))
             s0 = st["s0"] or t0_sym

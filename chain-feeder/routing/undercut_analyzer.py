@@ -249,7 +249,8 @@ def simulate(cap, range_pct, fee_pips, swaps, opening_px, p0_usd, p1_usd,
     if markets is None:
         markets = market_prices(swaps)
     res = {"L": pool["L"], "div_count": 0, "div_usd": 0.0, "fee_usd": 0.0,
-           "in_range": 0, "by_fee_bps": defaultdict(lambda: [0, 0.0])}
+           "in_range": 0, "by_fee_bps": defaultdict(lambda: [0, 0.0]),
+           "by_pool": defaultdict(lambda: [0, 0.0])}
     for s, market_price in zip(swaps, markets):
         market_sqrt = sqrt_price_x96(market_price)
         if pool["sa"] < market_sqrt < pool["sb"]:
@@ -264,5 +265,9 @@ def simulate(cap, range_pct, fee_pips, swaps, opening_px, p0_usd, p1_usd,
             b = res["by_fee_bps"].setdefault(s["fee_bps"], [0, 0.0])
             b[0] += 1
             b[1] += s["usd"]
+            pkey = (s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
+            bp = res["by_pool"].setdefault(pkey, [0, 0.0])
+            bp[0] += 1
+            bp[1] += s["usd"]
     res["pct"] = 100 * res["div_usd"] / total_usd if total_usd else 0.0
     return res
