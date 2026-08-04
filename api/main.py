@@ -1382,16 +1382,31 @@ async def undercut(
             start_tokens=start_tokens_list, end_tokens=end_tokens_list
         )
 
+        latest_prices = fetcher.fetch_latest_prices(token_filter)
         swaps = []
         for r in raw_swaps:
             a0f, a1f = float(r.get('amount0', 0) or 0), float(r.get('amount1', 0) or 0)
-            if usd <= 0 and (abs(a0f) > 0 or abs(a1f) > 0):
-                p0 = latest_prices.get(s0, 0.0) if 'latest_prices' in locals() else 0.0
-                p1 = latest_prices.get(s1, 0.0) if 'latest_prices' in locals() else 0.0
+            if a0f == 0 or a1f == 0 or not (math.isfinite(a0f) and math.isfinite(a1f)):
+                continue
+            usd = float(r.get('amountUSD', r.get('amount_usd', 0)) or 0)
+            t0_in = a0f > 0
+            s0 = (r.get('token0_symbol') or '').upper()
+            s1 = (r.get('token1_symbol') or '').upper()
+
+            if usd <= 0:
+                p0 = latest_prices.get(s0, 0.0) if latest_prices else 0.0
+                p1 = latest_prices.get(s1, 0.0) if latest_prices else 0.0
                 if p0 > 0:
                     usd = abs(a0f) * p0
                 elif p1 > 0:
                     usd = abs(a1f) * p1
+
+            # Filter swaps directionally to match start_token -> end_token
+            in_sym = s0 if t0_in else s1
+            out_sym = s1 if t0_in else s0
+            if start_tokens_list and end_tokens_list:
+                if in_sym not in start_tokens_list or out_sym not in end_tokens_list:
+                    continue
 
             swaps.append({
                 "ts": datetime.fromtimestamp(r['timestamp'], tz=timezone.utc),
