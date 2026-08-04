@@ -1534,9 +1534,8 @@ async def undercut(
                     period_days=days,
                     fee_tier=f"{_fee_label(fee_b)}|{st['protocol']}|{net_label}",
                 )
-                real_tvl = enriched.get('tvl') or 0.0
-            if real_tvl <= 1.0 and real_vol > 0:
-                pass
+            if real_tvl <= 1.0 and st["volume"] <= 1.0:
+                continue
             hyp_apr_pct = (hyp_fees / real_tvl) * (365.0 / days) * 100.0 if (hyp_vol > 0 and real_tvl > 0) else 0.0
             real_apr_pct = (orig_fees / real_tvl) * (365.0 / days) * 100.0 if (orig_fees > 0 and real_tvl > 0) else 0.0
             pools.append({

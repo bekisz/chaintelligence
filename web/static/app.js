@@ -1679,8 +1679,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        // Align backtest pools with the active routes from the top table (N active pools -> N+1 backtest rows)
+        const activeRouteCids = new Set();
+        const activeRouteAddrs = new Set();
+        (currentRoutes || []).forEach(route => {
+            if (route.path_tokens) {
+                route.path_tokens.forEach((item, idx) => {
+                    if (idx % 2 === 1 && typeof item === 'object') {
+                        if (item.cid !== null && item.cid !== undefined) activeRouteCids.add(String(item.cid));
+                        if (item.pool_address) activeRouteAddrs.add(item.pool_address.toLowerCase());
+                    }
+                });
+            }
+        });
+
+        const activePools = pools.filter(p => {
+            if (activeRouteCids.size > 0 || activeRouteAddrs.size > 0) {
+                const matchCid = p.cid !== null && p.cid !== undefined && activeRouteCids.has(String(p.cid));
+                const matchAddr = p.pool_address && activeRouteAddrs.has(p.pool_address.toLowerCase());
+                return matchCid || matchAddr;
+            }
+            return (p.tvl || 0) > 1.0;
+        });
+
         // Existing pools with hypothetical post-diversion stats
-        pools.forEach(p => {
+        activePools.forEach(p => {
             const proto = p.protocol || 'Uniswap V3';
             rowSpecs.push({
                 pathTokens: buildPathTokens(p.fee_display, proto, p.hyp_apr_pct),
