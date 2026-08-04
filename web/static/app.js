@@ -1709,9 +1709,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const protoMatch = rowProtocol === ucProtocol || (ucProtocol === 'Uniswap' && rowProtocol.startsWith('Uniswap'));
                 if (!protoMatch) return;
             }
-            if (cells.apr < minAprVal) return;
-            if (cells.fees < minMktVal) return;
-            if (cells.count < minTxsVal) return;
+            const checkApr = isHypothetical ? cells.apr : (cells.realApr !== null && cells.realApr !== undefined ? cells.realApr : cells.apr);
+            const checkFees = isHypothetical ? cells.fees : (cells.realVolume !== undefined ? cells.realVolume : cells.fees);
+            const checkCount = isHypothetical ? cells.count : (cells.realCount !== undefined ? cells.realCount : cells.count);
+
+            if (checkApr < minAprVal) return;
+            if (checkFees < minMktVal) return;
+            if (checkCount < minTxsVal) return;
             appendRow(pathTokens, cells, isHypothetical, rowProtocol);
         });
         updateColumnVisibility();
