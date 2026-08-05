@@ -257,7 +257,7 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
         if ds_tvl and ds_tvl > 1.0 and (is_unreliable or abs(ds_tvl - tvl_val) / max(1.0, tvl_val) > 0.1):
             tvl_val = ds_tvl
             fee_rate = parse_fee_rate(fee_tier)
-            if fee_rate is not None and vol_val > 0 and is_unreliable:
+            if fee_rate is not None and vol_val > 0:
                 fees_earned = vol_val * fee_rate
                 apr_val = (fees_earned / tvl_val) * (365.0 / period_days)
                 
@@ -1565,6 +1565,7 @@ async def undercut(
                     [[st["s0"] or t0_sym, st["s1"] or t1_sym,
                       f"{_fee_label(st['fee_bps'])}|{st['protocol']}|{net_label}"] for st in by_pool.values()],
                     start_dt, end_dt,
+                    prices=latest_prices,
                     tvl_mode='latest',
                 )
             except Exception:
@@ -1630,9 +1631,15 @@ async def undercut(
                     period_days=days,
                     fee_tier=f"{_fee_label(fee_b)}|{st['protocol']}|{net_label}",
                 )
-                # Use enriched TVL if it is more reliable than the DB value
+                # Prefer DexScreener / DeFi Llama real-time TVL whenever it
+                # returns a valid value — this matches the top Routes table which
+                # calls the same get_enriched_pool_stat function and always uses
+                # the external TVL.  The previous `enriched_tvl > real_tvl` guard
+                # caused a bug: when the DB had a stale high TVL (e.g. $145K) and
+                # DexScreener returned the correct lower value ($79K), the guard
+                # silently kept the wrong DB figure.
                 enriched_tvl = (enriched or {}).get("tvl") or 0.0
-                if enriched_tvl > real_tvl:
+                if enriched_tvl > 1.0:
                     real_tvl = enriched_tvl
             if real_tvl <= 1.0 and st["volume"] <= 1.0:
                 continue
