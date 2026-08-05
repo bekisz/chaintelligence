@@ -35,7 +35,7 @@ WEB_DIR = os.path.join(ROOT_DIR, 'web')
 STATIC_DIR = os.path.join(WEB_DIR, 'static')
 load_dotenv(os.path.join(ROOT_DIR, '.env'))
 
-# Import routing logic from chain-feeder
+# Import routing logic from api/routing
 
 # Load DEX configuration
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'dex-config.yaml')
@@ -43,9 +43,9 @@ with open(CONFIG_PATH, 'r') as f:
     DEX_CONFIG = yaml.safe_load(f)
 
 
-CHAIN_FEEDER_ROUTING = os.path.join(ROOT_DIR, 'chain-feeder', 'routing')
-if CHAIN_FEEDER_ROUTING not in sys.path:
-    sys.path.insert(0, CHAIN_FEEDER_ROUTING)
+API_ROUTING = os.path.join(ROOT_DIR, 'api', 'routing')
+if API_ROUTING not in sys.path:
+    sys.path.insert(0, API_ROUTING)
 
 # Import graph discovery client
 
@@ -567,7 +567,7 @@ try:
     from config import DATA_WAREHOUSE_DB
     import undercut_analyzer as ua
 except ImportError as e:
-    print(f"Error importing routing modules from {CHAIN_FEEDER_ROUTING}: {e}")
+    print(f"Error importing routing modules from {API_ROUTING}: {e}")
     sys.exit(1)
 
 app = FastAPI(
@@ -1383,6 +1383,10 @@ async def undercut(
         )
 
         latest_prices = fetcher.fetch_latest_prices(token_filter)
+        # Build ALL fetched events for the token families (both directions and
+        # any intermediate-hop pools) so each tx's first log entry can decide
+        # its direction — matching the top routes table, which treats a tx's
+        # direction as whatever its first (lowest log_index) entry initiated.
         swaps = []
         for r in raw_swaps:
             a0f, a1f = float(r.get('amount0', 0) or 0), float(r.get('amount1', 0) or 0)
@@ -1401,15 +1405,9 @@ async def undercut(
                 elif p1 > 0:
                     usd = abs(a1f) * p1
 
-            # Filter swaps directionally to match start_token -> end_token
-            in_sym = s0 if t0_in else s1
-            out_sym = s1 if t0_in else s0
-            if start_tokens_list and end_tokens_list:
-                if in_sym not in start_tokens_list or out_sym not in end_tokens_list:
-                    continue
-
             swaps.append({
                 "ts": datetime.fromtimestamp(r['timestamp'], tz=timezone.utc),
+                "log_index": r.get('log_index') or 0,
                 "fee_bps": float(r.get('fee_bps') or 0),
                 "fee_tier": r.get('fee_tier') or '',
                 "t0_in": t0_in,
@@ -1427,11 +1425,53 @@ async def undercut(
                 "tx_hash": r.get('tx_hash') or '',
             })
 
+        # First log entry per tx decides its direction. A tx counts as a
+        # start->end swap only if its FIRST log entry spends the start token —
+        # the same rule as the top routes table. Reverse-first txs (arb
+        # round-trips that start by buying the start token) are excluded so
+        # both tables count the same swaps.
+        first_by_tx = {}
+        for s in swaps:
+            prev = first_by_tx.get(s["tx_hash"])
+            if prev is None or s["log_index"] < prev["log_index"]:
+                first_by_tx[s["tx_hash"]] = s
+
+        all_events = swaps
+        swaps = [s for s in all_events
+                 if (s["s0"] if s["t0_in"] else s["s1"]) in start_tokens_list
+                 and (s["s1"] if s["t0_in"] else s["s0"]) in end_tokens_list
+                 and (first_by_tx[s["tx_hash"]]["s0"] if first_by_tx[s["tx_hash"]]["t0_in"] else first_by_tx[s["tx_hash"]]["s1"]) in start_tokens_list]
+        # Reverse-direction (end->start) demand for the two-sided inventory
+        # simulation. Same first-log-entry rule mirrored: a tx counts as an
+        # end->start swap only if its FIRST log entry spends the end token.
+        # These are the real counter-swaps that rebalance the hypothetical pool.
+        reverse_swaps = [s for s in all_events
+                         if (s["s1"] if s["t0_in"] else s["s0"]) in start_tokens_list
+                         and (s["s0"] if s["t0_in"] else s["s1"]) in end_tokens_list
+                         and (first_by_tx[s["tx_hash"]]["s0"] if first_by_tx[s["tx_hash"]]["t0_in"] else first_by_tx[s["tx_hash"]]["s1"]) in end_tokens_list]
+
         if not swaps:
             return {"hypothetical": None, "pools": [], "total_volume": 0,
                     "total_tx": 0, "days": max(1, (end_dt - start_dt).days),
                     "start_token": t0_sym, "end_token": t1_sym, "network": network or "Ethereum",
                     "fee_bps": fee_bps, "liquidity_usd": liquidity_usd, "range_pct": range_pct}
+
+        # Raw swap-event count and volume per pool (before the (tx, pool) dedup
+        # below), so the table can show both TXs (unique transactions), Swaps
+        # (individual swap events — exceed TXs when one tx emits multiple swaps
+        # in the same pool, e.g. aggregator splits), and full log-entry volume.
+        raw_pool_swaps = {}
+        raw_pool_vol = {}
+        for s in swaps:
+            pkey = (s.get("cid"), s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
+            raw_pool_swaps[pkey] = raw_pool_swaps.get(pkey, 0) + 1
+            raw_pool_vol[pkey] = raw_pool_vol.get(pkey, 0.0) + s["usd"]
+
+        # True totals for the pair (pre-dedup): the number of unique user swaps
+        # (TXs, one per tx_hash) and the full volume (sum of ALL log entries),
+        # so the backtest reports the same totals as the top routes table.
+        unique_tx_count = len({s["tx_hash"] for s in swaps})
+        raw_total_usd = sum(s["usd"] for s in swaps)
 
         # Deduplicate by (tx_hash, pool) so each unique transaction is counted
         # once per pool – matching how the Route Analyzer counts TXs.  When a
@@ -1452,7 +1492,16 @@ async def undercut(
             fee_frac = ua.fee_fraction_from_bps(s["fee_bps"])
             s["fee_free_price"] = ua.fee_free_price(s["price"], s["t0_in"], fee_frac)
 
-        total_usd = sum(s["usd"] for s in swaps)
+        # Dedup reverse swaps by (tx, pool) the same way, then sort
+        # chronologically so the two-sided simulation can interleave them.
+        seen_rev = {}
+        for s in reverse_swaps:
+            key = (s["tx_hash"], s.get("cid"))
+            if key not in seen_rev or s["usd"] > seen_rev[key]["usd"]:
+                seen_rev[key] = s
+        reverse_swaps = list(seen_rev.values())
+        reverse_swaps.sort(key=lambda s: s["ts"])
+
         days = max(1, (end_dt - start_dt).days)
 
         # Market price anchor: median of the fee-free market estimates (the mean
@@ -1472,8 +1521,6 @@ async def undercut(
                 p1_usd = prices.get(t1_sym, 1.0 if 'USD' in t1_sym else 100.0)
 
         fee_pips = int(round(fee_bps * 100))
-        res = ua.simulate(liquidity_usd / 2.0, range_pct, fee_pips, swaps,
-                          Fraction(center), p0_usd, p1_usd, total_usd, markets=markets)
 
         # Group swaps by pool (cid, fee_bps, protocol, pool_address) so all distinct competitor pools are retained
         from collections import defaultdict
@@ -1501,6 +1548,12 @@ async def undercut(
             if not b["s1"] and s.get("s1"):
                 b["s1"] = s["s1"]
 
+        # Pool volume = sum of ALL the pool's log entries (pre-dedup), so
+        # per-pool volume and the response total reconcile with the top routes
+        # table (which counts every start-token-consuming leg).
+        for pkey, st in by_pool.items():
+            st["volume"] = raw_pool_vol.get(pkey, st["volume"])
+
         pools = []
         if by_pool:
             net_label = network or "Ethereum"
@@ -1516,8 +1569,30 @@ async def undercut(
                 )
             except Exception:
                 pool_stats = {}
+
+            # The hypothetical pool only competes with pools that will actually
+            # be shown (real TVL > $1 or window volume > $1). Excluding dead
+            # pools' swaps keeps the backtest table self-consistent:
+            #   sum(displayed count) == sum(displayed hyp_count) + diverted_count
+            def _pkey_of(s):
+                return (s.get("cid"), s["fee_bps"], s.get("protocol", "Uniswap V3"), s.get("pool_address", ""))
+            active_keys = set()
+            for pkey, st in by_pool.items():
+                pool_key = f"{st['s0'] or t0_sym}-{st['s1'] or t1_sym}-{_fee_label(st['fee_bps'])}|{st['protocol']}|{net_label}"
+                rev_pool_key = f"{st['s1'] or t1_sym}-{st['s0'] or t0_sym}-{_fee_label(st['fee_bps'])}|{st['protocol']}|{net_label}"
+                stat = pool_stats.get(pool_key) or pool_stats.get(rev_pool_key)
+                real_tvl = (stat or {}).get("tvl", 0.0) or 0.0
+                if real_tvl > 1.0 or (st["volume"] or 0) > 1.0:
+                    active_keys.add(pkey)
+            sim_swaps = [s for s in swaps if _pkey_of(s) in active_keys]
+            sim_reverse = [s for s in reverse_swaps if _pkey_of(s) in active_keys]
+            res = ua.simulate(liquidity_usd / 2.0, range_pct, fee_pips, sim_swaps,
+                              Fraction(center), p0_usd, p1_usd, sum(s["usd"] for s in sim_swaps),
+                              reverse_swaps=sim_reverse)
         else:
             pool_stats = {}
+            res = ua.simulate(liquidity_usd / 2.0, range_pct, fee_pips, [],
+                              Fraction(center), p0_usd, p1_usd, 0.0, reverse_swaps=[])
 
         for pkey, st in sorted(by_pool.items(), key=lambda kv: (kv[1]["volume"] or 0), reverse=True):
             fee_b = st["fee_bps"]
@@ -1536,16 +1611,22 @@ async def undercut(
             # Mirror the Show Routes enrichment: when the DB TVL is missing or
             # unreliable, fall back to DexScreener / DeFi Llama for the real TVL
             # so the backtest competitor pools match the routes table.
-            if st.get("pool_address"):
+            # V4 pools have no pool_address; fall back to pool_id for lookups.
+            lookup_addr = st.get("pool_address") or st.get("pool_id") or ''
+            if lookup_addr:
                 enriched = await get_enriched_pool_stat(
                     key=pool_key,
                     rev_key=rev_pool_key,
                     aprs=pool_stats,
-                    pool_addr=st["pool_address"],
+                    pool_addr=lookup_addr,
                     pool_network=net_label,
                     period_days=days,
                     fee_tier=f"{_fee_label(fee_b)}|{st['protocol']}|{net_label}",
                 )
+                # Use enriched TVL if it is more reliable than the DB value
+                enriched_tvl = (enriched or {}).get("tvl") or 0.0
+                if enriched_tvl > real_tvl:
+                    real_tvl = enriched_tvl
             if real_tvl <= 1.0 and st["volume"] <= 1.0:
                 continue
             hyp_apr_pct = (hyp_fees / real_tvl) * (365.0 / days) * 100.0 if (hyp_vol > 0 and real_tvl > 0) else 0.0
@@ -1555,6 +1636,7 @@ async def undercut(
                 "fee_display": _fee_label(fee_b),
                 "protocol": st["protocol"],
                 "count": st["count"],
+                "swaps": raw_pool_swaps.get(pkey, st["count"]),
                 "volume": st["volume"],
                 "fees": orig_fees,
                 "tvl": real_tvl,
@@ -1580,15 +1662,19 @@ async def undercut(
                 "liquidity_usd": liquidity_usd,
                 "range_pct": range_pct,
                 "diverted_count": res["div_count"],
+                "swaps": res["div_count"],
                 "diverted_volume": res["div_usd"],
                 "diverted_pct": res["pct"],
                 "fee_usd": res["fee_usd"],
                 "apr_pct": hyp_apr_pct,
                 "in_range": res["in_range"],
+                "reverse_count": res["reverse_count"],
+                "reverse_volume": res["reverse_usd"],
+                "reverse_fee_usd": res["reverse_fee_usd"],
             },
             "pools": pools,
-            "total_volume": total_usd,
-            "total_tx": len(swaps),
+            "total_volume": raw_total_usd,
+            "total_tx": unique_tx_count,
             "days": days,
             "start_token": t0_sym,
             "end_token": t1_sym,
