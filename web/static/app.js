@@ -300,11 +300,40 @@ document.addEventListener('DOMContentLoaded', async () => {
             inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         };
 
-        inputEl.addEventListener('focus', () => renderDropdown(inputEl.value));
+        // Track whether the input was clicked while the dropdown was already open.
+        // In that case, the upcoming focus event should close rather than re-open.
+        let suppressNextOpen = false;
+
+        inputEl.addEventListener('mousedown', () => {
+            if (dropdown.classList.contains('active')) {
+                suppressNextOpen = true;
+            }
+        });
+
+        inputEl.addEventListener('focus', () => {
+            if (suppressNextOpen) {
+                suppressNextOpen = false;
+                dropdown.classList.remove('active');
+                return;
+            }
+            renderDropdown(inputEl.value);
+        });
+
         inputEl.addEventListener('input', () => {
             updateInputIcon();
             renderDropdown(inputEl.value);
         });
+
+        const updateSelection = (items) => {
+            items.forEach((item, i) => {
+                if (i === selectedIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        };
 
         inputEl.addEventListener('keydown', (e) => {
             const items = dropdown.querySelectorAll('.token-autocomplete-item');
@@ -328,17 +357,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        const updateSelection = (items) => {
-            items.forEach((item, i) => {
-                if (i === selectedIndex) {
-                    item.classList.add('selected');
-                    item.scrollIntoView({ block: 'nearest' });
-                } else {
-                    item.classList.remove('selected');
-                }
-            });
-        };
-
         document.addEventListener('click', (e) => {
             if (!container.contains(e.target)) {
                 dropdown.classList.remove('active');
@@ -349,6 +367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(updateInputIcon, 200);
         setTimeout(updateInputIcon, 1000);
     };
+
 
     initTokenAutocomplete(startTokenInput);
     initTokenAutocomplete(endTokenInput);
@@ -1056,6 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="col-network">${getNetworkIconBadge(networkVal)}</td>
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocolDisplay}</td>
                 <td class="col-tx-count">${route.count.toLocaleString()}</td>
+                <td class="col-swaps">${(route.swaps ?? route.count).toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
                 <td class="col-volume hidden-column font-bold">${formatUSD(route.volume)}</td>
                 <td class="col-market-size hidden-column">${formatUSD(route.market_size || 0)}</td>
@@ -1382,6 +1402,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (key === 'count') {
                 valA = a.count;
                 valB = b.count;
+            } else if (key === 'swaps') {
+                valA = a.swaps ?? a.count;
+                valB = b.swaps ?? b.count;
             } else if (key === 'apr') {
                 valA = getRouteAvgApr(a);
                 valB = getRouteAvgApr(b);
@@ -1469,6 +1492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Event listeners for sorting
     document.getElementById('sort-count').addEventListener('click', () => sortRoutes('count', 'sort-count'));
+    document.getElementById('sort-swaps').addEventListener('click', () => sortRoutes('swaps', 'sort-swaps'));
     document.getElementById('sort-apr').addEventListener('click', () => sortRoutes('apr', 'sort-apr'));
     document.getElementById('sort-vol').addEventListener('click', () => sortRoutes('volume', 'sort-vol'));
     document.getElementById('sort-mkt').addEventListener('click', () => sortRoutes('mkt', 'sort-mkt'));
@@ -1625,6 +1649,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const dVol = cells.volume - cells.realVolume;
                 const parts = [];
                 if (cells.realCount !== undefined && cells.realCount != null) parts.push(`TXs ${cells.realCount} → ${cells.count}${dTx > 0 ? ` (+${dTx})` : dTx < 0 ? ` (${dTx})` : ''}`);
+                if (cells.realSwaps !== undefined && cells.realSwaps != null) parts.push(`Swaps ${cells.realSwaps} → ${cells.swaps}`);
                 if (cells.realApr != null && cells.realApr !== undefined) parts.push(`APR ${formatAprPercent(cells.realApr)} → ${formatAprPercent(cells.apr)} (${dApr >= 0 ? '+' : ''}${dApr.toFixed(2)}%)`);
                 if (cells.realVolume !== undefined) parts.push(`Vol ${formatUSD(cells.realVolume)} → ${formatUSD(cells.volume)} (${dVol >= 0 ? '+' : ''}${formatUSD(dVol)})`);
                 tooltip = parts.join(' · ');
@@ -1648,6 +1673,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="uc-col-network"${tooltipAttr}>${getNetworkIconBadge(network)}</td>
                 <td class="uc-col-protocol hidden-column font-bold"${tooltipAttr}>${protocolDisplay}</td>
                 <td class="uc-col-tx-count"${tooltipAttr}>${cells.count.toLocaleString()}</td>
+                <td class="uc-col-swaps"${tooltipAttr}>${(cells.swaps ?? cells.count).toLocaleString()}</td>
                 <td class="uc-col-apr ${aprClass}"${tooltipAttr}>${formatAprPercent(cells.apr)}</td>
                 <td class="uc-col-volume hidden-column font-bold"${tooltipAttr}>${formatUSD(cells.volume)}</td>
                 <td class="uc-col-market-size hidden-column"${tooltipAttr}>${formatUSD(cells.fees)}</td>
@@ -1667,6 +1693,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 pathTokens: buildPathTokens(hyp.fee_display, 'Uniswap V4', hyp.apr_pct),
                 cells: {
                     count: hyp.diverted_count,
+                    swaps: hyp.swaps ?? hyp.diverted_count,
                     apr: hyp.apr_pct,
                     volume: hyp.diverted_volume,
                     fees: hyp.fee_usd,
@@ -1718,6 +1745,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 pathTokens: buildPathTokens(p.fee_display, proto, p.hyp_apr_pct),
                 cells: {
                     count: p.hyp_count,
+                    swaps: p.swaps ?? p.hyp_count,
                     apr: p.hyp_apr_pct,
                     volume: p.hyp_volume,
                     fees: p.hyp_fees,
@@ -1726,6 +1754,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     cid: p.cid,
                     poolId: p.pool_id || p.pool_address,
                     realCount: p.count,
+                    realSwaps: p.swaps,
                     realApr: p.apr_pct !== undefined ? p.apr_pct : null,
                     realVolume: p.volume,
                     lastActivity: p.last_activity

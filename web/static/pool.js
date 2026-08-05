@@ -299,7 +299,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         };
 
-        inputEl.addEventListener('focus', () => renderDropdown(inputEl.value));
+        // Track whether the input was clicked while the dropdown was already open.
+        // In that case, the upcoming focus event should close rather than re-open.
+        let suppressNextOpen = false;
+
+        inputEl.addEventListener('mousedown', () => {
+            if (dropdown.classList.contains('active')) {
+                suppressNextOpen = true;
+            }
+        });
+
+        inputEl.addEventListener('focus', () => {
+            if (suppressNextOpen) {
+                suppressNextOpen = false;
+                dropdown.classList.remove('active');
+                return;
+            }
+            renderDropdown(inputEl.value);
+        });
+
         inputEl.addEventListener('input', () => {
             updateInputIcon();
             renderDropdown(inputEl.value);
