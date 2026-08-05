@@ -1596,17 +1596,24 @@ async def undercut(
 
         for pkey, st in sorted(by_pool.items(), key=lambda kv: (kv[1]["volume"] or 0), reverse=True):
             fee_b = st["fee_bps"]
-            orig_fees = st["volume"] * (ua.fee_fraction_from_bps(fee_b))
             div_cnt, div_vol = res.get("by_pool", {}).get(pkey, [0, 0.0])
             hyp_vol = max(0.0, st["volume"] - div_vol)
-            hyp_fees = hyp_vol * (ua.fee_fraction_from_bps(fee_b))
             s0 = st["s0"] or t0_sym
             s1 = st["s1"] or t1_sym
             pool_key = f"{s0}-{s1}-{_fee_label(fee_b)}|{st['protocol']}|{net_label}"
             rev_pool_key = f"{s1}-{s0}-{_fee_label(fee_b)}|{st['protocol']}|{net_label}"
             stat = pool_stats.get(pool_key) or pool_stats.get(rev_pool_key)
             real_tvl = (stat or {}).get("tvl", 0.0) or 0.0
+            # Bidirectional volume from DB: pools earn fees on swaps in both
+            # directions, so APR must use the full two-way volume — the same
+            # source the top Routes table uses.  st["volume"] is directional
+            # only (start_token → end_token) and is kept for the simulation
+            # (deciding which swaps the hypothetical pool diverts).
             real_vol = (stat or {}).get("volume", 0.0) or 0.0
+            fee_vol_for_apr = real_vol if real_vol > st["volume"] else st["volume"]
+            orig_fees = fee_vol_for_apr * (ua.fee_fraction_from_bps(fee_b))
+            # For post-undercut fees: scale proportionally by volume diverted
+            hyp_fees = orig_fees * (hyp_vol / st["volume"]) if st["volume"] > 0 else 0.0
 
             # Mirror the Show Routes enrichment: when the DB TVL is missing or
             # unreliable, fall back to DexScreener / DeFi Llama for the real TVL
