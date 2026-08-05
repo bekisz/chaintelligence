@@ -5,8 +5,8 @@ import json
 
 ROOT_DIR = '/app'
 sys.path.insert(0, os.path.join(ROOT_DIR, 'api'))
-sys.path.insert(1, os.path.join(ROOT_DIR, 'chain-feeder'))
-sys.path.insert(2, os.path.join(ROOT_DIR, 'chain-feeder', 'routing'))
+sys.path.insert(1, os.path.join(ROOT_DIR, 'api', 'routing'))
+sys.path.insert(2, os.path.join(ROOT_DIR, 'chain-feeder'))
 sys.path.insert(3, os.path.join(ROOT_DIR, 'chain-feeder', 'include'))
 
 import main

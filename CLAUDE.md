@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Chaintelligence is a DeFi analytics platform: real-time LP portfolio tracking, swap-route analysis, and Uniswap V3 backtesting. It is an N-tier system — Airflow ETL → PostgreSQL warehouse → FastAPI logic layer → static HTML/JS frontend. The frontend **never** touches Postgres or external APIs directly; it only talks to the FastAPI layer.
 
-Note: `README.md` and `docs/architecture.md` reference some legacy directory names (`routing/`, `routing-web/`, `lp-backtester/`). The real layout is `api/`, `web/`, `chain-feeder/` as described below.
+Note: `README.md` may reference some legacy directory names; the real layout is `api/`, `web/`, `chain-feeder/` as described below.
 
 ## Architecture
 
-- **`api/main.py`** — the entire FastAPI application (single ~65KB file). All routes, auth middleware, business logic, and Airflow proxying live here. Run with `python api/main.py` (uvicorn on `:8000`). Imports routing logic from `chain-feeder/routing/` by inserting it onto `sys.path`, and loads DEX factory/init-hash config from `config/dex-config.yaml`.
-- **`chain-feeder/`** — Airflow ETL layer. `dags/` are the ingestion pipelines (CMC, The Graph V3/V4 swaps, RPC claim/event backfills, daily history aggregation). `include/` holds API clients (`coinmarketcap_client.py`, `defillama_client.py`, `graph_discovery_client.py`, `rpc_discovery_engine.py`, `uniswap_v*_range_fetcher.py`) and `sql/init_db.sql` (the warehouse schema, applied on first Postgres boot). `routing/` is shared business logic imported by **both** the DAGs and the API server.
-- **`chain-feeder/routing/`** — the shared logic core. `postgres_fetcher.py` (swap-data queries, including V3+V4 `UNION ALL` branches), `route_analyzer.py` (reconstructs multi-hop routes by grouping swaps by tx hash and ordering by log index), `shortcut_finder.py`, and `config.py` (loads token registry from the `coin` table at import time; falls back to a static USDC/USDT/WETH/WBTC set if the DB is unreachable).
+- **`api/main.py`** — the entire FastAPI application (single ~65KB file). All routes, auth middleware, business logic, and Airflow proxying live here. Run with `python api/main.py` (uvicorn on `:8000`). Imports routing/analysis logic from `api/routing/` by inserting it onto `sys.path`, and loads DEX factory/init-hash config from `config/dex-config.yaml`.
+- **`chain-feeder/`** — Airflow ETL layer. `dags/` are the ingestion pipelines (CMC, The Graph V3/V4 swaps, RPC claim/event backfills, daily history aggregation). `include/` holds API clients (`coinmarketcap_client.py`, `defillama_client.py`, `graph_discovery_client.py`, `rpc_discovery_engine.py`, `uniswap_v*_range_fetcher.py`) and `sql/init_db.sql` (the warehouse schema, applied on first Postgres boot). It is strictly ETL — it does **not** own analytics/business logic.
+- **`api/routing/`** — the analysis/analytics core, owned by the API layer. `postgres_fetcher.py` (swap-data queries against the unified `swaps` table), `route_analyzer.py` (reconstructs multi-hop routes by grouping swaps by tx hash and ordering by log index), `shortcut_finder.py`, `undercut_analyzer.py`, and `config.py` (loads token registry from the `coin` table at import time; falls back to a static USDC/USDT/WETH/WBTC set if the DB is unreachable). The `DATA_WAREHOUSE_DB` DSN is derived via the shared `chain-feeder/include/settings.py` (`data_warehouse_dsn`), imported by both `api/routing/config.py` and `chain-feeder/dags/common/utils/config.py` so env handling never drifts between layers.
 - **`web/`** — pure presentation, no build step. `web/static/` is the main portal (`routing.html`+`app.js`, `lp.html`+`lp.js`, `pool.*`, `sps.*`, `api.html`, shared `nav.js`/`style.css`). `web/backtest/` is the standalone LP backtester mounted at `/backtester`.
 - **`config/dex-config.yaml`** — per-network factory addresses + init code hashes for V3-style DEXes (Uniswap V3, PancakeSwap V3). `get_factory_and_hash(protocol, network)` in `main.py` reads this; pool contract addresses are derived via CREATE2 and cached in module-level `POOL_ADDRESS_CACHE`/`FACTORY_HASH_CACHE`.
 
@@ -44,10 +44,10 @@ docker exec chaintelligence-server python api/tests/test_api.py -v
 docker exec chaintelligence-server python api/tests/test_api.py TestChaintelligenceAPI.test_06_price_by_cmc_id_single -v   # single test
 
 # Routing-logic unit tests (no server needed)
-cd chain-feeder/routing && python test_route_analyzer.py && python test_shortcut_finder.py
+cd api/routing && python test_route_analyzer.py && python test_shortcut_finder.py
 ```
 
-Postgres is exposed on host port **5433** (container 5432) so local dev can connect to the same DB the Airflow containers write to. The default `DATA_WAREHOUSE_DB` in `chain-feeder/routing/config.py` targets `host=localhost port=5433`.
+Postgres is exposed on host port **5433** (container 5432) so local dev can connect to the same DB the Airflow containers write to. The default `DATA_WAREHOUSE_DB` in `api/routing/config.py` targets `host=localhost port=5433`.
 
 ## Configuration & secrets
 

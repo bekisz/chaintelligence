@@ -17,9 +17,9 @@ import logging
 from datetime import datetime, timezone
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-ROUTING_DIR = os.path.join(ROOT_DIR, 'routing')
-if ROUTING_DIR not in sys.path:
-    sys.path.insert(0, ROUTING_DIR)
+DAGS_DIR = os.path.join(ROOT_DIR, 'dags')
+if DAGS_DIR not in sys.path:
+    sys.path.insert(0, DAGS_DIR)
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def get_db_connection():
         return pg_hook.get_conn()
     except Exception:
         import psycopg2
-        from config import DATA_WAREHOUSE_DB
+        from common.utils.config import DATA_WAREHOUSE_DB
         return psycopg2.connect(DATA_WAREHOUSE_DB)
 
 

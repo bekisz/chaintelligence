@@ -78,12 +78,13 @@ openssl rand -base64 32
 
 ## 📁 Project Structure
 
-- `Dockerfile`: Multi-stage build for the Chaintelligence Portal.
+- `Dockerfile`: Multi-stage build for the Chaintelligence Portal server.
 - `docker-compose.yaml`: Orchestration for Airflow, Postgres, and the Portal.
-- `routing/`: Core logic for fetching and analyzing swap routes.
-- `routing-web/`: FastAPI backend and frontend for the portal.
-- `lp-backtester/`: Historical Uniswap V3 strategy simulator.
-- `chain-feeder/`: Airflow DAGs and ETL scripts for data ingestion.
+- `api/`: FastAPI application server — `main.py` (all routes, auth, business logic) plus `api/routing/` (analysis core: route analyzer, shortcut finder, undercut simulator).
+- `web/`: Frontend — `web/static/` (main portal) and `web/backtest/` (standalone LP backtester mounted at `/backtester`).
+- `chain-feeder/`: Airflow DAGs and ETL scripts for data ingestion (ETL-only; no business logic).
+- `config/`: Per-network YAML (DEX factory/init-hash, chains, coin families, swap retention).
+- `docs/`: Architecture, feature notes, and concept docs.
 
 ---
 
@@ -91,10 +92,12 @@ openssl rand -base64 32
 
 ### Local Development (Non-Docker)
 
-If you wish to run the portal server locally:
+If you wish to run the portal server locally (requires `.env` loaded for `DATA_WAREHOUSE_DB` etc.):
 
-1. Install dependencies: `pip install -r routing/requirements.txt`
-2. Run the server: `cd routing-web && python server.py`
+```bash
+pip install -r api/requirements.txt
+python api/main.py
+```
 
 ### Testing LP Backtester
 

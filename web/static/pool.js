@@ -849,11 +849,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </button>
                     </div>
                 </td>
-                <td class="col-cid hidden-column">${cid || '-'}</td>
+                <td class="col-cid">${cid || '-'}</td>
                 <td class="col-pool-id hidden-column">${formatAddress(poolId || poolAddr)}</td>
                 <td class="col-network">${getNetworkIconBadge(chain)}</td>
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocol}</td>
-                <td class="col-tx-count">${txCount.toLocaleString()}</td>
+                <td class="col-tx-count hidden-column">${txCount.toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
                 <td class="col-volume hidden-column font-bold">${formatUSD(vol)}</td>
                 <td class="col-market-size hidden-column">${formatUSD(pool.fees_usd || 0)}</td>

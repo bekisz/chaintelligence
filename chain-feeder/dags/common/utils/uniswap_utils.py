@@ -681,7 +681,21 @@ class PostgresStorage:
                         pool_id_map[pid.lower()] = lid
                     if paddr:
                         pool_id_map[paddr.lower()] = lid
-                pool_tokens_map = {(row[2], row[3], frozenset({row[4], row[5]}), row[6]): row[0] for row in rows}
+                pool_tokens_map = {}
+                lid_to_row = {row[0]: row for row in rows}
+                for row in rows:
+                    lid, pid, cid, prid, c0, c1, fbps_row, paddr = row
+                    key = (cid, prid, frozenset({c0, c1}), fbps_row)
+                    # If multiple pools collide on (chain, protocol, tokens, fee),
+                    # prefer the canonical one that carries an on-chain address
+                    # or pool_id over a phantom row with neither.
+                    existing = pool_tokens_map.get(key)
+                    if existing is not None:
+                        e_pid, e_paddr = lid_to_row[existing][1], lid_to_row[existing][7]
+                        if (pid or paddr) and not (e_pid or e_paddr):
+                            pool_tokens_map[key] = lid
+                        continue
+                    pool_tokens_map[key] = lid
 
                 # Load contract addresses for this chain, mapping LOWER(contract_address) -> {coin_id, symbol, tracked}
                 cur.execute("""
@@ -752,16 +766,23 @@ class PostgresStorage:
 
                     fbps = _compute_fee_bps(s.get('fee_tier'))
                     
-                    # 1. Match by on-chain pool ID or pool address
+                    # 1. Match by on-chain pool ID or pool address (authoritative)
                     sg_pool_id = (s.get('pool') or {}).get('id')
                     pool_id = None
                     if sg_pool_id:
                         pool_id = pool_id_map.get(sg_pool_id.lower())
-                    
-                    # 2. Fall back to tokens/fee matching
-                    if pool_id is None:
+
+                    # 2. Token/fee fallback is ONLY allowed when the swap carries
+                    #    no subgraph pool identity at all. When sg_pool_id exists
+                    #    but isn't found in pool_id_map, the pool row is simply
+                    #    missing from the DB — fuzzy token+fee matching here is
+                    #    what historically bulk-assigned lower-fee swaps to the
+                    #    wrong same-pair pool (e.g. 0.05% WETH-USDC swaps into the
+                    #    1% WETH-USDC pool). In that case we create the pool from
+                    #    subgraph truth below instead of guessing.
+                    if pool_id is None and not sg_pool_id:
                         pool_id = pool_tokens_map.get((chain_id, protocol_id, frozenset({t0_id, t1_id}), fbps))
-                        
+
                     # 3. Create pool on-the-spot if it does not exist
                     if pool_id is None:
                         fee_tier_str = s.get('fee_tier') or (f"{fbps / 10000}%" if fbps is not None else "")
@@ -780,11 +801,22 @@ class PostgresStorage:
                             seed = f"v4-fallback-{t0_id}-{t1_id}-{fbps}"
                             pool_id_val = "0x" + keccak(seed.encode('utf-8')).hex()
 
+                        # Conflict on the pool's own address (V3) or pool_id (V4)
+                        # — NOT on name+fee. Keying the ON CONFLICT on name+fee
+                        # caused a genuinely distinct new pool to be absorbed into
+                        # an existing same-name pool, silently misattributing every
+                        # swap written under the absorbed row.
                         try:
-                            cur.execute("""
+                            if pool_address_val:
+                                conflict_clause = "(pool_address) WHERE pool_address IS NOT NULL"
+                            elif pool_id_val:
+                                conflict_clause = "(pool_id) WHERE pool_id IS NOT NULL"
+                            else:
+                                conflict_clause = "(chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, '')))"
+                            cur.execute(f"""
                                 INSERT INTO liquidity_pool (chain_id, protocol_id, pool_name, fee_bps, coin0_id, coin1_id, pool_address, pool_id, reverted)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, false)
-                                ON CONFLICT (chain_id, protocol_id, pool_name, fee_bps, (COALESCE(pool_id, ''))) DO UPDATE
+                                ON CONFLICT {conflict_clause} DO UPDATE
                                 SET pool_address = COALESCE(liquidity_pool.pool_address, EXCLUDED.pool_address),
                                     pool_id = COALESCE(liquidity_pool.pool_id, EXCLUDED.pool_id)
                                 RETURNING id

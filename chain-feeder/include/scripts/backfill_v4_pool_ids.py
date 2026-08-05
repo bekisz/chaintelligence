@@ -21,11 +21,11 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', '..'))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder'))
 sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'dags'))
-sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'routing'))
 
 from common.utils.uniswap_utils import UniswapV4Fetcher
-from config import DATA_WAREHOUSE_DB
+from common.utils.config import DATA_WAREHOUSE_DB
 import psycopg2
 
 

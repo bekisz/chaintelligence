@@ -19,7 +19,7 @@ Build a CLI tool that automatically:
 
 ### Core Module
 
-#### [NEW] [shortcut_finder.py](file:///Users/szablocsbeki/git/chaintelligence/chain-feeder/routing/shortcut_finder.py)
+#### [NEW] [shortcut_finder.py](file:///Users/szablocsbeki/git/chaintelligence/api/routing/shortcut_finder.py)
 
 The main analysis engine. A `ShortcutFinder` class that:
 
@@ -56,7 +56,7 @@ Key design decisions:
 
 ### CLI Entry Point
 
-#### [NEW] [find_shortcuts.py](file:///Users/szablocsbeki/git/chaintelligence/chain-feeder/routing/find_shortcuts.py)
+#### [NEW] [find_shortcuts.py](file:///Users/szablocsbeki/git/chaintelligence/api/routing/find_shortcuts.py)
 
 Command-line tool wrapping `ShortcutFinder`:
 

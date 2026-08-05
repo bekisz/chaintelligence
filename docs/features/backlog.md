@@ -26,7 +26,7 @@ GROUP BY network, pair_key, date_trunc('day', ts);
 
 ## 2. Connection Pool Tuning
 
-The current pool is 8 connections (`_POOL_MAXCONN` in `chain-feeder/routing/postgres_fetcher.py`). For concurrent users doing routing analysis, consider increasing to 16–32.
+The current pool is 8 connections (`_POOL_MAXCONN` in `api/routing/postgres_fetcher.py`). For concurrent users doing routing analysis, consider increasing to 16–32.
 
 ## 3. Add More Tracked Tokens to Coin Table
 

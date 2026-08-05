@@ -66,7 +66,7 @@ The central asset registry. Every token tracked by the system has a row here.
 | `cmc_id` | INTEGER UNIQUE | CoinMarketCap ID. Used for price API calls. |
 | `first_historical_data` | TIMESTAMPTZ | Earliest available historical data on CMC. |
 | `image_url` | TEXT | URL to the token logo image. |
-| `price` | NUMERIC | Current price in USD. Updated by `tiered_coin_price_ingestion`. |
+| `price` | NUMERIC | Current price in USD. Updated by `cmc_global_coin_price` (triggered by `cmc_global_coin_tiered_price`). |
 | `price_timestamp` | TIMESTAMPTZ | When `price` was last updated. |
 | `decimals` | INTEGER | Token decimals (default: 18). |
 | `percent_change_1h` | NUMERIC | Price change % over 1 hour. |
@@ -119,7 +119,7 @@ Groups related tokens into families for tiered price updates and analysis (e.g. 
 | `name` | VARCHAR(50) | Family name (e.g. `USD`, `EUR`, `ETH`, `BTC`, `GOLD`). |
 | `coin_id` | SMALLINT (FK → coin) | Member coin. CASCADE on delete. |
 
-Managed by the `coin_family_ingestion` DAG from [coin-families.yml](file:///Users/szabi/git/chaintelligence/chain-feeder/include/config/coin-families.yml).
+Managed by the `yaml_global_coin_family` DAG from [coin-families.yml](file:///Users/szabi/git/chaintelligence/config/coin-families.yml).
 
 ---
 
@@ -137,7 +137,7 @@ Daily price snapshots used for historical analysis and APR calculations.
 | `timestamp` | TIMESTAMPTZ | Time of price recording. |
 | `price` | NUMERIC | Asset price in USD at that time. |
 
-Written by the `coin_price_history_feeder` DAG (daily at 1 AM).
+Written by the `defillama_global_coin_price_history` DAG (daily at 1 AM).
 
 ---
 
@@ -187,7 +187,7 @@ Represents a user's specific position within a pool. For concentrated liquidity 
 | `current_tick` | INTEGER | Current pool tick (updated by range backfill). |
 | `current_price` | NUMERIC | Current pool price (updated by range backfill). |
 | `fee_tier` | VARCHAR(10) | Position-level fee tier (copied from pool or fetched). |
-| `last_claim_scan_block` | INTEGER | Last block scanned for fee claims by `backfill_claims_rpc`. |
+| `last_claim_scan_block` | INTEGER | Last block scanned for fee claims by `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims`. |
 | `created_at` | TIMESTAMP | Row creation timestamp. |
 
 > [!NOTE]
@@ -211,8 +211,8 @@ Time-series data capturing position state at each ingestion cycle. Assets and fe
 | `coin1_amount` | NUMERIC | Amount of pool's coin1 held in position. |
 | `coin0_claimable_amount` | NUMERIC | Unclaimed (pending) coin0 fees. |
 | `coin1_claimable_amount` | NUMERIC | Unclaimed (pending) coin1 fees. |
-| `coin0_claimed_amount` | NUMERIC | Cumulative collected coin0 fees. Updated by `backfill_claims_rpc`. |
-| `coin1_claimed_amount` | NUMERIC | Cumulative collected coin1 fees. Updated by `backfill_claims_rpc`. |
+| `coin0_claimed_amount` | NUMERIC | Cumulative collected coin0 fees. Updated by `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims`. |
+| `coin1_claimed_amount` | NUMERIC | Cumulative collected coin1 fees. Updated by `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims`. |
 | `current_tick` | INTEGER | Pool tick at snapshot time. |
 | `current_price` | NUMERIC | Pool price at snapshot time. |
 | `in_range` | BOOLEAN | Whether position was in range at snapshot time. |
@@ -242,7 +242,7 @@ On-chain lifecycle events for positions: liquidity additions, removals, and fee 
 | `tick_upper` | INTEGER | Tick upper at time of event. |
 | `created_at` | TIMESTAMP | Row creation timestamp. |
 
-Written by `backfill_position_events` DAG and `rpc_lp_ingestion_v2`.
+Written by `rpc_all_uniswap_v3_liquidity_pool_position_event` and `rpc_ethereum_uniswap_v3_liquidity_pool_position`.
 
 ---
 
@@ -262,7 +262,7 @@ Aggregated daily performance metrics per pool. Used for volume and TVL analytics
 | `volume_usd` | NUMERIC | Total swap volume in USD (default: 0). |
 | `tvl_usd` | NUMERIC | Total Value Locked at end of day (default: 0). |
 
-Written by `uniswap_v3_history_sync`, `uniswap_v4_history_sync`, `pancakeswap_v4_history_sync`.
+Written by the per-network `graph_*_liquidity_pool_history` DAGs, `global_liquidity_pool_history_rollup`, and `rpc_tvl_sync`.
 
 ---
 
@@ -278,10 +278,16 @@ Unified swap event log across all protocols and chains. Monthly range-partitione
 | `tx_hash` | VARCHAR(80) | Transaction hash (part of PK). |
 | `log_index` | INT | Log index within the tx (part of PK). |
 | `ts` | TIMESTAMPTZ | Block timestamp (partition key, part of PK). |
-| `pool_id` | INT (FK → liquidity_pool) | The pool this swap belongs to. |
+| `network` | VARCHAR(20) | Chain name (e.g. `Ethereum`, `Arbitrum`, `Base`, `BNB`). Default `Ethereum`. |
+| `protocol` | VARCHAR(50) | DEX protocol (e.g. `Uniswap V3`, `Uniswap V4`, `PancakeSwap V3`, `Aerodrome`). Default `Uniswap V3`. |
+| `t0_coin_id` | SMALLINT (FK → coin) | Token0 coin reference. |
+| `t1_coin_id` | SMALLINT (FK → coin) | Token1 coin reference. |
 | `amount0` | DOUBLE PRECISION | Signed amount of token0. |
 | `amount1` | DOUBLE PRECISION | Signed amount of token1. |
 | `amount_usd` | DOUBLE PRECISION | Normalized USD value of the swap. |
+| `pool_id` | INT (FK → liquidity_pool) | The pool this swap belongs to. Added via [normalize_swaps_pool_id.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/normalize_swaps_pool_id.sql). |
+| `fee_bps` | DOUBLE PRECISION | Fee in basis points (5 = 0.05%, 30 = 0.3%); NULL = dynamic fee. |
+| `fee_display` | VARCHAR(20) | Original display format, e.g. `0.05%`. |
 
 Schema source: [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql)
 
@@ -316,15 +322,15 @@ Defined in [init_db.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/in
 
 ---
 
-## Legacy Tables
+## Legacy Tables / Compatibility Views
 
-The following tables still exist in `init_db.sql` but are **no longer actively written to**. All swap data now goes to the unified `swaps` table.
+The following were the original per-protocol swap tables. They have been superseded by the unified `swaps` table and now exist only as **compatibility views** over `swaps` (defined in [create_compatibility_views.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_compatibility_views.sql)) so legacy queries keep working. They are **not written to** directly.
 
-| Table | Status | Replacement |
+| View | Underlying | Protocol filter |
 |---|---|---|
-| `uniswap_v2_swaps` | Legacy | `swaps` (protocol = `Uniswap V2`) |
-| `uniswap_v3_swaps` | Legacy | `swaps` (protocol = `Uniswap V3`) |
-| `uniswap_v4_swaps` | Legacy | `swaps` (protocol = `Uniswap V4`) |
+| `uniswap_v2_swaps` | `swaps` | `protocol = 'Uniswap V2'` |
+| `uniswap_v3_swaps` | `swaps` | `protocol = 'Uniswap V3'` |
+| `uniswap_v4_swaps` | `swaps` | `protocol = 'Uniswap V4'` |
 
 ---
 
@@ -332,16 +338,13 @@ The following tables still exist in `init_db.sql` but are **no longer actively w
 
 Based on a review of the current schema, queries, and ETL pipelines, here are the key architectural improvements recommended for better performance, clarity, and adherence to best practices.
 
-### 1. Performance: Missing Indexes
-- **Snapshots**: The `liquidity_pool_position_snapshot` table will become the largest table in the database (recording every position every 15-60 minutes). It currently lacks indexes entirely. 
-  - **Fix**: Add indexes on `position_id` and `timestamp`. Without these, any API query (like `/api/lp/position-summary`) fetching the latest snapshot per position will trigger a massive Full Table Scan.
-  - `CREATE INDEX idx_snapshot_pos_time ON liquidity_pool_position_snapshot(position_id, timestamp DESC);`
-- **Positions by Wallet**: The API queries positions by `wallet_address`.
-  - **Fix**: Add an index: `CREATE INDEX idx_lpp_wallet ON liquidity_pool_position(wallet_address);`
+### 1. Performance: Missing Indexes ✅ Done
+- **Snapshots**: The `liquidity_pool_position_snapshot` table has indexes `idx_snapshot_pos_time` on `(position_id, timestamp DESC)` and `idx_snapshot_time` on `(timestamp DESC)`. Defined in [init_db.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/init_db.sql).
+- **Positions by Wallet**: `idx_lpp_wallet` on `liquidity_pool_position(wallet_address)` and `idx_lpp_pool_id` on `(pool_id)`. Defined in [init_db.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/init_db.sql).
 
-### 2. Performance: Partitioning the Snapshot Table
-- The `swaps` table is beautifully partitioned by month (`RANGE(ts)`). 
-- **Fix**: The `liquidity_pool_position_snapshot` table will grow exponentially faster than swaps if tracking many wallets. It should be partitioned by `timestamp` (e.g., monthly) just like `swaps`. This allows fast retrieval of recent data and easy pruning of data that is older than 6 months.
+### 2. Performance: Partitioning the Snapshot Table ✅ Done
+- The `swaps` table is partitioned by month (`RANGE(ts)`).
+- The `liquidity_pool_position_snapshot` table is now also partitioned by `timestamp` (monthly, through 2026_12 + a default partition), matching `swaps`. This allows fast retrieval of recent data and easy pruning of old data. See [init_db.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/init_db.sql) and [migrate_snapshots_partitioning.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/migrate_snapshots_partitioning.sql).
 
 ### 3. Best Practices: Precision Loss in Token Amounts
 - Blockchain token amounts can reach enormous numbers (e.g., $10^{18}$ for 1 ETH, or higher for meme coins).
@@ -354,4 +357,4 @@ Based on a review of the current schema, queries, and ETL pipelines, here are th
 
 ### 5. Design Clarity: The Summary View & USD Caching
 - The view `v_lp_snapshots_summary` dynamically builds complex JSON arrays using `jsonb_build_array` and hardcodes `0` for `asset0_usd`, `asset1_usd`, `reward0_usd`, and `reward1_usd`. 
-- **Fix**: The UI clearly wants to show USD value breakdowns for tokens and rewards, but the ETL only saves total `balance_usd`. The ETL pipelines (e.g., `graph_lp_ingestion`) should calculate and save `coin0_usd`, `coin1_usd`, `reward0_usd`, and `reward1_usd` directly into the `liquidity_pool_position_snapshot` table. This removes the need to hardcode `0` in the view and allows the frontend to show accurate portfolio breakdowns instantly.
+- **Fix**: The UI clearly wants to show USD value breakdowns for tokens and rewards, but the ETL only saves total `balance_usd`. The ETL pipelines (e.g., `graph_all_uniswap_v3_liquidity_pool_position_snapshot`) should calculate and save `coin0_usd`, `coin1_usd`, `reward0_usd`, and `reward1_usd` directly into the `liquidity_pool_position_snapshot` table. This removes the need to hardcode `0` in the view and allows the frontend to show accurate portfolio breakdowns instantly.

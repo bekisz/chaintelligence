@@ -5,19 +5,27 @@ Given the real swap demand for an exact token pair (from the warehouse `swaps`
 table), this models adding a hypothetical extra Uniswap V3 pool and estimates
 how much of that traffic a max-expected-output router would divert to it.
 
-Model (same as scratch/tbtc_wbtc_router_spike.py):
+Model (two-sided inventory / drift — diverges from scratch/tbtc_wbtc_router_spike.py):
   - Router picks the pool with the highest net output. The observed on-chain
     output of each swap IS the best the existing pools could do; the
     hypothetical pool diverts the swap iff its simulated net output exceeds it.
+    When the hypothetical pool exactly ties the observed output (both pools are
+    equally good, e.g. an identical clone pool), the router is indifferent and
+    the tie is broken by deterministic alternation so each pool captures ~half
+    of the tied traffic.
   - Hypothetical pool: a single LP position with $LIQ/2 of each token deposited
     in a +/-RANGE% band around the market price. Its liquidity L is constant
-    while the market price is inside the band (out-of-range => dry). The pool
-    price is assumed arbitraged to the market (so L never depletes; fee revenue
-    accrues). This is an upper bound on competitiveness.
+    while the pool's price is inside the band (out-of-range => dry).
+  - Drift / inventory: the pool is NOT assumed arbitraged back to the market.
+    Its internal price starts at the opening price and moves only when the pool
+    actually serves a swap. Heavy one-sided flow drifts the price toward the
+    band boundary, draining the pool of the output token in that direction;
+    real counter-direction swaps (reverse_swaps) rebalance it. A swap that
+    would push the price past the boundary (partial fill), or that arrives when
+    the pool is already drained of the required token, is not served.
   - Swap evaluation: exact-in `compute_swap_step` (faithful port of
-    uniswap-v3-core v1.0.0) with the price limit at the range boundary. The
-    hypothetical pool is not competitive if the order pushes price past the
-    boundary (partial fill).
+    uniswap-v3-core v1.0.0) with the price limit at the range boundary and the
+    pool's current (drifted) price as the starting point.
 
 Read-only against Postgres (DATA_WAREHOUSE_DB, default localhost:5433).
 """
@@ -225,16 +233,25 @@ def build_pool(capital_per_token_usd, range_pct, fee_pips, opening_px, p0_usd, p
             "dx": dx, "dy": dy, "range_pct": range_pct}
 
 
-def quote(pool, market_sqrt, t0_in, gross_input_scaled):
-    """Net output the hypothetical pool would give for the full gross input, or
-    None if it cannot fill the whole order (price hits the range boundary)."""
-    if market_sqrt <= pool["sa"] or market_sqrt >= pool["sb"]:
-        return None, None, None            # out of range / dry
+def quote(pool, s_cur, t0_in, gross_input_scaled):
+    """Net output the hypothetical pool would give at its CURRENT (drifted)
+    price for the full gross input, or None if it cannot fill the whole order.
+
+    The pool is dry of a token when its price is at the corresponding band
+    boundary (all liquidity concentrated in the other token). t0_in spends
+    token0 (start) and pushes the price toward sa (pool gives out token1);
+    !t0_in spends token1 (end) and pushes the price toward sb (pool gives out
+    token0). A swap that would push the price all the way to the boundary
+    cannot be fully filled and is not competitive."""
+    if t0_in and s_cur <= pool["sa"]:
+        return None, None, None            # dry of token1
+    if not t0_in and s_cur >= pool["sb"]:
+        return None, None, None            # dry of token0
     target = pool["sa"] if t0_in else pool["sb"]
     sq_next, _in, out, _fee = compute_swap_step(
-        market_sqrt, target, pool["L"], gross_input_scaled, pool["fee"])
+        s_cur, target, pool["L"], gross_input_scaled, pool["fee"])
     if sq_next == target:
-        return None, None, None            # partial fill -> not competitive
+        return None, None, None            # order would drain the pool -> not competitive
     return out, sq_next, gross_input_scaled - _in   # out, post-sqrt, fee paid
 
 
@@ -242,26 +259,66 @@ def quote(pool, market_sqrt, t0_in, gross_input_scaled):
 # Top-level simulation
 # ---------------------------------------------------------------------------
 def simulate(cap, range_pct, fee_pips, swaps, opening_px, p0_usd, p1_usd,
-             total_usd, markets=None):
-    """Run the router diversion simulation. Returns summary + per-fee-tier
-    diverted stats so existing pools can be adjusted."""
+             total_usd, reverse_swaps=None):
+    """Run the two-sided router diversion simulation with a drifting inventory.
+
+    `swaps` are the start->end demand (spends the hypothetical pool's token0);
+    `reverse_swaps` (optional) are the end->start demand (spends token1) that
+    rebalances the pool. All swaps are processed in chronological order.
+
+    The pool's price starts at the opening price and moves ONLY when it serves a
+    swap — it is not automatically arbitraged back to the market. Serving one
+    direction accumulates the input token and depletes the output token, drifting
+    the pool price toward the band boundary; once the pool is drained of a token
+    (price at the boundary) it cannot fully fill that direction's swaps. Only
+    real counter-direction swaps push the price back and restore service.
+
+    Returns summary + per-fee-tier / per-pool diverted stats so existing pools
+    can be adjusted. `div_*`/`by_pool` track the forward (start->end) direction
+    so the existing pool rows can be adjusted; reverse serving is reported
+    separately and contributes to `fee_usd` (two-sided fee revenue)."""
     pool = build_pool(cap, range_pct, fee_pips, opening_px, p0_usd, p1_usd)
-    if markets is None:
-        markets = market_prices(swaps)
     res = {"L": pool["L"], "div_count": 0, "div_usd": 0.0, "fee_usd": 0.0,
+           "reverse_count": 0, "reverse_usd": 0.0, "reverse_fee_usd": 0.0,
            "in_range": 0, "by_fee_bps": defaultdict(lambda: [0, 0.0]),
            "by_pool": defaultdict(lambda: [0, 0.0])}
-    for s, market_price in zip(swaps, markets):
-        market_sqrt = sqrt_price_x96(market_price)
-        if pool["sa"] < market_sqrt < pool["sb"]:
+    s_cur = pool["s_open"]
+    tie_flip = False
+
+    # Merge forward and reverse demand chronologically. `forward` is the
+    # direction relative to the hypothetical pool (token0 = start token): a
+    # forward swap spends the start token (t0_in), a reverse swap spends the
+    # end token (!t0_in). input/output are already normalized by symbol, so
+    # direction is independent of each real pool's token ordering.
+    events = [(s["ts"], True, s) for s in swaps]
+    events += [(s["ts"], False, s) for s in (reverse_swaps or [])]
+    events.sort(key=lambda e: e[0])
+
+    for _ts, forward, s in events:
+        if pool["sa"] < s_cur < pool["sb"]:
             res["in_range"] += 1
-        out_q, _, _ = quote(pool, market_sqrt, s["t0_in"], int(round(s["input"] * SCALE)))
+        out_q, sq_next, _ = quote(pool, s_cur, forward, int(round(s["input"] * SCALE)))
         if out_q is None:
             continue
-        if out_q > int(round(s["output"] * SCALE)):
+        recorded = int(round(s["output"] * SCALE))
+        if out_q > recorded:
+            divert = True
+        elif out_q == recorded:
+            # Exact tie: the real pool and the hypothetical pool give the same
+            # net output, so the router is indifferent. Deterministically
+            # alternate so each pool captures roughly half of the tied traffic.
+            tie_flip = not tie_flip
+            divert = tie_flip
+        else:
+            divert = False
+        if not divert:
+            continue
+        s_cur = sq_next
+        fee = s["usd"] * fee_pips / 1_000_000
+        res["fee_usd"] += fee
+        if forward:
             res["div_count"] += 1
             res["div_usd"] += s["usd"]
-            res["fee_usd"] += s["usd"] * fee_pips / 1_000_000
             b = res["by_fee_bps"].setdefault(s["fee_bps"], [0, 0.0])
             b[0] += 1
             b[1] += s["usd"]
@@ -269,5 +326,92 @@ def simulate(cap, range_pct, fee_pips, swaps, opening_px, p0_usd, p1_usd,
             bp = res["by_pool"].setdefault(pkey, [0, 0.0])
             bp[0] += 1
             bp[1] += s["usd"]
+        else:
+            res["reverse_count"] += 1
+            res["reverse_usd"] += s["usd"]
+            res["reverse_fee_usd"] += fee
     res["pct"] = 100 * res["div_usd"] / total_usd if total_usd else 0.0
+    return res
+
+
+def simulate_two_pools(comp_cap, comp_range_pct, comp_fee_pips,
+                       hyp_cap, hyp_range_pct, hyp_fee_pips,
+                       swaps, opening_px, p0_usd, p1_usd,
+                       total_usd, reverse_swaps=None):
+    """Coupled two-pool simulation: BOTH the existing (competitor) pool and the
+    hypothetical pool are modeled with the same AMM band math, so no recorded
+    on-chain output is needed — each swap is quoted against both pools' current
+    drifted prices and routed to whichever returns the higher net output (ties
+    broken by deterministic alternation). Both pools' prices drift as they serve.
+
+    Use for parameter experiments (e.g. does a larger- or lower-fee competitor
+    capture more volume?): each pool gets its own cap/range/fee tier. Returns
+    per-pool stats (`count`/`usd`/`fee_usd` forward + `reverse_*`) plus
+    `pct` = the hypothetical pool's share of forward volume."""
+    comp = build_pool(comp_cap, comp_range_pct, comp_fee_pips,
+                      opening_px, p0_usd, p1_usd)
+    hyp = build_pool(hyp_cap, hyp_range_pct, hyp_fee_pips,
+                     opening_px, p0_usd, p1_usd)
+
+    def blank():
+        return {"count": 0, "usd": 0.0, "fee_usd": 0.0,
+                "reverse_count": 0, "reverse_usd": 0.0, "reverse_fee_usd": 0.0,
+                "in_range": 0}
+
+    res = {"comp": blank(), "hyp": blank(),
+           "L": {"comp": comp["L"], "hyp": hyp["L"]}}
+    comp_cur, hyp_cur = comp["s_open"], hyp["s_open"]
+    tie_flip = False
+
+    events = [(s["ts"], True, s) for s in swaps]
+    events += [(s["ts"], False, s) for s in (reverse_swaps or [])]
+    events.sort(key=lambda e: e[0])
+
+    for _ts, forward, s in events:
+        if comp["sa"] < comp_cur < comp["sb"]:
+            res["comp"]["in_range"] += 1
+        if hyp["sa"] < hyp_cur < hyp["sb"]:
+            res["hyp"]["in_range"] += 1
+        comp_out, comp_sq, _ = quote(comp, comp_cur, forward,
+                                     int(round(s["input"] * SCALE)))
+        hyp_out, hyp_sq, _ = quote(hyp, hyp_cur, forward,
+                                   int(round(s["input"] * SCALE)))
+        if comp_out is None and hyp_out is None:
+            continue
+        if comp_out is None:
+            serve_comp = False
+        elif hyp_out is None:
+            serve_comp = True
+        elif comp_out > hyp_out:
+            serve_comp = True
+        elif hyp_out > comp_out:
+            serve_comp = False
+        else:
+            # Exact tie: both pools are equally good; alternate so each gets ~half.
+            tie_flip = not tie_flip
+            serve_comp = not tie_flip
+
+        if serve_comp:
+            comp_cur = comp_sq
+            fee = s["usd"] * comp_fee_pips / 1_000_000
+            res["comp"]["fee_usd"] += fee
+            if forward:
+                res["comp"]["count"] += 1
+                res["comp"]["usd"] += s["usd"]
+            else:
+                res["comp"]["reverse_count"] += 1
+                res["comp"]["reverse_usd"] += s["usd"]
+                res["comp"]["reverse_fee_usd"] += fee
+        else:
+            hyp_cur = hyp_sq
+            fee = s["usd"] * hyp_fee_pips / 1_000_000
+            res["hyp"]["fee_usd"] += fee
+            if forward:
+                res["hyp"]["count"] += 1
+                res["hyp"]["usd"] += s["usd"]
+            else:
+                res["hyp"]["reverse_count"] += 1
+                res["hyp"]["reverse_usd"] += s["usd"]
+                res["hyp"]["reverse_fee_usd"] += fee
+    res["pct"] = 100 * res["hyp"]["usd"] / total_usd if total_usd else 0.0
     return res

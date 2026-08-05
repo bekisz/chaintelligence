@@ -3,11 +3,11 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 
-# Add routing module to sys.path for standalone testing
+# Add dags module to sys.path for standalone testing
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-ROUTING_DIR = os.path.join(ROOT_DIR, 'routing')
-if ROUTING_DIR not in sys.path:
-    sys.path.insert(0, ROUTING_DIR)
+DAGS_DIR = os.path.join(ROOT_DIR, 'dags')
+if DAGS_DIR not in sys.path:
+    sys.path.insert(0, DAGS_DIR)
 
 def zero_fill_dormant_pools(days_back: int = 14):
     """
@@ -48,7 +48,7 @@ def get_db_connection():
         return pg_hook.get_conn()
     except Exception:
         import psycopg2
-        from config import DATA_WAREHOUSE_DB
+        from common.utils.config import DATA_WAREHOUSE_DB
         return psycopg2.connect(DATA_WAREHOUSE_DB)
 
 def run_global_volume_rollup(days_back: int = 14) -> int:

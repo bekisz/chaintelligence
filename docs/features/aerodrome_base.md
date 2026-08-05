@@ -164,7 +164,7 @@ WHERE chain_id = 8453   -- Base
 Add the same `UNION ALL` logic already present for other chains.
 
 ### 7.4 API Layer
-`api/main.py` already forwards all routes to `chain-feeder/routing`. No code changes required; the new `chain_id` will be automatically included when the request payload includes `network: "base"` (converted to `8453`).
+`api/main.py` already forwards all routes to `api/routing`. No code changes required; the new `chain_id` will be automatically included when the request payload includes `network: "base"` (converted to `8453`).
 
 ### 7.5 Frontend
 * `web/static/routing.html` – Add `<option value="base">Base</option>` to network selector.
@@ -173,7 +173,7 @@ Add the same `UNION ALL` logic already present for other chains.
 
 ### 7.6 Tests
 ```bash
-cd chain-feeder/routing
+cd api/routing
 python -m pytest test_route_analyzer.py::test_base_route
 python -m pytest test_shortcut_finder.py::test_aerodrome_pool_detection
 ```

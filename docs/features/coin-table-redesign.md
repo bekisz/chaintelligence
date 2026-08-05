@@ -392,7 +392,7 @@ With ~500 tracked coins and millions of swap rows, switching from `VARCHAR(8)` J
 | `chain-feeder/dags/coin_ingestion.py` | **MODIFY** | Multi-chain contract extraction and `coin_contract` upsert |
 | `chain-feeder/dags/common/utils/config.py` | **MODIFY** | `load_tokens_from_db()` uses `coin_contract` |
 | `chain-feeder/dags/common/utils/uniswap_utils.py` | **MODIFY** | Remove hardcoded dicts, add `load_token_addresses_for_chain()` |
-| `chain-feeder/routing/postgres_fetcher.py` | **MODIFY** | Use `coin_id` JOINs where applicable |
+| `api/routing/postgres_fetcher.py` | **MODIFY** | Use `coin_id` JOINs where applicable |
 | `api/main.py` | **MODIFY** | Query token addresses from `coin_contract` table per network |
 | `chain-feeder/include/sql/migrate_coin_v2.sql` | **NEW** | Migration script (Phases 1–2) |
 

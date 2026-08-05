@@ -69,9 +69,10 @@ log = logging.getLogger("fee_backfill")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', '..'))
-sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'routing'))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder'))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'dags'))
 
-from config import DATA_WAREHOUSE_DB  # noqa: E402
+from common.utils.config import DATA_WAREHOUSE_DB  # noqa: E402
 
 GATEWAY = 'https://gateway-arbitrum.network.thegraph.com/api/{key}/subgraphs/id/{sub}'
 

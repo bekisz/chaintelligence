@@ -10,7 +10,7 @@ permission:
     "api/tests/**": "allow"
     "api/tests/test_report.py": "allow"
     "chain-feeder/tests/**": "allow"
-    "chain-feeder/routing/test_*": "allow"
+    "api/routing/test_*": "allow"
     "*": "deny"
 ---
 
@@ -31,7 +31,7 @@ docker exec chaintelligence-server python api/tests/test_api.py TestChaintellige
 
 ### Routing unit tests (no server needed)
 ```bash
-cd chain-feeder/routing && python test_route_analyzer.py && python test_shortcut_finder.py
+cd api/routing && python test_route_analyzer.py && python test_shortcut_finder.py
 ```
 
 ## Common failure patterns

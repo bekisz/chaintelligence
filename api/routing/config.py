@@ -2,6 +2,9 @@
 
 from dotenv import load_dotenv
 import os
+import sys
+
+from include.settings import data_warehouse_dsn
 
 # Load environment variables from .env file
 load_dotenv()
@@ -10,7 +13,7 @@ load_dotenv()
 import psycopg2
 
 # Database Configuration (needed early for token loading)
-DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=localhost port=5433')
+DATA_WAREHOUSE_DB = data_warehouse_dsn('dbname=chaintelligence user=airflow password=airflow host=localhost port=5433')
 
 def load_tokens_from_db():
     """
@@ -84,4 +87,3 @@ TOKEN_ADDRESSES = [token['address'].lower() for token in TOKENS.values()]
 ADDRESS_TO_SYMBOL = {token['address'].lower(): symbol for symbol, token in TOKENS.items()}
 
 # Postgres Configuration
-DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=localhost port=5433')

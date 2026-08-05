@@ -107,7 +107,7 @@ the option to externalize Postgres later documented as an open question.
 | `airflow-webserver` | same | `api-server` command, Airflow UI + REST API | host port `8081:8080` |
 | `airflow-scheduler` | same | `scheduler` command | — |
 | `airflow-dag-processor` | same | `dag-processor` command | — |
-| `chaintelligence-server` | `Dockerfile` (python:3.13-slim) | FastAPI on `:8000`, imports `chain-feeder/routing/` and `config/dex_config.yaml` | bind-mounts `api/`, `web/`, `chain-feeder/`, `config/`, `.env`; host port `8000:8000` |
+| `chaintelligence-server` | `Dockerfile` (python:3.13-slim) | FastAPI on `:8000`, imports `api/routing/` and `config/dex_config.yaml` | bind-mounts `api/`, `web/`, `chain-feeder/`, `config/`, `.env`; host port `8000:8000` |
 
 **Airflow config highlights:** `LocalExecutor`, FAB auth manager with basic
 auth, DAGs paused at creation = false, example DAGs off. DAGs and `include/`
@@ -243,7 +243,7 @@ subchart key) configures:
 ### 4.5 FastAPI portal — Deployment + Service + HPA
 
 - Image: existing `Dockerfile` (python:3.13-slim), unchanged in structure but
-  the bind-mounts are removed — `api/`, `web/`, `chain-feeder/routing/`,
+  the bind-mounts are removed — `api/`, `web/`, `api/routing/`,
   `config/` are `COPY`ed at build time (dev: a `gitSync`/`pvc` overlay or a
   dev image with live-reload can mount source for iteration).
 - `Deployment` with `replicas: 1` (dev) / `3` (prod), `livenessProbe` on
@@ -291,7 +291,7 @@ subchart key) configures:
   editing, gated by `values-dev.yaml`.
 - The `include/` API clients and `routing/` shared logic are **baked into the
   Airflow image** (`Dockerfile.airflow` already installs extras; we extend it
-  to `COPY chain-feeder/include` and `chain-feeder/routing`). This matches the
+  to `COPY chain-feeder/include` and `api/routing`). This matches the
   API image, which already copies `routing/`.
 
 ### 4.9 Observability
@@ -342,7 +342,7 @@ reversible. No phase cuts over until the previous one is verified.
 - Extend `Dockerfile` to `COPY config/` (currently bind-mounted) so the API
   image is self-contained.
 - Extend `Dockerfile.airflow` to `COPY chain-feeder/include` and
-  `chain-feeder/routing` so the Airflow image is self-contained.
+  `api/routing` so the Airflow image is self-contained.
 - Keep `docker-compose.yaml` working throughout (bind-mounts still override
   the baked copies in dev).
 
@@ -406,11 +406,11 @@ reversible. No phase cuts over until the previous one is verified.
 
 **Modified:**
 - `Dockerfile` — add `COPY config/`; remove reliance on bind-mounts at rest.
-- `Dockerfile.airflow` — `COPY chain-feeder/include`, `chain-feeder/routing`.
+- `Dockerfile.airflow` — `COPY chain-feeder/include`, `api/routing`.
 - `api/main.py` — minor: stop depending on `ROOT_DIR/.env` as a directory
   (read env vars directly); keep `load_dotenv` as a fallback. Optional,
   tracked as a follow-up.
-- `chain-feeder/routing/config.py` — `DATA_WAREHOUSE_DB` already reads env;
+- `api/routing/config.py` — `DATA_WAREHOUSE_DB` already reads env;
   confirm the CNPG-provided connection string is honored (it is, via env).
 - `docker-compose.yaml` — **kept** as the local-only dev option during the
   transition; eventually archived once k3d parity is proven.
@@ -419,7 +419,7 @@ reversible. No phase cuts over until the previous one is verified.
 
 **Unchanged:**
 - All application code under `api/`, `chain-feeder/dags/`,
-  `chain-feeder/routing/`, `web/`.
+  `api/routing/`, `web/`.
 - `chain-feeder/include/sql/init_db.sql` and sibling migrations (consumed, not
   rewritten).
 - `config/dex_config.yaml`, `config/chains.yaml` (mounted, not relocated).

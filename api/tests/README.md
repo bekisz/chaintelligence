@@ -128,7 +128,7 @@ Ran 10 tests in X.XXXs
 OK
 ```
 
-figure Environment
+### Configure Environment
 
 The tests use environment variables for authentication. You can either export them in your shell or create a `.env` file in the project root:
 
@@ -150,11 +150,11 @@ docker-compose up chaintelligence-server
 Run the test script from the root directory or the `tests` directory:
 
 ```bash
-python routing-web/tests/test_api.py
+python api/tests/test_api.py
 ```
 
 ## Troubleshooting
 
 - **401 Unauthorized**: Check your `PORTAL_USERNAME` and `PORTAL_PASSWORD` settings.
 - **Connection Refused**: Ensure the server is running and `API_URL` is correct.
-- **No data for selected date range**: This usually indicates the database is empty or the `uniswap_v3_swaps` table hasn't been synced for the test period.
+- **No data for selected date range**: This usually indicates the database is empty or the `swaps` table hasn't been synced for the test period.

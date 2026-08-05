@@ -6,8 +6,10 @@ load_dotenv()
 
 import psycopg2
 
+from include.settings import data_warehouse_dsn
+
 # Database Configuration (needed early for token loading)
-DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=postgres port=5432')
+DATA_WAREHOUSE_DB = data_warehouse_dsn('dbname=chaintelligence user=airflow password=airflow host=postgres port=5432')
 
 def load_tokens_from_db():
     tokens = {}
@@ -62,7 +64,7 @@ else:
 
 
 # Database Configuration
-DATA_WAREHOUSE_DB = os.getenv('DATA_WAREHOUSE_DB', 'dbname=chaintelligence user=airflow password=airflow host=postgres port=5432')
+DATA_WAREHOUSE_DB = data_warehouse_dsn('dbname=chaintelligence user=airflow password=airflow host=postgres port=5432')
 
 # Fetcher Settings
 MAX_RESULTS_PER_QUERY = 1000

@@ -4,11 +4,13 @@ import logging
 import psycopg2
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-ROUTING_DIR = os.path.join(ROOT_DIR, 'routing')
-if ROUTING_DIR not in sys.path:
-    sys.path.insert(0, ROUTING_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+DAGS_DIR = os.path.join(ROOT_DIR, 'dags')
+if DAGS_DIR not in sys.path:
+    sys.path.insert(0, DAGS_DIR)
 try:
-    from config import DATA_WAREHOUSE_DB
+    from common.utils.config import DATA_WAREHOUSE_DB
 except ImportError:
     DATA_WAREHOUSE_DB = os.environ.get('DATA_WAREHOUSE_DB', 'postgresql://airflow:airflow@postgres:5432/airflow')
 

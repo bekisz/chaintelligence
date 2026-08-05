@@ -1,7 +1,7 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-from routing.postgres_fetcher import PostgresFetcher
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../api/routing')))
+from postgres_fetcher import PostgresFetcher
 from datetime import datetime, timedelta
 
 def test_fetch_stats():

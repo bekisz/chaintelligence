@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir fastapi uvicorn psycopg2-binary python-dotenv
 # Copy the application code
 COPY api/ ./api/
 COPY web/ ./web/
-COPY chain-feeder/routing/ ./chain-feeder/routing/
+COPY chain-feeder/include/ ./chain-feeder/include/
+COPY config/ ./config/
 
 # Set working directory to app root
 WORKDIR /app

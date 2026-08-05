@@ -21,7 +21,9 @@ ROUTING_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROUTING_DIR not in sys.path:
     sys.path.insert(0, ROUTING_DIR)
 
-INCLUDE_DIR = os.path.join(os.path.dirname(ROUTING_DIR), 'include')
+# coin_family_resolver lives in chain-feeder/include
+REPO_ROOT = os.path.abspath(os.path.join(ROUTING_DIR, '..', '..'))
+INCLUDE_DIR = os.path.join(REPO_ROOT, 'chain-feeder', 'include')
 if INCLUDE_DIR not in sys.path:
     sys.path.insert(0, INCLUDE_DIR)
 

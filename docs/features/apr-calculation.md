@@ -25,7 +25,7 @@ Where:
 
 ## 3. Data Retrieval Flow
 
-To maximize performance, pool metrics are queried and computed in **three progressive phases** within the [PostgresFetcher](file:///Users/szabi/git/chaintelligence/chain-feeder/routing/postgres_fetcher.py) class:
+To maximize performance, pool metrics are queried and computed in **three progressive phases** within the [PostgresFetcher](file:///Users/szabi/git/chaintelligence/api/routing/postgres_fetcher.py) class:
 
 ```mermaid
 graph TD

@@ -163,11 +163,12 @@
                                     </button>
                                     <div id="table-columns-dropdown" class="column-dropdown hidden">
                                         <div class="dropdown-section">
-                                            <label class="checkbox-label" style="opacity: 0.6;"><input type="checkbox" data-col="cid"> CID</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="cid" checked> CID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="pool-id"> Pool Address / ID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="network" checked> Network</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="protocol"> Protocol</label>
-                                            <label class="checkbox-label"><input type="checkbox" data-col="tx-count" checked> TXs</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="tx-count"> TXs</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="swaps"> Swaps</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="apr" checked> APR</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="volume"> Volume</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="market-size"> Fees</label>
@@ -211,11 +212,12 @@
                             <thead>
                                 <tr>
                                     <th>Pool</th>
-                                    <th id="sort-cid" class="sortable col-cid hidden-column">CID <span>↕</span></th>
+                                    <th id="sort-cid" class="sortable col-cid">CID <span>↕</span></th>
                                     <th id="sort-pool-id" class="sortable col-pool-id hidden-column">Pool Address / ID <span>↕</span></th>
                                     <th id="sort-network" class="sortable col-network">Net <span class="sort-icon">↕</span></th>
                                     <th id="sort-protocol" class="sortable col-protocol hidden-column">Protocol <span>↕</span></th>
-                                    <th id="sort-count" class="sortable col-tx-count">TXs <span>↕</span></th>
+                                    <th id="sort-count" class="sortable col-tx-count hidden-column">TXs <span>↕</span></th>
+                                    <th id="sort-swaps" class="sortable col-swaps hidden-column">Swaps <span>↕</span></th>
                                     <th id="sort-apr" class="sortable col-apr">APR <span>↕</span></th>
                                     <th id="sort-vol" class="sortable col-volume hidden-column">Volume <span>↕</span></th>
                                     <th id="sort-mkt" class="sortable col-market-size hidden-column">Fees <span>↕</span></th>
@@ -298,11 +300,12 @@
                                     </button>
                                     <div id="uc-columns-dropdown" class="column-dropdown hidden">
                                         <div class="dropdown-section">
-                                            <label class="checkbox-label"><input type="checkbox" data-uc-col="cid"> CID</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-uc-col="cid" checked> CID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="pool-id"> Pool Address / ID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="network" checked> Network</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="protocol"> Protocol</label>
-                                            <label class="checkbox-label"><input type="checkbox" data-uc-col="tx-count" checked> TXs</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-uc-col="tx-count"> TXs</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-uc-col="swaps"> Swaps</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="apr" checked> APR</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="volume"> Volume</label>
                                             <label class="checkbox-label"><input type="checkbox" data-uc-col="market-size"> Fees</label>
@@ -327,11 +330,12 @@
                             <thead>
                                 <tr>
                                     <th>Pool</th>
-                                    <th class="uc-col-cid hidden-column">CID</th>
+                                    <th class="uc-col-cid">CID</th>
                                     <th class="uc-col-pool-id hidden-column">Pool Address / ID</th>
                                     <th class="uc-col-network">Net</th>
                                     <th class="uc-col-protocol hidden-column">Protocol</th>
-                                    <th class="uc-col-tx-count">TXs</th>
+                                    <th class="uc-col-tx-count hidden-column">TXs</th>
+                                    <th class="uc-col-swaps hidden-column">Swaps</th>
                                     <th class="uc-col-apr">APR</th>
                                     <th class="uc-col-volume hidden-column">Volume</th>
                                     <th class="uc-col-market-size hidden-column">Fees</th>

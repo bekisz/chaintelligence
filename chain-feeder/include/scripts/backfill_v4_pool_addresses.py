@@ -27,10 +27,10 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', '..'))
 sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder'))      # for `include.*`
-sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'routing'))  # for config
+sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'dags'))  # for `common.utils.config`
 
 import psycopg2  # noqa: E402
-from config import DATA_WAREHOUSE_DB  # noqa: E402
+from common.utils.config import DATA_WAREHOUSE_DB  # noqa: E402
 from include.v4_pool import derive_v4_pool_id  # noqa: E402
 from include.graph_discovery_client import verify_v4_position_rpc  # noqa: E402
 

@@ -11,7 +11,7 @@ apart from the subgraph URL. This test verifies:
   3. save_swaps is invoked with network='Base', protocol='Aerodrome'.
 
 Run (plain runner, per repo convention):
-  cd chain-feeder/routing && python test_aerodrome_fetcher.py
+  cd api/routing && python test_aerodrome_fetcher.py
 """
 
 import os
@@ -19,10 +19,13 @@ import sys
 import unittest
 from unittest.mock import patch, MagicMock
 
-# chain-feeder/dags must be on the path so `from common.utils...` resolves.
-_DAGS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'dags'))
-if _DAGS_DIR not in sys.path:
-    sys.path.insert(0, _DAGS_DIR)
+# chain-feeder root (for `include.*`) and dags (for `common.utils`) on path.
+_ROUTING_DIR = os.path.dirname(os.path.abspath(__file__))
+_CHAIN_FEEDER_DIR = os.path.abspath(os.path.join(_ROUTING_DIR, '..', '..', 'chain-feeder'))
+_DAGS_DIR = os.path.join(_CHAIN_FEEDER_DIR, 'dags')
+for _path in (_CHAIN_FEEDER_DIR, _DAGS_DIR):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 # Ensure a key is present so __init__ builds the authenticated URL shape.
 os.environ.setdefault('GRAPH_API_KEY', 'test_key_for_unit_test')

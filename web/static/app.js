@@ -1070,12 +1070,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                     ` : ''}
                 </td>
-                <td class="col-cid hidden-column">${cidDisplay}</td>
+                <td class="col-cid">${cidDisplay}</td>
                 <td class="col-pool-id hidden-column">${poolIdDisplay || poolAddrDisplay}</td>
                 <td class="col-network">${getNetworkIconBadge(networkVal)}</td>
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocolDisplay}</td>
-                <td class="col-tx-count">${route.count.toLocaleString()}</td>
-                <td class="col-swaps">${(route.swaps ?? route.count).toLocaleString()}</td>
+                <td class="col-tx-count hidden-column">${route.count.toLocaleString()}</td>
+                <td class="col-swaps hidden-column">${(route.swaps ?? route.count).toLocaleString()}</td>
                 <td class="col-apr ${aprClass}">${aprDisplay}</td>
                 <td class="col-volume hidden-column font-bold">${formatUSD(route.volume)}</td>
                 <td class="col-market-size hidden-column">${formatUSD(route.market_size || 0)}</td>
@@ -1668,12 +1668,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             row.innerHTML = `
                 <td class="path-cell"${tooltipAttr}>${renderPath(pathTokens)}</td>
-                <td class="uc-col-cid hidden-column"${tooltipAttr}>${cidDisplay}</td>
+                <td class="uc-col-cid"${tooltipAttr}>${cidDisplay}</td>
                 <td class="uc-col-pool-id hidden-column monospace"${tooltipAttr}>${poolIdDisplay}</td>
                 <td class="uc-col-network"${tooltipAttr}>${getNetworkIconBadge(network)}</td>
                 <td class="uc-col-protocol hidden-column font-bold"${tooltipAttr}>${protocolDisplay}</td>
-                <td class="uc-col-tx-count"${tooltipAttr}>${cells.count.toLocaleString()}</td>
-                <td class="uc-col-swaps"${tooltipAttr}>${(cells.swaps ?? cells.count).toLocaleString()}</td>
+                <td class="uc-col-tx-count hidden-column"${tooltipAttr}>${cells.count.toLocaleString()}</td>
+                <td class="uc-col-swaps hidden-column"${tooltipAttr}>${(cells.swaps ?? cells.count).toLocaleString()}</td>
                 <td class="uc-col-apr ${aprClass}"${tooltipAttr}>${formatAprPercent(cells.apr)}</td>
                 <td class="uc-col-volume hidden-column font-bold"${tooltipAttr}>${formatUSD(cells.volume)}</td>
                 <td class="uc-col-market-size hidden-column"${tooltipAttr}>${formatUSD(cells.fees)}</td>

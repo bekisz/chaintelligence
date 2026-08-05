@@ -14,10 +14,11 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', '..'))
-sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'routing'))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder'))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'dags'))
 
 try:
-    from config import DATA_WAREHOUSE_DB
+    from common.utils.config import DATA_WAREHOUSE_DB
 except ImportError:
     DATA_WAREHOUSE_DB = "dbname=chaintelligence user=airflow password=airflow host=localhost port=5433"
 
