@@ -11,7 +11,7 @@ import requests
 from fastapi import FastAPI, HTTPException, Query, Request, Response, Body
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse
 from anyio import to_thread
 from dotenv import load_dotenv
@@ -566,6 +566,7 @@ try:
     from shortcut_finder import ShortcutFinder
     from config import DATA_WAREHOUSE_DB
     import undercut_analyzer as ua
+    import swap_distribution as sd
 except ImportError as e:
     print(f"Error importing routing modules from {API_ROUTING}: {e}")
     sys.exit(1)
@@ -585,7 +586,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status"]
+    exempt_paths = ["/api/coin/list", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status", "/pool-arena", "/api/pool-arena", "/api/swap-distribution"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -637,6 +638,27 @@ class AnalysisRequest(BaseModel):
 class HistoryFeederRequest(BaseModel):
     force_update: bool = False
     coin_symbols: List[str] = []
+
+class PoolArenaPool(BaseModel):
+    name: str = "Pool"
+    liquidity_usd: float = 100000.0   # total two-sided liquidity
+    range_pct: float = 10.0
+    fee_bps: float = 30.0             # 0.3% default
+
+class PoolArenaSwaps(BaseModel):
+    count: int = 2000
+    seed: int = 7
+    vol_min: float = 50.0
+    vol_max: float = 50000.0
+    direction_bias: float = 0.5       # probability a swap is start->end
+
+class PoolArenaRequest(BaseModel):
+    pools: List[PoolArenaPool] = Field(default_factory=lambda: [
+        PoolArenaPool(name="Baseline", liquidity_usd=100000.0),
+        PoolArenaPool(name="Deep", liquidity_usd=500000.0),
+    ])
+    swaps: PoolArenaSwaps = Field(default_factory=PoolArenaSwaps)
+    days: float = 30.0
 
 def resolve_token_input(input_str: str) -> list[str]:
     """
@@ -1703,6 +1725,258 @@ async def undercut(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pool-arena/simulate", tags=["Pool Arena"])
+async def pool_arena_simulate(req: PoolArenaRequest):
+    """Run the coupled N-pool simulation on generated random swap demand.
+
+    The user defines 2+ pools (liquidity / range / fee tier) and the demand
+    generator's parameters (swap count, seed, volume bounds, direction bias).
+    Every swap is quoted against all pools' current drifted prices and routed
+    to the best fill, so no historical price data is required. Returns
+    per-pool volume / fees / APR plus a cumulative volume time-series."""
+    if not req.pools or len(req.pools) < 2:
+        raise HTTPException(status_code=400, detail="Define at least 2 pools")
+    if req.swaps.count < 10 or req.swaps.count > 200000:
+        raise HTTPException(status_code=400, detail="swaps.count must be in [10, 200000]")
+    if not (0.0 <= req.swaps.direction_bias <= 1.0):
+        raise HTTPException(status_code=400, detail="direction_bias must be in [0, 1]")
+
+    # Generate the demand server-side (deterministic via seed).
+    import random as _random
+    from fractions import Fraction as _Fraction
+    rng = _random.Random(req.swaps.seed)
+    fwd, rev = [], []
+    for i in range(req.swaps.count):
+        usd = rng.uniform(req.swaps.vol_min, req.swaps.vol_max)
+        sw = {"ts": i, "input": usd, "output": usd, "usd": usd, "fee_bps": 30,
+              "cid": 1, "protocol": "Arena", "pool_address": "0xARENA"}
+        (fwd if rng.random() < req.swaps.direction_bias else rev).append(sw)
+    total_fwd = sum(s["usd"] for s in fwd)
+
+    def _run():
+        return ua.simulate_pools(
+            [{"name": p.name, "cap": p.liquidity_usd / 2.0,
+              "range_pct": p.range_pct,
+              "fee_pips": int(round(p.fee_bps * 100))} for p in req.pools],
+            fwd, _Fraction(1, 1), 1.0, 1.0, total_fwd,
+            reverse_swaps=rev, series_every=max(1, req.swaps.count // 100))
+
+    res = await asyncio.to_thread(_run)
+
+    pools_out = []
+    for p, r in zip(req.pools, res["pools"]):
+        two_way_vol = r["usd"] + r["reverse_usd"]
+        fee = r["fee_usd"] + r["reverse_fee_usd"]
+        apr = fee / p.liquidity_usd * (365.0 / req.days) * 100.0 if p.liquidity_usd > 0 else 0.0
+        pools_out.append({
+            "name": p.name,
+            "liquidity_usd": p.liquidity_usd,
+            "range_pct": p.range_pct,
+            "fee_bps": p.fee_bps,
+            "count": r["count"],
+            "usd": r["usd"],
+            "reverse_count": r["reverse_count"],
+            "reverse_usd": r["reverse_usd"],
+            "volume": two_way_vol,
+            "fee_usd": fee,
+            "apr_pct": apr,
+            "pct": r["pct"],
+        })
+
+    return {
+        "pools": pools_out,
+        "series": res.get("series", []),
+        "total_volume": total_fwd + sum(s["usd"] for s in rev),
+        "swap_count": req.swaps.count,
+        "days": req.days,
+    }
+
+
+@app.get("/api/swap-distribution", tags=["Swap Distribution"])
+async def swap_distribution(
+    start_token: str,
+    end_token: str,
+    days: Optional[float] = Query(None, description="Lookback period in days"),
+    start_date: Optional[str] = Query(None, description="ISO format start date"),
+    end_date: Optional[str] = Query(None, description="ISO format end date"),
+    network: Optional[str] = Query(None, description="Filter swaps by network"),
+    limit: int = Query(500000, ge=100, le=2000000, description="Max swap rows sampled"),
+    exclude_chains: Optional[str] = Query(None, description="Comma-separated chain names to exclude"),
+    group_by: str = Query("chain", pattern="^(chain|direction)$",
+                          description="Split the histogram into per-chain groups or per-direction (start→end vs end→start) groups"),
+    direction: str = Query("both", pattern="^(both|forward|reverse)$",
+                           description="Restrict to a single swap direction: both (default), forward (start→end), or reverse (end→start)"),
+):
+    """Analyze the swap-size distribution for a token route.
+
+    Samples amount_usd for the given token pair (either direction) within the
+    date range, fits a lognormal body + Pareto tail, and returns the log-binned
+    histogram plus fitted curves for the frontend to render as pure SVG.
+
+    `group_by` controls how the stacked histogram splits:
+      - "chain" (default): one segment per network (arbitrum, base, ...)
+      - "direction": one segment per swap direction, labelled as
+        START→END and END→START using the resolved start/end tokens.
+    """
+    try:
+        now = datetime.now()
+        if days is not None:
+            end_dt = now
+            start_dt = end_dt - timedelta(days=days)
+        elif start_date:
+            def safe_parse_iso(date_str: str) -> datetime:
+                s = date_str.replace('Z', '+00:00').strip()
+                try:
+                    return datetime.fromisoformat(s)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Invalid date: {date_str}")
+
+            start_dt = safe_parse_iso(start_date)
+            if end_date:
+                end_dt = safe_parse_iso(end_date)
+                if end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
+                    end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            else:
+                end_dt = now
+        else:
+            end_dt = now
+            start_dt = end_dt - timedelta(days=1)
+
+        if end_dt <= start_dt:
+            raise HTTPException(status_code=400, detail="start_date must be before end_date")
+
+        start_list = resolve_token_input(start_token)
+        end_list = resolve_token_input(end_token)
+        if not start_list:
+            start_list = [start_token.strip().upper()]
+        if not end_list:
+            end_list = [end_token.strip().upper()]
+        start_list = [s.strip().upper() for s in start_list]
+        end_list = [e.strip().upper() for e in end_list]
+
+        exclude = []
+        if exclude_chains:
+            exclude = [c.strip().lower() for c in exclude_chains.split(",") if c.strip()]
+
+        def _fetch_and_analyze():
+            with get_conn() as conn:
+                cur = conn.cursor()
+                exclude_sql = ""
+
+                start_wild = "*" in start_list
+                end_wild = "*" in end_list
+
+                # Pair constraint: every non-wildcard side must appear in the
+                # pool (as coin0 or coin1). A wildcard side adds no restriction.
+                pair_pred = []
+                pair_params = []
+                if not start_wild:
+                    pair_pred.append("(UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s))")
+                    pair_params += [start_list, start_list]
+                if not end_wild:
+                    pair_pred.append("(UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s))")
+                    pair_params += [end_list, end_list]
+
+                # Direction constraint: the input token is coin0 when amount0<0,
+                # else coin1 (Uniswap sign convention). Forward => input is a
+                # start-side token, reverse => input is an end-side token.
+                input_expr = ("CASE WHEN s.amount0 IS NOT NULL AND s.amount0 < 0 "
+                              "THEN UPPER(c0.symbol) ELSE UPPER(c1.symbol) END")
+                dir_pred = ""
+                dir_params = []
+                if direction == "forward" and not start_wild:
+                    dir_pred = f" AND {input_expr} = ANY(%s)"
+                    dir_params.append(start_list)
+                elif direction == "reverse" and not end_wild:
+                    dir_pred = f" AND {input_expr} = ANY(%s)"
+                    dir_params.append(end_list)
+
+                pair_sql = " AND ".join(pair_pred) if pair_pred else "TRUE"
+                params = ([start_dt, end_dt] + pair_params + dir_params
+                          + [network, network])
+                if exclude:
+                    exclude_sql = " AND NOT (LOWER(ch.name) = ANY(%s))"
+                    params.append(exclude)
+                params.append(limit)
+                cur.execute(f"""
+                    SELECT s.amount_usd, ch.name, UPPER(c0.symbol), UPPER(c1.symbol), s.amount0
+                    FROM swaps s
+                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                    JOIN chain ch ON lp.chain_id = ch.id
+                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                    WHERE s.ts >= %s AND s.ts <= %s
+                      AND s.amount_usd >= 10.0
+                      AND {pair_sql}
+                      {dir_pred}
+                      AND (LOWER(ch.name) = LOWER(%s) OR %s IS NULL)
+                      {exclude_sql}
+                    ORDER BY s.ts DESC
+                    LIMIT %s
+                """, params)
+                by_chain = {}
+                by_dir = {}
+                start_set = set(s.upper() for s in start_list if s != "*")
+                end_set = set(e.upper() for e in end_list if e != "*")
+                fwd_label = ",".join(start_list).upper() + "→" + ",".join(end_list).upper()
+                rev_label = ",".join(end_list).upper() + "→" + ",".join(start_list).upper()
+                for amt, chain, sym0, sym1, amount0 in cur.fetchall():
+                    by_chain.setdefault(chain, []).append(amt)
+                    # coin0/coin1 are fixed pool positions; the trade direction
+                    # is the input token: coin0 when amount0<0, coin1 when amount0>0.
+                    input_sym = sym0 if amount0 is not None and amount0 < 0 else sym1
+                    if start_set and input_sym in start_set:
+                        key = fwd_label
+                    elif end_set and input_sym in end_set:
+                        key = rev_label
+                    elif end_wild and start_set:
+                        # input isn't a start token and the end side is a wildcard,
+                        # so this is the reverse: wildcard-token → START.
+                        key = rev_label
+                    elif start_wild and end_set:
+                        # wildcard-token → END is forward.
+                        key = fwd_label
+                    else:
+                        key = fwd_label
+                    by_dir.setdefault(key, []).append(amt)
+                cur.close()
+            result = sd.analyze_sizes_by_chain(by_chain)
+            if result:
+                dirs = sd.analyze_sizes_by_chain(by_dir)
+                if dirs:
+                    by_label = dict.fromkeys(by_dir)  # preserve insertion order
+                    for ch in dirs["chains"]:
+                        # Tag each direction group so the frontend doesn't have
+                        # to reverse-engineer forward/reverse from the label
+                        # (start/end may resolve to comma-joined token aliases).
+                        ch["direction"] = "forward" if ch["name"] == fwd_label else "reverse"
+                    result["dir_chains"] = dirs["chains"]
+                else:
+                    result["dir_chains"] = []
+            return result
+
+        result = await asyncio.to_thread(_fetch_and_analyze)
+        if not result:
+            return {"data": None, "n": 0, "start_token": ",".join(start_list),
+                    "end_token": ",".join(end_list),
+                    "network": network, "start_date": start_dt.isoformat(),
+                    "end_date": end_dt.isoformat()}
+        result["start_token"] = ",".join(start_list)
+        result["end_token"] = ",".join(end_list)
+        result["network"] = network
+        result["start_date"] = start_dt.isoformat()
+        result["end_date"] = end_dt.isoformat()
+        result["exclude_chains"] = exclude
+        result["group_by"] = group_by
+        result["direction"] = direction
+        return {"data": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[swap-distribution] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing swap distribution: {e}")
 
 
 @app.get("/api/pools/search", tags=["Liquidity Pools"])
@@ -4235,6 +4509,11 @@ async def read_lp():
 @app.get("/pool", include_in_schema=False)
 async def read_pool():
     return FileResponse(os.path.join(STATIC_DIR, 'pool.html'))
+
+@app.get("/pool-arena", include_in_schema=False)
+async def read_pool_arena():
+    return FileResponse(os.path.join(STATIC_DIR, 'pool-arena.html'),
+                        headers={"Cache-Control": "no-store"})
 
 @app.get("/status", include_in_schema=False)
 @app.get("/health-status", include_in_schema=False)

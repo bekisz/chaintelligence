@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaintelligence | Pool Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
+    <link rel="stylesheet" href="/static/style.css?v=44.0">
+    <style>
+        .arena-pools { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 12px; }
+        .arena-pool-row { display: grid; grid-template-columns: 1.8fr 56px 1.5fr 1.1fr 0.9fr 40px; gap: 12px; align-items: center; }
+        .arena-pool-row .token-input-field { padding: 1.1rem 1.2rem; font-size: 1.1rem; }
+        .arena-pool-row input[type="color"] { height: 52px; padding: 3px; cursor: pointer; background: var(--uniswap-input-bg); border: 1px solid var(--uniswap-border); border-radius: 12px; }
+        .arena-col-heads { display: grid; grid-template-columns: 1.8fr 56px 1.5fr 1.1fr 0.9fr 40px; gap: 12px; align-items: center; font-size: 0.75rem; color: var(--text-secondary, #a3b3c9); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+        .remove-pool-btn { background: none; border: 1px solid var(--uniswap-border); color: #e57373; border-radius: 12px; cursor: pointer; height: 52px; font-size: 1.2rem; }
+        .remove-pool-btn:hover { background: rgba(229,115,115,0.12); }
+        .arena-swaps .token-input-field { padding: 1.2rem 1.3rem; font-size: 1.15rem; }
+        .arena-swaps .input-group label { font-size: 1rem; }
+        .pool-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+        .legend-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+        .arena-table th, .arena-table td { padding: 10px 12px; text-align: right; }
+        .arena-table th:first-child, .arena-table td:first-child { text-align: left; }
+        .arena-summary { display: flex; gap: 24px; flex-wrap: wrap; margin: 12px 0; font-size: 0.9rem; }
+        .arena-summary b { color: var(--text-primary, #fff); }
+        .arena-chart-box { width: 100%; margin: 0 0 8px 0; }
+        .arena-charts { margin-top: 16px; }
+        .arena-chart-pane { padding: 16px; }
+        .arena-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .arena-tab { background: none; border: 1px solid var(--uniswap-border, rgba(255,255,255,0.15)); color: var(--text-secondary, #a3b3c9); border-radius: 10px; padding: 8px 18px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .arena-tab:hover { border-color: #565A69; }
+        .arena-tab.active { background: var(--uniswap-pink, #ff007a); border-color: var(--uniswap-pink, #ff007a); color: #fff; }
+        .arena-chart-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; }
+        .arena-help { display: inline-block; margin-left: 4px; font-size: 0.8rem; color: var(--text-secondary, #a3b3c9); cursor: help; }
+        .arena-error { color: #e57373; margin: 8px 0; }
+        #arena-status { font-size: 0.85rem; color: var(--text-secondary, #a3b3c9); margin: 8px 0; }
+    </style>
+</head>
+
+<body>
+    <!-- Unified Uniswap-Style Header -->
+    <header class="unified-header">
+        <div class="header-content">
+            <a href="/" class="logo-section">
+                <img src="/static/logo.png?v=side-brain-minimal" alt="Chaintelligence" class="logo-icon">
+                <span class="logo-text">Chaintelligence</span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="/pool" class="nav-link">Pools</a>
+                <a href="/lp" class="nav-link">Positions</a>
+                <a href="/backtester" class="nav-link">Backtest</a>
+                <a href="/routing" class="nav-link">Swaps</a>
+                <a href="/pool-arena" class="nav-link active">Pool Arena</a>
+                <a href="/status" class="nav-link secondary-link">Health</a>
+                <a href="/docs" class="nav-link secondary-link">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <main>
+            <div class="page-hero">
+                <h1 class="page-title">Pool Arena</h1>
+                <p class="page-subtitle">Pit 2+ hypothetical pools against each other on generated swap demand and see who captures volume and APR</p>
+            </div>
+
+            <div class="controls-wrapper">
+                <div class="selection-row">
+                    <span style="font-size: 0.85rem; color: var(--text-secondary, #a3b3c9);">Swaps</span>
+                </div>
+                <div class="advanced-grid arena-swaps" style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1.25rem 1.5rem; border-top: none; padding-top: 0; margin-top: 0;">
+                    <div class="input-group" style="flex: 1 1 180px;">
+                        <label for="swap-count">Swaps <span class="arena-help" data-tooltip="Number of random swaps to generate.&#10;More swaps = smoother, more representative results.&#10;Range: 10 - 200,000.">ⓘ</span></label>
+                        <input type="number" id="swap-count" value="2000" min="10" max="200000" class="token-input-field">
+                    </div>
+                    <div class="input-group" style="flex: 1 1 140px;">
+                        <label for="swap-seed">Seed <span class="arena-help" data-tooltip="Random seed for deterministic results.&#10;Same seed + same params = identical run.">ⓘ</span></label>
+                        <input type="number" id="swap-seed" value="7" class="token-input-field">
+                    </div>
+                    <div class="input-group" style="flex: 1 1 180px;">
+                        <label for="vol-min">Min Volume ($) <span class="arena-help" data-tooltip="Smallest swap size (in USD) the generator can produce.">ⓘ</span></label>
+                        <input type="number" id="vol-min" value="50" min="1" class="token-input-field">
+                    </div>
+                    <div class="input-group" style="flex: 1 1 180px;">
+                        <label for="vol-max">Max Volume ($) <span class="arena-help" data-tooltip="Largest swap size (in USD) the generator can produce.&#10;Volume is drawn uniformly between min and max.">ⓘ</span></label>
+                        <input type="number" id="vol-max" value="50000" min="1" class="token-input-field">
+                    </div>
+                    <div class="input-group" style="flex: 1 1 180px;">
+                        <label for="direction-bias">Direction Bias <span class="arena-help" data-tooltip="Probability each generated swap is forward (buy) vs reverse (sell).&#10;0.0 = all reverse, 0.5 = ~50/50 mix, 1.0 = all forward.&#10;Use it to simulate skewed demand like heavy buy pressure.">ⓘ</span></label>
+                        <input type="text" inputmode="decimal" id="direction-bias" value="0.5" class="token-input-field">
+                    </div>
+                    <div class="input-group" style="flex: 1 1 180px;">
+                        <label for="days">APR Horizon (days) <span class="arena-help" data-tooltip="Horizon used to annualize APR:&#10;APR = fees / liquidity x (365 / days) x 100.&#10;Also used to map the swap series to a time axis.">ⓘ</span></label>
+                        <input type="number" id="days" value="30" min="1" class="token-input-field">
+                    </div>
+                </div>
+
+                <div class="selection-row">
+                    <span style="font-size: 0.85rem; color: var(--text-secondary, #a3b3c9);">Pools</span>
+                    <button id="add-pool-btn" class="secondary-btn" style="margin-left: auto;">+ Add Pool</button>
+                </div>
+                <div class="arena-col-heads">
+                    <span>Pool Name</span>
+                    <span>Color</span>
+                    <span>Liquidity ($)</span>
+                    <span>Fee (%)</span>
+                    <span>Range (%)</span>
+                    <span></span>
+                </div>
+                <div id="pool-list" class="arena-pools"></div>
+
+                <div class="selection-row">
+                    <button id="run-btn" class="primary-btn">Run Arena</button>
+                    <span id="arena-status"></span>
+                </div>
+            </div>
+
+            <div id="results-section" class="results-container hidden">
+                <div class="pool-legend" id="arena-legend"></div>
+                <div class="arena-summary" id="arena-summary"></div>
+                <div class="table-container glass" style="padding: 16px;">
+                    <table class="arena-table">
+                        <thead>
+                            <tr>
+                                <th>Pool</th>
+                                <th>Liquidity</th>
+                                <th>Fee</th>
+                                <th>Range</th>
+                                <th>Volume</th>
+                                <th>Vol Share</th>
+                                <th>Fees</th>
+                                <th>APR</th>
+                            </tr>
+                        </thead>
+                        <tbody id="arena-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="arena-charts">
+                    <div class="arena-tabs">
+                        <button class="arena-tab active" data-chart="apr">APR %</button>
+                        <button class="arena-tab" data-chart="volume">Volume</button>
+                        <button class="arena-tab" data-chart="fees">Fees</button>
+                    </div>
+                    <div class="table-container glass arena-chart-pane" id="pane-apr">
+                        <div class="arena-chart-title">APR % Over Time (trailing window)</div>
+                        <svg id="arena-apr-chart" viewBox="0 0 800 300" preserveAspectRatio="none"></svg>
+                    </div>
+                    <div class="table-container glass arena-chart-pane hidden" id="pane-volume">
+                        <div class="arena-chart-title">Cumulative Volume Over Time</div>
+                        <svg id="arena-chart" viewBox="0 0 800 300" preserveAspectRatio="none"></svg>
+                    </div>
+                    <div class="table-container glass arena-chart-pane hidden" id="pane-fees">
+                        <div class="arena-chart-title">Cumulative Fees Earned</div>
+                        <svg id="arena-fee-chart" viewBox="0 0 800 300" preserveAspectRatio="none"></svg>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/pool-arena.js"></script>
+</body>
+
+</html>

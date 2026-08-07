@@ -334,6 +334,87 @@ def simulate(cap, range_pct, fee_pips, swaps, opening_px, p0_usd, p1_usd,
     return res
 
 
+def simulate_pools(pools, swaps, opening_px, p0_usd, p1_usd,
+                   total_usd, reverse_swaps=None, series_every=None):
+    """General N-pool coupled simulation. Every pool is modeled with the same
+    AMM band math (no recorded on-chain output needed): each swap is quoted
+    against every pool's current drifted price and routed to the best fill.
+    Exact ties are broken by deterministic round-robin among the tied pools.
+
+    `pools` is a list of dicts with keys `cap` (liquidity/2 per token),
+    `range_pct`, `fee_pips` and an optional `name`. Returns per-pool stats
+    (`count`/`usd`/`fee_usd` forward + `reverse_*`, `in_range`, `pct` = share
+    of forward volume) in pool order. If `series_every` is set, `series` holds
+    cumulative snapshots every N events: `[{"step", "pools": [...]}, ...]`.
+
+    Use for pool-arena style experiments: define 2+ pools, run the same demand
+    through all of them, and see who captures volume and fees."""
+    built = [dict(p, pool=build_pool(p["cap"], p["range_pct"], p["fee_pips"],
+                                     opening_px, p0_usd, p1_usd))
+             for p in pools]
+
+    def blank():
+        return {"count": 0, "usd": 0.0, "fee_usd": 0.0,
+                "reverse_count": 0, "reverse_usd": 0.0, "reverse_fee_usd": 0.0,
+                "in_range": 0}
+
+    res = [{"name": b.get("name", f"pool{i}"), "L": b["pool"]["L"], **blank()}
+           for i, b in enumerate(built)]
+    curs = [b["pool"]["s_open"] for b in built]
+    series = []
+    tie_flip = 0
+
+    events = [(s["ts"], True, s) for s in swaps]
+    events += [(s["ts"], False, s) for s in (reverse_swaps or [])]
+    events.sort(key=lambda e: e[0])
+
+    for idx, (_ts, forward, s) in enumerate(events):
+        for i, b in enumerate(built):
+            if b["pool"]["sa"] < curs[i] < b["pool"]["sb"]:
+                res[i]["in_range"] += 1
+        quoted = []
+        for i, b in enumerate(built):
+            out, sq, _ = quote(b["pool"], curs[i], forward,
+                               int(round(s["input"] * SCALE)))
+            if out is not None:
+                quoted.append((out, sq, i))
+        if not quoted:
+            continue
+        best = max(o for o, _sq, _i in quoted)
+        tied = [q for q in quoted if q[0] == best]
+        if len(tied) > 1:
+            # Deterministic round-robin among equally-good pools.
+            chosen = tied[tie_flip % len(tied)]
+            tie_flip += 1
+        else:
+            chosen = tied[0]
+        _best_out, sq_next, pool_i = chosen
+
+        curs[pool_i] = sq_next
+        fee = s["usd"] * built[pool_i]["fee_pips"] / 1_000_000
+        res[pool_i]["fee_usd"] += fee
+        if forward:
+            res[pool_i]["count"] += 1
+            res[pool_i]["usd"] += s["usd"]
+        else:
+            res[pool_i]["reverse_count"] += 1
+            res[pool_i]["reverse_usd"] += s["usd"]
+            res[pool_i]["reverse_fee_usd"] += fee
+
+        if series_every and (idx + 1) % series_every == 0:
+            series.append({"step": idx + 1, "pools": [
+                {"count": r["count"], "usd": r["usd"], "fee_usd": r["fee_usd"],
+                 "reverse_count": r["reverse_count"], "reverse_usd": r["reverse_usd"],
+                 "reverse_fee_usd": r["reverse_fee_usd"]} for r in res]})
+
+    for r in res:
+        r["pct"] = 100 * r["usd"] / total_usd if total_usd else 0.0
+    out = {"pools": res}
+    if series_every:
+        out["series"] = series
+    return out
+
+
 def simulate_two_pools(comp_cap, comp_range_pct, comp_fee_pips,
                        hyp_cap, hyp_range_pct, hyp_fee_pips,
                        swaps, opening_px, p0_usd, p1_usd,
@@ -344,74 +425,19 @@ def simulate_two_pools(comp_cap, comp_range_pct, comp_fee_pips,
     drifted prices and routed to whichever returns the higher net output (ties
     broken by deterministic alternation). Both pools' prices drift as they serve.
 
+    Thin wrapper over simulate_pools() kept for the existing tests.
+
     Use for parameter experiments (e.g. does a larger- or lower-fee competitor
     capture more volume?): each pool gets its own cap/range/fee tier. Returns
     per-pool stats (`count`/`usd`/`fee_usd` forward + `reverse_*`) plus
     `pct` = the hypothetical pool's share of forward volume."""
-    comp = build_pool(comp_cap, comp_range_pct, comp_fee_pips,
-                      opening_px, p0_usd, p1_usd)
-    hyp = build_pool(hyp_cap, hyp_range_pct, hyp_fee_pips,
-                     opening_px, p0_usd, p1_usd)
-
-    def blank():
-        return {"count": 0, "usd": 0.0, "fee_usd": 0.0,
-                "reverse_count": 0, "reverse_usd": 0.0, "reverse_fee_usd": 0.0,
-                "in_range": 0}
-
-    res = {"comp": blank(), "hyp": blank(),
-           "L": {"comp": comp["L"], "hyp": hyp["L"]}}
-    comp_cur, hyp_cur = comp["s_open"], hyp["s_open"]
-    tie_flip = False
-
-    events = [(s["ts"], True, s) for s in swaps]
-    events += [(s["ts"], False, s) for s in (reverse_swaps or [])]
-    events.sort(key=lambda e: e[0])
-
-    for _ts, forward, s in events:
-        if comp["sa"] < comp_cur < comp["sb"]:
-            res["comp"]["in_range"] += 1
-        if hyp["sa"] < hyp_cur < hyp["sb"]:
-            res["hyp"]["in_range"] += 1
-        comp_out, comp_sq, _ = quote(comp, comp_cur, forward,
-                                     int(round(s["input"] * SCALE)))
-        hyp_out, hyp_sq, _ = quote(hyp, hyp_cur, forward,
-                                   int(round(s["input"] * SCALE)))
-        if comp_out is None and hyp_out is None:
-            continue
-        if comp_out is None:
-            serve_comp = False
-        elif hyp_out is None:
-            serve_comp = True
-        elif comp_out > hyp_out:
-            serve_comp = True
-        elif hyp_out > comp_out:
-            serve_comp = False
-        else:
-            # Exact tie: both pools are equally good; alternate so each gets ~half.
-            tie_flip = not tie_flip
-            serve_comp = not tie_flip
-
-        if serve_comp:
-            comp_cur = comp_sq
-            fee = s["usd"] * comp_fee_pips / 1_000_000
-            res["comp"]["fee_usd"] += fee
-            if forward:
-                res["comp"]["count"] += 1
-                res["comp"]["usd"] += s["usd"]
-            else:
-                res["comp"]["reverse_count"] += 1
-                res["comp"]["reverse_usd"] += s["usd"]
-                res["comp"]["reverse_fee_usd"] += fee
-        else:
-            hyp_cur = hyp_sq
-            fee = s["usd"] * hyp_fee_pips / 1_000_000
-            res["hyp"]["fee_usd"] += fee
-            if forward:
-                res["hyp"]["count"] += 1
-                res["hyp"]["usd"] += s["usd"]
-            else:
-                res["hyp"]["reverse_count"] += 1
-                res["hyp"]["reverse_usd"] += s["usd"]
-                res["hyp"]["reverse_fee_usd"] += fee
-    res["pct"] = 100 * res["hyp"]["usd"] / total_usd if total_usd else 0.0
-    return res
+    r = simulate_pools([
+        {"name": "comp", "cap": comp_cap, "range_pct": comp_range_pct,
+         "fee_pips": comp_fee_pips},
+        {"name": "hyp", "cap": hyp_cap, "range_pct": hyp_range_pct,
+         "fee_pips": hyp_fee_pips},
+    ], swaps, opening_px, p0_usd, p1_usd, total_usd, reverse_swaps=reverse_swaps)
+    comp, hyp = r["pools"]
+    return {"comp": comp, "hyp": hyp,
+            "L": {"comp": comp["L"], "hyp": hyp["L"]},
+            "pct": hyp["pct"]}

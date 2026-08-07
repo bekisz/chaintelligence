@@ -295,9 +295,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             inputEl.value = sym;
             updateInputIcon();
             dropdown.classList.remove('active');
+            justSelected = true;
             inputEl.dispatchEvent(new Event('change', { bubbles: true }));
             inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         };
+
+        // Set by selectSymbol so the synthetic 'input' below doesn't re-open
+        // the popup right after the user picks a token.
+        let justSelected = false;
 
         // Track whether the input was clicked while the dropdown was already open.
         // In that case, the upcoming focus event should close rather than re-open.
@@ -320,6 +325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         inputEl.addEventListener('input', () => {
             updateInputIcon();
+            if (justSelected) { justSelected = false; return; }
             renderDropdown(inputEl.value);
         });
 
@@ -358,6 +364,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.addEventListener('click', (e) => {
             if (!container.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        // Close when focus leaves the input entirely (Tab to another field,
+        // click a non-DOM target, etc.) — otherwise the popup stays open.
+        inputEl.addEventListener('focusout', () => {
+            if (!container.contains(document.activeElement)) {
                 dropdown.classList.remove('active');
             }
         });
