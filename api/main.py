@@ -1970,7 +1970,7 @@ async def swap_distribution(
                 # Mirror the route analyzer: fall back to price × token amount so
                 # those swaps still count. Only fetch prices when needed.
                 min_amt = 10.0
-                if any(r[0] is None or r[0] < min_amt for r in rows):
+                if any(r[0] is None or r[0] <= 0 for r in rows):
                     from postgres_fetcher import PostgresFetcher as _PF
                     price_syms = [s for s in (start_list + end_list) if s != "*"]
                     try:
@@ -1981,7 +1981,7 @@ async def swap_distribution(
                     out_rows = []
                     for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
                         usd = float(amt) if amt is not None else 0.0
-                        if usd < min_amt:
+                        if usd <= 0:
                             # input token = the side with a positive amount
                             # (Uniswap sign convention); price it if available.
                             if (amount0 or 0) > 0:
@@ -1990,12 +1990,14 @@ async def swap_distribution(
                             else:
                                 in_sym = sym1.upper()
                                 in_amt = abs(amount1 or 0)
+                            if in_amt > 1e12:
+                                in_amt /= 1e18
                             p = _latest_prices.get(in_sym)
                             # Stablecoin heuristic matching route_analyzer: USD/EUR
                             # stablecoins that lack a DB price are worth ~$1.
                             if p is None and any(x in in_sym for x in ['USD', 'EUR']):
                                 p = 1.0
-                            usd = in_amt * (p or 0.0)
+                            usd = min(in_amt * (p or 0.0), 100_000_000.0)
                         if usd >= min_amt:
                             out_rows.append((usd, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id))
                     rows = out_rows
@@ -2118,14 +2120,16 @@ async def swap_distribution(
                                 chain = first[0]
                                 in_usd = first[8]
                                 in_amt_usd = float(in_usd) if in_usd else 0.0
-                                if in_amt_usd < min_amt:
+                                if in_amt_usd <= 0:
                                     in_sym = _leg_in(first[1], first[2], first[3], first[4])
                                     in_amt = abs(first[3] or 0) if (first[3] or 0) > 0 else abs(first[4] or 0)
+                                    if in_amt > 1e12:
+                                        in_amt /= 1e18
                                     _pr = _latest_prices.get(in_sym.upper())
                                     # Stablecoin heuristic matching route_analyzer.
                                     if _pr is None and any(x in in_sym.upper() for x in ['USD', 'EUR']):
                                         _pr = 1.0
-                                    in_amt_usd = in_amt * (_pr or 0.0)
+                                    in_amt_usd = min(in_amt * (_pr or 0.0), 100_000_000.0)
                                 if in_amt_usd >= min_amt:
                                     broad_rows.append((in_amt_usd, chain, first[1], first[2], first[3], first[4], first[5], first[6], txid, first[7]))
                                     broad_by_count[key] = len(route)
