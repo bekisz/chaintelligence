@@ -2349,93 +2349,98 @@ async def swap_distribution(
                 # count the hop length and path string.
                 if rows:
                     from collections import defaultdict
-                    tx_set = sorted({tx for _, _, _, _, _0, _1, _, _, tx, _ in rows})
-                    hcur = conn.cursor()
-                    legs_by_tx = defaultdict(list)
-                    # Fetch legs in chunks of tx hashes so the parameter array
-                    # stays small (a single ANY(%s) over the full set can exceed
-                    # Postgres' 1GB query/string limits).
-                    chunk = 5000
-                    for i in range(0, len(tx_set), chunk):
-                        tx_slice = tx_set[i:i + chunk]
-                        hcur.execute(f"""
-                            SELECT s.tx_hash, s.log_index, UPPER(c0.symbol), UPPER(c1.symbol),
-                                   s.amount0, s.amount1, s.amount_usd, lp.fee_bps, pr.name, ch.name
-                            FROM swaps s
-                            JOIN liquidity_pool lp ON s.pool_id = lp.id
-                            JOIN chain ch ON lp.chain_id = ch.id
-                            JOIN protocol pr ON lp.protocol_id = pr.id
-                            JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                            JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                            WHERE s.tx_hash = ANY(%s)
-                            ORDER BY s.tx_hash, s.log_index
-                        """, (tx_slice,))
-                        for htx, lg, hs0, hs1, ha0, ha1, h_usd, h_fee, h_proto, h_chain in hcur.fetchall():
-                            legs_by_tx[htx].append({
-                                'sym0': hs0, 'sym1': hs1, 'a0': ha0, 'a1': ha1, 'usd': h_usd,
-                                'fee_bps': h_fee, 'protocol': h_proto, 'chain': h_chain,
-                            })
-                    hcur.close()
-                    # A tx only counts toward a hop/route bucket when its FIRST leg
-                    # (lowest log_index) consumes a start-side token, exactly like
-                    # the route analyzer — walking from any start-token leg
-                    # anywhere in a tx invents bogus multi-hop chains for basket
-                    # trades. Direction applies to the chain orientation.
+                    multi_pool_txs = [tx for tx, p in tx_pools.items() if len(p) > 1]
                     tx_hops = {}
                     tx_routes = {}
-                    for htx, legs in legs_by_tx.items():
-                        if htx in tx_hops:
-                            continue
-                        if not legs:
-                            continue
-                        def _leg_input(l):
-                            return l['sym0'] if (l['a0'] or 0) > 0 else l['sym1']
-                        def _leg_out(l):
-                            return l['sym1'] if (l['a0'] or 0) > 0 else l['sym0']
-                        def _leg_fee_str(l):
-                            return 'Dynamic' if l.get('fee_bps') is None else f"{(l['fee_bps'] / 100.0):.2f}%"
-                        def _leg_info(l):
-                            fee_s = _leg_fee_str(l)
-                            proto_s = l.get('protocol') or 'Unknown'
-                            chain_s = l.get('chain') or 'Unknown'
-                            return f"{fee_s}|{proto_s}|{chain_s}"
 
-                        first = legs[0]
-                        first_in = _leg_input(first)
-                        if first_in in start_set:
-                            orient = "forward"
-                            from_set, to_set = start_set, end_set
-                        elif first_in in end_set and direction in ("both", "reverse"):
-                            orient = "reverse"
-                            from_set, to_set = end_set, start_set
-                        else:
+                    # Fast in-memory 1-hop assignment for single-pool txs (98%+ of all txs)
+                    for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
+                        if tx_hash in tx_hops:
                             continue
-                        if orient == "reverse" and direction == "forward":
-                            continue
-                        if orient == "forward" and direction == "reverse":
-                            continue
-                        cur_tok = _leg_out(first)
-                        hops = 1
-                        used = {id(first)}
-                        route_parts = [first_in, f"-- {_leg_info(first)} -->", cur_tok]
-                        while cur_tok not in to_set and len(used) < len(legs):
-                            nxt = None
-                            for l in legs:
-                                if id(l) in used:
-                                    continue
-                                if _leg_input(l) == cur_tok:
-                                    nxt = l
+                        if tx_hash not in tx_pools or len(tx_pools[tx_hash]) == 1:
+                            tx_hops[tx_hash] = 1
+                            in_sym = sym0 if (amount0 or 0) > 0 else sym1
+                            out_sym = sym1 if (amount0 or 0) > 0 else sym0
+                            fee_s = "Dynamic" if fee_bps is None else f"{(fee_bps / 100.0):.2f}%"
+                            tx_routes[tx_hash] = f"{in_sym} -- {fee_s}|{protocol or 'Unknown'}|{chain} --> {out_sym}"
+
+                    # Only query legs for multi-pool transactions (fan-out / multi-hop trades)
+                    if multi_pool_txs:
+                        hcur = conn.cursor()
+                        legs_by_tx = defaultdict(list)
+                        chunk = 5000
+                        for i in range(0, len(multi_pool_txs), chunk):
+                            tx_slice = multi_pool_txs[i:i + chunk]
+                            hcur.execute(f"""
+                                SELECT s.tx_hash, s.log_index, UPPER(c0.symbol), UPPER(c1.symbol),
+                                       s.amount0, s.amount1, s.amount_usd, lp.fee_bps, pr.name, ch.name
+                                FROM swaps s
+                                JOIN liquidity_pool lp ON s.pool_id = lp.id
+                                JOIN chain ch ON lp.chain_id = ch.id
+                                JOIN protocol pr ON lp.protocol_id = pr.id
+                                JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                                JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                                WHERE s.tx_hash = ANY(%s)
+                                ORDER BY s.tx_hash, s.log_index
+                            """, (tx_slice,))
+                            for htx, lg, hs0, hs1, ha0, ha1, h_usd, h_fee, h_proto, h_chain in hcur.fetchall():
+                                legs_by_tx[htx].append({
+                                    'sym0': hs0, 'sym1': hs1, 'a0': ha0, 'a1': ha1, 'usd': h_usd,
+                                    'fee_bps': h_fee, 'protocol': h_proto, 'chain': h_chain,
+                                })
+                        hcur.close()
+
+                        for htx, legs in legs_by_tx.items():
+                            if not legs:
+                                continue
+                            def _leg_input(l):
+                                return l['sym0'] if (l['a0'] or 0) > 0 else l['sym1']
+                            def _leg_out(l):
+                                return l['sym1'] if (l['a0'] or 0) > 0 else l['sym0']
+                            def _leg_fee_str(l):
+                                return 'Dynamic' if l.get('fee_bps') is None else f"{(l['fee_bps'] / 100.0):.2f}%"
+                            def _leg_info(l):
+                                fee_s = _leg_fee_str(l)
+                                proto_s = l.get('protocol') or 'Unknown'
+                                chain_s = l.get('chain') or 'Unknown'
+                                return f"{fee_s}|{proto_s}|{chain_s}"
+
+                            first = legs[0]
+                            first_in = _leg_input(first)
+                            if first_in in start_set:
+                                orient = "forward"
+                                from_set, to_set = start_set, end_set
+                            elif first_in in end_set and direction in ("both", "reverse"):
+                                orient = "reverse"
+                                from_set, to_set = end_set, start_set
+                            else:
+                                continue
+                            if orient == "reverse" and direction == "forward":
+                                continue
+                            if orient == "forward" and direction == "reverse":
+                                continue
+                            cur_tok = _leg_out(first)
+                            hops = 1
+                            used = {id(first)}
+                            route_parts = [first_in, f"-- {_leg_info(first)} -->", cur_tok]
+                            while cur_tok not in to_set and len(used) < len(legs):
+                                nxt = None
+                                for l in legs:
+                                    if id(l) in used:
+                                        continue
+                                    if _leg_input(l) == cur_tok:
+                                        nxt = l
+                                        break
+                                if nxt is None:
                                     break
-                            if nxt is None:
-                                break
-                            used.add(id(nxt))
-                            hops += 1
-                            cur_tok = _leg_out(nxt)
-                            route_parts.append(f"-- {_leg_info(nxt)} -->")
-                            route_parts.append(cur_tok)
+                                used.add(id(nxt))
+                                hops += 1
+                                cur_tok = _leg_out(nxt)
+                                route_parts.append(f"-- {_leg_info(nxt)} -->")
+                                route_parts.append(cur_tok)
 
-                        tx_hops[htx] = hops
-                        tx_routes[htx] = " ".join(route_parts)
+                            tx_hops[htx] = hops
+                            tx_routes[htx] = " ".join(route_parts)
 
                     for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
                         fee_usd = amt * (fee_bps / 10000.0) if fee_bps is not None else 0.0
