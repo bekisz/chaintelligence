@@ -31,6 +31,8 @@
         .dist-control-group select.filter-select:focus { border-color: var(--uniswap-pink, #ff007a); box-shadow: 0 0 0 1px var(--uniswap-pink, #ff007a); }
         .dist-control-group select.filter-select:disabled { opacity: 0.45; cursor: not-allowed; }
         .dist-control-group select.filter-select option { background: #191B1F; color: var(--text-primary); }
+        .dist-total-group { justify-content: flex-end; margin-left: auto; }
+        .dist-total-value { display: inline-flex; align-items: center; gap: 4px; font-size: 0.9rem; font-weight: 700; color: var(--text-primary); background: rgba(255,255,255,0.06); border: 1px solid var(--uniswap-border, rgba(255,255,255,0.12)); border-radius: 10px; padding: 8px 14px; min-width: 110px; justify-content: center; font-variant-numeric: tabular-nums; }
         .chain-toggle { display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 4px; cursor: pointer; color: inherit; font: inherit; border-radius: 4px; }
         .chain-toggle:hover { background: rgba(255,255,255,0.08); }
         .chain-toggle.chain-off { opacity: 0.35; text-decoration: line-through; }
@@ -97,7 +99,9 @@
                 <div class="selection-row">
                     <div class="input-group-pair">
                         <input type="text" id="start-token" placeholder="Token" value="USDC" class="token-input-field">
-                        <span class="token-arrow"><svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="28 5 38 12 28 19"></polyline></svg></span>
+                        <button type="button" id="route-direction-arrow" class="token-arrow" title="Swap direction: single arrow = forward only; double arrow = both directions" aria-label="Swap direction">
+                            <svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="28 5 38 12 28 19"></polyline></svg>
+                        </button>
                         <input type="text" id="end-token" placeholder="Token" value="USDT" class="token-input-field">
                     </div>
 
@@ -136,6 +140,7 @@
                                     <label for="ctrl-axis">Y axis</label>
                                     <select id="ctrl-axis" class="filter-select">
                                         <option value="volume" selected>USD volume</option>
+                                        <option value="fees">Fees</option>
                                         <option value="count">Swap count</option>
                                     </select>
                                 </div>
@@ -147,19 +152,19 @@
                                     </select>
                                 </div>
                                 <div class="dist-control-group">
-                                    <label for="ctrl-group">Group by</label>
+                                <label for="ctrl-group">Group by</label>
                                     <select id="ctrl-group" class="filter-select">
                                         <option value="chain">Chain</option>
+                                        <option value="fee_tier">Fee Tier</option>
+                                        <option value="protocol">Protocol</option>
+                                        <option value="split">Split</option>
+                                        <option value="hops">Hops</option>
                                         <option value="direction">Direction</option>
                                     </select>
                                 </div>
-                                <div class="dist-control-group">
-                                    <label for="ctrl-direction">Direction</label>
-                                    <select id="ctrl-direction" class="filter-select">
-                                        <option value="both">Both</option>
-                                        <option value="forward">Forward</option>
-                                        <option value="reverse">Reverse</option>
-                                    </select>
+                                <div class="dist-control-group dist-total-group" title="Total sum of the selected Y axis metric across all groups">
+                                    <label>Σ Total</label>
+                                    <span id="dist-total" class="dist-total-value">—</span>
                                 </div>
                             </div>
                             <div class="dist-chart-box">
@@ -309,6 +314,9 @@
                                             <label class="checkbox-label"><input type="checkbox" id="direct-only-filter"> Direct Only</label>
                                             <label class="checkbox-label" id="stable-shortcut-wrapper" style="opacity: 0.5; transition: opacity 0.2s;" title="Only enabled when querying tokens within the same family (e.g. USD-USD, ETH-ETH, BTC-BTC).">
                                                 <input type="checkbox" id="stable-shortcut-filter" disabled> Stable Pair Shortcut
+                                            </label>
+                                            <label class="checkbox-label" id="collate-direction-wrapper" style="opacity: 0.5; transition: opacity 0.2s;" title="Merge the route running in both directions into one row, summing volumes, txs and swaps, shown with a double-headed arrow. Enabled when results contain bidirectional routes.">
+                                                <input type="checkbox" id="collate-direction-filter" checked> Collate Directions
                                             </label>
                                         </div>
                                     </div>
@@ -499,7 +507,7 @@
 
     <script src="/static/nav.js"></script>
     <script src="/static/token-input.js?v=1.2"></script>
-    <script src="/static/swap-distribution.js?v=3.4"></script>
+    <script src="/static/swap-distribution.js?v=3.10"></script>
     <script src="/static/app.js?v=49.0"></script>
 </body>
 

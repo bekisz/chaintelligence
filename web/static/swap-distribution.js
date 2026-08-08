@@ -64,7 +64,6 @@ let xFullLo = null, xFullHi = null;   // full data domain
 let xLo = null, xHi = null;            // currently visible domain
 let lastZoomKey = null;                // resets zoom when dataset/mode changes
 let dragStartX = null, dragStartLo = null, dragStartHi = null;
-// Direction filter for the query: "both", "forward" (start→end), or "reverse" (end→start).
 let directionFilter = "both";
 // Current route tokens (form inputs), used to color direction groups deterministically.
 let startTokenInputValue = "";
@@ -72,6 +71,20 @@ let endTokenInputValue = "";
 
 // Stable palette for non-chain group labels (e.g. swap directions).
 const GROUP_COLORS = ["#0052ff", "#c99700", "#6fc3f7", "#8b93a3", "#ff0420", "#8247e5"];
+// Fee tier palette: sorted by tier, low→high.
+const FEE_TIER_COLORS = ["#22c55e", "#84cc16", "#eab308", "#f97316", "#ef4444", "#a855f7", "#a3b3c9"];
+// Protocol palette: common protocols get stable colors.
+const PROTOCOL_COLORS = {
+    "Uniswap V3": "#f73ac2",
+    "Uniswap V4": "#9b59b6",
+    "PancakeSwap V3": "#f0b90b",
+    "Aerodrome": "#2dd4bf",
+    "Camelot": "#f97316",
+    "Balancer": "#6b5ce7",
+    "SushiSwap": "#0e0f23",
+    "Curve": "#0073ff",
+    "Dodo": "#f58b13",
+};
 function groupHash(s) {
     let h = 5381;
     for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
@@ -110,15 +123,39 @@ function directionLegendLabel(fullName) {
     if (d === "forward") return `${s}→${e}`;
     return `${e}→${s}`;
 }
-function groupColor(name) {
-    if (CHAIN_COLORS[name]) return CHAIN_COLORS[name];
+function groupColor(name, mode) {
+    if (CHAIN_COLORS[name] && (!mode || mode === "chain")) return CHAIN_COLORS[name];
+    if (mode === "fee_tier") {
+        // Map common fee tiers to a green→red gradient
+        const commonTiers = ["0.01%","0.02%","0.05%","0.10%","0.25%","0.30%","0.50%","1.00%","Dynamic"];
+        const ti = commonTiers.indexOf(name);
+        if (ti >= 0) return FEE_TIER_COLORS[Math.min(ti, FEE_TIER_COLORS.length - 1)];
+        return FEE_TIER_COLORS[groupHash(name) % FEE_TIER_COLORS.length];
+    }
+    if (mode === "protocol") {
+        if (PROTOCOL_COLORS[name]) return PROTOCOL_COLORS[name];
+        return GROUP_COLORS[groupHash(name) % GROUP_COLORS.length];
+    }
+    if (mode === "split") {
+        // Split = router fanned the queried pair across 2+ pools in one tx.
+        return name === "Split" ? "#f97316" : "#22c55e"; // split: orange / non-split: green
+    }
+    if (mode === "hops") {
+        // hops: single-hop green → multi-hop amber/red gradient.
+        const m = name.match(/^(\d+) hop/);
+        if (m) {
+            const hs = parseInt(m[1], 10);
+            return ["#22c55e", "#84cc16", "#eab308", "#f97316"][Math.min(hs - 1, 3)];
+        }
+        return "#ef4444"; // 4+ hops / fallback
+    }
     const dir = directionColor(name);
     if (dir) return dir;
     return GROUP_COLORS[groupHash(name) % GROUP_COLORS.length];
 }
 
 function chainColor(name) {
-    return groupColor(name);
+    return groupColor(name, groupByMode);
 }
 function lnPdf(v, sigma, scale) {
     if (v <= 0 || sigma <= 0 || scale <= 0) return 0;
@@ -188,6 +225,31 @@ function buildCurves(lo, hi, sigma, scale, alpha, xmin, points = 400) {
 // and lognormal (additive sufficient stats), ~1% for the binned quantiles.
 function activeGroups(d) {
     if (groupByMode === "direction") return d.dir_chains || [];
+    if (groupByMode === "fee_tier") {
+        const tiers = d.fee_tier_chains || [];
+        return tiers.sort((a, b) => {
+            const pa = parseFloat(a.name) || (a.name === "Dynamic" ? Infinity : 0);
+            const pb = parseFloat(b.name) || (b.name === "Dynamic" ? Infinity : 0);
+            return pa - pb;
+        });
+    }
+    if (groupByMode === "protocol") return d.protocol_chains || [];
+    if (groupByMode === "split") {
+        // Order Split before Non-split so the fan-out segment is on top.
+        const s = (d.split_chains || []).slice();
+        s.sort((a, b) => (a.name === "Split" ? -1 : 1) - (b.name === "Split" ? -1 : 1));
+        return s;
+    }
+    if (groupByMode === "hops") {
+        // Order low→high hop count ("1 hop", "2 hops", "3 hops", "4+ hops").
+        const h = (d.hops_chains || []).slice();
+        h.sort((a, b) => {
+            const ha = parseInt(a.name, 10) || (a.name.startsWith("4+") ? 4 : 0);
+            const hb = parseInt(b.name, 10) || (b.name.startsWith("4+") ? 4 : 0);
+            return ha - hb;
+        });
+        return h;
+    }
     return d.chains || [];
 }
 function computeSubset(d) {
@@ -201,23 +263,28 @@ function computeSubset(d) {
     const dens = new Array(nbins).fill(0);
     const counts = new Array(nbins).fill(0);
     const sums = new Array(nbins).fill(0);
+    const fees = new Array(nbins).fill(0);
     const lin = d.histogram.linear || null;
     const lnbins = lin ? lin.counts.length : 0;
     const lcounts = new Array(lnbins).fill(0);
     const lsums = new Array(lnbins).fill(0);
+    const lfees = new Array(lnbins).fill(0);
     let sumLog = 0, sumLog2 = 0, cmin = Infinity, cmax = -Infinity;
     for (const c of visible) {
         for (let i = 0; i < nbins; i++) {
             dens[i] += c.dens_log[i] * scale;
             counts[i] += c.counts[i];
             sums[i] += c.sums[i];
+            fees[i] += c.fees[i] || 0;
         }
         if (lnbins > 0) {
             const lc = c.linear_counts || [];
             const ls = c.linear_sums || [];
+            const lf = c.linear_fees || [];
             for (let i = 0; i < lnbins; i++) {
                 lcounts[i] += lc[i] || 0;
                 lsums[i] += ls[i] || 0;
+                lfees[i] += lf[i] || 0;
             }
         }
         sumLog += c.sum_log;
@@ -236,6 +303,11 @@ function computeSubset(d) {
     const pareto = fitParetoFromHist(dens, edges, mids, nSub, p90);
     const curves = buildCurves(Math.log10(cmin), Math.log10(cmax),
                                sigma, lnScale, pareto.alpha, pareto.xmin);
+    const groupField = groupByMode === "fee_tier" ? "fee_tier_chains" :
+                       groupByMode === "protocol" ? "protocol_chains" :
+                       groupByMode === "direction" ? "dir_chains" :
+                       groupByMode === "split" ? "split_chains" :
+                       groupByMode === "hops" ? "hops_chains" : "chains";
     return {
         n: nSub,
         min: cmin,
@@ -246,8 +318,9 @@ function computeSubset(d) {
         lognormal: { s: sigma, scale: lnScale },
         pareto: pareto,
         histogram: { edges: edges, mids: mids, dens_log: dens, counts: counts, sums: sums,
-                      linear: lin ? { edges: lin.edges, counts: lcounts, sums: lsums } : null },
-        chains: visible,
+                      fees: fees,
+                      linear: lin ? { edges: lin.edges, counts: lcounts, sums: lsums, fees: lfees } : null },
+        [groupField]: visible,
         curves: curves,
     };
 }
@@ -347,14 +420,18 @@ function showBinTooltip(d, i, event) {
     const hi = fullDollar(hist.edges[i + 1]);
     const cnt = hist.counts[i];
     const val = hist.sums[i];
+    const fees = hist.fees[i];
     const n = d.n;
     const totalVal = hist.sums.reduce((a, b) => a + b, 0);
+    const totalFees = (hist.fees || []).reduce((a, b) => a + b, 0);
     const cntPct = n > 0 ? (cnt / n * 100) : 0;
     const valPct = totalVal > 0 ? (val / totalVal * 100) : 0;
+    const feePct = totalFees > 0 ? (fees / totalFees * 100) : 0;
     el.innerHTML = `
         <div class="tt-title">${lo} – ${hi}</div>
         <div class="tt-row"><span>Swaps</span><b>${cnt.toLocaleString("en-US")} <em>(${cntPct.toFixed(1)}%)</em></b></div>
         <div class="tt-row"><span>Value</span><b>${fullDollar(val)} <em>(${valPct.toFixed(1)}%)</em></b></div>
+        <div class="tt-row"><span>Fees</span><b>${fullDollar(fees)} <em>(${feePct.toFixed(1)}%)</em></b></div>
     `;
     const box = el.getBoundingClientRect();
     const svgRect = document.getElementById("dist-chart").closest(".dist-chart-box").getBoundingClientRect();
@@ -401,11 +478,25 @@ function drawDistribution(d) {
 
     const hist = d.histogram;
     const linear = bucketMode === "linear";
+    const volume = yAxisMode === "volume";
+    const fees = yAxisMode === "fees";
     const edges = linear ? hist.linear.edges : hist.edges;
     const counts = linear ? hist.linear.counts : hist.counts;
     const sums = linear ? hist.linear.sums : hist.sums;
-    const chains = activeGroups(d);
+    let chains = activeGroups(d);
     const nbins = counts.length;
+
+    // Order groups (chains / fee tiers / protocols) by their total relevance
+    // for the current Y axis (descending): USD volume, fees, or swap count.
+    // This drives both the stacking order and the legend toggle order so they
+    // stay visually aligned.
+    const _metricKey = volume
+        ? (linear ? "linear_sums" : "sums")
+        : fees ? (linear ? "linear_fees" : "fees")
+        : (linear ? "linear_counts" : "counts");
+    const _metricTally = entry =>
+        (entry[_metricKey] || []).reduce((a, b) => a + (b || 0), 0);
+    chains = chains.slice().sort((a, b) => _metricTally(b) - _metricTally(a));
 
     // Establish/keep the zoom domain in axis space. Axis space = log10(v) in
     // log mode, v in linear mode. Reset zoom whenever the input changes.
@@ -423,19 +514,33 @@ function drawDistribution(d) {
         return linear ? a : Math.pow(10, a);
     };
 
-    const volume = yAxisMode === "volume";
-    const valuesFull = volume ? sums : counts;
-    const yFmt = volume ? fmtStat : fmtCount;
-    // y-scale from the bars currently visible in the zoomed x-window.
+    const valuesFull = volume ? sums : (fees ? (linear ? hist.linear.fees : hist.fees) : counts);
+    const yFmt = (volume || fees) ? fmtStat : fmtCount;
+    // y-scale from the bars currently visible in the zoomed x-window. A heavy
+    // tail (a few enormous swap-size/fee bins) can otherwise flatten the whole
+    // distribution, so the top of the axis is set at the ~98th percentile of
+    // visible bar values and any wild outliers get clipped at the ceiling.
     let ymax = 1;
+    const visibleVals = [];
     for (let i = 0; i < nbins; i++) {
         const a0 = linear ? edges[i] : Math.log10(edges[i]);
         const a1 = linear ? edges[i + 1] : Math.log10(edges[i + 1]);
         if (a1 < xLo || a0 > xHi) continue;
-        if (valuesFull[i] > ymax) ymax = valuesFull[i];
+        const v = valuesFull[i];
+        if (v > 0) visibleVals.push(v);
+        if (v > ymax) ymax = v;
+    }
+    if (visibleVals.length >= 8) {
+        visibleVals.sort((a, b) => a - b);
+        const cap = visibleVals[Math.min(visibleVals.length - 1,
+                                         Math.floor(visibleVals.length * 0.98))];
+        // clamp so a decent fraction of bar height always remains visible, but
+        // never shrink below the true max unless a real outlier dominates.
+        ymax = cap;
     }
     ymax *= 1.15;
-    const Y = v => H - PAD_B - (v / ymax) * plotH;
+    const ymaxAbs = ymax;
+    const Y = v => Math.max(PAD_T, H - PAD_B - (v / ymaxAbs) * plotH);
 
     // Gridlines + y labels
     for (let g = 0; g < 5; g++) {
@@ -488,9 +593,14 @@ function drawDistribution(d) {
         const width = Math.max(x1 - x0, 0.8);
         let cumulative = 0;
         for (const ch of chains) {
-            const seg = volume
-                ? (linear ? (ch.linear_sums || [])[i] : ch.sums[i]) || 0
-                : (linear ? (ch.linear_counts || [])[i] : ch.counts[i]) || 0;
+            let seg;
+            if (volume) {
+                seg = (linear ? (ch.linear_sums || [])[i] : ch.sums[i]) || 0;
+            } else if (fees) {
+                seg = (linear ? (ch.linear_fees || [])[i] : ch.fees[i]) || 0;
+            } else {
+                seg = (linear ? (ch.linear_counts || [])[i] : ch.counts[i]) || 0;
+            }
             if (seg <= 0) continue;
             const yTop = Y(cumulative + seg);
             const yBot = Y(cumulative);
@@ -577,7 +687,28 @@ function drawDistribution(d) {
 
 function renderStats(d) {
     const stats = document.getElementById("dist-stats");
-    stats.innerHTML = "";
+    if (stats) stats.innerHTML = "";
+
+    // Σ Total: the sum of the metric selected on the Y axis across every
+    // active (non-excluded) group. Volume => total USD, fees => total fees,
+    // count => total swap count.
+    const totalEl = document.getElementById("dist-total");
+    if (totalEl && d) {
+        const linear = bucketMode === "linear";
+        const _sum = arr => (arr || []).reduce((a, b) => a + (b || 0), 0);
+        let total = 0;
+        const hist = d.histogram || {};
+        if (yAxisMode === "fees") {
+            total = _sum(linear ? (hist.linear && hist.linear.fees) : hist.fees);
+        } else if (yAxisMode === "count") {
+            total = _sum(linear ? (hist.linear && hist.linear.counts) : hist.counts);
+        } else {
+            total = _sum(linear ? (hist.linear && hist.linear.sums) : hist.sums);
+        }
+        totalEl.textContent = (yAxisMode === "volume" || yAxisMode === "fees")
+            ? fmtStat(total)
+            : fmtCount(total);
+    }
 }
 
 async function runAnalysis() {
@@ -621,6 +752,7 @@ async function runAnalysis() {
             url += `&network=${encodeURIComponent(selectedNetwork)}`;
         }
                 url += `&direction=${directionFilter}`;
+                url += `&group_by=${groupByMode}`;
 
         const response = await fetch(url);
         if (!response.ok) {
@@ -709,6 +841,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const analyzeBtn = document.getElementById("analyze-btn");
     analyzeBtn.addEventListener("click", () => {
+        directionFilter = arrowDirection();
         excludedChains.clear();
         runAnalysis();
     });
@@ -716,25 +849,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     const ctrlAxis = document.getElementById("ctrl-axis");
     const ctrlBucket = document.getElementById("ctrl-bucket");
     const ctrlGroup = document.getElementById("ctrl-group");
-    const ctrlDirection = document.getElementById("ctrl-direction");
+
+    // Direction follows the arrow between the two token inputs on the main row:
+    // forward (→) or both (⇄). swap-distribution has no direction control of
+    // its own.
+    function arrowDirection() {
+        return (window.routeDirection || "forward") === "both" ? "both" : "forward";
+    }
 
     // When the network filter is a single chain, grouping by chain is pointless,
     // so default Group by to direction instead. Multi-chain ("all") keeps chain.
     function applyGroupByDefault() {
         const multiChain = !queryNetworkSelect || queryNetworkSelect.value === "all";
-        const useDirection = !multiChain;
-        ctrlGroup.value = useDirection ? "direction" : "chain";
-        groupByMode = useDirection ? "direction" : "chain";
-        excludedChains.clear();
-        if (useDirection) {
-            directionFilter = "both";
-            ctrlDirection.value = "both";
-            ctrlDirection.disabled = true;
-            if (lastData && lastDataDirection !== "both") { lastData = null; }
-        } else {
-            ctrlDirection.disabled = false;
+        const wasChain = groupByMode === "chain";
+        if (!multiChain && wasChain) {
+            ctrlGroup.value = "direction";
+            groupByMode = "direction";
+        } else if (multiChain && wasChain) {
+            // stay on chain
         }
-        // Re-render with the new grouping unless nothing has been analyzed yet.
+        excludedChains.clear();
+        directionFilter = arrowDirection();
+        if (lastData && lastDataDirection !== directionFilter) { lastData = null; }
         if (lastData) { applyChainFilter(); }
     }
     applyGroupByDefault();
@@ -753,27 +889,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     ctrlGroup.addEventListener("change", () => {
         groupByMode = ctrlGroup.value;
         excludedChains.clear();
-        if (groupByMode === "direction") {
-            directionFilter = "both";
-            ctrlDirection.value = "both";
-            ctrlDirection.disabled = true;
-            if (!lastData || lastDataDirection !== "both") {
-                lastData = null;
-                runAnalysis();
-                return;
-            }
+        if (lastData) {
+            applyChainFilter();
         } else {
-            ctrlDirection.disabled = false;
+            runAnalysis();
         }
-        applyChainFilter();
-    });
-    ctrlDirection.addEventListener("change", () => {
-        directionFilter = ctrlDirection.value;
-        excludedChains.clear();
-        lastData = null;
-        runAnalysis();
     });
 
+    // Direction follows the arrow: clicking it re-runs the shared Analyze
+    // button, so the distribution's directionFilter is read fresh here via
+    // arrowDirection() during the next fetch.
     const distSvg = document.getElementById("dist-chart");
     distSvg.addEventListener("wheel", onDistWheel, { passive: false });
     distSvg.addEventListener("mousedown", onDistDragStart);

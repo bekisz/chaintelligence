@@ -81,14 +81,19 @@ def _dens_log_for(x: List[float], edges: List[float], n_total: int) -> List[floa
             for i in range(nbins)]
 
 
-def _counts_and_sums(x: List[float], edges: List[float]):
-    """Per-bin swap counts and total USD sums using shared bin edges."""
+def _counts_and_sums(x: List[float], edges: List[float], fees: List[float] = None):
+    """Per-bin swap counts, total USD sums, and total fees using shared bin edges.
+
+    `fees`, when given, must be parallel to `x` (one fee amount per swap) and is
+    summed per bin into a `fees` list. Dynamic fee tiers contribute 0.
+    """
     nbins = len(edges) - 1
     lo = math.log10(edges[0])
     hi = math.log10(edges[-1])
     counts = [0] * nbins
     sums = [0.0] * nbins
-    for v in x:
+    fee_bins = [0.0] * nbins
+    for i, v in enumerate(x):
         if v < edges[0] or v > edges[-1]:
             continue
         b = int((math.log10(v) - lo) / (hi - lo) * nbins)
@@ -96,11 +101,13 @@ def _counts_and_sums(x: List[float], edges: List[float]):
             b = nbins - 1
         counts[b] += 1
         sums[b] += v
-    return counts, sums
+        if fees:
+            fee_bins[b] += fees[i]
+    return counts, sums, fee_bins
 
 
 def _trim_trailing_empties(edges: List[float], counts: List[float], sums: List[float],
-                           dens_log: List[float]) -> tuple:
+                           dens_log: List[float], fees: List[float] = None) -> tuple:
     """Drop trailing bins whose count is zero so the x-axis ends at the last
     non-empty bucket instead of showing empty tail buckets."""
     nbins = len(counts)
@@ -108,7 +115,9 @@ def _trim_trailing_empties(edges: List[float], counts: List[float], sums: List[f
     while last > 0 and counts[last] == 0:
         last -= 1
     n = last + 1
-    return edges[:n + 1], counts[:n], sums[:n], dens_log[:n]
+    if fees is None:
+        return edges[:n + 1], counts[:n], sums[:n], dens_log[:n]
+    return edges[:n + 1], counts[:n], sums[:n], dens_log[:n], fees[:n]
 
 
 def _nice_ceil(v: float) -> float:
@@ -142,13 +151,14 @@ def _linear_bin_edges(x: List[float], target_bins: int = 80) -> List[float]:
     return [width * i for i in range(nbins + 1)]
 
 
-def _counts_and_sums_linear(x: List[float], edges: List[float]):
-    """Per-bin counts/sums for constant-width linear bins (first edge is 0)."""
+def _counts_and_sums_linear(x: List[float], edges: List[float], fees: List[float] = None):
+    """Per-bin counts/sums/fees for constant-width linear bins (first edge is 0)."""
     nbins = len(edges) - 1
     width = edges[1] - edges[0]
     counts = [0] * nbins
     sums = [0.0] * nbins
-    for v in x:
+    fee_bins = [0.0] * nbins
+    for i, v in enumerate(x):
         if v < 0:
             continue
         b = int(v // width)
@@ -156,7 +166,9 @@ def _counts_and_sums_linear(x: List[float], edges: List[float]):
             b = nbins - 1
         counts[b] += 1
         sums[b] += v
-    return counts, sums
+        if fees:
+            fee_bins[b] += fees[i]
+    return counts, sums, fee_bins
 
 
 def _fit_and_curves(x: List[float], lo: float, hi: float,
@@ -204,12 +216,12 @@ def analyze_sizes(sizes: List[float], nbins: int = 120,
     hi = math.log10(x[-1])
     edges = _log_bin_edges(x, nbins)
     dens_log = _dens_log_for(x, edges, n)
-    counts, sums = _counts_and_sums(x, edges)
+    counts, sums, _ = _counts_and_sums(x, edges)
     edges, counts, sums, dens_log = _trim_trailing_empties(edges, counts, sums, dens_log)
     nbins = len(counts)
     mids = [math.sqrt(edges[i] * edges[i + 1]) for i in range(nbins)]
     ledges = _linear_bin_edges(x)
-    lcounts, lsums = _counts_and_sums_linear(x, ledges)
+    lcounts, lsums, _ = _counts_and_sums_linear(x, ledges)
     ledges, lcounts, lsums, _ = _trim_trailing_empties(ledges, lcounts, lsums, [0.0] * len(lcounts))
 
     result = {
@@ -233,7 +245,8 @@ def analyze_sizes(sizes: List[float], nbins: int = 120,
 
 
 def analyze_sizes_by_chain(groups: Dict[str, List[float]], nbins: int = 120,
-                           curve_points: int = 400) -> Optional[Dict]:
+                           curve_points: int = 400,
+                           fee_groups: Dict[str, List[float]] = None) -> Optional[Dict]:
     """Compute the swap-size distribution split per chain.
 
     `groups` maps chain name -> list of USD sizes. All chains share the same
@@ -242,16 +255,29 @@ def analyze_sizes_by_chain(groups: Dict[str, List[float]], nbins: int = 120,
     analyze_sizes plus a "chains" list:
         [{"name": ..., "n": ..., "dens_log": [...]}, ...]
     ordered by descending n, or None if there are too few sizes overall.
+
+    `fee_groups`, when given, is parallel to `groups` (one fee amount per swap,
+    same ordering) and is summed per bin into `fees`/`linear_fees` arrays for
+    the histogram and each group.
     """
     x = []
+    x_fees = []
     per_chain = {}
+    per_fees = {}
     for name, vals in groups.items():
-        cleaned = [float(v) for v in vals if v and v > 0]
+        cleaned = [v for v in vals if v and v > 0]
         if not cleaned:
             continue
-        per_chain[name] = sorted(cleaned)
-        x.extend(cleaned)
+        fees_for = (fee_groups or {}).get(name) or []
+        pairs = sorted(zip(cleaned, [float(fees_for[i]) if i < len(fees_for) else 0.0
+                                     for i in range(len(cleaned))]),
+                       key=lambda p: p[0])
+        per_chain[name] = [p[0] for p in pairs]
+        per_fees[name] = [p[1] for p in pairs]
+        x.extend(per_chain[name])
+        x_fees.extend(per_fees[name])
     x.sort()
+    x_fees = [f for _, f in sorted(zip(x, x_fees), key=lambda p: p[0])]
     n = len(x)
     if n < 3 or not per_chain:
         return None
@@ -262,21 +288,32 @@ def analyze_sizes_by_chain(groups: Dict[str, List[float]], nbins: int = 120,
     mids = [math.sqrt(edges[i] * edges[i + 1]) for i in range(nbins)]
 
     overall = _dens_log_for(x, edges, n)
-    overall_counts, overall_sums = _counts_and_sums(x, edges)
-    edges, overall_counts, overall_sums, overall = _trim_trailing_empties(
-        edges, overall_counts, overall_sums, overall)
+    if fee_groups:
+        overall_counts, overall_sums, overall_fees = _counts_and_sums(x, edges, x_fees)
+        edges, overall_counts, overall_sums, overall, overall_fees = _trim_trailing_empties(
+            edges, overall_counts, overall_sums, overall, overall_fees)
+    else:
+        overall_counts, overall_sums, _ = _counts_and_sums(x, edges)
+        edges, overall_counts, overall_sums, overall = _trim_trailing_empties(
+            edges, overall_counts, overall_sums, overall)
     nbins = len(overall_counts)
     mids = [math.sqrt(edges[i] * edges[i + 1]) for i in range(nbins)]
     ledges = _linear_bin_edges(x)
-    overall_lc, overall_ls = _counts_and_sums_linear(x, ledges)
-    ledges, overall_lc, overall_ls, _ = _trim_trailing_empties(
-        ledges, overall_lc, overall_ls, [0.0] * len(overall_lc))
+    if fee_groups:
+        overall_lc, overall_ls, overall_lfees = _counts_and_sums_linear(x, ledges, x_fees)
+        ledges, overall_lc, overall_ls, _, overall_lfees = _trim_trailing_empties(
+            ledges, overall_lc, overall_ls, [0.0] * len(overall_lc), overall_lfees)
+    else:
+        overall_lc, overall_ls, _ = _counts_and_sums_linear(x, ledges)
+        ledges, overall_lc, overall_ls, _ = _trim_trailing_empties(
+            ledges, overall_lc, overall_ls, [0.0] * len(overall_lc))
     chains = []
     for name, chain_x in sorted(per_chain.items(), key=lambda kv: -len(kv[1])):
+        chain_fees = per_fees[name]
         logs = [math.log(v) for v in chain_x]
-        chain_counts, chain_sums = _counts_and_sums(chain_x, edges)
+        chain_counts, chain_sums, chain_fees_b = _counts_and_sums(chain_x, edges, chain_fees)
         chain_dens = _dens_log_for(chain_x, edges, n)
-        lc, ls = _counts_and_sums_linear(chain_x, ledges)
+        lc, ls, lfees = _counts_and_sums_linear(chain_x, ledges, chain_fees)
         chains.append({
             "name": name,
             "n": len(chain_x),
@@ -287,17 +324,24 @@ def analyze_sizes_by_chain(groups: Dict[str, List[float]], nbins: int = 120,
             "dens_log": chain_dens,
             "counts": chain_counts,
             "sums": chain_sums,
+            "fees": chain_fees_b,
             "linear_counts": lc,
             "linear_sums": ls,
+            "linear_fees": lfees,
         })
+
+    hist = {"edges": edges, "mids": mids, "dens_log": overall,
+            "counts": overall_counts, "sums": overall_sums,
+            "linear": {"edges": ledges, "counts": overall_lc, "sums": overall_ls}}
+    if fee_groups:
+        hist["fees"] = overall_fees
+        hist["linear"]["fees"] = overall_lfees
 
     result = {
         "n": n,
         "min": x[0],
         "max": x[-1],
-        "histogram": {"edges": edges, "mids": mids, "dens_log": overall,
-                      "counts": overall_counts, "sums": overall_sums,
-                      "linear": {"edges": ledges, "counts": overall_lc, "sums": overall_ls}},
+        "histogram": hist,
         "chains": chains,
     }
 

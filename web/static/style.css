@@ -1128,6 +1128,21 @@ header h1 {
     margin: 0 auto;
 }
 
+/* Direction arrow between tokens is a clickable control */
+.token-arrow {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.token-arrow:hover {
+    border-color: rgba(255, 0, 122, 0.5);
+    background: rgba(255, 0, 122, 0.08);
+    color: #f472b6;
+}
+
 .icon-btn {
     width: 42px;
     height: 42px;

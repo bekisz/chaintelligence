@@ -245,7 +245,7 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
     is_v4 = 'v4' in fee_tier.lower()
     is_unreliable = is_v4 or tvl_val <= 1.0 or (vol_val > 0.0 and tvl_val < (vol_val / period_days) * 0.05)
     
-    if pool_addr:
+    if pool_addr and is_unreliable:
         ds_tvl = await asyncio.to_thread(fetch_dexscreener_tvl, pool_network, pool_addr)
         
         # Fallback to DeFi Llama TVL if DexScreener fails
@@ -254,7 +254,7 @@ async def get_enriched_pool_stat(key: str, rev_key: str, aprs: dict, pool_addr: 
             if dl_tvl and dl_tvl > 1.0:
                 ds_tvl = dl_tvl
                 
-        if ds_tvl and ds_tvl > 1.0 and (is_unreliable or abs(ds_tvl - tvl_val) / max(1.0, tvl_val) > 0.1):
+        if ds_tvl and ds_tvl > 1.0:
             tvl_val = ds_tvl
             fee_rate = parse_fee_rate(fee_tier)
             if fee_rate is not None and vol_val > 0:
@@ -389,16 +389,17 @@ def _build_defillama_index() -> Dict[str, str]:
     return index
 
 
-def get_defillama_index() -> Dict[str, dict]:
-    """Return the cached pool_address->UUID index, rebuilding if stale.
-    Thread-safe; safe to call from asyncio.to_thread on first use."""
-    global DEFILLAMA_INDEX, DEFILLAMA_INDEX_BUILT_AT
-    now = time.time()
-    if DEFILLAMA_INDEX and (now - DEFILLAMA_INDEX_BUILT_AT < DEFILLAMA_INDEX_TTL):
-        return DEFILLAMA_INDEX
+_DEFILLAMA_BUILDING = False
+
+def trigger_defillama_index_build():
+    global _DEFILLAMA_BUILDING
     with _DEFILLAMA_LOCK:
-        if DEFILLAMA_INDEX and (time.time() - DEFILLAMA_INDEX_BUILT_AT < DEFILLAMA_INDEX_TTL):
-            return DEFILLAMA_INDEX
+        if _DEFILLAMA_BUILDING:
+            return
+        _DEFILLAMA_BUILDING = True
+
+    def _worker():
+        global DEFILLAMA_INDEX, DEFILLAMA_INDEX_BUILT_AT, _DEFILLAMA_BUILDING
         try:
             idx = _build_defillama_index()
             if idx:
@@ -407,6 +408,18 @@ def get_defillama_index() -> Dict[str, dict]:
                 print(f"[DeFiLlama] yields index built: {len(idx)} pools")
         except Exception as e:
             print(f"[DeFiLlama] yields index build failed: {e}")
+        finally:
+            with _DEFILLAMA_LOCK:
+                _DEFILLAMA_BUILDING = False
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+def get_defillama_index() -> Dict[str, dict]:
+    """Return the cached pool_address->UUID index, triggering background rebuild if stale."""
+    now = time.time()
+    if not DEFILLAMA_INDEX or (now - DEFILLAMA_INDEX_BUILT_AT >= DEFILLAMA_INDEX_TTL):
+        trigger_defillama_index_build()
     return DEFILLAMA_INDEX
 
 
@@ -800,31 +813,31 @@ async def analyze(
                 an.process_batch(batch_swaps, s_tokens, e_tokens)
 
         async def generate():
-            c_chunk_start = start_dt
-            has_data = False
-            total_seconds = (end_dt - start_dt).total_seconds()
-            
-            while c_chunk_start < end_dt:
-                c_chunk_end = min(c_chunk_start + timedelta(days=1), end_dt)
-                progress_sec = (c_chunk_start - start_dt).total_seconds()
-                # Fetching takes 0% to 75% of the total progress
-                pct = (progress_sec / total_seconds) * 75 if total_seconds > 0 else 0
-                yield json.dumps({"type": "progress", "pct": round(pct, 1), "message": f"Fetching swaps for {c_chunk_start.strftime('%Y-%m-%d')} → {c_chunk_end.strftime('%Y-%m-%d')}..."}) + "\n"
-                await asyncio.sleep(0.01)
+            # Build 1-day date chunks
+            date_chunks = []
+            cur_s = start_dt
+            while cur_s < end_dt:
+                cur_e = min(cur_s + timedelta(days=1), end_dt)
+                date_chunks.append((cur_s, cur_e))
+                cur_s = cur_e
 
-                print(f"[Anaylsis] Processing batch: {c_chunk_start} -> {c_chunk_end}")
-                batch_swaps = await asyncio.to_thread(
-                    fetcher.fetch_swaps, c_chunk_start, c_chunk_end, token_filter, network, start_tokens_list, end_tokens_list, True
+            yield json.dumps({"type": "progress", "pct": 10.0, "message": f"Fetching swaps for {start_dt.strftime('%Y-%m-%d')} → {end_dt.strftime('%Y-%m-%d')} ({len(date_chunks)} parallel batches)..."}) + "\n"
+            await asyncio.sleep(0.01)
+
+            async def _fetch_chunk(cs, ce):
+                return await asyncio.to_thread(
+                    fetcher.fetch_swaps, cs, ce, token_filter, network, start_tokens_list, end_tokens_list, True
                 )
 
+            chunk_results = await asyncio.gather(*[_fetch_chunk(cs, ce) for cs, ce in date_chunks])
+
+            has_data = False
+            for batch_swaps in chunk_results:
                 if batch_swaps:
                     has_data = True
                     await asyncio.to_thread(
                         _process_analyzers, batch_swaps, analytics_inputs
                     )
-
-                batch_swaps = []
-                c_chunk_start = c_chunk_end
                 
             yield json.dumps({"type": "progress", "pct": 75.0, "message": "Building routing path graph..."}) + "\n"
             await asyncio.sleep(0.01)
@@ -1065,15 +1078,26 @@ async def analyze(
                     batch = await asyncio.to_thread(_derive_batch)
                     pool_addresses.update(batch)
 
-                def _lookup_db_pools():
+                def _lookup_db_pools(pools_to_fetch=None):
                     """Fetch pool identifiers and IDs from DB in one query."""
                     db_results = {}
+                    where_clause = ""
+                    params = []
+                    if pools_to_fetch:
+                        symbols = set()
+                        for (t0, t1, fee) in pools_to_fetch:
+                            symbols.add(t0.upper())
+                            symbols.add(t1.upper())
+                        if symbols:
+                            where_clause = " WHERE UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)"
+                            sym_list = list(symbols)
+                            params = [sym_list, sym_list]
                     try:
                         with get_conn() as conn:
                             cur = conn.cursor()
-                            cur.execute("""
+                            cur.execute(f"""
                                  SELECT ch.name AS network, pr.name AS protocol,
-                                        CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%' END AS fee_tier,
+                                        CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic' ELSE (lp.fee_bps / 100.0)::text || '%%' END AS fee_tier,
                                         lp.pool_id,
                                         UPPER(c0.symbol) AS s0,
                                         UPPER(c1.symbol) AS s1,
@@ -1088,7 +1112,8 @@ async def analyze(
                                  LEFT JOIN coin_contract cc0
                                      ON cc0.coin_id = lp.coin0_id
                                     AND cc0.chain_id = lp.chain_id
-                             """)
+                                 {where_clause}
+                             """, params)
                             for net, proto, fee_tier, pid, sym0, sym1, t0_addr, lp_addr, cid in cur.fetchall():
                                 v4_pool_id = pid
                                 v4_pool_addr = lp_addr
@@ -1166,7 +1191,7 @@ async def analyze(
                         print(f"  Error looking up DB pools: {ex}")
                     return db_results
 
-                db_batch = await asyncio.to_thread(_lookup_db_pools)
+                db_batch = await asyncio.to_thread(_lookup_db_pools, pools_to_fetch)
                 # Preserve derived CREATE2 addresses for V2/V3 pools (the DB
                 # may contain stale/wrong addresses); only overlay the internal cid
                 # from the DB. V4 pools, which have no CREATE2 derivation, still get
@@ -1204,11 +1229,63 @@ async def analyze(
                             if not v.get("pool_id"):
                                 v["pool_id"] = match_val.get("pool_id") or match_val.get("pool_address", "")
 
-            # Warm the DeFi Llama yields index off the event loop (one-time per TTL).
-            if not DEFILLAMA_INDEX or (time.time() - DEFILLAMA_INDEX_BUILT_AT > DEFILLAMA_INDEX_TTL):
-                await asyncio.to_thread(get_defillama_index)
+            # Trigger background warming of DeFi Llama yields index if stale (non-blocking).
+            get_defillama_index()
 
             # 3. Inject into routes
+            # Pre-collect unique pool enrichment tasks to run concurrently and prevent duplicate calls
+            unique_enrichment_jobs = {}
+            days = max(1, (end_dt - start_dt).days)
+            for route in analysis.get('routes', []):
+                path = route.get('path_tokens', [])
+                for i in range(1, len(path), 2):
+                    t0 = path[i-1]
+                    fee = path[i]
+                    t1 = path[i+1]
+                    t0_norm = 'WETH' if t0.upper() == 'ETH' else ('WBNB' if t0.upper() == 'BNB' else t0.upper())
+                    t1_norm = 'WETH' if t1.upper() == 'ETH' else ('WBNB' if t1.upper() == 'BNB' else t1.upper())
+                    key = f"{t0_norm}-{t1_norm}-{fee}"
+                    rev_key = f"{t1_norm}-{t0_norm}-{fee}"
+
+                    if key not in unique_enrichment_jobs and rev_key not in unique_enrichment_jobs:
+                        pool_info = pool_addresses.get(key) or pool_addresses.get(rev_key)
+                        if not pool_info:
+                            fee_parts = fee.split('|')
+                            clean_fee = fee_parts[0].strip()
+                            clean_proto = fee_parts[1].strip() if len(fee_parts) >= 2 else ""
+                            clean_net = fee_parts[2].strip() if len(fee_parts) >= 3 else ""
+                            alt_keys = [
+                                f"{t0_norm}-{t1_norm}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t1_norm}-{t0_norm}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t0_norm}-{t1_norm}-{clean_fee}|{clean_proto}",
+                                f"{t1_norm}-{t0_norm}-{clean_fee}|{clean_proto}",
+                                f"{t0.upper()}-{t1.upper()}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t1.upper()}-{t0.upper()}-{clean_fee}|{clean_proto}|{clean_net}",
+                                f"{t0.upper()}-{t1.upper()}-{clean_fee}|{clean_proto}",
+                                f"{t1.upper()}-{t0.upper()}-{clean_fee}|{clean_proto}",
+                            ]
+                            for ak in alt_keys:
+                                if ak in pool_addresses:
+                                    pool_info = pool_addresses[ak]
+                                    break
+                        if not pool_info:
+                            pool_info = {}
+
+                        if isinstance(pool_info, str):
+                            pool_info = {"pool_address": pool_info, "pool_id": pool_info, "cid": None}
+                        pool_addr = pool_info.get("pool_address")
+                        fee_parts = fee.split('|')
+                        pool_network = fee_parts[2].strip() if len(fee_parts) >= 3 else "Ethereum"
+
+                        unique_enrichment_jobs[key] = (key, rev_key, aprs, pool_addr, pool_network, days, fee)
+
+            enrichment_results = {}
+            if unique_enrichment_jobs:
+                job_keys = list(unique_enrichment_jobs.keys())
+                results = await asyncio.gather(*[get_enriched_pool_stat(*unique_enrichment_jobs[k]) for k in job_keys])
+                for k, res in zip(job_keys, results):
+                    enrichment_results[k] = res
+
             for route_idx, route in enumerate(analysis.get('routes', [])):
                 path = route.get('path_tokens', [])
                 new_path = []
@@ -1258,17 +1335,18 @@ async def analyze(
                         
                         fee_parts = fee.split('|')
                         pool_network = fee_parts[2].strip() if len(fee_parts) >= 3 else "Ethereum"
-                        days = max(1, (end_dt - start_dt).days)
-                        
-                        enriched = await get_enriched_pool_stat(
-                            key=key,
-                            rev_key=rev_key,
-                            aprs=aprs,
-                            pool_addr=pool_addr,
-                            pool_network=pool_network,
-                            period_days=days,
-                            fee_tier=fee
-                        )
+
+                        enriched = enrichment_results.get(key) or enrichment_results.get(rev_key)
+                        if not enriched:
+                            enriched = await get_enriched_pool_stat(
+                                key=key,
+                                rev_key=rev_key,
+                                aprs=aprs,
+                                pool_addr=pool_addr,
+                                pool_network=pool_network,
+                                period_days=days,
+                                fee_tier=fee
+                            )
                         
                         apr_val = enriched['apr']
                         tvl_val = enriched['tvl']
@@ -1902,6 +1980,9 @@ async def swap_distribution(
         start_list = [s.strip().upper() for s in start_list]
         end_list = [e.strip().upper() for e in end_list]
 
+        if network and network.lower() in ("all", "*"):
+            network = None
+
         exclude = []
         if exclude_chains:
             exclude = [c.strip().lower() for c in exclude_chains.split(",") if c.strip()]
@@ -2202,9 +2283,8 @@ async def swap_distribution(
 
                 # Hops: reconstruct each matched tx's full route (ALL legs,
                 # including intermediate tokens outside the queried pair) and
-                # count the hop length. Only fetched when the hops grouping is
-                # requested — it is the expensive per-tx scan.
-                if group_by == "hops" and rows:
+                # count the hop length.
+                if rows:
                     from collections import defaultdict
                     tx_set = sorted({tx for _, _, _, _, _0, _1, _, _, tx, _ in rows})
                     hcur = conn.cursor()

@@ -336,63 +336,133 @@ class PostgresFetcher:
                 token_where, token_params = self._build_token_clause(start_tokens, end_tokens, token_filter, broad)
                 network_where, network_param = self._build_network_clause(network)
 
-                # Query the unified swaps table. No ORDER BY: callers that need
-                # chronological order (route_analyzer) re-sort by tx_hash/log_index
-                # anyway, and forcing a sort here triggers a large external disk
-                # sort over the full result set for no benefit.
-                query = f"""
-                    SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
-                           c0.symbol, c1.symbol,
-                           s.amount0, s.amount1, s.amount_usd,
-                           CASE
-                               WHEN lp.fee_bps IS NULL THEN 'Dynamic'
-                               ELSE (lp.fee_bps / 100.0)::text || '%%'
-                           END AS fee_display,
-                           lp.fee_bps,
-                           lp.id AS cid,
-                           lp.pool_address,
-                           lp.pool_id
-                    FROM swaps s
-                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                # 1. Pre-fetch matching pool IDs & metadata (typically 5-50 rows, finishes in < 10ms)
+                pool_query = f"""
+                    SELECT lp.id, ch.name AS network, pr.name AS protocol,
+                           c0.symbol, c1.symbol, lp.fee_bps, lp.pool_address, lp.pool_id
+                    FROM liquidity_pool lp
                     JOIN chain ch ON lp.chain_id = ch.id
                     JOIN protocol pr ON lp.protocol_id = pr.id
                     JOIN coin c0 ON lp.coin0_id = c0.coin_id
                     JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                    WHERE s.ts >= %s AND s.ts <= %s
-                      AND (s.amount_usd >= 10.0 OR s.amount_usd = 0 OR s.amount_usd IS NULL)
                 """
-                params = [start_date, end_date]
+                pool_params = []
+                where_clauses = []
                 if token_where:
-                    query += f" AND ({token_where})"
-                    params.extend(token_params)
+                    where_clauses.append(f"({token_where})")
+                    pool_params.extend(token_params)
                 if network_param:
-                    query += network_where
-                    params.append(network_param)
+                    where_clauses.append(network_where.lstrip(" AND "))
+                    pool_params.append(network_param)
+                if where_clauses:
+                    pool_query += " WHERE " + " AND ".join(where_clauses)
 
-                cur.execute(query, params)
+                cur.execute(pool_query, pool_params)
+                pool_rows = cur.fetchall()
+
+                if not pool_rows:
+                    cur.close()
+                    self._log("Fetch complete. No matching pools found.")
+                    return []
+
+                pool_meta = {}
+                pool_ids = []
+                for p_id, p_net, p_prot, c0_sym, c1_sym, p_fee, p_addr, p_pool_id in pool_rows:
+                    pool_ids.append(p_id)
+                    fee_str = 'Dynamic' if p_fee is None else f"{p_fee / 100.0:.2f}%"
+                    pool_meta[p_id] = {
+                        'network': p_net,
+                        'protocol': p_prot,
+                        'symbol0': c0_sym,
+                        'symbol1': c1_sym,
+                        'fee_display': fee_str,
+                        'fee_bps': float(p_fee) if p_fee is not None else None,
+                        'pool_address': p_addr or p_pool_id or '',
+                        'pool_id': p_pool_id or p_addr or '',
+                    }
+
+                # 2. Query swaps table
+                if broad and start_tokens and end_tokens and '*' not in start_tokens and '*' not in end_tokens:
+                    start_upper = set(s.upper() for s in start_tokens)
+                    end_upper = set(e.upper() for e in end_tokens)
+                    
+                    start_pool_ids = []
+                    end_pool_ids = []
+                    direct_pool_ids = []
+                    
+                    for p_id, p_net, p_prot, c0_sym, c1_sym, p_fee, p_addr, p_pool_id in pool_rows:
+                        c0_u, c1_u = c0_sym.upper(), c1_sym.upper()
+                        is_start = (c0_u in start_upper or c1_u in start_upper)
+                        is_end = (c0_u in end_upper or c1_u in end_upper)
+                        
+                        if is_start: start_pool_ids.append(p_id)
+                        if is_end: end_pool_ids.append(p_id)
+                        if is_start and is_end: direct_pool_ids.append(p_id)
+
+                    swaps_query = """
+                        WITH direct_txs AS (
+                            SELECT DISTINCT tx_hash FROM swaps WHERE pool_id = ANY(%s) AND ts >= %s AND ts <= %s
+                        ),
+                        start_txs AS (
+                            SELECT DISTINCT tx_hash FROM swaps WHERE pool_id = ANY(%s) AND ts >= %s AND ts <= %s
+                        ),
+                        end_txs AS (
+                            SELECT DISTINCT tx_hash FROM swaps WHERE pool_id = ANY(%s) AND ts >= %s AND ts <= %s
+                        ),
+                        candidate_txs AS (
+                            SELECT tx_hash FROM direct_txs
+                            UNION
+                            SELECT s.tx_hash FROM start_txs s INTERSECT SELECT e.tx_hash FROM end_txs e
+                        )
+                        SELECT s.tx_hash, s.log_index, s.ts, s.pool_id, s.amount0, s.amount1, s.amount_usd
+                        FROM swaps s
+                        JOIN candidate_txs c ON s.tx_hash = c.tx_hash
+                        WHERE s.ts >= %s AND s.ts <= %s AND (s.amount_usd >= 10.0 OR s.amount_usd = 0 OR s.amount_usd IS NULL)
+                        ORDER BY s.tx_hash, s.log_index
+                    """
+                    cur.execute(swaps_query, [
+                        direct_pool_ids, start_date, end_date,
+                        start_pool_ids, start_date, end_date,
+                        end_pool_ids, start_date, end_date,
+                        start_date, end_date
+                    ])
+                else:
+                    swaps_query = """
+                        SELECT s.tx_hash, s.log_index, s.ts, s.pool_id, s.amount0, s.amount1, s.amount_usd
+                        FROM swaps s
+                        WHERE s.pool_id = ANY(%s)
+                          AND s.ts >= %s AND s.ts <= %s
+                          AND (s.amount_usd >= 10.0 OR s.amount_usd = 0 OR s.amount_usd IS NULL)
+                        ORDER BY s.tx_hash, s.log_index
+                    """
+                    cur.execute(swaps_query, [pool_ids, start_date, end_date])
                 rows = cur.fetchall()
 
                 swaps = []
                 for row in rows:
                     tx_hash = row[0]
                     log_index = row[1]
+                    pid = row[3]
+                    pm = pool_meta.get(pid)
+                    if not pm:
+                        continue
                     swaps.append({
                         'id': f"{tx_hash}#{log_index}",
                         'timestamp': int(row[2].timestamp()),
                         'tx_hash': tx_hash,
-                        'token0_symbol': row[5],
-                        'token1_symbol': row[6],
-                        'amount0': float(row[7]) if row[7] is not None else 0.0,
-                        'amount1': float(row[8]) if row[8] is not None else 0.0,
-                        'amountUSD': float(row[9]) if row[9] is not None else 0.0,
-                        'amount_usd': float(row[9]) if row[9] is not None else 0.0,
-                        'fee_tier': row[10] or '',
-                        'fee_bps': float(row[11]) if row[11] is not None else None,
-                        'protocol': row[4],
-                        'network': row[3],
-                        'cid': row[12],
-                        'pool_address': row[13] or row[14] or '',
-                        'pool_id': row[14] or row[13] or '',
+                        'token0_symbol': pm['symbol0'],
+                        'token1_symbol': pm['symbol1'],
+                        'amount0': float(row[4]) if row[4] is not None else 0.0,
+                        'amount1': float(row[5]) if row[5] is not None else 0.0,
+                        'amountUSD': float(row[6]) if row[6] is not None else 0.0,
+                        'amount_usd': float(row[6]) if row[6] is not None else 0.0,
+                        'fee_tier': pm['fee_display'],
+                        'fee_bps': pm['fee_bps'],
+                        'protocol': pm['protocol'],
+                        'network': pm['network'],
+                        'cid': pid,
+                        'pool_address': pm['pool_address'],
+                        'pool_id': pm['pool_id'],
                         'log_index': log_index,
                     })
 

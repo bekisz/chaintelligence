@@ -57,6 +57,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
 
+let routeDirection = 'forward';
+    window.routeDirection = routeDirection;
+
+    const DIRECTION_ARROWS = {
+        forward: '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="28 5 38 12 28 19"></polyline></svg>',
+        both: '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="8 5 2 12 8 19"></polyline><polyline points="32 5 38 12 32 19"></polyline></svg>'
+    };
+
+    const renderDirectionArrow = (dir) => {
+        const arrow = document.getElementById('route-direction-arrow');
+        if (!arrow) return;
+        arrow.innerHTML = DIRECTION_ARROWS[dir] || DIRECTION_ARROWS.forward;
+        arrow.title = dir === 'forward' ? 'Forward only: start → right end token. Click to cycle.'
+            : 'Both directions: trades in either direction (double-headed arrow). Click to cycle.';
+    };
+
+    const directionArrow = document.getElementById('route-direction-arrow');
+    if (directionArrow) {
+        directionArrow.addEventListener('click', () => {
+            routeDirection = routeDirection === 'forward' ? 'both' : 'forward';
+            window.routeDirection = routeDirection;
+            renderDirectionArrow(routeDirection);
+        });
+        renderDirectionArrow(routeDirection);
+    }
+
     function getYesterdayStr() {
         const d = new Date();
         d.setDate(d.getDate() - 1);
@@ -532,7 +558,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const famB = getTokenFamily(endToken);
         const isSameFamily = Boolean(famA && famB && famA === famB);
 
-        if (stableShortcutCheckbox && stableShortcutWrapper) {
+if (stableShortcutCheckbox && stableShortcutWrapper) {
             if (isSameFamily) {
                 stableShortcutCheckbox.disabled = false;
                 stableShortcutWrapper.style.opacity = '1.0';
@@ -543,6 +569,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                 stableShortcutWrapper.style.opacity = '0.5';
                 stableShortcutWrapper.title = `Only enabled when querying tokens within the same family (e.g. USD-USD, ETH-ETH, BTC-BTC). Currently queried: ${famA || startToken} - ${famB || endToken}.`;
             }
+        }
+    };
+
+    // Enable/disable the "Collate Directions" toggle based on the fetched data:
+    // it is only meaningful when the current results contain the same route in
+    // both directions, so disable (and uncheck) it when the data is entirely
+    // unidirectional.
+    const updateCollateDirectionState = () => {
+        const collateWrapper = document.getElementById('collate-direction-wrapper');
+        const collateCheckbox = document.getElementById('collate-direction-filter');
+        if (!collateCheckbox) return;
+
+        let hasBidirection = false;
+        if (currentRoutes && currentRoutes.length > 0) {
+            const groups = {};
+            for (const r of currentRoutes) {
+                const key = routePathSignature(r);
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(r);
+            }
+            hasBidirection = Object.values(groups).some(grp =>
+                grp.some(r => r.direction !== 'reverse') && grp.some(r => r.direction === 'reverse')
+            );
+        }
+
+        collateCheckbox.disabled = !hasBidirection;
+        if (!hasBidirection) collateCheckbox.checked = false;
+        if (collateWrapper) {
+            collateWrapper.style.opacity = hasBidirection ? '1.0' : '0.5';
+            collateWrapper.title = hasBidirection
+                ? 'Merge the route running in both directions into one row, summing volumes, txs and swaps, shown with a double-headed arrow.'
+                : 'Disabled: results are open in only one direction.';
         }
     };
 
@@ -682,6 +740,74 @@ document.addEventListener('DOMContentLoaded', async () => {
         return protocols.size === 1 ? Array.from(protocols)[0] : '';
     };
 
+    // Canonical signature of a route's path ignoring swap direction: the set of
+    // hops (token pair + fee + protocol + network) that make up the route. A
+    // route and its opposite-direction twin share the same signature, letting
+    // us collate the two rows into one when "Collate Directions" is enabled.
+    const routePathSignature = (route) => {
+        const hops = [];
+        if (route.path_tokens) {
+            for (let i = 0; i + 2 <= route.path_tokens.length; i += 2) {
+                const t0 = String(route.path_tokens[i]).toUpperCase();
+                const t1 = String(route.path_tokens[i + 2]).toUpperCase();
+                const mid = route.path_tokens[i + 1];
+                let fee = '';
+                if (typeof mid === 'object' && mid) {
+                    fee = mid.fee || '';
+                } else if (typeof mid === 'string') {
+                    fee = mid;
+                }
+                const pair = t0.localeCompare(t1) <= 0 ? `${t0}/${t1}` : `${t1}/${t0}`;
+                hops.push(`${pair}|${fee}`);
+            }
+        }
+        const pathStr = route.path || '';
+        if (hops.length === 0) {
+            const parts = pathStr.split(' ');
+            for (let i = 0; i + 1 < parts.length; i += 2) {
+                const a = String(parts[i]).toUpperCase();
+                const b = String(parts[i + 1] || '').toUpperCase();
+                const pair = a.localeCompare(b) <= 0 ? `${a}/${b}` : `${b}/${a}`;
+                hops.push(`${pair}|`);
+            }
+        }
+        return hops.sort().join('~');
+    };
+
+    // Collate the two directions of the same route into a single row: sum
+    // counts/volumes/fees and mark the route as bidirectional so it renders a
+    // double-headed arrow. Only routes present in both directions are merged.
+    const collateDirectionRoutes = (routes) => {
+        const groups = {};
+        for (const r of routes) {
+            const key = routePathSignature(r);
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(r);
+        }
+        const out = [];
+        for (const key of Object.keys(groups)) {
+            const grp = groups[key];
+            const hasForward = grp.some(r => r.direction !== 'reverse');
+            const hasReverse = grp.some(r => r.direction === 'reverse');
+            if (grp.length >= 2 && hasForward && hasReverse) {
+                const base = Object.assign({}, grp.find(r => r.direction !== 'reverse') || grp[0]);
+                base.direction = 'both';
+                base.count = grp.reduce((s, r) => s + (r.count || 0), 0);
+                base.swaps = grp.reduce((s, r) => s + (r.swaps ?? r.count ?? 0), 0);
+                base.volume = grp.reduce((s, r) => s + (r.volume || 0), 0);
+                base.market_size = grp.reduce((s, r) => s + (r.market_size || 0), 0);
+                base.daily_fees = grp.reduce((s, r) => s + (r.daily_fees || 0), 0);
+                base.daily_volume = grp.reduce((s, r) => s + (r.daily_volume || 0), 0);
+                const lastAct = grp.map(r => r.last_activity).filter(Boolean).sort();
+                if (lastAct.length) base.last_activity = lastAct[lastAct.length - 1];
+                out.push(base);
+            } else {
+                out.push(...grp);
+            }
+        }
+        return out;
+    };
+
     const filterAndRenderRoutes = () => {
         if (!currentRoutes) return;
 
@@ -703,7 +829,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const selectedNetwork = networkFilter ? networkFilter.value : 'all';
         const selectedProtocol = protocolFilter ? protocolFilter.value : 'all';
 
-        const filtered = currentRoutes.filter(route => {
+        const collateDirections = !!document.getElementById('collate-direction-filter')?.checked && routeDirection === 'both';
+        const source = collateDirections ? collateDirectionRoutes(currentRoutes) : currentRoutes;
+
+        const filtered = source.filter(route => {
             // Network filter
             if (selectedNetwork !== 'all' && (route.network || 'Ethereum') !== selectedNetwork) {
                 return false;
@@ -842,6 +971,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (selectedNetwork && selectedNetwork !== 'all') {
                 url += `&network=${selectedNetwork}`;
             }
+            if (routeDirection && routeDirection !== 'forward') {
+                url += `&direction=${routeDirection}`;
+            }
 
             const response = await fetch(url);
             if (!response.ok) {
@@ -902,6 +1034,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Update stats
             currentRoutes = data.routes;
             updateStableShortcutState();
+            updateCollateDirectionState();
             // Default sort: Daily fees descending for the selected time period
             if (currentRoutes && currentRoutes.length > 0) {
                 sortRoutes('daily-fees', 'sort-daily-fees', 'desc');
@@ -1170,7 +1303,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        if (tokens.length === 2) {
+        // A reverse-direction route comes back from the backend in flow order
+        // (end token first). Keep the displayed token order aligned with the
+        // queried pair (start token left) and instead flip the hop arrows to
+        // point the opposite way, so the swap's real direction is still clear.
+        const isReverse = route.direction === 'reverse';
+        const isBoth = route.direction === 'both';
+        if (isReverse) {
+            tokens = tokens.slice().reverse();
+            items = items.slice().reverse();
+        }
+
+        if (tokens.length === 2 && !isReverse && !isBoth) {
             const getTokenHardness = (symbol) => {
                 if (!symbol || typeof symbol !== 'string') return 0;
                 const s = symbol.toUpperCase();
@@ -1366,19 +1510,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const arrowTooltip = `${protocolName}${networkName ? ' on ' + networkName : ''}`;
 
-                // New layout: arrow spans full width with floating label on top
-                html += `
-                    <div class="route-hop ${protocolClass} ${isClickable ? 'clickable-route-segment' : ''}">
-                        <div class="route-hop-arrow ${protocolClass}" data-tooltip="${arrowTooltip}">
-                            <div class="arrow-line">
+                // New layout: arrow spans full width with floating label on top.
+                // Forward routes: line first then arrowhead (→). Reverse routes:
+                // arrowhead first (head at the left) then the line (←). Collated
+                // bidirectional routes: arrowhead on both sides (↔).
+                const fwdHeadSvg = `<svg class="arrow-head" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1,1 7,7 1,13"/>
+                            </svg>`;
+                const revHeadSvg = `<svg class="arrow-head arrow-head-reverse" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="7,1 1,7 7,13"/>
+                            </svg>`;
+                const arrowLineHtml = `<div class="arrow-line">
                                 <div class="route-hop-label">
                                     ${labelContent}
                                     ${linksContent}
                                 </div>
-                            </div>
-                            <svg class="arrow-head" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="1,1 7,7 1,13"/>
-                            </svg>
+                            </div>`;
+                const arrowSegment = isBoth
+                    ? revHeadSvg + arrowLineHtml + fwdHeadSvg
+                    : isReverse
+                        ? revHeadSvg + arrowLineHtml
+                        : arrowLineHtml + fwdHeadSvg;
+                html += `
+                    <div class="route-hop ${protocolClass} ${isClickable ? 'clickable-route-segment' : ''}">
+                        <div class="route-hop-arrow ${protocolClass}" data-tooltip="${arrowTooltip}">
+                            ${arrowSegment}
                         </div>
                     </div>
                 `;
@@ -1978,6 +2134,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stableShortcutCheckbox = document.getElementById('stable-shortcut-filter');
     if (stableShortcutCheckbox) {
         stableShortcutCheckbox.addEventListener('change', () => {
+            filterAndRenderRoutes();
+        });
+    }
+
+    const collateDirectionCheckbox = document.getElementById('collate-direction-filter');
+    if (collateDirectionCheckbox) {
+        collateDirectionCheckbox.addEventListener('change', () => {
             filterAndRenderRoutes();
         });
     }
