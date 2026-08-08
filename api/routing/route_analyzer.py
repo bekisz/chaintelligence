@@ -139,15 +139,22 @@ class RouteAnalyzer:
                 route_vol_usd = 0.0
                 for sw in tx_events:
                     a0 = sw.get('amount0', 0) or 0
-                    a1 = sw.get('amount1', 0) or 0
                     in_sym = sw['token0_symbol'].upper() if a0 > 0 else sw['token1_symbol'].upper()
-                    if in_sym == tx_start_token:
+                    if in_sym == tx_start_token or len(tx_events) == 1:
                         try:
-                            route_vol_usd += float(sw.get('amountUSD', sw.get('amount_usd', 0.0)) or 0.0)
+                            usd_val = float(sw.get('amountUSD', sw.get('amount_usd', 0.0)) or 0.0)
+                            route_vol_usd += usd_val
                         except (KeyError, TypeError):
                             pass
 
                 # Volume Fallback for low-liquidity pairs or missing price data
+                if route_vol_usd < 0.01:
+                    for sw in tx_events:
+                        usd_val = float(sw.get('amountUSD', sw.get('amount_usd', 0.0)) or 0.0)
+                        if usd_val > 0:
+                            route_vol_usd += usd_val
+                            break
+
                 if route_vol_usd < 0.01:
                     t0_sym = first_swap['token0_symbol'].upper()
                     t1_sym = first_swap['token1_symbol'].upper()
@@ -159,10 +166,15 @@ class RouteAnalyzer:
                     if p0 is None and any(x in t0_sym for x in ['USD', 'EUR']): p0 = 1.0
                     if p1 is None and any(x in t1_sym for x in ['USD', 'EUR']): p1 = 1.0
                     
+                    a0_norm = abs(first_swap.get('amount0', 0) or 0)
+                    if a0_norm > 1e12: a0_norm /= 1e18
+                    a1_norm = abs(first_swap.get('amount1', 0) or 0)
+                    if a1_norm > 1e12: a1_norm /= 1e18
+
                     if p0 is not None:
-                        route_vol_usd = abs(first_swap['amount0']) * p0
+                        route_vol_usd = a0_norm * p0
                     elif p1 is not None:
-                        route_vol_usd = abs(first_swap['amount1']) * p1
+                        route_vol_usd = a1_norm * p1
                 
                 # Aggregate immediately
                 # Format path: TokenA -- fee%|protocol --> TokenB -- fee%|protocol --> TokenC

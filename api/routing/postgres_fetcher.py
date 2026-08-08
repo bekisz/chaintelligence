@@ -241,7 +241,8 @@ class PostgresFetcher:
     @staticmethod
     def _build_token_clause(start_tokens: Optional[List[str]] = None,
                             end_tokens: Optional[List[str]] = None,
-                            token_filter: Optional[List[str]] = None):
+                            token_filter: Optional[List[str]] = None,
+                            broad: bool = False):
         """Build the coin-symbol filter clause used by swap queries.
 
         Returns (where_sql, params). The clause filters on the *pool's* coin
@@ -250,8 +251,15 @@ class PostgresFetcher:
 
         `start_tokens`/`end_tokens` take precedence over `token_filter` when
         present. A '*' wildcard on either side means "no constraint on that side".
+
+        When `broad` is True, both sides are concrete, and the clause is
+        loosened to match any leg touching EITHER a start OR an end token
+        (union, ANY-based) instead of only the strict start/end pair. The route
+        analyzer needs this: a multi-hop route's intermediate legs (e.g.
+        WBTC→USDC→RLUSD) live on pools that hold one side but not both, so a
+        strict pair filter returns zero rows and the chain is never fetched.
         """
-        if start_tokens and end_tokens:
+        if start_tokens and end_tokens and not broad:
             start_upper = [s.upper() for s in start_tokens]
             end_upper = [e.upper() for e in end_tokens]
 
@@ -270,6 +278,20 @@ class PostgresFetcher:
                 return (("(UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s)) "
                          "OR (UPPER(c0.symbol) = ANY(%s) AND UPPER(c1.symbol) = ANY(%s))"),
                         [start_upper, end_upper, end_upper, start_upper])
+
+        # Broad (multi-hop) mode: both sides concrete, but we want every leg
+        # touching EITHER side so intermediate hops (which never contain both
+        # start and end, e.g. USDC in WBTC→USDC→RLUSD) are still fetched. This
+        # is a lazy super-set; RouteAnalyzer then discards txs that don't form a
+        # real contiguous start→end chain.
+        if broad and start_tokens and end_tokens:
+            start_upper = [s.upper() for s in start_tokens if s != '*']
+            end_upper = [e.upper() for e in end_tokens if e != '*']
+            all_tokens = list(dict.fromkeys(start_upper + end_upper))
+            if not all_tokens:
+                return "", []
+            return ("UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)",
+                    [all_tokens, all_tokens])
 
         upper_symbols = [symbol.upper() for symbol in token_filter] if token_filter else None
         if token_filter and len(token_filter) == 2:
@@ -293,19 +315,25 @@ class PostgresFetcher:
                     token_filter: Optional[List[str]] = None,
                     network: Optional[str] = None,
                     start_tokens: Optional[List[str]] = None,
-                    end_tokens: Optional[List[str]] = None) -> List[Dict]:
+                    end_tokens: Optional[List[str]] = None,
+                    broad: bool = False) -> List[Dict]:
         """
         Fetch all swap events for tracked tokens within the date range from Postgres.
 
         Queries the unified `swaps` table with coin_id joins for symbol resolution.
+
+        When `broad` is True, legs touching EITHER start OR end token are fetched
+        so multi-hop routes (which traverse intermediate tokens not on the queried
+        pair) can be reconstructed. Use only for route analysis; pool-stats callers
+        keep the strict direct-pair filter.
         """
-        self._log(f"Fetching swaps from {start_date} to {end_date} (network={network}, tokens={token_filter}, start={start_tokens}, end={end_tokens})")
+        self._log(f"Fetching swaps from {start_date} to {end_date} (network={network}, tokens={token_filter}, start={start_tokens}, end={end_tokens}, broad={broad})")
 
         try:
             with get_conn() as conn:
                 cur = conn.cursor()
 
-                token_where, token_params = self._build_token_clause(start_tokens, end_tokens, token_filter)
+                token_where, token_params = self._build_token_clause(start_tokens, end_tokens, token_filter, broad)
                 network_where, network_param = self._build_network_clause(network)
 
                 # Query the unified swaps table. No ORDER BY: callers that need
@@ -815,7 +843,11 @@ class PostgresFetcher:
                         elif prices is not None:
                             p0 = prices.get(row[1]) or (1.0 if any(x in row[1].upper() for x in ['USD','EUR']) else 0)
                             p1 = prices.get(row[2]) or (1.0 if any(x in row[2].upper() for x in ['USD','EUR']) else 0)
-                            pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + (float(row[4] or 0)*p0 + float(row[5] or 0)*p1)/2.0
+                            v0 = float(row[4] or 0)
+                            if v0 > 1e12: v0 /= 1e18
+                            v1 = float(row[5] or 0)
+                            if v1 > 1e12: v1 /= 1e18
+                            pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + (v0*p0 + v1*p1)/2.0
 
             # Calculate APR
             for k, meta in pool_meta.items():
