@@ -1181,9 +1181,11 @@ async def analyze(
 
                 for key, db_val in db_batch.items():
                     if key in pool_addresses:
-                        # Preserve derived CREATE2 addresses for V2/V3 pools (the DB
-                        # may contain stale/wrong addresses); only overlay the internal
-                        # cid from the DB.
+                        # Prefer actual database pool_address when available;
+                        # fallback to derived CREATE2 address if missing.
+                        if db_val.get("pool_address"):
+                            pool_addresses[key]["pool_address"] = db_val["pool_address"]
+                            pool_addresses[key]["pool_id"] = db_val.get("pool_id") or db_val["pool_address"]
                         pool_addresses[key]["cid"] = db_val.get("cid")
                     else:
                         pool_addresses[key] = db_val
