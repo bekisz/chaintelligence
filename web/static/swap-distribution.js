@@ -149,6 +149,11 @@ function groupColor(name, mode) {
         }
         return "#ef4444"; // 4+ hops / fallback
     }
+    if (mode === "route") {
+        if (name === "Others") return "#64748b";
+        const ROUTE_COLORS = ["#0052ff", "#22c55e", "#f97316", "#a855f7", "#06b6d4", "#ec4899", "#eab308", "#84cc16", "#3b82f6", "#f43f5e"];
+        return ROUTE_COLORS[groupHash(name) % ROUTE_COLORS.length];
+    }
     const dir = directionColor(name);
     if (dir) return dir;
     return GROUP_COLORS[groupHash(name) % GROUP_COLORS.length];
@@ -250,6 +255,15 @@ function activeGroups(d) {
         });
         return h;
     }
+    if (groupByMode === "route") {
+        const r = (d.route_chains || []).slice();
+        r.sort((a, b) => {
+            if (a.name === "Others") return 1;
+            if (b.name === "Others") return -1;
+            return (b.n || 0) - (a.n || 0);
+        });
+        return r;
+    }
     return d.chains || [];
 }
 function computeSubset(d) {
@@ -307,7 +321,8 @@ function computeSubset(d) {
                        groupByMode === "protocol" ? "protocol_chains" :
                        groupByMode === "direction" ? "dir_chains" :
                        groupByMode === "split" ? "split_chains" :
-                       groupByMode === "hops" ? "hops_chains" : "chains";
+                       groupByMode === "hops" ? "hops_chains" :
+                       groupByMode === "route" ? "route_chains" : "chains";
     return {
         n: nSub,
         min: cmin,

@@ -159,6 +159,7 @@
                                         <option value="protocol">Protocol</option>
                                         <option value="split">Split</option>
                                         <option value="hops">Hops</option>
+                                        <option value="route">Route</option>
                                         <option value="direction">Direction</option>
                                     </select>
                                 </div>
@@ -283,7 +284,8 @@
                                     </button>
                                     <div id="table-columns-dropdown" class="column-dropdown hidden">
                                         <div class="dropdown-section">
-                                            <label class="checkbox-label"><input type="checkbox" data-col="cid" checked> CID</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="route-id"> Route ID</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="cid"> Pool ID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="pool-id"> Pool Address / ID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="network" checked> Network</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="protocol"> Protocol</label>
@@ -335,7 +337,8 @@
                             <thead>
                                 <tr>
                                     <th>Pool</th>
-                                    <th id="sort-cid" class="sortable col-cid">CID <span>↕</span></th>
+                                    <th class="col-route-id hidden-column">Route ID</th>
+                                    <th id="sort-cid" class="sortable col-cid hidden-column">Pool ID <span>↕</span></th>
                                     <th id="sort-pool-id" class="sortable col-pool-id hidden-column">Pool Address / ID <span>↕</span></th>
                                     <th id="sort-network" class="sortable col-network">Net <span class="sort-icon">↕</span></th>
                                     <th id="sort-protocol" class="sortable col-protocol hidden-column">Protocol <span>↕</span></th>
@@ -349,6 +352,7 @@
                                     <th id="sort-daily-fees" class="sortable col-daily-fees">Daily Fees <span>↕</span></th>
                                     <th id="sort-pct" class="sortable col-pct-volume">% Volume <span>↕</span></th>
                                     <th id="sort-last-activity" class="sortable col-last-activity hidden-column">Last Swap <span>↕</span></th>
+                                    <th class="col-route-id hidden-column">Route ID</th>
                                 </tr>
                             </thead>
                             <tbody id="routes-body">
@@ -508,7 +512,7 @@
     <script src="/static/nav.js"></script>
     <script src="/static/token-input.js?v=1.2"></script>
     <script src="/static/swap-distribution.js?v=3.10"></script>
-    <script src="/static/app.js?v=49.0"></script>
+    <script src="/static/app.js?v=50.0"></script>
 </body>
 
 </html>

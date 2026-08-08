@@ -786,88 +786,123 @@ async def analyze(
         if dir_norm not in ('forward', 'reverse', 'both'):
             dir_norm = 'forward'
 
-        analyzers = {}
-        if dir_norm in ('forward', 'both'):
-            analyzers['forward'] = RouteAnalyzer(verbose=True, prices=latest_prices)
-        if dir_norm in ('reverse', 'both'):
-            analyzers['reverse'] = RouteAnalyzer(verbose=True, prices=latest_prices)
-
         from fastapi.responses import StreamingResponse
         import json
         import asyncio
         import psycopg2
 
-        # Token roles per analyzer direction: forward analyzes start->end with
-        # start_tokens as the start role; reverse swaps the roles so a tx whose
+        # Token roles per requested direction: forward analyzes start->end with
+        # start_tokens as the origin role; reverse swaps the roles so a tx whose
         # first log entry spends the end token is analyzed as end->start.
         analytics_inputs = []
-        if 'forward' in analyzers:
-            analytics_inputs.append(('forward', analyzers['forward'],
-                                     start_tokens_list, end_tokens_list))
-        if 'reverse' in analyzers:
-            analytics_inputs.append(('reverse', analyzers['reverse'],
-                                     end_tokens_list, start_tokens_list))
-
-        def _process_analyzers(batch_swaps, inputs):
-            for _label, an, s_tokens, e_tokens in inputs:
-                an.process_batch(batch_swaps, s_tokens, e_tokens)
+        if dir_norm in ('forward', 'both'):
+            analytics_inputs.append(('forward', start_tokens_list, end_tokens_list))
+        if dir_norm in ('reverse', 'both'):
+            analytics_inputs.append(('reverse', end_tokens_list, start_tokens_list))
 
         async def generate():
-            # Build 1-day date chunks
-            date_chunks = []
-            cur_s = start_dt
-            while cur_s < end_dt:
-                cur_e = min(cur_s + timedelta(days=1), end_dt)
-                date_chunks.append((cur_s, cur_e))
-                cur_s = cur_e
-
-            yield json.dumps({"type": "progress", "pct": 10.0, "message": f"Fetching swaps for {start_dt.strftime('%Y-%m-%d')} → {end_dt.strftime('%Y-%m-%d')} ({len(date_chunks)} parallel batches)..."}) + "\n"
+            yield json.dumps({"type": "progress", "pct": 10.0, "message": f"Loading pre-aggregated route stats for {start_dt.strftime('%Y-%m-%d')} → {end_dt.strftime('%Y-%m-%d')}..."}) + "\n"
             await asyncio.sleep(0.01)
 
-            async def _fetch_chunk(cs, ce):
-                return await asyncio.to_thread(
-                    fetcher.fetch_swaps, cs, ce, token_filter, network, start_tokens_list, end_tokens_list, True
-                )
-
-            chunk_results = await asyncio.gather(*[_fetch_chunk(cs, ce) for cs, ce in date_chunks])
-
-            has_data = False
-            for batch_swaps in chunk_results:
-                if batch_swaps:
-                    has_data = True
-                    await asyncio.to_thread(
-                        _process_analyzers, batch_swaps, analytics_inputs
+            async def _fetch_stats(label, s_tokens, e_tokens):
+                # Stat-backed fast path: route_daily_stats groups per (route, day),
+                # so a long window is a few hundred summed rows instead of a full
+                # swaps sweep. Falls back to the streaming swap path on any schema/
+                # population error (legacy DB without route tables).
+                try:
+                    return await asyncio.to_thread(
+                        fetcher.fetch_route_stats, start_dt, end_dt,
+                        s_tokens, e_tokens, network, label
                     )
-                
-            yield json.dumps({"type": "progress", "pct": 75.0, "message": "Building routing path graph..."}) + "\n"
-            await asyncio.sleep(0.01)
-            
-            if not has_data:
-                conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-                cur = conn.cursor()
-                cur.execute("""
-                    SELECT MIN(ts), MAX(ts) FROM swaps
-                """)
-                row = cur.fetchone()
-                db_min = row[0].isoformat() if row[0] else None
-                db_max = row[1].isoformat() if row[1] else None
-                cur.close()
-                conn.close()
-                
-                yield json.dumps({"type": "result", "data": {"routes": [], "total_tx": 0, "total_volume": 0, "db_range": {"min": db_min, "max": db_max}}}) + "\n"
-                return
+                except Exception as e:
+                    print(f"[routes/analyze] route-stats path failed ({e}); falling back to swap-stream path", flush=True)
+                    return None
 
-            # Combine per-direction results. Each direction labels its routes so
-            # the frontend can distinguish forward vs reverse chains in `both`.
-            analysis = {'routes': [], 'total_tx': 0, 'total_volume': 0.0}
-            for label, an, _s, _e in analytics_inputs:
-                res = an.get_results()
-                for r in res.get('routes', []):
-                    r['direction'] = label
-                analysis['routes'].extend(res.get('routes', []))
-                analysis['total_tx'] += res.get('total_tx', 0)
-                analysis['total_volume'] += res.get('total_volume', 0.0)
-            analysis['routes'].sort(key=lambda r: r.get('volume', 0), reverse=True)
+            stat_results = await asyncio.gather(
+                *[_fetch_stats(label, st, et) for label, st, et in analytics_inputs]
+            )
+
+            has_data = any(res is not None and res.get('routes') for res in stat_results)
+            if not has_data:
+                # No routes yet (migration pending or empty window): run the
+                # original chunked swap fetch + RouteAnalyzer path unchanged.
+                yield json.dumps({"type": "progress", "pct": 40.0, "message": "Route tables not populated; falling back to streaming swap analysis..."}) + "\n"
+                await asyncio.sleep(0.01)
+
+                date_chunks = []
+                cur_s = start_dt
+                while cur_s < end_dt:
+                    cur_e = min(cur_s + timedelta(days=1), end_dt)
+                    date_chunks.append((cur_s, cur_e))
+                    cur_s = cur_e
+
+                async def _fetch_chunk(cs, ce):
+                    return await asyncio.to_thread(
+                        fetcher.fetch_swaps, cs, ce, token_filter, network, start_tokens_list, end_tokens_list, True
+                    )
+
+                chunk_results = await asyncio.gather(*[_fetch_chunk(cs, ce) for cs, ce in date_chunks])
+
+                legacy_analyzers = {}
+                if dir_norm in ('forward', 'both'):
+                    legacy_analyzers['forward'] = RouteAnalyzer(verbose=True, prices=latest_prices)
+                if dir_norm in ('reverse', 'both'):
+                    legacy_analyzers['reverse'] = RouteAnalyzer(verbose=True, prices=latest_prices)
+                legacy_inputs = []
+                if 'forward' in legacy_analyzers:
+                    legacy_inputs.append(('forward', legacy_analyzers['forward'], start_tokens_list, end_tokens_list))
+                if 'reverse' in legacy_analyzers:
+                    legacy_inputs.append(('reverse', legacy_analyzers['reverse'], end_tokens_list, start_tokens_list))
+
+                def _process_analyzers(batch_swaps, inputs):
+                    for _label, an, s_tokens, e_tokens in inputs:
+                        an.process_batch(batch_swaps, s_tokens, e_tokens)
+
+                for batch_swaps in chunk_results:
+                    if batch_swaps:
+                        has_data = True
+                        await asyncio.to_thread(_process_analyzers, batch_swaps, legacy_inputs)
+
+                if not has_data:
+                    conn2 = psycopg2.connect(DATA_WAREHOUSE_DB)
+                    cur2 = conn2.cursor()
+                    cur2.execute("SELECT MIN(ts), MAX(ts) FROM swaps")
+                    row = cur2.fetchone()
+                    db_min = row[0].isoformat() if row[0] else None
+                    db_max = row[1].isoformat() if row[1] else None
+                    cur2.close()
+                    conn2.close()
+                    yield json.dumps({"type": "result", "data": {"routes": [], "total_tx": 0, "total_volume": 0, "db_range": {"min": db_min, "max": db_max}}}) + "\n"
+                    return
+
+                yield json.dumps({"type": "progress", "pct": 75.0, "message": "Building routing path graph..."}) + "\n"
+                await asyncio.sleep(0.01)
+
+                analysis = {'routes': [], 'total_tx': 0, 'total_volume': 0.0}
+                for label, an, _s, _e in legacy_inputs:
+                    res = an.get_results()
+                    for r in res.get('routes', []):
+                        r['direction'] = label
+                    analysis['routes'].extend(res.get('routes', []))
+                    analysis['total_tx'] += res.get('total_tx', 0)
+                    analysis['total_volume'] += res.get('total_volume', 0.0)
+                analysis['routes'].sort(key=lambda r: r.get('volume', 0), reverse=True)
+            else:
+                yield json.dumps({"type": "progress", "pct": 75.0, "message": "Building routing path graph..."}) + "\n"
+                await asyncio.sleep(0.01)
+
+                # Combine per-direction results. Each direction labels its routes so
+                # the frontend can distinguish forward vs reverse chains in `both`.
+                analysis = {'routes': [], 'total_tx': 0, 'total_volume': 0.0}
+                for (label, _s, _e), res in zip(analytics_inputs, stat_results):
+                    if not res:
+                        continue
+                    for r in res.get('routes', []):
+                        r['direction'] = label
+                    analysis['routes'].extend(res.get('routes', []))
+                    analysis['total_tx'] += res.get('total_tx', 0)
+                    analysis['total_volume'] += res.get('total_volume', 0.0)
+                analysis['routes'].sort(key=lambda r: r.get('volume', 0), reverse=True)
         
             # --- Enrichment with APRs ---
             # 1. Identify pools
@@ -1928,8 +1963,8 @@ async def swap_distribution(
     network: Optional[str] = Query(None, description="Filter swaps by network"),
     limit: int = Query(500000, ge=100, le=2000000, description="Max swap rows sampled"),
     exclude_chains: Optional[str] = Query(None, description="Comma-separated chain names to exclude"),
-    group_by: str = Query("chain", pattern="^(chain|direction|fee_tier|protocol|split|hops)$",
-                          description="Split the histogram groups: chain, direction, fee_tier, protocol, split (Split/Non-split), hops (route hop count)"),
+    group_by: str = Query("chain", pattern="^(chain|direction|fee_tier|protocol|split|hops|route)$",
+                          description="Split the histogram groups: chain, direction, fee_tier, protocol, split (Split/Non-split), hops (route hop count), route (top 10 routes)"),
     direction: str = Query("both", pattern="^(both|forward|reverse)$",
                            description="Restrict to a single swap direction: both (default), forward (start→end), or reverse (end→start)"),
 ):
@@ -2229,6 +2264,8 @@ async def swap_distribution(
                 by_split_fees = {}
                 by_hops = {}
                 by_hops_fees = {}
+                by_route = {}
+                by_route_fees = {}
                 broad_by_count = {}
                 start_set = set(s.upper() for s in start_list if s != "*")
                 end_set = set(e.upper() for e in end_list if e != "*")
@@ -2281,9 +2318,9 @@ async def swap_distribution(
                     by_dir.setdefault(key, []).append(amt)
                     by_dir_fees.setdefault(key, []).append(fee_usd)
 
-                # Hops: reconstruct each matched tx's full route (ALL legs,
+                # Hops & Routes: reconstruct each matched tx's full route (ALL legs,
                 # including intermediate tokens outside the queried pair) and
-                # count the hop length.
+                # count the hop length and path string.
                 if rows:
                     from collections import defaultdict
                     tx_set = sorted({tx for _, _, _, _, _0, _1, _, _, tx, _ in rows})
@@ -2297,25 +2334,29 @@ async def swap_distribution(
                         tx_slice = tx_set[i:i + chunk]
                         hcur.execute(f"""
                             SELECT s.tx_hash, s.log_index, UPPER(c0.symbol), UPPER(c1.symbol),
-                                   s.amount0, s.amount1, s.amount_usd
+                                   s.amount0, s.amount1, s.amount_usd, lp.fee_bps, pr.name, ch.name
                             FROM swaps s
                             JOIN liquidity_pool lp ON s.pool_id = lp.id
+                            JOIN chain ch ON lp.chain_id = ch.id
+                            JOIN protocol pr ON lp.protocol_id = pr.id
                             JOIN coin c0 ON lp.coin0_id = c0.coin_id
                             JOIN coin c1 ON lp.coin1_id = c1.coin_id
                             WHERE s.tx_hash = ANY(%s)
                             ORDER BY s.tx_hash, s.log_index
                         """, (tx_slice,))
-                        for htx, lg, hs0, hs1, ha0, ha1, h_usd in hcur.fetchall():
+                        for htx, lg, hs0, hs1, ha0, ha1, h_usd, h_fee, h_proto, h_chain in hcur.fetchall():
                             legs_by_tx[htx].append({
                                 'sym0': hs0, 'sym1': hs1, 'a0': ha0, 'a1': ha1, 'usd': h_usd,
+                                'fee_bps': h_fee, 'protocol': h_proto, 'chain': h_chain,
                             })
                     hcur.close()
-                    # A tx only counts toward a hop bucket when its FIRST leg
+                    # A tx only counts toward a hop/route bucket when its FIRST leg
                     # (lowest log_index) consumes a start-side token, exactly like
                     # the route analyzer — walking from any start-token leg
                     # anywhere in a tx invents bogus multi-hop chains for basket
                     # trades. Direction applies to the chain orientation.
                     tx_hops = {}
+                    tx_routes = {}
                     for htx, legs in legs_by_tx.items():
                         if htx in tx_hops:
                             continue
@@ -2325,6 +2366,14 @@ async def swap_distribution(
                             return l['sym0'] if (l['a0'] or 0) > 0 else l['sym1']
                         def _leg_out(l):
                             return l['sym1'] if (l['a0'] or 0) > 0 else l['sym0']
+                        def _leg_fee_str(l):
+                            return 'Dynamic' if l.get('fee_bps') is None else f"{(l['fee_bps'] / 100.0):.2f}%"
+                        def _leg_info(l):
+                            fee_s = _leg_fee_str(l)
+                            proto_s = l.get('protocol') or 'Unknown'
+                            chain_s = l.get('chain') or 'Unknown'
+                            return f"{fee_s}|{proto_s}|{chain_s}"
+
                         first = legs[0]
                         first_in = _leg_input(first)
                         if first_in in start_set:
@@ -2342,6 +2391,7 @@ async def swap_distribution(
                         cur_tok = _leg_out(first)
                         hops = 1
                         used = {id(first)}
+                        route_parts = [first_in, f"-- {_leg_info(first)} -->", cur_tok]
                         while cur_tok not in to_set and len(used) < len(legs):
                             nxt = None
                             for l in legs:
@@ -2355,19 +2405,30 @@ async def swap_distribution(
                             used.add(id(nxt))
                             hops += 1
                             cur_tok = _leg_out(nxt)
+                            route_parts.append(f"-- {_leg_info(nxt)} -->")
+                            route_parts.append(cur_tok)
+
                         tx_hops[htx] = hops
+                        tx_routes[htx] = " ".join(route_parts)
+
                     for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
                         fee_usd = amt * (fee_bps / 10000.0) if fee_bps is not None else 0.0
-                        # A tx the first-leg walk skipped (its first leg consumes
-                        # neither a start nor an end token) is not a start->end
-                        # route and must not pollute the hop buckets with a fake
-                        # 1. Unless the fallback walked it, leave it out.
                         if tx_hash not in tx_hops:
                             continue
                         hp = tx_hops[tx_hash]
                         hkey = ("4+ hops" if hp >= 4 else f"{hp} hop{'s' if hp > 1 else ''}")
                         by_hops.setdefault(hkey, []).append(amt)
                         by_hops_fees.setdefault(hkey, []).append(fee_usd)
+
+                        rkey = tx_routes.get(tx_hash)
+                        if not rkey:
+                            fee_s = 'Dynamic' if fee_bps is None else f"{(fee_bps / 100.0):.2f}%"
+                            in_s = sym0 if (amount0 is not None and amount0 > 0) else sym1
+                            out_s = sym1 if (amount0 is not None and amount0 > 0) else sym0
+                            rkey = f"{in_s} -- {fee_s}|{protocol or 'Unknown'}|{chain} --> {out_s}"
+
+                        by_route.setdefault(rkey, []).append(amt)
+                        by_route_fees.setdefault(rkey, []).append(fee_usd)
 
                 # Keep only the most relevant groups per category (by swap
                 # count) and fold the long tail of tiny groups into "Others"
@@ -2392,6 +2453,7 @@ async def swap_distribution(
                 by_chain, by_chain_fees = _cap_groups(by_chain, by_chain_fees)
                 by_fee_tier, by_fee_tier_fees = _cap_groups(by_fee_tier, by_fee_tier_fees)
                 by_protocol, by_protocol_fees = _cap_groups(by_protocol, by_protocol_fees)
+                by_route, by_route_fees = _cap_groups(by_route, by_route_fees, max_groups=10)
             result = sd.analyze_sizes_by_chain(by_chain, fee_groups=by_chain_fees)
             if result:
                 dirs = sd.analyze_sizes_by_chain(by_dir, fee_groups=by_dir_fees)
@@ -2425,6 +2487,11 @@ async def swap_distribution(
                     result["hops_chains"] = hp["chains"]
                 else:
                     result["hops_chains"] = []
+                rt = sd.analyze_sizes_by_chain(by_route, fee_groups=by_route_fees)
+                if rt:
+                    result["route_chains"] = rt["chains"]
+                else:
+                    result["route_chains"] = []
             return result
 
         result = await asyncio.to_thread(_fetch_and_analyze)
