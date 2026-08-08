@@ -1577,10 +1577,20 @@ async def undercut(
             if usd <= 0:
                 p0 = latest_prices.get(s0, 0.0) if latest_prices else 0.0
                 p1 = latest_prices.get(s1, 0.0) if latest_prices else 0.0
+                if p0 == 0.0 and any(x in s0 for x in ['USD', 'EUR']): p0 = 1.0
+                if p1 == 0.0 and any(x in s1 for x in ['USD', 'EUR']): p1 = 1.0
                 v0 = abs(a0f)
-                if v0 > 1e12: v0 /= 1e18
+                if v0 > 1e12:
+                    v0 /= 1e18
+                elif any(b in s0 for b in ['BTC', 'WBTC', 'BTCB']) and v0 > 1e4:
+                    v0 /= 1e8
+
                 v1 = abs(a1f)
-                if v1 > 1e12: v1 /= 1e18
+                if v1 > 1e12:
+                    v1 /= 1e18
+                elif any(b in s1 for b in ['BTC', 'WBTC', 'BTCB']) and v1 > 1e4:
+                    v1 /= 1e8
+
                 if p0 > 0:
                     usd = v0 * p0
                 elif p1 > 0:
@@ -2097,25 +2107,32 @@ async def swap_distribution(
                         print(f"[swap-distribution] price fallback failed: {_pe}")
                         _latest_prices = {}
                     out_rows = []
+                    stables = {'USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD', 'USDS', 'EURC', 'USDE', 'PYUSD'}
                     for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
                         usd = float(amt) if amt is not None else 0.0
                         if usd <= 0:
-                            # input token = the side with a positive amount
-                            # (Uniswap sign convention); price it if available.
-                            if (amount0 or 0) > 0:
-                                in_sym = sym0.upper()
-                                in_amt = abs(amount0 or 0)
+                            s0_u, s1_u = sym0.upper(), sym1.upper()
+                            a0, a1 = abs(amount0 or 0), abs(amount1 or 0)
+                            if s0_u in stables and a0 > 0:
+                                usd = a0 / 1e18 if a0 > 1e12 else (a0 / 1e6 if a0 > 1e4 else a0)
+                            elif s1_u in stables and a1 > 0:
+                                usd = a1 / 1e18 if a1 > 1e12 else (a1 / 1e6 if a1 > 1e4 else a1)
                             else:
-                                in_sym = sym1.upper()
-                                in_amt = abs(amount1 or 0)
-                            if in_amt > 1e12:
-                                in_amt /= 1e18
-                            p = _latest_prices.get(in_sym)
-                            # Stablecoin heuristic matching route_analyzer: USD/EUR
-                            # stablecoins that lack a DB price are worth ~$1.
-                            if p is None and any(x in in_sym for x in ['USD', 'EUR']):
-                                p = 1.0
-                            usd = min(in_amt * (p or 0.0), 100_000_000.0)
+                                if (amount0 or 0) > 0:
+                                    in_sym = s0_u
+                                    in_amt = a0
+                                else:
+                                    in_sym = s1_u
+                                    in_amt = a1
+                                if in_amt > 1e12:
+                                    in_amt /= 1e18
+                                elif any(b in in_sym for b in ['BTC', 'WBTC', 'BTCB']) and in_amt > 1e4:
+                                    in_amt /= 1e8
+                                p = _latest_prices.get(in_sym)
+                                if p is None and any(x in in_sym for x in ['USD', 'EUR']):
+                                    p = 1.0
+                                usd = in_amt * (p or 0.0)
+                            usd = min(max(0.0, usd), 100_000_000.0)
                         if usd >= min_amt:
                             out_rows.append((usd, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id))
                     rows = out_rows
@@ -2239,15 +2256,24 @@ async def swap_distribution(
                                 in_usd = first[8]
                                 in_amt_usd = float(in_usd) if in_usd else 0.0
                                 if in_amt_usd <= 0:
-                                    in_sym = _leg_in(first[1], first[2], first[3], first[4])
-                                    in_amt = abs(first[3] or 0) if (first[3] or 0) > 0 else abs(first[4] or 0)
-                                    if in_amt > 1e12:
-                                        in_amt /= 1e18
-                                    _pr = _latest_prices.get(in_sym.upper())
-                                    # Stablecoin heuristic matching route_analyzer.
-                                    if _pr is None and any(x in in_sym.upper() for x in ['USD', 'EUR']):
-                                        _pr = 1.0
-                                    in_amt_usd = min(in_amt * (_pr or 0.0), 100_000_000.0)
+                                    s0_u, s1_u = first[1].upper(), first[2].upper()
+                                    a0, a1 = abs(first[3] or 0), abs(first[4] or 0)
+                                    if s0_u in stables and a0 > 0:
+                                        in_amt_usd = a0 / 1e18 if a0 > 1e12 else (a0 / 1e6 if a0 > 1e4 else a0)
+                                    elif s1_u in stables and a1 > 0:
+                                        in_amt_usd = a1 / 1e18 if a1 > 1e12 else (a1 / 1e6 if a1 > 1e4 else a1)
+                                    else:
+                                        in_sym = _leg_in(first[1], first[2], first[3], first[4]).upper()
+                                        in_amt = a0 if (first[3] or 0) > 0 else a1
+                                        if in_amt > 1e12:
+                                            in_amt /= 1e18
+                                        elif any(b in in_sym for b in ['BTC', 'WBTC', 'BTCB']) and in_amt > 1e4:
+                                            in_amt /= 1e8
+                                        _pr = _latest_prices.get(in_sym)
+                                        if _pr is None and any(x in in_sym for x in ['USD', 'EUR']):
+                                            _pr = 1.0
+                                        in_amt_usd = in_amt * (_pr or 0.0)
+                                    in_amt_usd = min(max(0.0, in_amt_usd), 100_000_000.0)
                                 if in_amt_usd >= min_amt:
                                     broad_rows.append((in_amt_usd, chain, first[1], first[2], first[3], first[4], first[5], first[6], txid, first[7]))
                                     broad_by_count[key] = len(route)
