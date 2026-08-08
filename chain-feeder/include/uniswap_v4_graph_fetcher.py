@@ -230,8 +230,7 @@ def fetch_v4_position_range_data_from_graph(position_label, network, graph_api_k
             "current_price": current_price,
             "in_range": in_range,
             "token0_symbol": token0["symbol"],
-            "token1_symbol": token1["symbol"],
-            "fee_tier": pool.get("feeTier", 0)
+            "fee_tier": int(pool.get("feeTier", 0)) // 100 if pool.get("feeTier") else 0
         }
         
     except requests.exceptions.RequestException as e:
