@@ -1717,7 +1717,7 @@ footer {
     height: 0;
     border-top: 1.5px solid currentColor;
     position: relative;
-    min-width: 160px;
+    min-width: 240px;
 }
 
 /* The fixed-size arrowhead — never stretches */
@@ -1725,6 +1725,8 @@ footer {
     width: 8px;
     height: 14px;
     flex-shrink: 0;
+    position: relative;
+    z-index: 3;
     overflow: visible;
 }
 

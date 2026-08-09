@@ -288,10 +288,73 @@ Unified swap event log across all protocols and chains. Monthly range-partitione
 | `pool_id` | INT (FK → liquidity_pool) | The pool this swap belongs to. Added via [normalize_swaps_pool_id.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/normalize_swaps_pool_id.sql). |
 | `fee_bps` | DOUBLE PRECISION | Fee in basis points (5 = 0.05%, 30 = 0.3%); NULL = dynamic fee. |
 | `fee_display` | VARCHAR(20) | Original display format, e.g. `0.05%`. |
+| `route_id` | INT (FK → route) | Route this swap leg belongs to, back-filled by the route classifier (`could be NULL between the INSERT and the post-commit classification sweep). Added via [create_route_tables.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_route_tables.sql). |
 
 Schema source: [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql)
 
 ---
+
+## Route taxonomy
+
+Derived tables that encode the topology of routing across the unified `swaps` log. Legs are grouped per tx hash and ordered by log index; a contiguous chain of swap legs (hop `N`'s output token == hop `N+1`'s input token) forms one route. Multiple disjoint chains in a single tx each become their own route (read by [route_classifier.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/route_classifier.py)). Round-trip routes where the origin contract equals the destination contract are valid; directed pairs `(A,B)` and `(B,A)` are distinct.
+
+Schema source: [create_route_tables.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_route_tables.sql), §8.5 of [init_db.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/init_db.sql)
+
+### `origin_destination_pair`
+
+Coarse identity of a route's endpoints. Key = `(chain_id, origin_contract, dest_contract)`; identical contracts found again idempotently reuse the row.
+
+| Column | Type | Description |
+|:---|:---|:---|
+| `id` | SERIAL PK | Stable pair id. |
+| `chain_id` | SMALLINT (FK → chain) | Chain the pair was first seen on. |
+| `origin_contract` | VARCHAR(64) | Input token contract (lowercased). |
+| `dest_contract` | VARCHAR(64) | Final output token contract (lowercased). |
+| `origin_coin_id` / `dest_coin_id` | INTEGER (FK → coin) | Enriched coin references, may be NULL. |
+| `origin_symbol` / `dest_symbol` | VARCHAR(10) | Symbol display metadata. |
+| `first_seen` / `last_seen` | TIMESTAMPTZ | First/last observation timestamps. |
+
+### `route`
+
+One specific directed path between a pair, identified by its ordered pool sequence.
+
+| Column | Type | Description |
+|:---|:---|:---|
+| `route_id` | SERIAL PK | Route id; referenced by `swaps.route_id`. |
+| `pair_id` | INTEGER (FK → origin_destination_pair) | Owning pair. |
+| `chain_id` | SMALLINT (FK → chain) | Chain the route was first seen on. |
+| `hops` | SMALLINT | Number of hops (legs) in the route. |
+| `canonical_key` | TEXT UNIQUE | `"{pair_id}:{pool1.id}:{pool2.id}:..."` — idempotency key. |
+| `first_seen` / `last_seen` | TIMESTAMPTZ | First/last observation timestamps. |
+
+### `route_hop`
+
+Normalized graph edges: one row per pool hop, preserving order.
+
+| Column | Type | Description |
+|:---|:---|:---|
+| `route_id` | INTEGER (FK → route, cascade) | Owning route. |
+| `seq` | SMALLINT, part of PK | Order within the route (0-based). |
+| `pool_id` | INTEGER (FK → liquidity_pool) | The pool executing this hop. |
+| `token_in` / `token_out` | VARCHAR(64) | Hop endpoints (lowercased contracts). |
+
+Primary key: `(route_id, seq)`.
+
+### `route_daily_stats`
+
+Pre-aggregated rollup read model. One row per `(route, day)`. Written idempotently (DELETE+INSERT per day) by `route_classifier.compute_daily_stats` / the [route_daily_stats_rollup.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/route_daily_stats_rollup.py) DAG. This is the fast read path consumed by `api/routing/postgres_fetcher.fetch_route_stats`.
+
+| Column | Type | Description |
+|:---|:---|:---|
+| `route_id` | INTEGER (FK → route, ON DELETE CASCADE) | Owning route. |
+| `day` | DATE | UTC day of the aggregation bucket. |
+| `tx_count` | INT | Number of distinct transactions attributed to this (route, day). |
+| `swap_count` | INT | Number of legs (swap events) attributed. |
+| `volume_usd` | DOUBLE PRECISION | Sum of `amount_usd` over legs whose input contract == pair origin. |
+
+Primary key: `(route_id, day)`; index on `day` for windowed reads.
+
+The API's `/api/routes/analyze` first tries to read these stats per requested direction and falls back to the streaming `swaps`-sweep + `RouteAnalyzer` path when the route tables are empty.
 
 ## Views
 

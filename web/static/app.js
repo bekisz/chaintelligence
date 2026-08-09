@@ -1217,7 +1217,8 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
                         </div>
                     ` : ''}
                 </td>
-                <td class="col-cid">${cidDisplay}</td>
+                <td class="col-route-id hidden-column">${route.route_id ?? '-'}</td>
+                <td class="col-cid hidden-column">${cidDisplay}</td>
                 <td class="col-pool-id hidden-column">${poolIdDisplay || poolAddrDisplay}</td>
                 <td class="col-network">${getNetworkIconBadge(networkVal)}</td>
                 <td class="col-protocol hidden-column font-bold" style="color: ${protoColor};">${protocolDisplay}</td>

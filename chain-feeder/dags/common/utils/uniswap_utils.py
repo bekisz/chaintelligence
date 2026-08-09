@@ -851,9 +851,28 @@ class PostgresStorage:
                         s.get('amountUSD'),
                     ))
 
+                tx_hashes = []
                 if data:
+                    for d in data:
+                        if d[0] not in tx_hashes:
+                            tx_hashes.append(d[0])
                     cur.executemany(insert_query, data)
             conn.commit()
+
+            # Post-commit route classification sweep. Every log of the batch's
+            # tx hashes is re-read from the (just committed) swaps table and
+            # attributed to a route (find-or-create via canonical key). This is
+            # idempotent: mixed-protocol legs arriving later in another DAG's
+            # batch reclassify the same tx to the same route.
+            if tx_hashes:
+                try:
+                    with conn.cursor() as cur2:
+                        from include.route_classifier import classify_tx_hashes
+                        classify_tx_hashes(cur2, tx_hashes)
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    print(f"Warning: route classification failed for {len(tx_hashes)} txs: {e}", flush=True)
 
     def get_last_swap_timestamp(self, network: str = "Ethereum", protocol: str = "Uniswap V3") -> Optional[int]:
         with psycopg2.connect(self.conn_str) as conn:

@@ -2040,16 +2040,74 @@ async def swap_distribution(
                 start_wild = "*" in start_list
                 end_wild = "*" in end_list
 
+                # Pre-load canonical DB routes matching start_list <-> end_list
+                db_route_map = {}
+                route_id_by_path = {}
+                route_id_by_pair = {}
+                all_matched_pool_ids = set()
+                try:
+                    r_cur = conn.cursor()
+                    r_cur.execute("""
+                        SELECT r.route_id, UPPER(pair.origin_symbol), UPPER(pair.dest_symbol), r.hops, ch.name,
+                               array_agg(h.pool_id ORDER BY h.seq) AS pool_ids
+                        FROM route r
+                        JOIN origin_destination_pair pair ON r.pair_id = pair.id
+                        JOIN chain ch ON r.chain_id = ch.id
+                        JOIN route_hop h ON h.route_id = r.route_id
+                        WHERE ((UPPER(pair.origin_symbol) = ANY(%s) AND UPPER(pair.dest_symbol) = ANY(%s))
+                           OR (UPPER(pair.origin_symbol) = ANY(%s) AND UPPER(pair.dest_symbol) = ANY(%s)))
+                        GROUP BY r.route_id, pair.origin_symbol, pair.dest_symbol, r.hops, ch.name
+                    """, (start_list, end_list, end_list, start_list))
+                    for rid, orig, dest, hops, chain_name, pids in r_cur.fetchall():
+                        all_matched_pool_ids.update(pids)
+                        hcur = conn.cursor()
+                        hcur.execute("""
+                            SELECT h.seq, UPPER(c0.symbol), UPPER(c1.symbol),
+                                   CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic'
+                                        ELSE (lp.fee_bps / 100.0)::text || '%%' END,
+                                   pr.name, ch.name
+                            FROM route_hop h
+                            JOIN liquidity_pool lp ON h.pool_id = lp.id
+                            JOIN protocol pr ON lp.protocol_id = pr.id
+                            JOIN chain ch ON lp.chain_id = ch.id
+                            JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                            JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                            WHERE h.route_id = %s
+                            ORDER BY h.seq
+                        """, (rid,))
+                        hop_rows = hcur.fetchall()
+                        hcur.close()
+                        parts = []
+                        for h_seq, h_s0, h_s1, h_fee, h_proto, h_chain in hop_rows:
+                            if h_seq == 0:
+                                parts.append(h_s0)
+                            parts.append(f"-- {h_fee}|{h_proto}|{h_chain} -->")
+                            parts.append(h_s1)
+                        path_str = " ".join(parts)
+                        info = {'route_id': rid, 'origin': orig, 'dest': dest, 'hops': hops, 'chain': chain_name, 'path_str': path_str}
+                        db_route_map[tuple(pids)] = info
+                        db_route_map[tuple(reversed(pids))] = info
+                        route_id_by_path[path_str] = rid
+                        route_id_by_pair[(orig, dest)] = rid
+                        route_id_by_pair[(dest, orig)] = rid
+                    r_cur.close()
+                except Exception as e:
+                    pass
+
                 # Pair constraint: every non-wildcard side must appear in the
                 # pool (as coin0 or coin1). A wildcard side adds no restriction.
                 pair_pred = []
                 pair_params = []
-                if not start_wild:
-                    pair_pred.append("(UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s))")
-                    pair_params += [start_list, start_list]
-                if not end_wild:
-                    pair_pred.append("(UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s))")
-                    pair_params += [end_list, end_list]
+                if all_matched_pool_ids and not start_wild and not end_wild:
+                    pair_pred.append("(lp.id = ANY(%s) OR ((UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s)) AND (UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s))))")
+                    pair_params += [list(all_matched_pool_ids), start_list, start_list, end_list, end_list]
+                else:
+                    if not start_wild:
+                        pair_pred.append("(UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s))")
+                        pair_params += [start_list, start_list]
+                    if not end_wild:
+                        pair_pred.append("(UPPER(c0.symbol) = ANY(%s) OR UPPER(c1.symbol) = ANY(%s))")
+                        pair_params += [end_list, end_list]
 
                 # Direction constraint: the input token is the side with a
                 # positive amount (Uniswap v3 sign convention — matches the
@@ -2098,6 +2156,7 @@ async def swap_distribution(
                 # Mirror the route analyzer: fall back to price × token amount so
                 # those swaps still count. Only fetch prices when needed.
                 min_amt = 10.0
+                stables = {'USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD', 'USDS', 'EURC', 'USDE', 'PYUSD'}
                 if any(r[0] is None or r[0] <= 0 for r in rows):
                     from postgres_fetcher import PostgresFetcher as _PF
                     price_syms = [s for s in (start_list + end_list) if s != "*"]
@@ -2107,7 +2166,6 @@ async def swap_distribution(
                         print(f"[swap-distribution] price fallback failed: {_pe}")
                         _latest_prices = {}
                     out_rows = []
-                    stables = {'USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD', 'USDS', 'EURC', 'USDE', 'PYUSD'}
                     for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
                         usd = float(amt) if amt is not None else 0.0
                         if usd <= 0:
@@ -2144,7 +2202,7 @@ async def swap_distribution(
                 # side, reconstruct contiguous start→end routes per tx, and emit
                 # one row per routed tx using the input leg's USD — mirroring the
                 # route analyzer. Direction still applies to the chain orientation.
-                if not rows and not start_wild and not end_wild:
+                if (not rows or group_by == "route" or all_matched_pool_ids) and not start_wild and not end_wild:
                     from collections import defaultdict
                     broad_tokens = list(dict.fromkeys(
                         [s.upper() for s in start_list if s != "*"]
@@ -2185,6 +2243,10 @@ async def swap_distribution(
                         end_set_hi = {e.upper() for e in end_list if e != "*"}
                         broad_rows = []
                         broad_by_count = {}
+                        broad_route_pools = {}
+                        tx_hops = {}
+                        tx_routes = {}
+                        tx_route_ids = {}
                         # On first run build a cached price map shared with below.
                         if "_latest_prices" not in locals():
                             from postgres_fetcher import PostgresFetcher as _PF
@@ -2253,7 +2315,11 @@ async def swap_distribution(
                                 seen_key.add(key)
                                 first = route[0]
                                 chain = first[0]
-                                in_usd = first[8]
+                                in_usd = None
+                                for leg in route:
+                                    if leg[8] and float(leg[8]) > 0:
+                                        in_usd = leg[8]
+                                        break
                                 in_amt_usd = float(in_usd) if in_usd else 0.0
                                 if in_amt_usd <= 0:
                                     s0_u, s1_u = first[1].upper(), first[2].upper()
@@ -2277,6 +2343,28 @@ async def swap_distribution(
                                 if in_amt_usd >= min_amt:
                                     broad_rows.append((in_amt_usd, chain, first[1], first[2], first[3], first[4], first[5], first[6], txid, first[7]))
                                     broad_by_count[key] = len(route)
+                                    pids = tuple(leg[7] for leg in route)
+                                    broad_route_pools[txid] = pids
+                                    if pids in db_route_map:
+                                        rinfo = db_route_map[pids]
+                                        tx_routes[txid] = rinfo['path_str']
+                                        tx_route_ids[txid] = rinfo['route_id']
+                                        tx_hops[txid] = rinfo['hops']
+                                    else:
+                                        parts = []
+                                        for idx, leg in enumerate(route):
+                                            l_in = _leg_in(leg[1], leg[2], leg[3], leg[4])
+                                            l_out = _leg_out(leg[1], leg[2], leg[3], leg[4])
+                                            fee_s = "Dynamic" if leg[5] is None else f"{(leg[5] / 100.0):.2f}%"
+                                            proto_s = leg[6] or 'Unknown'
+                                            chain_s = leg[0]
+                                            if idx == 0:
+                                                parts.append(l_in)
+                                            parts.append(f"-- {fee_s}|{proto_s}|{chain_s} -->")
+                                            parts.append(l_out)
+                                        rstr = " ".join(parts)
+                                        tx_routes[txid] = rstr
+                                        tx_hops[txid] = len(route)
                         rows = broad_rows
                 by_chain = {}
                 by_dir = {}
@@ -2293,6 +2381,14 @@ async def swap_distribution(
                 by_route = {}
                 by_route_fees = {}
                 broad_by_count = {}
+                if 'broad_route_pools' not in locals():
+                    broad_route_pools = {}
+                if 'tx_hops' not in locals():
+                    tx_hops = {}
+                if 'tx_routes' not in locals():
+                    tx_routes = {}
+                if 'tx_route_ids' not in locals():
+                    tx_route_ids = {}
                 start_set = set(s.upper() for s in start_list if s != "*")
                 end_set = set(e.upper() for e in end_list if e != "*")
                 fwd_label = ",".join(start_list).upper() + "→" + ",".join(end_list).upper()
@@ -2347,22 +2443,33 @@ async def swap_distribution(
                 # Hops & Routes: reconstruct each matched tx's full route (ALL legs,
                 # including intermediate tokens outside the queried pair) and
                 # count the hop length and path string.
+                # Hops & Routes: reconstruct each matched tx's full route (ALL legs,
+                # including intermediate tokens outside the queried pair), map to
+                # real DB route_ids from canonical route tables, and count the hop length
+                # and path string.
                 if rows:
                     from collections import defaultdict
-                    multi_pool_txs = [tx for tx, p in tx_pools.items() if len(p) > 1]
-                    tx_hops = {}
-                    tx_routes = {}
 
-                    # Fast in-memory 1-hop assignment for single-pool txs (98%+ of all txs)
+                    multi_pool_txs = [tx for tx, p in tx_pools.items() if len(p) > 1]
+
+                    # Fast in-memory assignment for matched DB routes & 1-hop txs
                     for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
                         if tx_hash in tx_hops:
                             continue
-                        if tx_hash not in tx_pools or len(tx_pools[tx_hash]) == 1:
-                            tx_hops[tx_hash] = 1
+                        ptuple = broad_route_pools.get(tx_hash) or (pool_id,)
+                        if ptuple in db_route_map:
+                            info = db_route_map[ptuple]
+                            tx_hops[tx_hash] = info['hops']
+                            tx_routes[tx_hash] = info['path_str']
+                            tx_route_ids[tx_hash] = info['route_id']
+                        elif tx_hash not in tx_pools or len(tx_pools[tx_hash]) == 1:
                             in_sym = sym0 if (amount0 or 0) > 0 else sym1
                             out_sym = sym1 if (amount0 or 0) > 0 else sym0
-                            fee_s = "Dynamic" if fee_bps is None else f"{(fee_bps / 100.0):.2f}%"
-                            tx_routes[tx_hash] = f"{in_sym} -- {fee_s}|{protocol or 'Unknown'}|{chain} --> {out_sym}"
+                            # Only treat as a valid route if it reaches end_list or start_list
+                            if (in_sym in start_set and out_sym in end_set) or (in_sym in end_set and out_sym in start_set):
+                                tx_hops[tx_hash] = 1
+                                fee_s = "Dynamic" if fee_bps is None else f"{(fee_bps / 100.0):.2f}%"
+                                tx_routes[tx_hash] = f"{in_sym} -- {fee_s}|{protocol or 'Unknown'}|{chain} --> {out_sym}"
 
                     # Only query legs for multi-pool transactions (fan-out / multi-hop trades)
                     if multi_pool_txs:
@@ -2373,7 +2480,7 @@ async def swap_distribution(
                             tx_slice = multi_pool_txs[i:i + chunk]
                             hcur.execute(f"""
                                 SELECT s.tx_hash, s.log_index, UPPER(c0.symbol), UPPER(c1.symbol),
-                                       s.amount0, s.amount1, s.amount_usd, lp.fee_bps, pr.name, ch.name
+                                       s.amount0, s.amount1, s.amount_usd, lp.fee_bps, pr.name, ch.name, s.pool_id
                                 FROM swaps s
                                 JOIN liquidity_pool lp ON s.pool_id = lp.id
                                 JOIN chain ch ON lp.chain_id = ch.id
@@ -2383,16 +2490,26 @@ async def swap_distribution(
                                 WHERE s.tx_hash = ANY(%s)
                                 ORDER BY s.tx_hash, s.log_index
                             """, (tx_slice,))
-                            for htx, lg, hs0, hs1, ha0, ha1, h_usd, h_fee, h_proto, h_chain in hcur.fetchall():
+                            for htx, lg, hs0, hs1, ha0, ha1, h_usd, h_fee, h_proto, h_chain, h_pool_id in hcur.fetchall():
                                 legs_by_tx[htx].append({
                                     'sym0': hs0, 'sym1': hs1, 'a0': ha0, 'a1': ha1, 'usd': h_usd,
-                                    'fee_bps': h_fee, 'protocol': h_proto, 'chain': h_chain,
+                                    'fee_bps': h_fee, 'protocol': h_proto, 'chain': h_chain, 'pool_id': h_pool_id
                                 })
                         hcur.close()
 
                         for htx, legs in legs_by_tx.items():
                             if not legs:
                                 continue
+
+                            # Check DB route map match for multi-pool tuple
+                            tx_pids = tuple(l['pool_id'] for l in legs)
+                            if tx_pids in db_route_map:
+                                info = db_route_map[tx_pids]
+                                tx_hops[htx] = info['hops']
+                                tx_routes[htx] = info['path_str']
+                                tx_route_ids[htx] = info['route_id']
+                                continue
+
                             def _leg_input(l):
                                 return l['sym0'] if (l['a0'] or 0) > 0 else l['sym1']
                             def _leg_out(l):
@@ -2439,8 +2556,10 @@ async def swap_distribution(
                                 route_parts.append(f"-- {_leg_info(nxt)} -->")
                                 route_parts.append(cur_tok)
 
-                            tx_hops[htx] = hops
-                            tx_routes[htx] = " ".join(route_parts)
+                            # Strictly require that the full route reached destination token in to_set
+                            if cur_tok in to_set:
+                                tx_hops[htx] = hops
+                                tx_routes[htx] = " ".join(route_parts)
 
                     for amt, chain, sym0, sym1, amount0, amount1, fee_bps, protocol, tx_hash, pool_id in rows:
                         fee_usd = amt * (fee_bps / 10000.0) if fee_bps is not None else 0.0
@@ -2452,14 +2571,9 @@ async def swap_distribution(
                         by_hops_fees.setdefault(hkey, []).append(fee_usd)
 
                         rkey = tx_routes.get(tx_hash)
-                        if not rkey:
-                            fee_s = 'Dynamic' if fee_bps is None else f"{(fee_bps / 100.0):.2f}%"
-                            in_s = sym0 if (amount0 is not None and amount0 > 0) else sym1
-                            out_s = sym1 if (amount0 is not None and amount0 > 0) else sym0
-                            rkey = f"{in_s} -- {fee_s}|{protocol or 'Unknown'}|{chain} --> {out_s}"
-
-                        by_route.setdefault(rkey, []).append(amt)
-                        by_route_fees.setdefault(rkey, []).append(fee_usd)
+                        if rkey:
+                            by_route.setdefault(rkey, []).append(amt)
+                            by_route_fees.setdefault(rkey, []).append(fee_usd)
 
                 # Keep only the most relevant groups per category (by swap
                 # count) and fold the long tail of tiny groups into "Others"
@@ -2520,6 +2634,16 @@ async def swap_distribution(
                     result["hops_chains"] = []
                 rt = sd.analyze_sizes_by_chain(by_route, fee_groups=by_route_fees)
                 if rt:
+                    for ch in rt["chains"]:
+                        r_id = route_id_by_path.get(ch["name"])
+                        if r_id is None and ch["name"] != "Others":
+                            parts = [p.strip() for p in ch["name"].split("-->") if p.strip()]
+                            if parts:
+                                s_tok = parts[0].split()[0].upper()
+                                e_tok = parts[-1].split()[-1].upper()
+                                r_id = route_id_by_pair.get((s_tok, e_tok)) or route_id_by_pair.get((e_tok, s_tok))
+                        if r_id is not None:
+                            ch["route_id"] = r_id
                     result["route_chains"] = rt["chains"]
                 else:
                     result["route_chains"] = []

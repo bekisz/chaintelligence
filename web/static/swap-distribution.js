@@ -108,6 +108,12 @@ function directionColor(name) {
 // real single token (e.g. USDC) is written plainly. Keeps the full name for
 // toggling.
 function directionLegendLabel(fullName) {
+    if (groupByMode === "route") {
+        if (!fullName || fullName === "Others") return "Others";
+        const tokens = fullName.split(/-- [^>]+ -->/).map(s => (s || "").trim()).filter(Boolean);
+        if (tokens.length > 1) return tokens.join(" ➔ ");
+        return fullName;
+    }
     if (groupByMode !== "direction") return fullName;
     const d = dirByLabel[fullName];
     if (!d) return fullName;

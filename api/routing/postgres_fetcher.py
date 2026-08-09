@@ -699,8 +699,8 @@ class PostgresFetcher:
                         SELECT
                             h.route_id,
                             h.seq,
-                            UPPER(c0.symbol) AS sym0,
-                            UPPER(c1.symbol) AS sym1,
+                            UPPER(ci.symbol) AS token_in_sym,
+                            UPPER(co.symbol) AS token_out_sym,
                             CASE WHEN lp.fee_bps IS NULL THEN 'Dynamic'
                                  ELSE (lp.fee_bps / 100.0)::text || '%%' END AS fee_display,
                             pr.name AS protocol,
@@ -709,19 +709,21 @@ class PostgresFetcher:
                         JOIN liquidity_pool lp ON h.pool_id = lp.id
                         JOIN protocol pr ON lp.protocol_id = pr.id
                         JOIN chain ch ON lp.chain_id = ch.id
-                        JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                        LEFT JOIN coin_contract cic ON LOWER(cic.contract_address) = LOWER(h.token_in) AND cic.chain_id = lp.chain_id
+                        LEFT JOIN coin ci ON cic.coin_id = ci.coin_id
+                        LEFT JOIN coin_contract coc ON LOWER(coc.contract_address) = LOWER(h.token_out) AND coc.chain_id = lp.chain_id
+                        LEFT JOIN coin co ON coc.coin_id = co.coin_id
                         WHERE h.route_id = ANY(%s)
                         ORDER BY h.route_id, h.seq
                         """,
                         (route_ids,),
                     )
-                    for (route_id, seq, sym0, sym1, fee_display,
+                    for (route_id, seq, token_in_sym, token_out_sym, fee_display,
                          protocol, network) in cur.fetchall():
                         hops_by_route.setdefault(route_id, []).append({
                             'seq': seq,
-                            'sym0': sym0,
-                            'sym1': sym1,
+                            'token_in_sym': token_in_sym,
+                            'token_out_sym': token_out_sym,
                             'fee': fee_display,
                             'protocol': protocol,
                             'network': network,
@@ -733,15 +735,15 @@ class PostgresFetcher:
                     ordered = sorted(hops_by_route.get(rec['route_id'], []),
                                      key=lambda hp: hp['seq'])
                     # Rebuild [Token, Fee, Token, Fee, ...]: hop i connects
-                    # sym0 -> sym1 over its pool. Because chains are contiguous,
-                    # hop i+1's input (sym0) equals hop i's output (sym1), so each
-                    # hop contributes its fee node + the output token.
+                    # token_in -> token_out over its pool. Because chains are
+                    # contiguous, hop i+1's token_in equals hop i's token_out,
+                    # so each hop contributes its fee node + the output token.
                     path_tokens = []
                     for i, hp in enumerate(ordered):
                         if i == 0:
-                            path_tokens.append(hp['sym0'] or rec['origin_symbol'] or '')
+                            path_tokens.append(hp['token_in_sym'] or rec['origin_symbol'] or '')
                         path_tokens.append(f"{hp['fee']}|{hp['protocol']}|{hp['network']}")
-                        path_tokens.append(hp['sym1'] or rec['dest_symbol'] or '')
+                        path_tokens.append(hp['token_out_sym'] or rec['dest_symbol'] or '')
                     if not path_tokens:
                         path_tokens = [rec['origin_symbol'] or '', rec['dest_symbol'] or '']
 

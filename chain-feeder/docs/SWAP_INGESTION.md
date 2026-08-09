@@ -127,15 +127,40 @@ For each swap:
   └─ Create pool on-the-spot ──────────────────────────────────► INSERT + cache
      │
      ▼
-  Append to batch → executemany INSERT INTO swaps ... ON CONFLICT DO NOTHING
+Append to batch → executemany INSERT INTO swaps ... ON CONFLICT DO NOTHING
      │
      ▼
-  COMMIT (whole batch)
+   COMMIT (whole batch)
+     │
+     ▼
+  Post-commit route classification sweep:
+  classify_tx_hashes(cur2, tx_hashes)  (warning-only on error)
+     │
+     ▼
+  route / route_hop / origin_destination_pair /
+  swaps.route_id  ← back-filled idempotently
 ```
 
 ---
 
-## Controlling What Gets Ingested
+## Route Classification After Commit
+
+After the batch commit, `save_swaps` runs a best-effort classification sweep over the newly inserted `tx_hash`es so the route taxonomy stays fresh. This is the on-ingest counterpart to the [route_daily_stats_rollup.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/route_daily_stats_rollup.py) DAG and the offline [backfill_route_tables.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/scripts/backfill_route_tables.py).
+
+Steps (see [route_classifier.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/route_classifier.py)):
+
+1. **Group legs by tx hash**, order by `log_index` (matching how `acct_route`/`RouteAnalyzer` reconstructs routes).
+2. **Derive per-leg flow** from the sign of `amount0`/`amount1`: the positive amount is spent, the negative is received (input token = token on the positive side).
+3. **Chain contiguous legs** so hop `N`'s output == hop `N+1`'s input; disjoint swaps in one tx produce separate chains (each becomes its own route). Round-trips (origin == dest) are valid.
+4. **Upsert** `origin_destination_pair` on `(chain_id, origin_contract, dest_contract)`, then `route` on `canonical_key`; insert `route_hop` rows (deleted+reinserted per route for idempotency).
+5. **Attribute swaps**: set `swaps.route_id` for each leg.
+6. `recompute_daily_stats(day)` deletes + reinserts the `route_daily_stats` rows for that day (DELETE + INSERT is idempotent).
+
+Because legs of a multi-protocol, multi-hop route land in different DAG batches, the
+upserts are keyed on canonical keys so re-running never duplicates rows. Between
+the swap INSERT and the sweep, `swaps.route_id` is NULL — the `route_daily_stats`
+rollup only counts legs whose `route_id` is already attributed. Errors during the
+sweep only log a warning; they never fail the ingest commit.
 
 | Goal | How |
 |---|---|

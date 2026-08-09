@@ -184,8 +184,21 @@ Examples:
             print(f"Time Range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
             print(f"{'='*80}\n")
             
-            analyzer = RouteAnalyzer(verbose=args.verbose)
-            analysis = analyzer.analyze_routes(swaps, route_start, route_end)
+            # Prefer the pre-aggregated route_daily_stats fast path when the
+            # route tables exist; fall back to the streaming swap analysis.
+            analysis = None
+            if args.source == 'db':
+                try:
+                    analysis = fetcher.fetch_route_stats(
+                        start_date, end_date, [route_start], [route_end],
+                        direction='forward',
+                    )
+                except Exception as e:
+                    print(f"Route-stats path unavailable ({e}); using swap-stream path", file=sys.stderr)
+                    analysis = None
+            if analysis is None:
+                analyzer = RouteAnalyzer(verbose=args.verbose)
+                analysis = analyzer.analyze_routes(swaps, route_start, route_end)
             
             print(f"Found {analysis['total_tx']} valid routing transactions")
             print(f"Total Volume: {format_usd(analysis['total_volume'])}")
