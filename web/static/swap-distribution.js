@@ -425,7 +425,7 @@ function onDistDragEnd() {
     window.removeEventListener("mouseup", onDistDragEnd);
 }
 
-function showBinTooltip(d, i, event) {
+function showSegmentTooltip(d, ch, i, event) {
     const el = document.getElementById("dist-tooltip");
     if (!el) return;
     if (dragStartX !== null) return;
@@ -433,23 +433,40 @@ function showBinTooltip(d, i, event) {
     const hist = linear ? d.histogram.linear : d.histogram;
     const lo = fullDollar(hist.edges[i]);
     const hi = fullDollar(hist.edges[i + 1]);
-    const cnt = hist.counts[i];
-    const val = hist.sums[i];
-    const fees = hist.fees[i];
+
+    const segCnt = (linear ? (ch.linear_counts || [])[i] : ch.counts[i]) || 0;
+    const segVal = (linear ? (ch.linear_sums || [])[i] : ch.sums[i]) || 0;
+    const segFees = (linear ? (ch.linear_fees || [])[i] : ch.fees[i]) || 0;
+
     const n = d.n;
-    const totalVal = hist.sums.reduce((a, b) => a + b, 0);
-    const totalFees = (hist.fees || []).reduce((a, b) => a + b, 0);
-    const cntPct = n > 0 ? (cnt / n * 100) : 0;
-    const valPct = totalVal > 0 ? (val / totalVal * 100) : 0;
-    const feePct = totalFees > 0 ? (fees / totalFees * 100) : 0;
+    const totalVal = (linear ? (d.histogram.linear && d.histogram.linear.sums) : d.histogram.sums).reduce((a, b) => a + b, 0);
+    const totalFees = ((linear ? (d.histogram.linear && d.histogram.linear.fees) : d.histogram.fees) || []).reduce((a, b) => a + b, 0);
+
+    const cntPct = n > 0 ? (segCnt / n * 100) : 0;
+    const valPct = totalVal > 0 ? (segVal / totalVal * 100) : 0;
+    const feePct = totalFees > 0 ? (segFees / totalFees * 100) : 0;
+
+    const color = chainColor(ch.name);
+    const label = directionLegendLabel(ch.name);
+
     el.innerHTML = `
+        <div class="tt-header">
+            <span class="tt-swatch" style="background:${color};"></span>
+            <span class="tt-group-name">${label}</span>
+        </div>
         <div class="tt-title">${lo} – ${hi}</div>
-        <div class="tt-row"><span>Swaps</span><b>${cnt.toLocaleString("en-US")} <em>(${cntPct.toFixed(1)}%)</em></b></div>
-        <div class="tt-row"><span>Value</span><b>${fullDollar(val)} <em>(${valPct.toFixed(1)}%)</em></b></div>
-        <div class="tt-row"><span>Fees</span><b>${fullDollar(fees)} <em>(${feePct.toFixed(1)}%)</em></b></div>
+        <div class="tt-row"><span>Swaps</span><b>${segCnt.toLocaleString("en-US")} <em>(${cntPct.toFixed(1)}%)</em></b></div>
+        <div class="tt-row"><span>Value</span><b>${fullDollar(segVal)} <em>(${valPct.toFixed(1)}%)</em></b></div>
+        <div class="tt-row"><span>Fees</span><b>${fullDollar(segFees)} <em>(${feePct.toFixed(1)}%)</em></b></div>
     `;
+    positionTooltip(el, event);
+}
+
+function positionTooltip(el, event) {
     const box = el.getBoundingClientRect();
-    const svgRect = document.getElementById("dist-chart").closest(".dist-chart-box").getBoundingClientRect();
+    const svgBox = document.getElementById("dist-chart").closest(".dist-chart-box");
+    if (!svgBox) return;
+    const svgRect = svgBox.getBoundingClientRect();
     let left = event.clientX - svgRect.left + 14;
     let top = event.clientY - svgRect.top - box.height - 10;
     if (left + box.width > svgRect.width - 8) left = svgRect.width - box.width - 8;
@@ -459,6 +476,55 @@ function showBinTooltip(d, i, event) {
     el.style.top = top + "px";
     el.style.opacity = "1";
     el.style.visibility = "visible";
+}
+
+function highlightGroup(groupName) {
+    const legend = document.getElementById("dist-legend");
+    if (legend) {
+        legend.querySelectorAll(".chain-toggle").forEach(btn => {
+            if (btn.dataset.chain === groupName) {
+                btn.classList.add("chain-highlight");
+                btn.classList.remove("chain-dimmed");
+            } else {
+                btn.classList.remove("chain-highlight");
+                btn.classList.add("chain-dimmed");
+            }
+        });
+    }
+
+    const svg = document.getElementById("dist-chart");
+    if (svg) {
+        svg.querySelectorAll("rect.bar-segment").forEach(rect => {
+            if (rect.getAttribute("data-group") === groupName) {
+                rect.setAttribute("opacity", "1");
+                rect.setAttribute("stroke", "#ffffff");
+                rect.setAttribute("stroke-width", "1.2");
+            } else {
+                rect.setAttribute("opacity", "0.3");
+                rect.setAttribute("stroke", "rgba(0,0,0,0.25)");
+                rect.setAttribute("stroke-width", "0.4");
+            }
+        });
+    }
+}
+
+function clearHighlight() {
+    hideTooltip();
+    const legend = document.getElementById("dist-legend");
+    if (legend) {
+        legend.querySelectorAll(".chain-toggle").forEach(btn => {
+            btn.classList.remove("chain-highlight", "chain-dimmed");
+        });
+    }
+
+    const svg = document.getElementById("dist-chart");
+    if (svg) {
+        svg.querySelectorAll("rect.bar-segment").forEach(rect => {
+            rect.setAttribute("opacity", "0.85");
+            rect.setAttribute("stroke", "rgba(0,0,0,0.25)");
+            rect.setAttribute("stroke-width", "0.4");
+        });
+    }
 }
 
 function hideTooltip() {
@@ -620,6 +686,9 @@ function drawDistribution(d) {
             const yTop = Y(cumulative + seg);
             const yBot = Y(cumulative);
             const rect = document.createElementNS(SVG_NS, "rect");
+            rect.setAttribute("class", "bar-segment");
+            rect.setAttribute("data-group", ch.name);
+            rect.setAttribute("data-bin", i);
             rect.setAttribute("x", x0.toFixed(1));
             rect.setAttribute("y", yTop.toFixed(1));
             rect.setAttribute("width", width.toFixed(1));
@@ -648,7 +717,7 @@ function drawDistribution(d) {
         }
     }
 
-    // Transparent hover overlays: one full-column rect per bin for the tooltip.
+    // Transparent hover overlays: smart segment hit testing per bin
     for (let i = 0; i < nbins; i++) {
         const x0 = X(edges[i]);
         const x1 = X(edges[i + 1]);
@@ -662,11 +731,51 @@ function drawDistribution(d) {
         hit.setAttribute("pointer-events", "all");
         hit.style.cursor = "crosshair";
         const idx = i;
-        hit.addEventListener("mousemove", ev => showBinTooltip(d, idx, ev));
-        hit.addEventListener("mouseleave", hideTooltip);
+        hit.addEventListener("mousemove", ev => {
+            if (dragStartX !== null) return;
+            const svgBox = svg.getBoundingClientRect();
+            const mouseY = ev.clientY - svgBox.top;
+
+            let hoveredCh = null;
+            const binSegments = [];
+
+            svg.querySelectorAll(`rect.bar-segment[data-bin="${idx}"]`).forEach(r => {
+                const yTop = parseFloat(r.getAttribute("y"));
+                const height = parseFloat(r.getAttribute("height"));
+                const yBot = yTop + height;
+                const grpName = r.getAttribute("data-group");
+                const chObj = chains.find(c => c.name === grpName);
+                if (chObj) {
+                    if (mouseY >= yTop - 2 && mouseY <= yBot + 2) {
+                        hoveredCh = chObj;
+                    }
+                    const dist = Math.min(
+                        Math.abs(mouseY - yTop),
+                        Math.abs(mouseY - yBot),
+                        (mouseY >= yTop && mouseY <= yBot) ? 0 : Infinity
+                    );
+                    binSegments.push({ ch: chObj, dist: dist });
+                }
+            });
+
+            if (!hoveredCh && binSegments.length > 0) {
+                binSegments.sort((a, b) => a.dist - b.dist);
+                if (binSegments[0].dist < 30) {
+                    hoveredCh = binSegments[0].ch;
+                }
+            }
+
+            if (hoveredCh) {
+                highlightGroup(hoveredCh.name);
+                showSegmentTooltip(d, hoveredCh, idx, ev);
+            } else {
+                clearHighlight();
+            }
+        });
+        hit.addEventListener("mouseleave", () => clearHighlight());
         svg.appendChild(hit);
     }
-    hideTooltip();
+    clearHighlight();
 
     // Legend: clickable chain toggles (dimmed when excluded), then model curves
     const legend = document.getElementById("dist-legend");
@@ -686,8 +795,14 @@ function drawDistribution(d) {
     }).join("");
     legend.innerHTML = chainItems;
     legend.querySelectorAll(".chain-toggle").forEach(btn => {
+        const name = btn.dataset.chain;
+        btn.addEventListener("mouseenter", () => {
+            highlightGroup(name);
+        });
+        btn.addEventListener("mouseleave", () => {
+            clearHighlight();
+        });
         btn.addEventListener("click", () => {
-            const name = btn.dataset.chain;
             if (excludedChains.has(name)) {
                 excludedChains.delete(name);
             } else {
