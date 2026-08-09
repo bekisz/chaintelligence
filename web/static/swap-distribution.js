@@ -425,6 +425,123 @@ function onDistDragEnd() {
     window.removeEventListener("mouseup", onDistDragEnd);
 }
 
+function getNetworkIconUrl(netName) {
+    if (!netName) return '/static/favicon.png';
+    const lower = netName.toLowerCase();
+    if (lower.includes('ethereum') || lower === 'eth') return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+    if (lower.includes('arbitrum') || lower === 'arb') return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png';
+    if (lower.includes('base')) return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png';
+    if (lower.includes('bnb') || lower.includes('binance') || lower === 'bsc') return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png';
+    if (lower.includes('polygon') || lower === 'matic') return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png';
+    if (lower.includes('optimism') || lower === 'op') return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png';
+    if (lower.includes('solana') || lower === 'sol') return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png';
+    return '/static/favicon.png';
+}
+
+function getToolTipTokenIcon(symbol) {
+    if (!symbol) return '';
+    const sym = symbol.toUpperCase().trim();
+    let url = window.tokenImageMap && window.tokenImageMap[sym];
+    if (!url) {
+        if (sym === 'WETH' || sym === 'ETH') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+        else if (sym === 'USDC') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png';
+        else if (sym === 'USDT') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/dAC17F958D2ee523a2206206994597C13D831ec7/logo.png';
+        else if (sym === 'WBTC' || sym === 'BTCB' || sym === 'BTC') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png';
+        else url = `https://assets.coingecko.com/coins/images/279/small/${sym.toLowerCase()}.png`;
+    }
+    return `<img src="${url}" width="14" height="14" onerror="this.style.display='none'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;">`;
+}
+
+function formatTooltipHeaderHtml(ch, color) {
+    const rawName = ch.name;
+    const label = directionLegendLabel(rawName);
+
+    if (rawName && rawName.includes(" -- ") && rawName.includes(" --> ")) {
+        const segments = rawName.split(" --> ");
+        const tokens = [];
+        const hops = [];
+
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i].trim();
+            if (seg.includes(" -- ")) {
+                const parts = seg.split(" -- ");
+                tokens.push(parts[0].trim());
+                hops.push(parts[1].trim());
+            } else {
+                tokens.push(seg);
+            }
+        }
+
+        let networkName = 'Ethereum';
+        if (hops.length > 0) {
+            const hParts = hops[0].split('|');
+            if (hParts.length >= 3 && hParts[2].trim()) {
+                networkName = hParts[2].trim();
+            }
+        }
+
+        const netIconUrl = getNetworkIconUrl(networkName);
+        const netBadge = `<span class="network-icon-badge" title="${networkName}"><img src="${netIconUrl}" width="14" height="14" style="border-radius:50%; vertical-align:middle;"></span>`;
+        
+        let routeIdStr = '';
+        if (ch.route_id !== undefined && ch.route_id !== null) {
+            routeIdStr = `#${ch.route_id}`;
+        } else if (lastData && lastData.route_chains) {
+            const rIdx = lastData.route_chains.findIndex(rc => rc.name === rawName);
+            if (rIdx >= 0) {
+                routeIdStr = `Route #${rIdx + 1}`;
+            }
+        }
+
+        let pathHtml = `<div class="tt-route-header">`;
+        pathHtml += `<div class="tt-route-meta">${netBadge} ${routeIdStr ? `<span class="tt-route-id">${routeIdStr}</span>` : ''}</div>`;
+        pathHtml += `<div class="route-path-container tt-path-container">`;
+
+        tokens.forEach((token, idx) => {
+            pathHtml += `<span class="token-badge">${getToolTipTokenIcon(token)} ${token}</span>`;
+            if (idx < hops.length) {
+                const hopStr = hops[idx];
+                const hParts = hopStr.split('|');
+                let feeStr = hParts[0] || '0.05%';
+                let protoName = hParts[1] || 'Uniswap V3';
+
+                let protoClass = 'v3';
+                const rawProto = protoName.toLowerCase();
+                if (rawProto.includes('v4')) protoClass = 'v4';
+                else if (rawProto.includes('pancake')) protoClass = 'pancake';
+                else if (!rawProto.includes('v3') && !rawProto.includes('uniswap')) protoClass = rawProto.replace(/\s+/g, '-');
+
+                const fwdHeadSvg = `<svg class="arrow-head" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,1 7,7 1,13"/></svg>`;
+
+                pathHtml += `
+                    <div class="route-hop ${protoClass}">
+                        <div class="route-hop-arrow ${protoClass}">
+                            <div class="arrow-line">
+                                <div class="route-hop-label">
+                                    <div class="label-pane fee-pane">
+                                        <span class="fee-pill">${feeStr}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            ${fwdHeadSvg}
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        pathHtml += `</div></div>`;
+        return pathHtml;
+    }
+
+    return `
+        <div class="tt-header">
+            <span class="tt-swatch" style="background:${color};"></span>
+            <span class="tt-group-name">${label}</span>
+        </div>
+    `;
+}
+
 function showSegmentTooltip(d, ch, i, event) {
     const el = document.getElementById("dist-tooltip");
     if (!el) return;
@@ -447,13 +564,10 @@ function showSegmentTooltip(d, ch, i, event) {
     const feePct = totalFees > 0 ? (segFees / totalFees * 100) : 0;
 
     const color = chainColor(ch.name);
-    const label = directionLegendLabel(ch.name);
+    const headerHtml = formatTooltipHeaderHtml(ch, color);
 
     el.innerHTML = `
-        <div class="tt-header">
-            <span class="tt-swatch" style="background:${color};"></span>
-            <span class="tt-group-name">${label}</span>
-        </div>
+        ${headerHtml}
         <div class="tt-title">${lo} – ${hi}</div>
         <div class="tt-row"><span>Swaps</span><b>${segCnt.toLocaleString("en-US")} <em>(${cntPct.toFixed(1)}%)</em></b></div>
         <div class="tt-row"><span>Value</span><b>${fullDollar(segVal)} <em>(${valPct.toFixed(1)}%)</em></b></div>

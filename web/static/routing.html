@@ -17,9 +17,18 @@
         .dist-stat b { display: block; font-size: 1.05rem; }
         .dist-stat span { font-size: 0.72rem; color: var(--text-secondary, #a3b3c9); }
         .dist-chart-box { width: 100%; position: relative; }
-        #dist-tooltip { position: absolute; z-index: 1000; pointer-events: none; background: rgba(15, 20, 32, 0.96); border: 1px solid rgba(255,255,255,0.18); color: #e8edf5; padding: 10px 14px; border-radius: 10px; font-size: 0.78rem; box-shadow: 0 8px 24px rgba(0,0,0,0.55); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; min-width: 150px; max-width: 320px; }
+        #dist-tooltip { position: absolute; z-index: 1000; pointer-events: none; background: rgba(15, 20, 32, 0.96); border: 1px solid rgba(255,255,255,0.18); color: #e8edf5; padding: 10px 14px; border-radius: 10px; font-size: 0.78rem; box-shadow: 0 8px 24px rgba(0,0,0,0.55); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; min-width: 150px; max-width: 380px; }
         #dist-tooltip .tt-header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.12); color: #fff; word-break: break-all; }
         #dist-tooltip .tt-swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        #dist-tooltip .tt-route-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+        #dist-tooltip .tt-route-meta { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #a3b3c9; font-weight: 600; }
+        #dist-tooltip .tt-route-id { color: var(--uniswap-pink, #ff007a); font-weight: 700; font-size: 0.76rem; background: rgba(255, 0, 122, 0.12); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(255, 0, 122, 0.25); letter-spacing: 0.02em; }
+        #dist-tooltip .tt-path-container { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; margin-top: 2px; }
+        #dist-tooltip .tt-path-container .token-badge { padding: 2px 6px; font-size: 0.78rem; background: rgba(255, 255, 255, 0.08); border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.12); font-weight: 600; color: #fff; }
+        #dist-tooltip .tt-path-container .route-hop { margin: 0 4px; min-width: 40px; }
+        #dist-tooltip .tt-path-container .route-hop-arrow .arrow-line { min-width: 42px; opacity: 0.9; }
+        #dist-tooltip .tt-path-container .fee-pill { font-size: 0.68rem; font-weight: 600; color: #a3b3c9; }
+        #dist-tooltip .tt-path-container .route-hop-label { padding: 1px 4px; background: rgba(15, 20, 32, 0.92); border: 1px solid rgba(255, 255, 255, 0.12); }
         #dist-tooltip .tt-title { font-weight: 600; font-size: 0.78rem; margin-bottom: 6px; color: #a3b3c9; }
         #dist-tooltip .tt-row { display: flex; justify-content: space-between; gap: 16px; line-height: 1.5; }
         #dist-tooltip .tt-row em { font-style: normal; color: #9fb0c6; font-weight: 500; }
