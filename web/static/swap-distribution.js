@@ -497,11 +497,11 @@ function highlightGroup(groupName) {
         svg.querySelectorAll("rect.bar-segment").forEach(rect => {
             if (rect.getAttribute("data-group") === groupName) {
                 rect.setAttribute("opacity", "1");
-                rect.setAttribute("stroke", "#ffffff");
-                rect.setAttribute("stroke-width", "1.2");
+                rect.setAttribute("stroke", "rgba(0,0,0,0.4)");
+                rect.setAttribute("stroke-width", "0.4");
             } else {
-                rect.setAttribute("opacity", "0.3");
-                rect.setAttribute("stroke", "rgba(0,0,0,0.25)");
+                rect.setAttribute("opacity", "0.25");
+                rect.setAttribute("stroke", "rgba(0,0,0,0.1)");
                 rect.setAttribute("stroke-width", "0.4");
             }
         });
@@ -735,8 +735,13 @@ function drawDistribution(d) {
         const idx = i;
         hit.addEventListener("mousemove", ev => {
             if (dragStartX !== null) return;
-            const svgBox = svg.getBoundingClientRect();
-            const mouseY = ev.clientY - svgBox.top;
+            const pt = svg.createSVGPoint();
+            pt.x = ev.clientX;
+            pt.y = ev.clientY;
+            const ctm = svg.getScreenCTM();
+            if (!ctm) return;
+            const svgPt = pt.matrixTransform(ctm.inverse());
+            const mouseY = svgPt.y;
 
             let hoveredCh = null;
             const binSegments = [];
@@ -748,21 +753,17 @@ function drawDistribution(d) {
                 const grpName = r.getAttribute("data-group");
                 const chObj = chains.find(c => c.name === grpName);
                 if (chObj) {
-                    if (mouseY >= yTop - 2 && mouseY <= yBot + 2) {
+                    if (mouseY >= yTop - 0.5 && mouseY <= yBot + 0.5) {
                         hoveredCh = chObj;
                     }
-                    const dist = Math.min(
-                        Math.abs(mouseY - yTop),
-                        Math.abs(mouseY - yBot),
-                        (mouseY >= yTop && mouseY <= yBot) ? 0 : Infinity
-                    );
+                    const dist = (mouseY >= yTop && mouseY <= yBot) ? 0 : Math.min(Math.abs(mouseY - yTop), Math.abs(mouseY - yBot));
                     binSegments.push({ ch: chObj, dist: dist });
                 }
             });
 
             if (!hoveredCh && binSegments.length > 0) {
                 binSegments.sort((a, b) => a.dist - b.dist);
-                if (binSegments[0].dist < 30) {
+                if (binSegments[0].dist < 20) {
                     hoveredCh = binSegments[0].ch;
                 }
             }
