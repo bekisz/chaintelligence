@@ -581,7 +581,9 @@ function drawDistribution(d) {
 
     // Establish/keep the zoom domain in axis space. Axis space = log10(v) in
     // log mode, v in linear mode. Reset zoom whenever the input changes.
-    const aMin = linear ? edges[0] : Math.log10(edges[0]);
+    // Minimum domain is capped at $1.00 (0.0 in log10 space, 1.0 in linear space).
+    const aMinRaw = linear ? edges[0] : Math.log10(edges[0]);
+    const aMin = linear ? Math.max(1.0, aMinRaw) : Math.max(0.0, aMinRaw);
     const aMax = linear ? edges[edges.length - 1] : Math.log10(edges[edges.length - 1]);
     const key = (linear ? "l:" : "g:") + d.n + ":" + d.max;
     if (lastZoomKey !== key) {
