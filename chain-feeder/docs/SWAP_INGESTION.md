@@ -127,19 +127,33 @@ For each swap:
   └─ Create pool on-the-spot ──────────────────────────────────► INSERT + cache
      │
      ▼
-Append to batch → executemany INSERT INTO swaps ... ON CONFLICT DO NOTHING
+Append to batch → executemany INSERT INTO swaps_staging ... ON CONFLICT DO NOTHING
+     │
+     ▼
+   UPDATE ingestion_state last_ts for (network, protocol)  ── watermark for next run
+     │
+     ▼
+   (optional, SWAP_LEGACY_MIRROR=true) executemany INSERT INTO swaps ... DO NOTHING
      │
      ▼
    COMMIT (whole batch)
      │
      ▼
-  Post-commit route classification sweep:
-  classify_tx_hashes(cur2, tx_hashes)  (warning-only on error)
+   Post-commit route classification sweep:
+   classify_tx_hashes(cur2, tx_hashes, table_name=swaps_staging)  (warning-only on error)
      │
      ▼
-  route / route_hop / origin_destination_pair /
-  swaps.route_id  ← back-filled idempotently
+   route / route_hop / origin_destination_pair /
+   swaps_staging.route_id  ← back-filled idempotently
 ```
+
+> **Switchover note (2026-08):** `swaps_staging` is now the canonical short-lived raw
+> store. Ingestion cursors read `ingestion_state.last_ts` instead of `MAX(swaps.ts)`.
+> The classifier, route_daily_stats rollup, distribution buckets, and the global
+> pool-history rollup all read `swaps_staging` (see `SWAP_RAW_TABLE`). The legacy
+> `swaps` table is only mirrored during the transition (`SWAP_LEGACY_MIRROR=true`
+> default) so the running API raw-swap fallbacks keep working; flip it to `false`
+> after those consumers are migrated, then retire the table via the purge DAG.
 
 ---
 

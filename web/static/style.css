@@ -1512,7 +1512,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 /* Results section updates */
 .results-container {
-    margin: 3rem auto;
+    margin: 3rem auto 3rem;
+    margin-top: 1.5rem;
 }
 
 .summary-cards .card {
@@ -1577,6 +1578,20 @@ table td {
 
 table tbody tr:hover {
     background: rgba(255, 255, 255, 0.02);
+}
+
+table tbody tr.selectable-row {
+    cursor: pointer;
+}
+
+table tbody tr.row-selected {
+    background: rgba(255, 0, 122, 0.14);
+    box-shadow: inset 3px 0 0 var(--uniswap-pink);
+}
+
+table tbody tr.row-partially-selected {
+    background: rgba(255, 0, 122, 0.07);
+    box-shadow: inset 3px 0 0 rgba(255, 0, 122, 0.55);
 }
 
 .stat {
@@ -1661,6 +1676,13 @@ footer {
     white-space: nowrap;
 }
 
+.od-pair-arrow {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 4px;
+    color: var(--text-secondary);
+}
+
 .token-badge {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
@@ -1741,7 +1763,7 @@ footer {
     align-items: stretch;
     padding: 0;
     border-radius: 6px;
-    background: rgba(20, 20, 30, 0.78);
+    background: rgba(20, 20, 30, 0.45);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -3123,6 +3145,29 @@ input:focus+.slider {
     position: relative;
 }
 
+.od-column-selector {
+    margin-left: auto;
+    order: 1;
+}
+
+.od-settings-selector {
+    margin-left: 0;
+    order: 2;
+}
+
+.od-settings-selector + .od-column-selector {
+    margin-left: auto;
+}
+
+.table-expand-btn {
+    margin-left: auto;
+    order: 3;
+}
+
+.od-column-selector + .table-expand-btn {
+    margin-left: 0;
+}
+
 .column-dropdown {
     position: absolute;
     top: 100%;
@@ -4360,6 +4405,38 @@ tr:hover .row-action-btn {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.table-expand-modal {
+    width: min(96vw, 1800px);
+    max-width: none;
+    max-height: 92vh;
+}
+
+.table-expand-modal .modal-body {
+    min-height: 0;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.table-expand-modal .table-container {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+.table-expand-modal .table-responsive {
+    overflow: visible;
+}
+
+.table-expand-modal table {
+    min-width: 1100px;
+}
+
+.table-expand-btn {
+    padding: 6px 8px;
+    border-radius: 8px;
 }
 
 .modal-top {

@@ -12,7 +12,7 @@ import pendulum
 from datetime import timedelta
 import logging
 
-from include.route_classifier import recompute_daily_stats
+from include.route_classifier import recompute_daily_stats, recompute_distribution_buckets
 
 LOOKBACK_DAYS = 3
 
@@ -22,6 +22,7 @@ def _rollup_days(pg_hook, days: list):
     try:
         with conn.cursor() as cur:
             recompute_daily_stats(cur, days)
+            recompute_distribution_buckets(cur, days)
         conn.commit()
     finally:
         conn.close()
@@ -45,7 +46,7 @@ with DAG(
     tags=['routes', 'swaps', 'analytics', 'rollup'],
     params={
         'backfill_days': Param(
-            default=None,
+            default=3,
             type='integer',
             description='Recompute this many past days (default 3).',
         ),

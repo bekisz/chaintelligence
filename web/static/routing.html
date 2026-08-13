@@ -17,21 +17,24 @@
         .dist-stat b { display: block; font-size: 1.05rem; }
         .dist-stat span { font-size: 0.72rem; color: var(--text-secondary, #a3b3c9); }
         .dist-chart-box { width: 100%; position: relative; }
-        #dist-tooltip { position: absolute; z-index: 1000; pointer-events: none; background: rgba(15, 20, 32, 0.96); border: 1px solid rgba(255,255,255,0.18); color: #e8edf5; padding: 10px 14px; border-radius: 10px; font-size: 0.78rem; box-shadow: 0 8px 24px rgba(0,0,0,0.55); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; min-width: 150px; max-width: 380px; }
-        #dist-tooltip .tt-header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.12); color: #fff; word-break: break-all; }
-        #dist-tooltip .tt-swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-        #dist-tooltip .tt-route-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.12); }
-        #dist-tooltip .tt-route-meta { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #a3b3c9; font-weight: 600; }
-        #dist-tooltip .tt-route-id { color: var(--uniswap-pink, #ff007a); font-weight: 700; font-size: 0.76rem; background: rgba(255, 0, 122, 0.12); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(255, 0, 122, 0.25); letter-spacing: 0.02em; }
-        #dist-tooltip .tt-path-container { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; margin-top: 2px; }
-        #dist-tooltip .tt-path-container .token-badge { padding: 2px 6px; font-size: 0.78rem; background: rgba(255, 255, 255, 0.08); border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.12); font-weight: 600; color: #fff; }
-        #dist-tooltip .tt-path-container .route-hop { margin: 0 4px; min-width: 40px; }
-        #dist-tooltip .tt-path-container .route-hop-arrow .arrow-line { min-width: 42px; opacity: 0.9; }
-        #dist-tooltip .tt-path-container .fee-pill { font-size: 0.68rem; font-weight: 600; color: #a3b3c9; }
-        #dist-tooltip .tt-path-container .route-hop-label { padding: 1px 4px; background: rgba(15, 20, 32, 0.92); border: 1px solid rgba(255, 255, 255, 0.12); }
-        #dist-tooltip .tt-title { font-weight: 600; font-size: 0.78rem; margin-bottom: 6px; color: #a3b3c9; }
-        #dist-tooltip .tt-row { display: flex; justify-content: space-between; gap: 16px; line-height: 1.5; }
-        #dist-tooltip .tt-row em { font-style: normal; color: #9fb0c6; font-weight: 500; }
+        #dist-tooltip, #ts-tooltip { position: absolute; z-index: 1000; pointer-events: none; background: rgba(15, 20, 32, 0.96); border: 1px solid rgba(255,255,255,0.18); color: #e8edf5; padding: 10px 14px; border-radius: 10px; font-size: 0.78rem; box-shadow: 0 8px 24px rgba(0,0,0,0.55); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; min-width: 180px; max-width: 380px; backdrop-filter: blur(8px); }
+        #dist-tooltip.visible, #ts-tooltip.visible { opacity: 1; visibility: visible; }
+        #dist-tooltip .tt-header, #ts-tooltip .tt-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.12); color: #fff; word-break: break-all; }
+        #dist-tooltip .tt-swatch, #ts-tooltip .tt-swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        #dist-tooltip .tt-route-header, #ts-tooltip .tt-route-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+        #dist-tooltip .tt-route-meta, #ts-tooltip .tt-route-meta { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #a3b3c9; font-weight: 600; }
+        #dist-tooltip .tt-route-id, #ts-tooltip .tt-route-id { color: var(--uniswap-pink, #ff007a); font-weight: 700; font-size: 0.76rem; background: rgba(255, 0, 122, 0.12); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(255, 0, 122, 0.25); letter-spacing: 0.02em; }
+        #dist-tooltip .tt-path-container, #ts-tooltip .tt-path-container { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; margin-top: 2px; }
+        #dist-tooltip .tt-path-container .token-badge, #ts-tooltip .tt-path-container .token-badge { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; font-size: 0.78rem; background: rgba(255, 255, 255, 0.08); border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.12); font-weight: 600; color: #fff; }
+        #dist-tooltip .tt-path-container .route-hop, #ts-tooltip .tt-path-container .route-hop { margin: 0 8px; min-width: 75px; }
+        #dist-tooltip .tt-path-container .route-hop-arrow .arrow-line, #ts-tooltip .tt-path-container .route-hop-arrow .arrow-line { min-width: 75px; opacity: 0.9; }
+        #dist-tooltip .tt-path-container .fee-pill, #ts-tooltip .tt-path-container .fee-pill { font-size: 0.66rem; font-weight: 600; color: #a3b3c9; padding: 0 2px; }
+        #dist-tooltip .tt-path-container .label-pane, #ts-tooltip .tt-path-container .label-pane { padding: 1px 3px; gap: 3px; }
+        #dist-tooltip .tt-path-container .route-hop-label, #ts-tooltip .tt-path-container .route-hop-label { padding: 0 2px; border-radius: 4px; background: rgba(15, 20, 32, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+        #dist-tooltip .tt-title, #ts-tooltip .tt-title { font-weight: 600; font-size: 0.78rem; margin-bottom: 6px; color: #a3b3c9; }
+        #dist-tooltip .tt-row, #ts-tooltip .tt-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; line-height: 1.5; margin-top: 3px; }
+        #dist-tooltip .tt-row em, #ts-tooltip .tt-row em { font-style: normal; color: #9fb0c6; font-weight: 500; }
+        #dist-tooltip .tt-val, #ts-tooltip .tt-val { font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
         .dist-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; font-size: 0.82rem; color: var(--text-secondary, #a3b3c9); }
         .dist-legend span { display: flex; align-items: center; gap: 6px; }
         .dist-controls { display: flex; flex-wrap: wrap; gap: 16px; margin: 14px 0 4px; padding-bottom: 14px; border-bottom: 1px solid var(--uniswap-border, rgba(255,255,255,0.1)); }
@@ -56,11 +59,11 @@
         #dist-chart { cursor: grab; width: 100%; height: auto; display: block; }
         #dist-chart.dragging { cursor: grabbing; }
         .collapsible-section { margin-top: 18px; border: 1px solid var(--uniswap-border, rgba(255,255,255,0.1)); border-radius: 12px; background: rgba(255,255,255,0.02); }
-        .collapsible-section summary { cursor: pointer; padding: 16px 18px; font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 12px; list-style: none; }
+        .collapsible-section summary { cursor: pointer; padding: 16px 18px 8px; font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 12px; list-style: none; }
         .collapsible-section summary::-webkit-details-marker, .collapsible-section summary::marker { display: none; content: ""; }
         .collapsible-section summary .drawer-chevron { display: inline-flex; color: var(--text-secondary); transition: transform 0.3s ease, color 0.3s; }
         .collapsible-section[open] summary .drawer-chevron { transform: rotate(180deg); color: var(--accent); }
-        .collapsible-section .d-body { padding: 6px 18px 18px; }
+        .collapsible-section .d-body { padding: 0 18px 5px; }
         .collapsible-section.advanced-options summary { color: var(--text-primary); font-size: 1.15rem; font-weight: 700; padding: 16px 18px; justify-content: flex-start; }
         .collapsible-section.advanced-options summary::after { content: none; }
         .collapsible-section.advanced-options.disabled summary { cursor: pointer; }
@@ -110,11 +113,11 @@
             <div class="controls-wrapper">
                 <div class="selection-row">
                     <div class="input-group-pair">
-                        <input type="text" id="start-token" placeholder="Token" value="USDC" class="token-input-field">
+                        <input type="text" id="start-token" placeholder="Token" value="WBTC" class="token-input-field">
                         <button type="button" id="route-direction-arrow" class="token-arrow" title="Swap direction: single arrow = forward only; double arrow = both directions" aria-label="Swap direction">
                             <svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="28 5 38 12 28 19"></polyline></svg>
                         </button>
-                        <input type="text" id="end-token" placeholder="Token" value="USDT" class="token-input-field">
+                        <input type="text" id="end-token" placeholder="Token" value="USDC" class="token-input-field">
                     </div>
 
                     <div class="input-group-pair">
@@ -139,6 +142,109 @@
                 </div>
             </div>
 
+
+            <details class="collapsible-section" id="section-od-pairs" open>
+                <summary><span class="drawer-chevron"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg></span>Origin &amp; Destination Pairs</summary>
+                <div class="d-body">
+                    <section id="od-results-section" class="results-container hidden">
+                        <div class="table-container glass" style="padding: 16px;">
+                            <div class="table-controls">
+                                <div class="filter-controls-wrapper">
+                                    <div class="filter-input-group">
+                                        <label for="od-network-filter">Network</label>
+                                        <select id="od-network-filter" class="filter-select">
+                                            <option value="all">All</option>
+                                            <option value="Ethereum">Ethereum</option>
+                                            <option value="Arbitrum">Arbitrum</option>
+                                            <option value="Base">Base</option>
+                                            <option value="BNB">BNB Chain</option>
+                                        </select>
+                                    </div>
+                                    <div class="column-selector-container od-settings-selector">
+                                        <button id="od-settings-btn" class="secondary-btn flex-center" title="O&amp;D Settings" style="padding: 6px 8px; border-radius: 8px;">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                                                <circle cx="12" cy="12" r="3"/>
+                                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 0 2.83 2.83l-.06.06a1.65 1.65 0 0 0 .33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                            </svg>
+                                        </button>
+                                        <div id="od-settings-dropdown" class="column-dropdown hidden">
+                                            <div class="dropdown-section">
+                                                <label class="checkbox-label" id="od-collate-direction-wrapper" title="Merge matching forward and reverse routes into one bidirectional O&amp;D row.">
+                                                    <input type="checkbox" id="od-collate-direction-filter" checked> Coalesce Directions
+                                                </label>
+                                                <label class="checkbox-label" title="Only show pairs that are currently selected.">
+                                                    <input type="checkbox" id="od-show-selected-filter"> Show Selected Only
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                     <div class="column-selector-container od-column-selector">
+                                        <button id="od-columns-btn" class="secondary-btn flex-center" title="Table Columns" style="padding: 6px 8px; border-radius: 8px;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                                <line x1="9" y1="3" x2="9" y2="21"/>
+                                                <line x1="15" y1="3" x2="15" y2="21"/>
+                                                <line x1="3" y1="9" x2="21" y2="9"/>
+                                            </svg>
+                                        </button>
+                                        <div id="od-columns-dropdown" class="column-dropdown hidden">
+                                            <div class="dropdown-section">
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-network" checked> Network</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-hash" checked> O&amp;D Hash</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-routes" checked> Routes</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-tx-count"> TXs</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-swaps" checked> Swaps</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-volume"> Volume</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-market-size"> Fees</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-daily-vol" checked> Daily Vol</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-daily-fees" checked> Daily Fees</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-pct-volume" checked> % Volume</label>
+                                                <label class="checkbox-label"><input type="checkbox" data-col="od-last-activity"> Last Swap</label>
+                                         </div>
+                                     </div>
+                                 </div>
+                                 <button type="button" id="od-expand-table-btn" class="secondary-btn flex-center table-expand-btn" title="Open O&amp;D table full size" aria-label="Open O&amp;D table full size">
+                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                             <polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>
+                                         </svg>
+                                     </button>
+                                 </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th data-od-sort="pair" class="col-od-pair">O&amp;D Pair <span>↕</span></th>
+                                            <th data-od-sort="network" class="col-od-network">Net <span>↕</span></th>
+                                            <th data-od-sort="od-hash" class="col-od-hash hidden-column">O&amp;D Hash <span>↕</span></th>
+                                            <th data-od-sort="routes" class="col-od-routes hidden-column">Routes <span>↕</span></th>
+                                            <th data-od-sort="tx-count" class="col-od-tx-count hidden-column">TXs <span>↕</span></th>
+                                            <th data-od-sort="swaps" class="col-od-swaps hidden-column">Swaps <span>↕</span></th>
+                                            <th data-od-sort="volume" class="col-od-volume hidden-column">Volume <span>↕</span></th>
+                                            <th data-od-sort="market-size" class="col-od-market-size hidden-column">Fees <span>↕</span></th>
+                                            <th data-od-sort="daily-vol" class="col-od-daily-vol hidden-column">Daily Vol <span>↕</span></th>
+                                            <th data-od-sort="daily-fees" class="col-od-daily-fees hidden-column">Daily Fees <span>↕</span></th>
+                                            <th data-od-sort="pct-volume" class="col-od-pct-volume hidden-column">% Volume <span>↕</span></th>
+                                            <th data-od-sort="last-activity" class="col-od-last-activity hidden-column">Last Swap <span>↕</span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="od-pairs-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                    <div id="od-no-data" class="no-data-msg hidden">
+                        <div class="empty-state-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 3H9.01M9 21H9.01M12 18a6 6 0 0 1 0-12M15 21a9 9 0 0 0 0-18"/>
+                                <path d="M9 8V16V8z"/>
+                            </svg>
+                        </div>
+                        <p class="empty-state-title">No Pairs Found</p>
+                        <p class="empty-state-desc">No origin &amp; destination pair data for the specified period and tokens.</p>
+                    </div>
+                </div>
+            </details>
 
             <details class="collapsible-section" open>
                 <summary><span class="drawer-chevron"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg></span>Swap Distribution</summary>
@@ -166,13 +272,7 @@
                                 <div class="dist-control-group">
                                 <label for="ctrl-group">Group by</label>
                                     <select id="ctrl-group" class="filter-select">
-                                        <option value="chain">Chain</option>
-                                        <option value="fee_tier">Fee Tier</option>
-                                        <option value="protocol">Protocol</option>
-                                        <option value="split">Split</option>
-                                        <option value="hops">Hops</option>
                                         <option value="route">Route</option>
-                                        <option value="direction">Direction</option>
                                     </select>
                                 </div>
                                 <div class="dist-control-group dist-total-group" title="Total sum of the selected Y axis metric across all groups">
@@ -207,12 +307,76 @@
                         <p class="empty-state-title">No Data Found</p>
                         <p class="empty-state-desc">No swap data found for the specified period and tokens.</p>
                     </div>
+            </details>
+
+            <details class="collapsible-section" id="section-swap-time-series" open>
+                <summary><span class="drawer-chevron"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg></span>Swap Time Series</summary>
+                <div class="d-body">
+                    <div id="ts-status" class="dist-status hidden"></div>
+                    <section id="ts-results-section" class="results-container hidden">
+                        <div class="table-container glass" style="padding: 16px;">
+                            <div class="dist-controls">
+                                <div class="dist-control-group">
+                                    <label for="ctrl-ts-axis">Y axis</label>
+                                    <select id="ctrl-ts-axis" class="filter-select">
+                                        <option value="volume" selected>USD volume</option>
+                                        <option value="fees">Fees</option>
+                                        <option value="count">Swap count</option>
+                                    </select>
+                                </div>
+                                <div class="dist-control-group">
+                                    <label for="ctrl-ts-interval">Granularity</label>
+                                    <select id="ctrl-ts-interval" class="filter-select">
+                                        <option value="day" selected>Daily</option>
+                                    </select>
+                                </div>
+                                <div class="dist-control-group">
+                                    <label for="ctrl-ts-group">Group by</label>
+                                    <select id="ctrl-ts-group" class="filter-select">
+                                        <option value="chain">Chain</option>
+                                        <option value="split">Split</option>
+                                        <option value="hops">Hops</option>
+                                        <option value="route">Route</option>
+                                        <option value="direction">Direction</option>
+                                    </select>
+                                </div>
+                                <div class="dist-control-group dist-total-group" title="Total sum across time series">
+                                    <label>Σ Total</label>
+                                    <span id="ts-total" class="dist-total-value">—</span>
+                                </div>
+                            </div>
+                            <div class="dist-chart-box">
+                                <svg id="ts-chart" viewBox="0 0 900 480" preserveAspectRatio="none"></svg>
+                                <div id="ts-tooltip" class="dist-tooltip"></div>
+                            </div>
+                            <div class="dist-legend" id="ts-legend"></div>
+                        </div>
+                    </section>
+                    <div id="ts-loader" class="loader-container hidden">
+                        <div class="loader-card">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-shimmer"></div>
+                                <div id="ts-progress-fill"></div>
+                                <p id="ts-progress-text" class="progress-text">Sampling time series...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="ts-no-data" class="no-data-msg hidden">
+                        <div class="empty-state-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 8v4M12 16h.01"/>
+                            </svg>
+                        </div>
+                        <p class="empty-state-title">No Data Found</p>
+                        <p class="empty-state-desc">No time series data found for the specified period and tokens.</p>
+                    </div>
                 </div>
             </details>
 
 
-            <details class="collapsible-section" open>
-                <summary><span class="drawer-chevron"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg></span>Swap Routes</summary>
+            <details id="section-routes" class="collapsible-section" open>
+                <summary><span class="drawer-chevron"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg></span>Routes</summary>
                 <div class="d-body">
             <section id="results-section" class="results-container hidden">
                 <div class="table-container glass" style="padding: 16px;">
@@ -296,7 +460,8 @@
                                     </button>
                                     <div id="table-columns-dropdown" class="column-dropdown hidden">
                                         <div class="dropdown-section">
-                                            <label class="checkbox-label"><input type="checkbox" data-col="route-id"> Route ID</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="pair-id"> O&D Hash</label>
+                                            <label class="checkbox-label"><input type="checkbox" data-col="route-id"> Route Hash</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="cid"> Pool ID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="pool-id"> Pool Address / ID</label>
                                             <label class="checkbox-label"><input type="checkbox" data-col="network" checked> Network</label>
@@ -332,16 +497,24 @@
                                             <label class="checkbox-label" id="collate-direction-wrapper" style="opacity: 0.5; transition: opacity 0.2s;" title="Merge the route running in both directions into one row, summing volumes, txs and swaps, shown with a double-headed arrow. Enabled when results contain bidirectional routes.">
                                                 <input type="checkbox" id="collate-direction-filter" checked> Collate Directions
                                             </label>
+                                            <label class="checkbox-label" title="Only show routes that are currently selected.">
+                                                <input type="checkbox" id="show-selected-filter"> Show Selected Only
+                                            </label>
                                         </div>
                                     </div>
                                 </div>
 
-                                <button id="collapse-results-btn" class="secondary-btn flex-center" title="Collapse / Expand Results" style="padding: 6px 8px; border-radius: 8px;">
+                                 <button id="collapse-results-btn" class="secondary-btn flex-center" title="Collapse / Expand Results" style="padding: 6px 8px; border-radius: 8px;">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
                                         <polyline points="18 15 12 9 6 15"></polyline>
                                     </svg>
-                                </button>
-                            </div>
+                                 </button>
+                                 <button type="button" id="routes-expand-table-btn" class="secondary-btn flex-center table-expand-btn" title="Open Routes table full size" aria-label="Open Routes table full size">
+                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                         <polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>
+                                     </svg>
+                                 </button>
+                             </div>
                         </div>
                     </div>
                     <div class="table-responsive">
@@ -349,7 +522,8 @@
                             <thead>
                                 <tr>
                                     <th>Route</th>
-                                    <th class="col-route-id hidden-column">Route ID</th>
+                                    <th id="sort-pair-id" class="sortable col-pair-id hidden-column">O&D Hash <span>↕</span></th>
+                                    <th id="sort-route-id" class="sortable col-route-id hidden-column">Route Hash <span>↕</span></th>
                                     <th id="sort-cid" class="sortable col-cid hidden-column">Pool ID <span>↕</span></th>
                                     <th id="sort-pool-id" class="sortable col-pool-id hidden-column">Pool Address / ID <span>↕</span></th>
                                     <th id="sort-network" class="sortable col-network">Net <span class="sort-icon">↕</span></th>
@@ -364,7 +538,6 @@
                                     <th id="sort-daily-fees" class="sortable col-daily-fees">Daily Fees <span>↕</span></th>
                                     <th id="sort-pct" class="sortable col-pct-volume">% Volume <span>↕</span></th>
                                     <th id="sort-last-activity" class="sortable col-last-activity hidden-column">Last Swap <span>↕</span></th>
-                                    <th class="col-route-id hidden-column">Route ID</th>
                                 </tr>
                             </thead>
                             <tbody id="routes-body">
@@ -524,6 +697,7 @@
     <script src="/static/nav.js"></script>
     <script src="/static/token-input.js?v=1.2"></script>
     <script src="/static/swap-distribution.js?v=3.10"></script>
+    <script src="/static/swap-time-series.js?v=1.0"></script>
     <script src="/static/app.js?v=50.0"></script>
 </body>
 

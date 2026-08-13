@@ -51,32 +51,35 @@ def get_db_connection():
         from common.utils.config import DATA_WAREHOUSE_DB
         return psycopg2.connect(DATA_WAREHOUSE_DB)
 
-def run_global_volume_rollup(days_back: int = 14) -> int:
+def run_global_volume_rollup(days_back: int = 14, table_name: str = None) -> int:
     """
-    Aggregates daily transaction count and USD volume directly from the swaps table
-    for ALL pools, protocols, and chains across the last N days.
+    Aggregates daily transaction count and USD volume directly from the short-lived
+    raw swap store for ALL pools, protocols, and chains across the last N days.
     """
+    if not table_name:
+        import os
+        table_name = os.getenv('SWAP_RAW_TABLE', 'swaps_staging').strip()
     conn = get_db_connection()
     cur = conn.cursor()
     
-    logging.info(f"Running global liquidity_pool_history volume rollup for last {days_back} days...")
+    logging.info(f"Running global liquidity_pool_history volume rollup for last {days_back} days (from {table_name})...")
     
-    query = """
+    query = f"""
     INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd)
     SELECT
         s.pool_id AS pool_id,
         DATE(s.ts) AS date,
         COUNT(*) AS tx_count,
         SUM(ABS(s.amount_usd)) AS volume_usd
-    FROM swaps s
+    FROM {table_name} s
     WHERE s.amount_usd IS NOT NULL
-      AND s.ts >= CURRENT_DATE - (INTERVAL '1 day' * %s)
+      AND s.ts >= CURRENT_DATE - (INTERVAL '1 day' * {days_back})
     GROUP BY s.pool_id, DATE(s.ts)
     ON CONFLICT (pool_id, date) DO UPDATE
     SET tx_count = EXCLUDED.tx_count,
         volume_usd = EXCLUDED.volume_usd;
     """
-    cur.execute(query, (days_back,))
+    cur.execute(query)
     updated_rows = cur.rowcount
     conn.commit()
     cur.close()

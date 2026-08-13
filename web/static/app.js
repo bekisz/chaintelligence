@@ -57,30 +57,93 @@ document.addEventListener('DOMContentLoaded', async () => {
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
 
+    const odSection = document.getElementById('section-od-pairs');
+    const routesSection = document.getElementById('section-routes');
+    if (odSection && routesSection) {
+        odSection.insertAdjacentElement('afterend', routesSection);
+    }
+
 let routeDirection = 'forward';
     window.routeDirection = routeDirection;
 
     const DIRECTION_ARROWS = {
         forward: '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="28 5 38 12 28 19"></polyline></svg>',
-        both: '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="8 5 2 12 8 19"></polyline><polyline points="32 5 38 12 32 19"></polyline></svg>'
+        both: '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="8 5 2 12 8 19"></polyline><polyline points="32 5 38 12 32 19"></polyline></svg>',
+        direct_forward: '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="8" x2="30" y2="8"></line><line x1="2" y1="16" x2="30" y2="16"></line><polyline points="26 3 38 12 26 21"></polyline></svg>',
+        direct_both: '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="8" x2="30" y2="8"></line><line x1="10" y1="16" x2="30" y2="16"></line><polyline points="10 3 2 12 10 21"></polyline><polyline points="30 3 38 12 30 21"></polyline></svg>'
+    };
+
+    // Compact direct-mode arrows for the O&D pairs table (mirror the input
+    // bar's double-line glyphs at a smaller scale).
+    const DIRECT_ARROWS_SMALL = {
+        forward: '<svg width="18" height="10" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="8" x2="30" y2="8"></line><line x1="2" y1="16" x2="30" y2="16"></line><polyline points="26 3 38 12 26 21"></polyline></svg>',
+        reverse: '<svg width="18" height="10" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="8" x2="38" y2="8"></line><line x1="10" y1="16" x2="38" y2="16"></line><polyline points="14 3 2 12 14 21"></polyline></svg>',
+        both: '<svg width="18" height="10" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="8" x2="30" y2="8"></line><line x1="10" y1="16" x2="30" y2="16"></line><polyline points="10 3 2 12 10 21"></polyline><polyline points="30 3 38 12 30 21"></polyline></svg>'
     };
 
     const renderDirectionArrow = (dir) => {
         const arrow = document.getElementById('route-direction-arrow');
         if (!arrow) return;
         arrow.innerHTML = DIRECTION_ARROWS[dir] || DIRECTION_ARROWS.forward;
-        arrow.title = dir === 'forward' ? 'Forward only: start → right end token. Click to cycle.'
-            : 'Both directions: trades in either direction (double-headed arrow). Click to cycle.';
+        const isDirectMode = dir === 'direct_forward' || dir === 'direct_both';
+        if (dir === 'forward') {
+            arrow.title = 'Forward only (all routes): start → end. Click to cycle.';
+        } else if (dir === 'both') {
+            arrow.title = 'Both directions (all routes): start ↔ end. Click to cycle.';
+        } else if (dir === 'direct_forward') {
+            arrow.title = 'Direct routes only (1 hop, forward): start ⇒ end. Click to cycle.';
+        } else if (dir === 'direct_both') {
+            arrow.title = 'Direct routes only (1 hop, both directions): start ⇔ end. Click to cycle.';
+        }
+
+        const directOnlyFilter = document.getElementById('direct-only-filter');
+        if (directOnlyFilter) {
+            if (isDirectMode) {
+                directOnlyFilter.checked = true;
+                directOnlyFilter.disabled = true;
+                if (directOnlyFilter.parentElement) {
+                    directOnlyFilter.parentElement.style.opacity = '0.5';
+                    directOnlyFilter.parentElement.title = 'Enforced by top input bar (Direct Routes Only mode)';
+                }
+            } else {
+                directOnlyFilter.disabled = false;
+                if (directOnlyFilter.parentElement) {
+                    directOnlyFilter.parentElement.style.opacity = '1';
+                    directOnlyFilter.parentElement.title = '';
+                }
+            }
+        }
+        if (window.updateSwapDistributionGroupOptions) {
+            window.updateSwapDistributionGroupOptions();
+        }
+    };
+
+    const nextDirectionState = {
+        forward: 'both',
+        both: 'direct_forward',
+        direct_forward: 'direct_both',
+        direct_both: 'forward'
     };
 
     const directionArrow = document.getElementById('route-direction-arrow');
     if (directionArrow) {
         directionArrow.addEventListener('click', () => {
-            routeDirection = routeDirection === 'forward' ? 'both' : 'forward';
+            routeDirection = nextDirectionState[routeDirection] || 'forward';
             window.routeDirection = routeDirection;
             renderDirectionArrow(routeDirection);
+            updateCollateDirectionState();
+            updateODCollateState();
         });
         renderDirectionArrow(routeDirection);
+    }
+
+    const directOnlyFilter = document.getElementById('direct-only-filter');
+    if (directOnlyFilter) {
+        directOnlyFilter.addEventListener('change', () => {
+            if (window.updateSwapDistributionGroupOptions) {
+                window.updateSwapDistributionGroupOptions();
+            }
+        });
     }
 
     function getYesterdayStr() {
@@ -503,6 +566,7 @@ let routeDirection = 'forward';
 
     initCustomChainSelector(document.getElementById('query-network-filter'));
     initCustomChainSelector(document.getElementById('network-filter'));
+    initCustomChainSelector(document.getElementById('od-network-filter'));
     initCustomChainSelector(document.getElementById('undercut-network'));
 
     const getNetworkIconBadge = (netName) => {
@@ -572,10 +636,14 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         }
     };
 
-    // Enable/disable the "Collate Directions" toggle based on the fetched data:
-    // it is only meaningful when the current results contain the same route in
-    // both directions, so disable (and uncheck) it when the data is entirely
-    // unidirectional.
+    // Coalescing routes is only meaningful when the query itself is
+    // bidirectional (start ↔ end). Single-direction queries can never pair a
+    // forward route with its reverse twin.
+    const isBidirectionalQuery = () => routeDirection === 'both' || routeDirection === 'direct_both';
+
+    // Enable/disable the "Collate Directions" toggle based on (a) the selected
+    // query direction and (b) the fetched data actually containing the same
+    // route in both directions — disable (and uncheck) it otherwise.
     const updateCollateDirectionState = () => {
         const collateWrapper = document.getElementById('collate-direction-wrapper');
         const collateCheckbox = document.getElementById('collate-direction-filter');
@@ -594,13 +662,34 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             );
         }
 
-        collateCheckbox.disabled = !hasBidirection;
-        if (!hasBidirection) collateCheckbox.checked = false;
+        const canCollate = isBidirectionalQuery() && hasBidirection;
+        collateCheckbox.disabled = !canCollate;
+        if (!canCollate) collateCheckbox.checked = false;
         if (collateWrapper) {
-            collateWrapper.style.opacity = hasBidirection ? '1.0' : '0.5';
-            collateWrapper.title = hasBidirection
+            collateWrapper.style.opacity = canCollate ? '1.0' : '0.5';
+            collateWrapper.title = canCollate
                 ? 'Merge the route running in both directions into one row, summing volumes, txs and swaps, shown with a double-headed arrow.'
-                : 'Disabled: results are open in only one direction.';
+                : isBidirectionalQuery()
+                    ? 'Disabled: results are open in only one direction.'
+                    : 'Disabled: the query is for one direction only.';
+        }
+    };
+
+    // The O&D "Coalesce Directions" toggle is a static on/off flag for a
+    // bidirectional query; disable (and uncheck) it when the query direction
+    // is single-direction.
+    const updateODCollateState = () => {
+        const odWrapper = document.getElementById('od-collate-direction-wrapper');
+        const odCheckbox = document.getElementById('od-collate-direction-filter');
+        if (!odCheckbox) return;
+        const canCoalesce = isBidirectionalQuery();
+        odCheckbox.disabled = !canCoalesce;
+        if (!canCoalesce) odCheckbox.checked = false;
+        if (odWrapper) {
+            odWrapper.style.opacity = canCoalesce ? '1.0' : '0.5';
+            odWrapper.title = canCoalesce
+                ? 'Merge matching forward and reverse routes into one bidirectional O&D row.'
+                : 'Disabled: the query is for one direction only.';
         }
     };
 
@@ -787,10 +876,10 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         const out = [];
         for (const key of Object.keys(groups)) {
             const grp = groups[key];
-            const hasForward = grp.some(r => r.direction !== 'reverse');
-            const hasReverse = grp.some(r => r.direction === 'reverse');
-            if (grp.length >= 2 && hasForward && hasReverse) {
-                const base = Object.assign({}, grp.find(r => r.direction !== 'reverse') || grp[0]);
+            const fwdRoute = grp.find(r => r.direction !== 'reverse');
+            const revRoute = grp.find(r => r.direction === 'reverse');
+            if (grp.length >= 2 && fwdRoute && revRoute) {
+                const base = Object.assign({}, fwdRoute);
                 base.direction = 'both';
                 base.count = grp.reduce((s, r) => s + (r.count || 0), 0);
                 base.swaps = grp.reduce((s, r) => s + (r.swaps ?? r.count ?? 0), 0);
@@ -800,6 +889,21 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
                 base.daily_volume = grp.reduce((s, r) => s + (r.daily_volume || 0), 0);
                 const lastAct = grp.map(r => r.last_activity).filter(Boolean).sort();
                 if (lastAct.length) base.last_activity = lastAct[lastAct.length - 1];
+
+                const fwdId = fwdRoute.route_id;
+                const revId = revRoute.route_id;
+                if (fwdId && revId && fwdId !== revId) {
+                    base.route_id = `${fwdId}+${revId}`;
+                } else {
+                    base.route_id = fwdId || revId;
+                }
+                const fwdPair = fwdRoute.pair_id;
+                const revPair = revRoute.pair_id;
+                if (fwdPair && revPair && fwdPair !== revPair) {
+                    base.pair_id = `${fwdPair}+${revPair}`;
+                } else {
+                    base.pair_id = fwdPair || revPair;
+                }
                 out.push(base);
             } else {
                 out.push(...grp);
@@ -808,7 +912,7 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         return out;
     };
 
-    const filterAndRenderRoutes = () => {
+    const filterAndRenderRoutes = (animate = true) => {
         if (!currentRoutes) return;
 
         const minAprInput = document.getElementById('min-apr-filter');
@@ -829,7 +933,7 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         const selectedNetwork = networkFilter ? networkFilter.value : 'all';
         const selectedProtocol = protocolFilter ? protocolFilter.value : 'all';
 
-        const collateDirections = !!document.getElementById('collate-direction-filter')?.checked && routeDirection === 'both';
+        const collateDirections = !!document.getElementById('collate-direction-filter')?.checked && (routeDirection === 'both' || routeDirection === 'direct_both');
         const source = collateDirections ? collateDirectionRoutes(currentRoutes) : currentRoutes;
 
         const filtered = source.filter(route => {
@@ -919,7 +1023,20 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             return true;
         });
 
-        renderRoutes(filtered);
+        const showSelectedOnly = !!document.getElementById('show-selected-filter')?.checked;
+        let displayed = filtered;
+        if (showSelectedOnly) {
+            displayed = filtered.filter(route => {
+                const ids = routeSelectionIds(route);
+                return ids.length > 0 && ids.every(id => selectedRouteIds.has(id));
+            });
+        }
+
+        renderRoutes(displayed, animate);
+        renderODPairs(currentRoutes);
+        if (expandedTableState && !tableExpandModal.classList.contains('hidden')) {
+            renderExpandedTable();
+        }
     };
 
     const showError = (msg) => {
@@ -938,6 +1055,10 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             return;
         }
 
+        if (window.fetchSwapTimeSeries) {
+            window.fetchSwapTimeSeries();
+        }
+
         if (startToken === '*' && endToken === '*') {
             alert('You cannot use * for both start and end tokens. One must be a specific token symbol.');
             return;
@@ -948,6 +1069,10 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         loader.classList.remove('hidden');
         resultsSection.classList.add('hidden');
         noDataMsg.classList.add('hidden');
+        const odResultsSection = document.getElementById('od-results-section');
+        const odNoData = document.getElementById('od-no-data');
+        if (odResultsSection) odResultsSection.classList.add('hidden');
+        if (odNoData) odNoData.classList.add('hidden');
         const undercutPanel = document.getElementById('undercut-section');
         if (undercutPanel) {
             undercutPanel.classList.add('disabled');
@@ -971,8 +1096,13 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             if (selectedNetwork && selectedNetwork !== 'all') {
                 url += `&network=${selectedNetwork}`;
             }
-            if (routeDirection && routeDirection !== 'forward') {
-                url += `&direction=${routeDirection}`;
+            const apiDirection = (routeDirection === 'both' || routeDirection === 'direct_both') ? 'both' : 'forward';
+            const maxHops = (routeDirection === 'direct_forward' || routeDirection === 'direct_both') ? 1 : null;
+            if (apiDirection !== 'forward') {
+                url += `&direction=${apiDirection}`;
+            }
+            if (maxHops) {
+                url += `&max_hops=${maxHops}`;
             }
 
             const response = await fetch(url);
@@ -1033,8 +1163,12 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
 
             // Update stats
             currentRoutes = data.routes;
+            // All routes are selected by default when new results arrive.
+            selectedRouteIds.clear();
+            currentRoutes.forEach(r => routeSelectionIds(r).forEach(id => selectedRouteIds.add(id)));
             updateStableShortcutState();
             updateCollateDirectionState();
+            updateODCollateState();
             // Default sort: Daily fees descending for the selected time period
             if (currentRoutes && currentRoutes.length > 0) {
                 sortRoutes('daily-fees', 'sort-daily-fees', 'desc');
@@ -1128,7 +1262,72 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         </span>`;
     };
 
-    const renderRoutes = (routes) => {
+    const formatHashCell = (value, label) => {
+        if (value == null || value === '') return '-';
+        const parts = String(value).split('+').map(p => p.trim()).filter(Boolean);
+        if (!parts.length) return '-';
+        return parts.map(hash => {
+            const shortened = hash.length > 13 ? `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}` : hash;
+            return `<span class="monospace clickable-addr" title="${label}: ${hash}\nClick to copy" onclick="copyToClipboard('${hash}', this, event);">
+                <span>${shortened}</span>
+                <span class="copy-icon-wrapper">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </span>
+            </span>`;
+        }).join('<span class="route-id-sep"> + </span>');
+    };
+
+    const formatRouteHash = (routeId) => formatHashCell(routeId, 'Route Hash');
+    const formatODHash = (pairId) => formatHashCell(pairId, 'O&D Hash');
+
+    const selectedRouteIds = new Set();
+
+    const routeSelectionIds = (route) => {
+        const value = route.route_id ?? route.pair_id ?? route.path;
+        return String(value || '').split('+').map(id => id.trim()).filter(Boolean);
+    };
+
+    const toggleRouteSelection = (ids) => {
+        const routeIds = ids.filter(Boolean);
+        if (!routeIds.length) return;
+        const shouldSelect = routeIds.some(id => !selectedRouteIds.has(id));
+        routeIds.forEach(id => {
+            if (shouldSelect) selectedRouteIds.add(id);
+            else selectedRouteIds.delete(id);
+        });
+    };
+
+    const syncSelectionUI = () => {
+        document.querySelectorAll('#routes-body tr[data-route-ids], #od-pairs-body tr[data-route-ids]').forEach(row => {
+            const ids = (row.dataset.routeIds || '').split('|').filter(Boolean);
+            row.classList.toggle('row-selected', ids.length > 0 && ids.every(id => selectedRouteIds.has(id)));
+            row.classList.toggle('row-partially-selected', ids.some(id => selectedRouteIds.has(id)) && !ids.every(id => selectedRouteIds.has(id)));
+        });
+    };
+
+    const refreshAfterSelection = () => {
+        const routeFilterActive = document.getElementById('show-selected-filter')?.checked;
+        const odFilterActive = document.getElementById('od-show-selected-filter')?.checked;
+        const isExpanded = expandedTableState && !tableExpandModal.classList.contains('hidden');
+        const expandedIsRoutes = isExpanded && expandedTableState.sourceId === 'results-section';
+
+        document.querySelectorAll('#routes-body tr.selectable-row, #od-pairs-body tr.selectable-row, #table-expand-body tr.selectable-row').forEach(row => {
+            const ids = (row.dataset.routeIds || '').split('|').filter(Boolean);
+            const allSelected = ids.length > 0 && ids.every(id => selectedRouteIds.has(id));
+            const anySelected = ids.some(id => selectedRouteIds.has(id));
+            const useRouteFilter = row.closest('#routes-body') !== null
+                || (row.closest('#table-expand-body') !== null && expandedIsRoutes);
+            const filterActive = useRouteFilter ? routeFilterActive : odFilterActive;
+            row.style.display = (!filterActive || allSelected) ? '' : 'none';
+            row.classList.toggle('row-selected', allSelected);
+            row.classList.toggle('row-partially-selected', anySelected && !allSelected);
+        });
+    };
+
+    const renderRoutes = (routes, animate = true) => {
         routesBody.innerHTML = '';
         const totalVolumeAllRoutes = currentRoutes.reduce((sum, r) => sum + (r.volume || 0), 0);
         routes.forEach((route, idx) => {
@@ -1172,9 +1371,20 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             const networkClass = networkVal.toLowerCase();
 
             const row = document.createElement('tr');
-            // Staggered fade-in animation
-            row.classList.add('fade-in');
-            row.style.animationDelay = `${idx * 30}ms`;
+            const selectionIds = routeSelectionIds(route);
+            row.dataset.routeIds = selectionIds.join('|');
+            row.classList.add('selectable-row');
+            row.addEventListener('click', (event) => {
+                if (event.target.closest('a, button, input, select')) return;
+                toggleRouteSelection(selectionIds);
+                refreshAfterSelection();
+            });
+            // Staggered animation is useful for initial results, but distracting
+            // when a row is only being selected or deselected.
+            if (animate) {
+                row.classList.add('fade-in');
+                row.style.animationDelay = `${idx * 30}ms`;
+            }
             // Dead pool (no current liquidity) is greyed out but not excluded
             if (hopCount === 1 && (routeTvl <= 0)) {
                 row.classList.add('dead-pool');
@@ -1217,7 +1427,8 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
                         </div>
                     ` : ''}
                 </td>
-                <td class="col-route-id hidden-column">${route.route_id ?? '-'}</td>
+                <td class="col-pair-id hidden-column">${route.pair_id != null ? formatODHash(route.pair_id) : '-'}</td>
+                <td class="col-route-id hidden-column">${route.route_id != null ? formatRouteHash(route.route_id) : '-'}</td>
                 <td class="col-cid hidden-column">${cidDisplay}</td>
                 <td class="col-pool-id hidden-column">${poolIdDisplay || poolAddrDisplay}</td>
                 <td class="col-network">${getNetworkIconBadge(networkVal)}</td>
@@ -1236,6 +1447,228 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             routesBody.appendChild(row);
         });
         updateColumnVisibility();
+        syncSelectionUI();
+    };
+
+    let odSortKey = 'volume';
+    let odSortDir = 'desc';
+    let odPairRows = [];
+
+    const odRouteTokens = (route) => {
+        let tokens = [];
+        if (route.path_tokens) {
+            for (let i = 0; i < route.path_tokens.length; i += 2) {
+                tokens.push(route.path_tokens[i]);
+            }
+        } else if (route.path) {
+            const parts = route.path.split(' ');
+            for (let i = 0; i < parts.length; i += 4) {
+                tokens.push(parts[i]);
+            }
+        }
+        return tokens;
+    };
+
+    const renderODPairs = (routes) => {
+        const body = document.getElementById('od-pairs-body');
+        const resultsSection = document.getElementById('od-results-section');
+        const noData = document.getElementById('od-no-data');
+        if (!body) return;
+
+        if (!routes || routes.length === 0) {
+            odPairRows = [];
+            if (resultsSection) resultsSection.classList.add('hidden');
+            if (noData) noData.classList.remove('hidden');
+            return;
+        }
+
+        const odCollate = document.getElementById('od-collate-direction-filter');
+        const coalesceDirections = odCollate?.checked && (routeDirection === 'both' || routeDirection === 'direct_both');
+        // Keep raw route records here so route counts and directional totals
+        // are not lost before the O&D aggregation runs.
+        const sourceRoutes = routes;
+
+        const groups = {};
+        for (const r of sourceRoutes) {
+            const tokens = odRouteTokens(r);
+            const origin = tokens[0] || '-';
+            const dest = tokens[tokens.length - 1] || '-';
+            const network = r.network || 'Ethereum';
+            const direction = r.direction || 'forward';
+            const key = coalesceDirections
+                ? `${network}|${origin}|${dest}`
+                : `${network}|${origin}|${dest}|${direction}`;
+            if (!groups[key]) groups[key] = { origin, dest, network, routes: [] };
+            groups[key].routes.push(r);
+        }
+
+        const numeric = value => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        const totalVolume = sourceRoutes.reduce((s, r) => s + numeric(r.volume), 0);
+        const queryDays = getQueryDays();
+
+        odPairRows = Object.values(groups).map(g => {
+            const r0 = g.routes[0];
+            let count = 0, swaps = 0, volume = 0, market_size = 0;
+            let daily_volume = 0, daily_fees = 0, lastActivity = null;
+            for (const r of g.routes) {
+                const routeVolume = numeric(r.volume);
+                const routeFees = numeric(r.market_size);
+                count += numeric(r.count);
+                swaps += numeric(r.swaps ?? r.count);
+                volume += routeVolume;
+                market_size += routeFees;
+                daily_volume += r.daily_volume !== undefined
+                    ? numeric(r.daily_volume)
+                    : (routeVolume / queryDays);
+                daily_fees += r.daily_fees !== undefined
+                    ? numeric(r.daily_fees)
+                    : (routeFees / queryDays);
+                if (r.last_activity && (!lastActivity || r.last_activity > lastActivity)) {
+                    lastActivity = r.last_activity;
+                }
+            }
+            const pctVolume = totalVolume > 0 ? (volume / totalVolume) * 100 : 0;
+            // Bidirectional only when a route is explicitly merged in both
+            // directions (collate toggle); multiple routes in a group are just
+            // different pathways for the same origin -> destination pair.
+            const hasForward = g.routes.some(r => r.direction !== 'reverse');
+            const hasReverse = g.routes.some(r => r.direction === 'reverse');
+            const isBidirectional = g.routes.some(r => r.direction === 'both')
+                || (coalesceDirections && hasForward && hasReverse);
+            const isReverse = !isBidirectional && g.routes.every(r => r.direction === 'reverse');
+            const pairIds = [...new Set(g.routes
+                .flatMap(r => String(r.pair_id || '').split('+'))
+                .map(id => id.trim())
+                .filter(Boolean))];
+            const routeIds = [...new Set(g.routes.flatMap(routeSelectionIds))];
+            return {
+                origin: g.origin,
+                dest: g.dest,
+                network: g.network,
+                pair_id: pairIds.join('+') || r0.pair_id,
+                routeIds,
+                routeCount: g.routes.length,
+                count, swaps, volume, market_size,
+                daily_volume, daily_fees, pctVolume,
+                last_activity: lastActivity,
+                isBidirectional,
+                isReverse
+            };
+        });
+
+        navigateODSort();
+    };
+
+    const navigateODSort = () => {
+        const body = document.getElementById('od-pairs-body');
+        const resultsSection = document.getElementById('od-results-section');
+        const noData = document.getElementById('od-no-data');
+        if (!body) return;
+
+        const networkFilter = document.getElementById('od-network-filter');
+        const selectedNetwork = networkFilter ? networkFilter.value : 'all';
+
+        const filteredPairs = selectedNetwork === 'all'
+            ? odPairRows
+            : odPairRows.filter(p => p.network === selectedNetwork);
+
+        const showSelectedOnly = !!document.getElementById('od-show-selected-filter')?.checked;
+        let displayPairs = filteredPairs;
+        if (showSelectedOnly) {
+            displayPairs = filteredPairs.filter(p => p.routeIds.length > 0 && p.routeIds.every(id => selectedRouteIds.has(id)));
+        }
+
+        if (!displayPairs.length) {
+            if (resultsSection) resultsSection.classList.remove('hidden');
+            if (noData) noData.classList.remove('hidden');
+            body.innerHTML = '';
+            return;
+        }
+
+        const dir = odSortDir === 'asc' ? 1 : -1;
+        const sorted = displayPairs.slice().sort((a, b) => {
+            let valA, valB;
+            if (odSortKey === 'pair') { valA = a.origin + a.dest; valB = b.origin + b.dest; }
+            else if (odSortKey === 'network') { valA = a.network; valB = b.network; }
+            else if (odSortKey === 'od-hash') {
+                const hexToNum = (v) => { const h = String(v || '0').split('+')[0].trim(); if (!h || !/^[0-9a-fA-F]+$/.test(h)) return 0; try { return Number(BigInt('0x' + h)); } catch (e) { return 0; } };
+                valA = hexToNum(a.pair_id); valB = hexToNum(b.pair_id);
+            } else if (odSortKey === 'routes') { valA = a.routeCount; valB = b.routeCount; }
+            else if (odSortKey === 'tx-count') { valA = a.count; valB = b.count; }
+            else if (odSortKey === 'swaps') { valA = a.swaps; valB = b.swaps; }
+            else if (odSortKey === 'volume') { valA = a.volume; valB = b.volume; }
+            else if (odSortKey === 'market-size') { valA = a.market_size; valB = b.market_size; }
+            else if (odSortKey === 'daily-vol') { valA = a.daily_volume; valB = b.daily_volume; }
+            else if (odSortKey === 'daily-fees') { valA = a.daily_fees; valB = b.daily_fees; }
+            else if (odSortKey === 'pct-volume') { valA = a.pctVolume; valB = b.pctVolume; }
+            else if (odSortKey === 'last-activity') { valA = a.last_activity ? new Date(a.last_activity).getTime() : 0; valB = b.last_activity ? new Date(b.last_activity).getTime() : 0; }
+            else { valA = a.volume; valB = b.volume; }
+
+            if (typeof valA === 'string') {
+                return dir * valA.localeCompare(String(valB));
+            }
+            return dir * ((valA || 0) - (valB || 0));
+        });
+
+        body.innerHTML = '';
+        sorted.forEach(pair => {
+            const row = document.createElement('tr');
+            const reverseArrow = '<svg width="32" height="16" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="12 5 2 12 12 19"></polyline></svg>';
+            const isDirectMode = routeDirection === 'direct_forward' || routeDirection === 'direct_both';
+            const arrow = isDirectMode
+                ? (pair.isBidirectional
+                    ? DIRECT_ARROWS_SMALL.both
+                    : pair.isReverse
+                        ? DIRECT_ARROWS_SMALL.reverse
+                        : DIRECT_ARROWS_SMALL.forward)
+                : pair.isBidirectional
+                    ? (DIRECTION_ARROWS.both || '↔')
+                    : pair.isReverse
+                        ? reverseArrow
+                        : (DIRECTION_ARROWS.forward || '→');
+            // Route paths are already normalized to the queried token order.
+            // Direction changes the arrow only, matching the route table.
+            const displayOrigin = pair.origin;
+            const displayDest = pair.dest;
+            row.innerHTML = `
+                <td class="path-cell">
+                    <a href="${getCmcUrl(displayOrigin)}" target="_blank" class="token-badge-link" onclick="event.stopPropagation();">
+                        <span class="token-badge">${tokenIconHtml(displayOrigin)} ${displayOrigin}</span>
+                    </a>
+                    <span class="od-pair-arrow">${arrow}</span>
+                    <a href="${getCmcUrl(displayDest)}" target="_blank" class="token-badge-link" onclick="event.stopPropagation();">
+                        <span class="token-badge">${tokenIconHtml(displayDest)} ${displayDest}</span>
+                    </a>
+                </td>
+                <td class="col-od-network">${getNetworkIconBadge(pair.network)}</td>
+                <td class="col-od-hash">${pair.pair_id != null ? formatODHash(pair.pair_id) : '-'}</td>
+                <td class="col-od-routes">${pair.routeCount.toLocaleString()}</td>
+                <td class="col-od-tx-count">${pair.count.toLocaleString()}</td>
+                <td class="col-od-swaps">${pair.swaps.toLocaleString()}</td>
+                <td class="col-od-volume font-bold">${formatUSD(pair.volume)}</td>
+                <td class="col-od-market-size">${formatUSD(pair.market_size || 0)}</td>
+                <td class="col-od-daily-vol">${formatUSD(pair.daily_volume)}</td>
+                <td class="col-od-daily-fees">${formatUSD(pair.daily_fees)}</td>
+                <td class="col-od-pct-volume accent-text">${pair.pctVolume.toFixed(1)}%</td>
+                <td class="col-od-last-activity">${formatRelativeTime(pair.last_activity)}</td>
+            `;
+            row.dataset.routeIds = pair.routeIds.join('|');
+            row.classList.add('selectable-row');
+            row.addEventListener('click', (event) => {
+                if (event.target.closest('a, button, input, select')) return;
+                toggleRouteSelection(pair.routeIds);
+                refreshAfterSelection();
+            });
+            body.appendChild(row);
+        });
+
+        if (resultsSection) resultsSection.classList.remove('hidden');
+        if (noData) noData.classList.add('hidden');
+        updateColumnVisibility();
+        syncSelectionUI();
     };
 
     const tokenIconUrl = (symbol) => {
@@ -1602,6 +2035,22 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             } else if (key === 'last-activity') {
                 valA = a.last_activity ? new Date(a.last_activity).getTime() : 0;
                 valB = b.last_activity ? new Date(b.last_activity).getTime() : 0;
+            } else if (key === 'route_id') {
+                const hexToNum = (v) => {
+                    const hex = String(v || '0').split('+')[0].trim();
+                    if (!hex || !/^[0-9a-fA-F]+$/.test(hex)) return 0;
+                    try { return Number(BigInt('0x' + hex)); } catch (e) { return 0; }
+                };
+                valA = hexToNum(a.route_id);
+                valB = hexToNum(b.route_id);
+            } else if (key === 'pair_id') {
+                const hexToNum = (v) => {
+                    const hex = String(v || '0').split('+')[0].trim();
+                    if (!hex || !/^[0-9a-fA-F]+$/.test(hex)) return 0;
+                    try { return Number(BigInt('0x' + hex)); } catch (e) { return 0; }
+                };
+                valA = hexToNum(a.pair_id);
+                valB = hexToNum(b.pair_id);
             } else if (key === 'cid') {
                 valA = getRouteCid(a);
                 valB = getRouteCid(b);
@@ -1630,7 +2079,7 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
     };
 
     const updateColumnVisibility = () => {
-        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"], #lp-options-dropdown input[type="checkbox"], #table-columns-dropdown input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll('#column-selector-dropdown input[type="checkbox"], #lp-options-dropdown input[type="checkbox"], #table-columns-dropdown input[type="checkbox"], #od-columns-dropdown input[type="checkbox"]');
         checkboxes.forEach(cb => {
             const isVisible = cb.checked;
 
@@ -1672,6 +2121,10 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
     const sortDailyFeesEl = document.getElementById('sort-daily-fees');
     if (sortDailyFeesEl) sortDailyFeesEl.addEventListener('click', () => sortRoutes('daily-fees', 'sort-daily-fees'));
     document.getElementById('sort-pct').addEventListener('click', () => sortRoutes('pct', 'sort-pct'));
+    const sortRouteIdEl = document.getElementById('sort-route-id');
+    if (sortRouteIdEl) sortRouteIdEl.addEventListener('click', () => sortRoutes('route_id', 'sort-route-id'));
+    const sortPairIdEl = document.getElementById('sort-pair-id');
+    if (sortPairIdEl) sortPairIdEl.addEventListener('click', () => sortRoutes('pair_id', 'sort-pair-id'));
     const sortLastActivityEl = document.getElementById('sort-last-activity');
     if (sortLastActivityEl) sortLastActivityEl.addEventListener('click', () => sortRoutes('last-activity', 'sort-last-activity'));
     const sortPoolAddrEl = document.getElementById('sort-pool-addr');
@@ -1680,6 +2133,47 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
     if (sortPoolIdEl) sortPoolIdEl.addEventListener('click', () => sortRoutes('pool_id', 'sort-pool-id'));
     document.getElementById('sort-network').addEventListener('click', () => sortRoutes('network', 'sort-network'));
     document.getElementById('sort-protocol').addEventListener('click', () => sortRoutes('protocol', 'sort-protocol'));
+
+    document.querySelectorAll('#section-od-pairs [data-od-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+            const key = th.getAttribute('data-od-sort');
+            if (odSortKey === key) {
+                odSortDir = odSortDir === 'desc' ? 'asc' : 'desc';
+            } else {
+                odSortKey = key;
+                odSortDir = 'desc';
+            }
+            navigateODSort();
+        });
+    });
+
+    const odNetworkFilter = document.getElementById('od-network-filter');
+    if (odNetworkFilter) {
+        odNetworkFilter.addEventListener('change', () => {
+            navigateODSort();
+        });
+    }
+
+    const odCollateFilter = document.getElementById('od-collate-direction-filter');
+    if (odCollateFilter) {
+        odCollateFilter.addEventListener('change', () => {
+            renderODPairs(currentRoutes);
+        });
+    }
+
+    const showSelectedFilter = document.getElementById('show-selected-filter');
+    if (showSelectedFilter) {
+        showSelectedFilter.addEventListener('change', () => {
+            filterAndRenderRoutes();
+        });
+    }
+
+    const odShowSelectedFilter = document.getElementById('od-show-selected-filter');
+    if (odShowSelectedFilter) {
+        odShowSelectedFilter.addEventListener('change', () => {
+            navigateODSort();
+        });
+    }
 
     analyzeBtn.addEventListener('click', performAnalysis);
 
@@ -2043,7 +2537,9 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         { btn: document.getElementById('lp-options-btn'), dropdown: document.getElementById('lp-options-dropdown') },
         { btn: document.getElementById('table-columns-btn'), dropdown: document.getElementById('table-columns-dropdown') },
         { btn: document.getElementById('column-selector-btn'), dropdown: document.getElementById('column-selector-dropdown') },
-        { btn: document.getElementById('uc-columns-btn'), dropdown: document.getElementById('uc-columns-dropdown') }
+        { btn: document.getElementById('uc-columns-btn'), dropdown: document.getElementById('uc-columns-dropdown') },
+        { btn: document.getElementById('od-settings-btn'), dropdown: document.getElementById('od-settings-dropdown') },
+        { btn: document.getElementById('od-columns-btn'), dropdown: document.getElementById('od-columns-dropdown') }
     ];
 
     dropdownPairs.forEach(({ btn, dropdown }) => {
@@ -2064,6 +2560,140 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
                 });
             });
         }
+    });
+
+    // Open a full-size copy of either results table, including its controls.
+    const tableExpandModal = document.createElement('div');
+    tableExpandModal.id = 'table-expand-modal';
+    tableExpandModal.className = 'modal-overlay hidden';
+    tableExpandModal.innerHTML = `
+        <div class="glass-modal table-expand-modal" role="dialog" aria-modal="true" aria-labelledby="table-expand-title">
+            <div class="modal-top">
+                <div class="modal-title-group"><h2 id="table-expand-title">Table</h2></div>
+                <button type="button" class="secondary-btn flex-center" id="table-expand-close" title="Close table" aria-label="Close table">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="table-expand-body"></div>
+        </div>`;
+    document.body.appendChild(tableExpandModal);
+
+    const closeTableExpand = () => tableExpandModal.classList.add('hidden');
+    let expandedTableState = null;
+    // Maps every interactive control in the enlarged-table clone back to its
+    // original element so modal toggles/filters drive the real table.
+    const expandSourceMap = new Map();
+    let expandSourceCounter = 0;
+
+    // Walk both trees in parallel (the clone is an exact copy of the source
+    // minus the removed expand button) and map interactive controls positionally.
+    const mapCloneControls = (cloneEl, origEl) => {
+        const cc = cloneEl.children;
+        const oc = origEl.children;
+        let ci = 0;
+        for (let oi = 0; oi < oc.length; oi++) {
+            const o = oc[oi];
+            if (o.matches && o.matches('#od-expand-table-btn, #routes-expand-table-btn')) continue;
+            const c = cc[ci];
+            if (c && c.tagName === o.tagName) {
+                if (c.matches('input, select, button, a[href], th.sortable, [data-od-sort]')) {
+                    const key = `expand-${++expandSourceCounter}`;
+                    expandSourceMap.set(key, o);
+                    c.dataset.sourceId = key;
+                }
+                mapCloneControls(c, o);
+            }
+            ci++;
+        }
+    };
+
+    const renderExpandedTable = () => {
+        if (!expandedTableState) return;
+        const { sourceId, title } = expandedTableState;
+        const source = document.querySelector(`#${sourceId} .table-container`);
+        const body = document.getElementById('table-expand-body');
+        const titleEl = document.getElementById('table-expand-title');
+        if (!source || !body || !titleEl) return;
+        titleEl.textContent = title;
+        body.innerHTML = '';
+        const clone = source.cloneNode(true);
+        // Remove the expand button from the clone so it's not shown twice.
+        const expandBtn = clone.querySelector('#od-expand-table-btn, #routes-expand-table-btn');
+        if (expandBtn) expandBtn.remove();
+        // Strip IDs (the clone would duplicate the page's element IDs) and
+        // remap interactive controls to their originals by tree position.
+        clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+        expandSourceMap.clear();
+        mapCloneControls(clone, source);
+        body.appendChild(clone);
+    };
+
+    const forwardExpandedClick = original => {
+        if (!original) return;
+        original.click();
+        renderExpandedTable();
+    };
+
+    tableExpandModal.addEventListener('click', event => {
+        const row = event.target.closest('#table-expand-body tbody tr[data-route-ids]');
+        if (row) {
+            if (event.target.closest('a, button, input, select')) return;
+            toggleRouteSelection((row.dataset.routeIds || '').split('|').filter(Boolean));
+            refreshAfterSelection();
+            return;
+        }
+
+        const target = event.target.closest('#table-expand-body button[data-source-id], #table-expand-body th[data-source-id]');
+        if (!target) return;
+        event.preventDefault();
+        if (target.matches('button')) {
+            const menu = target.closest('.column-selector-container')?.querySelector('.column-dropdown');
+            if (menu) {
+                tableExpandModal.querySelectorAll('.column-dropdown').forEach(dropdown => {
+                    if (dropdown !== menu) dropdown.classList.add('hidden');
+                });
+                menu.classList.toggle('hidden');
+                return;
+            }
+        }
+        forwardExpandedClick(expandSourceMap.get(target.dataset.sourceId));
+    });
+
+    const syncExpandedControl = event => {
+        const control = event.target.closest('#table-expand-body input[data-source-id], #table-expand-body select[data-source-id]');
+        if (!control) return;
+        const original = expandSourceMap.get(control.dataset.sourceId);
+        if (!original) return;
+        if (control.type === 'checkbox') original.checked = control.checked;
+        else original.value = control.value;
+        original.dispatchEvent(new Event(control.matches('input[type="number"]') ? 'input' : 'change', { bubbles: true }));
+        renderExpandedTable();
+    };
+    tableExpandModal.addEventListener('change', syncExpandedControl);
+    tableExpandModal.addEventListener('input', syncExpandedControl);
+    const openTableExpand = (sourceId, title) => {
+        expandedTableState = { sourceId, title };
+        renderExpandedTable();
+        tableExpandModal.classList.remove('hidden');
+    };
+
+    document.addEventListener('click', event => {
+        const expandButton = event.target.closest('#od-expand-table-btn, #routes-expand-table-btn');
+        if (!expandButton) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (expandButton.id === 'od-expand-table-btn') {
+            openTableExpand('od-results-section', 'Origin & Destination Pairs');
+        } else {
+            openTableExpand('results-section', 'Routes');
+        }
+    });
+    document.getElementById('table-expand-close')?.addEventListener('click', closeTableExpand);
+    tableExpandModal.addEventListener('click', event => {
+        if (event.target === tableExpandModal) closeTableExpand();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !tableExpandModal.classList.contains('hidden')) closeTableExpand();
     });
 
     // Close dropdowns when clicking outside
@@ -2167,4 +2797,7 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
             filterAndRenderRoutes();
         });
     }
+
+    updateCollateDirectionState();
+    updateODCollateState();
 });

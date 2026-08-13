@@ -475,114 +475,6 @@ class PostgresFetcher:
             self._log(f"Database query failed: {e}")
             raise
 
-    def fetch_pool_swap_aggregates(self, start_date: datetime, end_date: datetime,
-                                   token_filter: Optional[List[str]] = None,
-                                   network: Optional[str] = None,
-                                   start_tokens: Optional[List[str]] = None,
-                                   end_tokens: Optional[List[str]] = None) -> List[Dict]:
-        """Aggregate swaps per pool directly in SQL.
-
-        Returns one dict per pool_id that had swaps in range — with count,
-        volume, and market_size already summed. The /api/pools/search endpoint
-        merges these into its (sorted token pair, fee, protocol, network) key.
-
-        This collapses ~100k swap rows per day-chunk down to ~tens of pool rows,
-        avoiding the large row transfer and Python aggregation loop.
-
-        Shape: the inner query joins swaps -> liquidity_pool -> coin ONLY (the
-        coin symbols are needed for the token filter) and GROUP BY s.pool_id,
-        using the covering (pool_id, ts) INCLUDE (amount_usd) index as an
-        Index Only Scan. chain/protocol/coin-for-naming are joined in the OUTER
-        query against the ~tens of aggregated rows — never per-swap — so we
-        avoid ~1.3M redundant chain/protocol PK probes the flat join would do.
-        market_size is fee_bps/10000 * volume, computed in the outer query
-        (fee_bps is constant per pool, so SUM(amount_usd*k) == k*SUM(amount_usd)).
-
-        Each row:
-            {token0, token1, fee_tier, fee_bps, protocol, network, count, volume, market_size}
-        where token0/token1 are sorted alphabetically (matching the endpoint's key).
-        """
-        self._log(f"Aggregating swaps {start_date} -> {end_date} (network={network}, start={start_tokens}, end={end_tokens})")
-
-        try:
-            with get_conn() as conn:
-                cur = conn.cursor()
-
-                token_where, token_params = self._build_token_clause(start_tokens, end_tokens, token_filter)
-                # The network filter is a pool attribute, so apply it on the
-                # outer join (tens of rows) rather than the inner aggregation —
-                # this keeps the inner (pool_id, ts) index scan unconstrained
-                # and lets it use the covering index cleanly.
-                outer_network_where, outer_network_param = self._build_network_clause(network)
-
-                inner_query = f"""
-                    SELECT s.pool_id AS pid, COUNT(*) AS swap_count,
-                           COALESCE(SUM(s.amount_usd), 0.0) AS volume
-                    FROM swaps s
-                    JOIN liquidity_pool lp ON s.pool_id = lp.id
-                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                    WHERE s.ts >= %s AND s.ts <= %s
-                      AND s.amount_usd >= 10.0
-                """
-                inner_params = [start_date, end_date]
-                if token_where:
-                    inner_query += f" AND ({token_where})"
-                    inner_params.extend(token_params)
-                inner_query += "\nGROUP BY s.pool_id"
-
-                query = f"""
-                    SELECT
-                        LEAST(UPPER(c0.symbol), UPPER(c1.symbol)) AS token0,
-                        GREATEST(UPPER(c0.symbol), UPPER(c1.symbol)) AS token1,
-                        CASE
-                            WHEN lp.fee_bps IS NULL THEN 'Dynamic'
-                            ELSE (lp.fee_bps / 100.0)::text || '%%'
-                        END AS fee_display,
-                        lp.fee_bps,
-                        pr.name AS protocol,
-                        ch.name AS network,
-                        agg.swap_count,
-                        agg.volume,
-                        agg.volume * COALESCE(lp.fee_bps / 10000.0, 0.003) AS market_size
-                    FROM ({inner_query}) agg
-                    JOIN liquidity_pool lp ON agg.pid = lp.id
-                    JOIN chain ch ON lp.chain_id = ch.id
-                    JOIN protocol pr ON lp.protocol_id = pr.id
-                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                """
-                params = list(inner_params)
-                if outer_network_param:
-                    query += outer_network_where
-                    params.append(outer_network_param)
-
-                cur.execute(query, params)
-                rows = cur.fetchall()
-                cur.close()
-
-            aggregates = []
-            for row in rows:
-                fee_bps = float(row[3]) if row[3] is not None else None
-                aggregates.append({
-                    'token0': row[0],
-                    'token1': row[1],
-                    'fee_tier': row[2] or '',
-                    'fee_bps': fee_bps,
-                    'protocol': row[4],
-                    'network': row[5],
-                    'count': int(row[6]),
-                    'volume': float(row[7]),
-                    'market_size': float(row[8]),
-                })
-
-            self._log(f"Aggregate complete. Pools: {len(aggregates)}")
-            return aggregates
-
-        except Exception as e:
-            self._log(f"Database aggregate query failed: {e}")
-            raise
-
     def fetch_route_stats(self, start_date: datetime, end_date: datetime,
                           start_tokens: Optional[List[str]] = None,
                           end_tokens: Optional[List[str]] = None,
@@ -626,21 +518,8 @@ class PostgresFetcher:
 
         fwd_a, fwd_p1 = _side_pred('pair.origin_symbol', start_syms, start_wild)
         fwd_b, fwd_p2 = _side_pred('pair.dest_symbol', end_syms, end_wild)
-        rev_a, rev_p1 = _side_pred('pair.origin_symbol', end_syms, end_wild)
-        rev_b, rev_p2 = _side_pred('pair.dest_symbol', start_syms, start_wild)
-
-        # Determine the pair predicate + params for the selected direction(s)
-        # as a single combined expression. NOT shared lists: each branch only
-        # carries the params its own `%s` placeholders need.
-        if dir_norm == 'forward':
-            pair_sql = f"({fwd_a} AND {fwd_b})"
-            pair_params = fwd_p1 + fwd_p2
-        elif dir_norm == 'reverse':
-            pair_sql = f"({rev_a} AND {rev_b})"
-            pair_params = rev_p1 + rev_p2
-        else:  # both
-            pair_sql = f"(({fwd_a} AND {fwd_b}) OR ({rev_a} AND {rev_b}))"
-            pair_params = fwd_p1 + fwd_p2 + rev_p1 + rev_p2
+        pair_sql = f"({fwd_a} AND {fwd_b})"
+        pair_params = fwd_p1 + fwd_p2
 
         try:
             with get_conn() as conn:
@@ -650,6 +529,7 @@ class PostgresFetcher:
                 query = f"""
                     SELECT
                         r.route_id,
+                        pair.id AS pair_id,
                         pair.origin_symbol,
                         pair.dest_symbol,
                         r.hops,
@@ -668,7 +548,7 @@ class PostgresFetcher:
                     query += " AND LOWER(ch.name) = LOWER(%s)"
                     sql_params.append(network)
                 query += """
-                    GROUP BY r.route_id, pair.origin_symbol, pair.dest_symbol, r.hops
+                    GROUP BY r.route_id, pair.id, pair.origin_symbol, pair.dest_symbol, r.hops
                     ORDER BY volume_usd DESC
                 """
                 cur.execute(query, sql_params)
@@ -676,10 +556,11 @@ class PostgresFetcher:
 
                 # Build per-route aggregates.
                 route_records = []
-                for (route_id, origin_sym, dest_sym, hops,
+                for (route_id, pair_id, origin_sym, dest_sym, hops,
                      tx_count, swap_count, volume_usd, last_day) in agg_rows:
                     route_records.append({
                         'route_id': route_id,
+                        'pair_id': pair_id,
                         'origin_symbol': (origin_sym or '').upper(),
                         'dest_symbol': (dest_sym or '').upper(),
                         'hops': int(hops or 0),
@@ -766,6 +647,7 @@ class PostgresFetcher:
                         'path': ' --> '.join(path_tokens),
                         'path_tokens': path_tokens,
                         'route_id': rec['route_id'],
+                        'pair_id': rec['pair_id'],
                         'count': tc,
                         'swaps': rec['swap_count'],
                         'volume': vol,
@@ -789,89 +671,7 @@ class PostgresFetcher:
             self._log(f"Route stats query failed: {e}")
             raise
 
-    def fetch_swaps_streaming(self, start_date: datetime, end_date: datetime,
-                              token_filter: Optional[List[str]] = None,
-                              network: Optional[str] = None,
-                              batch_size: int = 5000):
-        """Generator that yields batches of swap dicts using a server-side cursor.
-
-        Each yield is a list of up to `batch_size` swap dicts, keeping Python heap
-        memory bounded regardless of the total result set size.  The caller receives
-        one connection (not pooled) that lives for the duration of the generator.
-
-        Example usage:
-            for batch in fetcher.fetch_swaps_streaming(...):
-                analyzer.process_batch(batch, ...)
-        """
-        import psycopg2
-
-        token_where, token_params = self._build_token_clause(token_filter=token_filter)
-        network_where, network_param = self._build_network_clause(network)
-
-        # Single query against the unified swaps table. No ORDER BY: the
-        # server-side cursor streams rows in storage order; callers that need
-        # chronological order sort by log_index themselves.
-        query = f"""
-            SELECT s.tx_hash, s.log_index, s.ts, ch.name AS network, pr.name AS protocol,
-                   c0.symbol, c1.symbol,
-                   s.amount0, s.amount1, s.amount_usd,
-                   CASE
-                       WHEN lp.fee_bps IS NULL THEN 'Dynamic'
-                       ELSE (lp.fee_bps / 100.0)::text || '%%'
-                   END AS fee_display
-            FROM swaps s
-            JOIN liquidity_pool lp ON s.pool_id = lp.id
-            JOIN chain ch ON lp.chain_id = ch.id
-            JOIN protocol pr ON lp.protocol_id = pr.id
-            JOIN coin c0 ON lp.coin0_id = c0.coin_id
-            JOIN coin c1 ON lp.coin1_id = c1.coin_id
-            WHERE s.ts >= %s AND s.ts <= %s
-              AND s.amount_usd >= 10.0
-        """
-        params = [start_date, end_date]
-        if token_where:
-            query += f" AND ({token_where})"
-            params.extend(token_params)
-        if network_param:
-            query += network_where
-            params.append(network_param)
-
-        # Use a dedicated connection with a server-side named cursor
-        conn = psycopg2.connect(DATA_WAREHOUSE_DB)
-        try:
-            cur = conn.cursor(name='swaps_stream')
-            cur.execute(query, params)
-            while True:
-                rows = cur.fetchmany(batch_size)
-                if not rows:
-                    break
-                batch = []
-                for row in rows:
-                    tx_hash = row[0]
-                    log_index = row[1]
-                    batch.append({
-                        'id': f"{tx_hash}#{log_index}",
-                        'timestamp': int(row[2].timestamp()),
-                        'tx_hash': tx_hash,
-                        'token0_symbol': row[5],
-                        'token1_symbol': row[6],
-                        'amount0': float(row[7]) if row[7] is not None else 0.0,
-                        'amount1': float(row[8]) if row[8] is not None else 0.0,
-                        'amountUSD': float(row[9]) if row[9] is not None else 0.0,
-                        'fee_tier': row[10] or '',
-                        'protocol': row[4],
-                        'network': row[3],
-                        'log_index': log_index,
-                    })
-                yield batch
-        finally:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            conn.close()
-
-    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None, tvl_mode: str = 'avg') -> Dict[str, Dict[str, float]]:
+    def fetch_pool_stats(self, pools: List[List[str]], start_date: datetime, end_date: datetime, prices: Optional[Dict[str, float]] = None, tvl_mode: str = 'avg', use_swaps_fallback: bool = False) -> Dict[str, Dict[str, float]]:
         """
         Fetch stats (APR) for a list of pools [(t0, t1, fee), ...] within date range.
         Returns dict: { "T0-T1-FEE": apr_float }
@@ -881,6 +681,13 @@ class PostgresFetcher:
                             non-zero TVL), matching the old per-pool AVG behavior.
                   'latest' -> TVL is the most recent non-zero snapshot in the DB
                             (across all history), i.e. the pool's current size.
+
+        use_swaps_fallback: when True, pools still at zero volume after the
+            liquidity_pool_history aggregation fall back to the raw swaps table
+            for volume. This is intentionally opt-in: only the counterfactual
+            tools (/api/routes/undercut, /api/sps/find) pass it, because they
+            are exempt from the no-raw-swaps rule; the main analytics endpoints
+            never read the swaps tables.
         
 
         Implementation note: this used to build one UNION ALL subquery *per pool*
@@ -890,8 +697,7 @@ class PostgresFetcher:
         symbol-pair indexes. The current shape resolves every requested pool to
         its pool_id(s) in ONE query, then runs ONE grouped aggregation over
         liquidity_pool_history keyed by pool_id, with ONE batched TVL-fallback
-        query for pools that had no non-zero TVL in range. The volume fallback
-        (swaps tables) is likewise collapsed to one grouped query per swap table.
+        query for pools that had no non-zero TVL in range.
         """
         if not pools:
             return {}
@@ -1081,56 +887,59 @@ class PostgresFetcher:
                         pool_meta[k]['avg_tvl'] = best_tvl
 
             # ------------------------------------------------------------------
-            # Phase 3: volume fallback from the swaps tables for keys still at
-            # zero volume. Each key gets its own tightly-scoped subquery (one
-            # exact symbol pair, one network/protocol, two fee-tier forms) so the
-            # planner drives off the (network, timestamp) covering index and only
-            # touches a small row set. Subqueries are UNION ALL'd in batches of 20
-            # — one round-trip per batch. (A single grouped query with
-            # token0=ANY(..) OR token1=ANY(..) over-fetches on the huge swaps
-            # tables and was measured ~20x slower, so the per-pool scope stays.)
+            # Phase 3: volume fallback from the raw swaps table. Opt-in only:
+            # the counterfactual tools (/api/routes/undercut, /api/sps/find) are
+            # exempt from the no-raw-swaps rule and rely on this to price pools
+            # that have no liquidity_pool_history rows yet. The main analytics
+            # endpoints never set use_swaps_fallback, so they stay raw-free.
+            # Each key gets its own tightly-scoped subquery (one exact symbol
+            # pair, one network/protocol, two fee-tier forms) so the planner
+            # drives off the (network, timestamp) covering index and only
+            # touches a small row set. Subqueries are UNION ALL'd in batches of
+            # 20 — one round-trip per batch.
             # ------------------------------------------------------------------
-            pool_queries_swaps = []
-            params_swaps = []
-            for k, meta in pool_meta.items():
-                if meta.get('total_vol', 0) == 0 and meta['pool_ids']:
-                    pool_queries_swaps.append("""
-                    SELECT %s, c0.symbol, c1.symbol, SUM(s.amount_usd), SUM(ABS(s.amount0)), SUM(ABS(s.amount1))
-                    FROM swaps s
-                    JOIN liquidity_pool lp ON s.pool_id = lp.id
-                    JOIN coin c0 ON lp.coin0_id = c0.coin_id
-                    JOIN coin c1 ON lp.coin1_id = c1.coin_id
-                    WHERE s.ts >= %s AND s.ts <= %s AND s.pool_id = ANY(%s)
-                    GROUP BY c0.symbol, c1.symbol
-                    """)
-                    params_swaps.extend([k, start_date, end_date, meta['pool_ids']])
+            if use_swaps_fallback:
+                pool_queries_swaps = []
+                params_swaps = []
+                for k, meta in pool_meta.items():
+                    if meta.get('total_vol', 0) == 0 and meta['pool_ids']:
+                        pool_queries_swaps.append("""
+                        SELECT %s, c0.symbol, c1.symbol, SUM(s.amount_usd), SUM(ABS(s.amount0)), SUM(ABS(s.amount1))
+                        FROM swaps s
+                        JOIN liquidity_pool lp ON s.pool_id = lp.id
+                        JOIN coin c0 ON lp.coin0_id = c0.coin_id
+                        JOIN coin c1 ON lp.coin1_id = c1.coin_id
+                        WHERE s.ts >= %s AND s.ts <= %s AND s.pool_id = ANY(%s)
+                        GROUP BY c0.symbol, c1.symbol
+                        """)
+                        params_swaps.extend([k, start_date, end_date, meta['pool_ids']])
 
-            if pool_queries_swaps:
-                batch_size = 20
-                for i in range(0, len(pool_queries_swaps), batch_size):
-                    batch_queries = pool_queries_swaps[i:i+batch_size]
-                    batch_params = params_swaps[i*4:(i+batch_size)*4]
-                    cur.execute(" UNION ALL ".join(batch_queries), tuple(batch_params))
-                    for row in cur.fetchall():
-                        k = row[0]
-                        usd_sum = float(row[3] or 0)
-                        if usd_sum > 0:
-                            pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + usd_sum
-                        elif prices is not None:
-                            p0 = prices.get(row[1]) or (1.0 if any(x in row[1].upper() for x in ['USD','EUR']) else 0)
-                            p1 = prices.get(row[2]) or (1.0 if any(x in row[2].upper() for x in ['USD','EUR']) else 0)
-                            v0 = float(row[4] or 0)
-                            if v0 > 1e12:
-                                v0 /= 1e18
-                            elif any(b in row[1].upper() for b in ['BTC', 'WBTC', 'BTCB']) and v0 > 1e4:
-                                v0 /= 1e8
+                if pool_queries_swaps:
+                    batch_size = 20
+                    for i in range(0, len(pool_queries_swaps), batch_size):
+                        batch_queries = pool_queries_swaps[i:i+batch_size]
+                        batch_params = params_swaps[i*4:(i+batch_size)*4]
+                        cur.execute(" UNION ALL ".join(batch_queries), tuple(batch_params))
+                        for row in cur.fetchall():
+                            k = row[0]
+                            usd_sum = float(row[3] or 0)
+                            if usd_sum > 0:
+                                pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + usd_sum
+                            elif prices is not None:
+                                p0 = prices.get(row[1]) or (1.0 if any(x in row[1].upper() for x in ['USD','EUR']) else 0)
+                                p1 = prices.get(row[2]) or (1.0 if any(x in row[2].upper() for x in ['USD','EUR']) else 0)
+                                v0 = float(row[4] or 0)
+                                if v0 > 1e12:
+                                    v0 /= 1e18
+                                elif any(b in row[1].upper() for b in ['BTC', 'WBTC', 'BTCB']) and v0 > 1e4:
+                                    v0 /= 1e8
 
-                            v1 = float(row[5] or 0)
-                            if v1 > 1e12:
-                                v1 /= 1e18
-                            elif any(b in row[2].upper() for b in ['BTC', 'WBTC', 'BTCB']) and v1 > 1e4:
-                                v1 /= 1e8
-                            pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + (v0*p0 + v1*p1)/2.0
+                                v1 = float(row[5] or 0)
+                                if v1 > 1e12:
+                                    v1 /= 1e18
+                                elif any(b in row[2].upper() for b in ['BTC', 'WBTC', 'BTCB']) and v1 > 1e4:
+                                    v1 /= 1e8
+                                pool_meta[k]['total_vol'] = pool_meta[k].get('total_vol', 0) + (v0*p0 + v1*p1)/2.0
 
             # Calculate APR
             for k, meta in pool_meta.items():

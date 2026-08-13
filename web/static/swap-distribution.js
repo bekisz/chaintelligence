@@ -55,8 +55,9 @@ let lastDataDirection = "both";
 let yAxisMode = "volume";
 // Bucket layout: "linear" (fixed-width bins from $0) or "log" (geometric bins).
 let bucketMode = "log";
-// What the stacked groups represent: "chain" (networks) or "direction" (start→end vs end→start).
-let groupByMode = "chain";
+// What the stacked groups represent. Only "route" is served since the
+// endpoint moved to pre-aggregated route buckets.
+let groupByMode = "route";
 
 // X-axis zoom state, kept in "axis units": log10(value) for log buckets,
 // dollar value for linear buckets. null/full means show entire range.
@@ -447,15 +448,34 @@ function getNetworkIconUrl(netName) {
 function getToolTipTokenIcon(symbol) {
     if (!symbol) return '';
     const sym = symbol.toUpperCase().trim();
-    let url = window.tokenImageMap && window.tokenImageMap[sym];
+    let url = (window.tokenImageMap && window.tokenImageMap[sym]);
     if (!url) {
-        if (sym === 'WETH' || sym === 'ETH') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
-        else if (sym === 'USDC') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png';
-        else if (sym === 'USDT') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/dAC17F958D2ee523a2206206994597C13D831ec7/logo.png';
-        else if (sym === 'WBTC' || sym === 'BTCB' || sym === 'BTC') url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png';
-        else url = `https://assets.coingecko.com/coins/images/279/small/${sym.toLowerCase()}.png`;
+        if (['WETH', 'ETH', 'STETH', 'WSTETH', 'RETH', 'CBETH', 'WEETH', 'EZETH'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+        } else if (['USDC', 'USDC.E', 'USDCE'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png';
+        } else if (['USDT'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/dAC17F958D2ee523a2206206994597C13D831ec7/logo.png';
+        } else if (['WBTC', 'BTCB', 'BTC', 'CBBTC', 'TBTC', 'KBTC', 'LBTC', 'FBTC'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png';
+        } else if (['DAI', 'SDAI'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/6B175474E89094C44Da98b954EedeAC495271d0F/logo.png';
+        } else if (['AAVE'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9/logo.png';
+        } else if (['BNB', 'WBNB'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png';
+        } else if (['MATIC', 'POL', 'WMATIC'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png';
+        } else if (['SOL', 'WSOL'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png';
+        } else if (['AVAX', 'WAVAX'].includes(sym)) {
+            url = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchex/info/logo.png';
+        } else {
+            const s = sym.toLowerCase().replace(/^(w|st|ez|cb|we)/, '');
+            url = `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${s}.png`;
+        }
     }
-    return `<img src="${url}" width="14" height="14" onerror="this.style.display='none'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0;">`;
+    return `<img src="${url}" width="14" height="14" onerror="this.onerror=null;this.src='/static/favicon.png'" style="border-radius: 50%; vertical-align: middle; flex-shrink: 0; margin-right: 4px; display: inline-block;">`;
 }
 
 function formatTooltipHeaderHtml(ch, color) {
@@ -472,10 +492,15 @@ function formatTooltipHeaderHtml(ch, color) {
             if (seg.includes(" -- ")) {
                 const parts = seg.split(" -- ");
                 tokens.push(parts[0].trim());
-                hops.push(parts[1].trim());
+                if (i < segments.length - 1) {
+                    hops.push(parts[1].trim());
+                }
             } else {
                 tokens.push(seg);
             }
+        }
+        if (hops.length > 0 && tokens.length > hops.length + 1) {
+            tokens.splice(hops.length + 1);
         }
 
         let networkName = 'Ethereum';
@@ -491,7 +516,9 @@ function formatTooltipHeaderHtml(ch, color) {
         
         let routeIdStr = '';
         if (ch.route_id !== undefined && ch.route_id !== null) {
-            routeIdStr = `#${ch.route_id}`;
+            const hash = String(ch.route_id).split('+').map(p => p.trim()).filter(Boolean).join(', ');
+            const shortened = hash.length > 13 ? `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}` : hash;
+            routeIdStr = `<span class="monospace" title="${hash}">#${shortened}</span>`;
         } else if (lastData && lastData.route_chains) {
             const rIdx = lastData.route_chains.findIndex(rc => rc.name === rawName);
             if (rIdx >= 0) {
@@ -505,7 +532,7 @@ function formatTooltipHeaderHtml(ch, color) {
 
         tokens.forEach((token, idx) => {
             pathHtml += `<span class="token-badge">${getToolTipTokenIcon(token)} ${token}</span>`;
-            if (idx < hops.length) {
+            if (idx < tokens.length - 1 && idx < hops.length) {
                 const hopStr = hops[idx];
                 const hParts = hopStr.split('|');
                 let feeStr = hParts[0] || '0.05%';
@@ -1004,8 +1031,12 @@ async function runAnalysis() {
         if (selectedNetwork && selectedNetwork !== "all") {
             url += `&network=${encodeURIComponent(selectedNetwork)}`;
         }
-                url += `&direction=${directionFilter}`;
-                url += `&group_by=${groupByMode}`;
+        url += `&direction=${directionFilter}`;
+        url += `&group_by=${groupByMode}`;
+        const isDirect = (window.routeDirection === "direct_forward" || window.routeDirection === "direct_both");
+        if (isDirect) {
+            url += `&max_hops=1`;
+        }
 
         const response = await fetch(url);
         if (!response.ok) {
@@ -1107,20 +1138,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     // forward (→) or both (⇄). swap-distribution has no direction control of
     // its own.
     function arrowDirection() {
-        return (window.routeDirection || "forward") === "both" ? "both" : "forward";
+        const d = window.routeDirection || "forward";
+        return (d === "both" || d === "direct_both") ? "both" : "forward";
     }
 
-    // When the network filter is a single chain, grouping by chain is pointless,
-    // so default Group by to direction instead. Multi-chain ("all") keeps chain.
+    function updateSwapDistributionGroupOptions() {
+        // Only the pre-aggregated route grouping is served. The DOM select is
+        // already restricted to route in routing.html; this is a no-op kept for
+        // backwards compat with callers that used to toggle hops visibility.
+    }
+    window.updateSwapDistributionGroupOptions = updateSwapDistributionGroupOptions;
+
+    // Group by is fixed to "route" (the sand histogram endpoint moved to
+    // pre-aggregated route buckets), so only refresh direction + chain filter.
     function applyGroupByDefault() {
-        const multiChain = !queryNetworkSelect || queryNetworkSelect.value === "all";
-        const wasChain = groupByMode === "chain";
-        if (!multiChain && wasChain) {
-            ctrlGroup.value = "direction";
-            groupByMode = "direction";
-        } else if (multiChain && wasChain) {
-            // stay on chain
-        }
         excludedChains.clear();
         directionFilter = arrowDirection();
         if (lastData && lastDataDirection !== directionFilter) { lastData = null; }

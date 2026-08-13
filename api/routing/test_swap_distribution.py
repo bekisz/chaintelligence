@@ -2,7 +2,13 @@ import math
 import random
 import unittest
 
-from swap_distribution import analyze_sizes, analyze_sizes_by_chain, fit_lognormal, fit_pareto_tail
+from swap_distribution import (
+    analyze_bucket_groups,
+    analyze_sizes,
+    analyze_sizes_by_chain,
+    fit_lognormal,
+    fit_pareto_tail,
+)
 
 
 class TestFitLognormal(unittest.TestCase):
@@ -164,6 +170,27 @@ class TestAnalyzeSizesByChain(unittest.TestCase):
         edges = result["histogram"]["edges"]
         for c in result["chains"]:
             self.assertEqual(len(c["dens_log"]), len(edges) - 1)
+
+
+class TestAnalyzeBucketGroups(unittest.TestCase):
+    def test_bucket_counts_and_sums_are_preserved(self):
+        edges = [10.0, 100.0, 1000.0, 10000.0]
+        result = analyze_bucket_groups({
+            "route-a": {
+                "edges": edges,
+                "counts": [2, 3, 1],
+                "sums": [20.0, 600.0, 5000.0],
+                "log_sum": 6.0,
+                "log_sum2": 8.0,
+                "min": 10.0,
+                "max": 10000.0,
+            }
+        })
+        self.assertIsNotNone(result)
+        self.assertEqual(result["n"], 6)
+        self.assertEqual(sum(result["histogram"]["counts"]), 6)
+        self.assertAlmostEqual(sum(result["histogram"]["sums"]), 5620.0)
+        self.assertEqual(len(result["chains"][0]["linear_counts"]), 3)
 
 
 if __name__ == "__main__":

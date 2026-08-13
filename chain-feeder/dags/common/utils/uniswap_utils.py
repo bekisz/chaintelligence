@@ -1,9 +1,20 @@
+import os
 import requests
 import time
 import logging
 import psycopg2
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
+
+# ---------------------------------------------------------------------------
+# Switchover raw-store configuration.
+# `swaps_staging` is the canonical (short-lived) raw store. The legacy `swaps`
+# table is only mirrored while SWAP_LEGACY_MIRROR is enabled so the running API,
+# which still reads `swaps` for raw-swap fallbacks, keeps working during the
+# transition. Flip it to false once the API consumers are migrated.
+# ---------------------------------------------------------------------------
+SWAP_RAW_TABLE = os.getenv('SWAP_RAW_TABLE', 'swaps_staging').strip()
+SWAP_LEGACY_MIRROR = os.getenv('SWAP_LEGACY_MIRROR', 'true').strip().lower() in ('1', 'true', 'yes')
 from .config import (
     UNISWAP_V3_SUBGRAPH_URL,
     UNISWAP_V4_SUBGRAPH_URL,
@@ -648,6 +659,41 @@ def _compute_fee_bps(fee_tier: Optional[str]) -> Optional[float]:
     except (ValueError, AttributeError):
         return None
 
+
+def get_last_ingestion_ts(pg_hook, network: str, protocol: str) -> Optional[datetime]:
+    """Return the last ingested swap timestamp for (network, protocol).
+
+    Reads the ingestion_state watermark first (the switchover source of truth).
+    Falls back to the highest timestamp present in the raw store for bootstrap /
+    pre-switchover state, so the first run after migration continues seamlessly.
+    """
+    row = pg_hook.get_first(
+        "SELECT last_ts FROM ingestion_state WHERE LOWER(network) = LOWER(%s) AND LOWER(protocol) = LOWER(%s)",
+        parameters=(network, protocol),
+    )
+    if row and row[0]:
+        return row[0]
+    row = pg_hook.get_first(
+        f"""
+        SELECT MAX(latest.ts)
+        FROM liquidity_pool lp
+        JOIN chain c ON lp.chain_id = c.id
+        JOIN protocol p ON lp.protocol_id = p.id
+        CROSS JOIN LATERAL (
+            SELECT s.ts
+            FROM {SWAP_RAW_TABLE} s
+            WHERE s.pool_id = lp.id
+            ORDER BY s.ts DESC
+            LIMIT 1
+        ) latest
+        WHERE LOWER(c.name) = LOWER(%s) AND LOWER(p.name) = LOWER(%s)
+        """,
+        parameters=(network, protocol),
+    )
+    if row and row[0]:
+        return row[0]
+    return None
+
 class PostgresStorage:
     def __init__(self):
         self.conn_str = DATA_WAREHOUSE_DB
@@ -707,13 +753,21 @@ class PostgresStorage:
                 contract_rows = cur.fetchall()
                 contract_map = {r[0]: {'coin_id': r[1], 'symbol': r[2], 'tracked': r[3]} for r in contract_rows}
 
-                insert_query = """
-                INSERT INTO swaps (
-                    tx_hash, log_index, ts, pool_id,
+                insert_query = f"""
+                INSERT INTO {SWAP_RAW_TABLE} (
+                    tx_hash, log_index, ts, network, protocol, pool_id,
                     amount0, amount1, amount_usd
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
                 """
+                if SWAP_LEGACY_MIRROR:
+                    insert_query_legacy = """
+                    INSERT INTO swaps (
+                        tx_hash, log_index, ts, pool_id,
+                        amount0, amount1, amount_usd
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (ts, tx_hash, log_index) DO NOTHING;
+                    """
                 
                 data = []
                 from collections import defaultdict
@@ -845,6 +899,8 @@ class PostgresStorage:
                         s['tx_hash'],
                         log_index,
                         ts_val,
+                        network,
+                        protocol,
                         pool_id,
                         s.get('amount0'),
                         s.get('amount1'),
@@ -857,34 +913,71 @@ class PostgresStorage:
                         if d[0] not in tx_hashes:
                             tx_hashes.append(d[0])
                     cur.executemany(insert_query, data)
+                    if SWAP_LEGACY_MIRROR:
+                        legacy_rows = [(t[0], t[1], t[2], t[5], t[6], t[7], t[8]) for t in data]
+                        cur.executemany(insert_query_legacy, legacy_rows)
+                    # Advance the ingestion watermark for (network, protocol).
+                    cur.execute(
+                        """
+                        INSERT INTO ingestion_state (network, protocol, last_ts, updated_at)
+                        VALUES (%s, %s, %s, NOW())
+                        ON CONFLICT (network, protocol) DO UPDATE SET
+                            last_ts = GREATEST(ingestion_state.last_ts, EXCLUDED.last_ts),
+                            updated_at = NOW()
+                        """,
+                        (network, protocol, max(d[2] for d in data)),
+                    )
             conn.commit()
 
-            # Post-commit route classification sweep. Every log of the batch's
-            # tx hashes is re-read from the (just committed) swaps table and
-            # attributed to a route (find-or-create via canonical key). This is
-            # idempotent: mixed-protocol legs arriving later in another DAG's
-            # batch reclassify the same tx to the same route.
+            # Queue route classification after the swap batch commits. Route
+            # reconstruction is deliberately asynchronous so ingestion does
+            # not wait on route-dimension upserts or contend with historical
+            # backfills. A later batch can requeue the same tx when late legs
+            # arrive from another protocol.
             if tx_hashes:
                 try:
                     with conn.cursor() as cur2:
-                        from include.route_classifier import classify_tx_hashes
-                        classify_tx_hashes(cur2, tx_hashes)
+                        cur2.executemany("""
+                            INSERT INTO route_classification_queue
+                                (tx_hash, status, available_at, updated_at)
+                            VALUES (%s, 'pending', NOW(), NOW())
+                            ON CONFLICT (tx_hash) DO UPDATE SET
+                                status = 'pending',
+                                available_at = NOW(),
+                                claimed_at = NULL,
+                                last_error = NULL,
+                                updated_at = NOW()
+                        """, [(tx_hash,) for tx_hash in tx_hashes])
                     conn.commit()
                 except Exception as e:
                     conn.rollback()
-                    print(f"Warning: route classification failed for {len(tx_hashes)} txs: {e}", flush=True)
+                    print(f"Warning: route classification queue failed for {len(tx_hashes)} txs: {e}", flush=True)
 
     def get_last_swap_timestamp(self, network: str = "Ethereum", protocol: str = "Uniswap V3") -> Optional[int]:
         with psycopg2.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT MAX(s.ts)
-                    FROM swaps s
-                    JOIN liquidity_pool lp ON s.pool_id = lp.id
+                    SELECT last_ts FROM ingestion_state
+                    WHERE LOWER(network) = LOWER(%s) AND LOWER(protocol) = LOWER(%s)
+                """, (network, protocol))
+                res = cur.fetchone()
+                if res and res[0]:
+                    return int(res[0].timestamp())
+                cur.execute("""
+                    SELECT MAX(latest.ts)
+                    FROM liquidity_pool lp
                     JOIN chain c ON lp.chain_id = c.id
                     JOIN protocol p ON lp.protocol_id = p.id
-                    WHERE LOWER(c.name) = LOWER(%s) AND LOWER(p.name) = LOWER(%s)
-                """, (network, protocol))
+                    CROSS JOIN LATERAL (
+                        SELECT s.ts
+                        FROM {SWAP_RAW_TABLE} s
+                        WHERE s.pool_id = lp.id
+                        ORDER BY s.ts DESC
+                        LIMIT 1
+                    ) latest
+                    WHERE LOWER(c.name) = LOWER(%s)
+                      AND LOWER(p.name) = LOWER(%s)
+                """.format(SWAP_RAW_TABLE=SWAP_RAW_TABLE), (network, protocol))
                 res = cur.fetchone()
                 if res and res[0]:
                     return int(res[0].timestamp())

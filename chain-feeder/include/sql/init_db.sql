@@ -451,7 +451,7 @@ ON CONFLICT DO NOTHING;
 -- create_swaps_table.sql), the ALTER below is skipped and applied later via
 -- create_route_tables.sql instead.
 CREATE TABLE IF NOT EXISTS origin_destination_pair (
-    id              SERIAL PRIMARY KEY,
+    id              BIGINT PRIMARY KEY,
     chain_id        SMALLINT NOT NULL REFERENCES chain(id),
     origin_contract VARCHAR(64) NOT NULL,
     dest_contract   VARCHAR(64) NOT NULL,
@@ -465,8 +465,8 @@ CREATE TABLE IF NOT EXISTS origin_destination_pair (
 );
 
 CREATE TABLE IF NOT EXISTS route (
-    route_id      SERIAL PRIMARY KEY,
-    pair_id       INTEGER NOT NULL REFERENCES origin_destination_pair(id),
+    route_id      BIGINT PRIMARY KEY,
+    pair_id       BIGINT NOT NULL REFERENCES origin_destination_pair(id),
     chain_id      SMALLINT NOT NULL REFERENCES chain(id),
     hops          SMALLINT NOT NULL,
     canonical_key TEXT NOT NULL UNIQUE,
@@ -475,7 +475,7 @@ CREATE TABLE IF NOT EXISTS route (
 );
 
 CREATE TABLE IF NOT EXISTS route_hop (
-    route_id  INTEGER NOT NULL REFERENCES route(route_id) ON DELETE CASCADE,
+    route_id  BIGINT NOT NULL REFERENCES route(route_id) ON DELETE CASCADE,
     seq       SMALLINT NOT NULL,
     pool_id   INTEGER NOT NULL REFERENCES liquidity_pool(id),
     token_in  VARCHAR(64) NOT NULL,
@@ -484,11 +484,12 @@ CREATE TABLE IF NOT EXISTS route_hop (
 );
 
 CREATE TABLE IF NOT EXISTS route_daily_stats (
-    route_id   INT NOT NULL REFERENCES route(route_id) ON DELETE CASCADE,
+    route_id   BIGINT NOT NULL REFERENCES route(route_id) ON DELETE CASCADE,
     day        DATE NOT NULL,
     tx_count   INT NOT NULL DEFAULT 0,
     swap_count INT NOT NULL DEFAULT 0,
     volume_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+    fees_usd   DOUBLE PRECISION NOT NULL DEFAULT 0,
     PRIMARY KEY (route_id, day)
 );
 
@@ -496,11 +497,56 @@ CREATE INDEX IF NOT EXISTS idx_route_daily_stats_day ON route_daily_stats (day);
 CREATE INDEX IF NOT EXISTS idx_route_hop_pool ON route_hop (pool_id);
 CREATE INDEX IF NOT EXISTS idx_route_pair ON route (pair_id);
 
+-- 8.6 Optional compact swap-size distributions for selected routes.
+CREATE TABLE IF NOT EXISTS route_distribution_config (
+    route_id        BIGINT PRIMARY KEY REFERENCES route(route_id) ON DELETE CASCADE,
+    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+    bucket_count    SMALLINT NOT NULL DEFAULT 80 CHECK (bucket_count BETWEEN 8 AND 256),
+    min_amount_usd  DOUBLE PRECISION NOT NULL DEFAULT 10.0 CHECK (min_amount_usd > 0),
+    max_amount_usd  DOUBLE PRECISION NOT NULL DEFAULT 100000000.0
+        CHECK (max_amount_usd > min_amount_usd),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS route_distribution_bucket (
+    route_id       BIGINT NOT NULL REFERENCES route(route_id) ON DELETE CASCADE,
+    day            DATE NOT NULL,
+    bucket_index   SMALLINT NOT NULL,
+    sample_count   BIGINT NOT NULL DEFAULT 0,
+    volume_usd     DOUBLE PRECISION NOT NULL DEFAULT 0,
+    log_sum        DOUBLE PRECISION NOT NULL DEFAULT 0,
+    log_sum2       DOUBLE PRECISION NOT NULL DEFAULT 0,
+    PRIMARY KEY (route_id, day, bucket_index),
+    CHECK (bucket_index >= 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_route_distribution_bucket_day
+    ON route_distribution_bucket (day, route_id);
+
+-- 6. Asynchronous route-classification work queue.
+CREATE TABLE IF NOT EXISTS route_classification_queue (
+    tx_hash       TEXT PRIMARY KEY,
+    status        TEXT NOT NULL DEFAULT 'pending',
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    available_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    claimed_at    TIMESTAMPTZ,
+    last_error    TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT route_classification_queue_status_check
+        CHECK (status IN ('pending', 'processing', 'complete'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_route_classification_queue_claim
+    ON route_classification_queue (available_at, tx_hash)
+    WHERE status IN ('pending', 'processing');
+
 DO $$
 BEGIN
     IF to_regclass('public.swaps') IS NOT NULL THEN
-        ALTER TABLE swaps ADD COLUMN IF NOT EXISTS route_id INT;
+        ALTER TABLE swaps ADD COLUMN IF NOT EXISTS route_id BIGINT;
         CREATE INDEX IF NOT EXISTS idx_swaps_route ON swaps (route_id);
+        CREATE INDEX IF NOT EXISTS idx_swaps_unclassified ON swaps (tx_hash) WHERE route_id IS NULL;
     END IF;
 END $$;
 

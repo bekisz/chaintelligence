@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return Number(num).toLocaleString();
     };
 
+    let _taxonomyData = null;
+    let _taxonomyMode = null;
+
     const formatDate = (isoStr) => {
         if (!isoStr) return '--';
         try {
@@ -91,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'coin',
         'coin_contract',
         'coin_price_history',
+        'route_taxonomy',
         'liquidity_pool',
         'liquidity_pool_history',
         'liquidity_pool_position',
@@ -112,6 +116,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tables: ['coin', 'coin_contract', 'coin_price_history']
         },
         {
+            id: 'routes-group',
+            title: 'Route Taxonomy',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="5" r="2"></circle><circle cx="19" cy="19" r="2"></circle><path d="M7 12h5a5 5 0 0 0 5-5"></path><path d="M7 12h5a5 5 0 0 1 5 5"></path></svg>',
+            tables: ['route_taxonomy']
+        },
+        {
             id: 'pools-group',
             title: 'Liquidity Pool',
             icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
@@ -129,8 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
         'swaps': { title: 'Swaps Ingestion', category: 'Swaps Ingestion', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>', defaultPolicy: 'Latest swap per chain within 3 hours' },
         'coin': { title: 'Coins Metadata', category: 'Coins', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v12M15 9.5H10.5a1.5 1.5 0 0 0 0 3h3a1.5 1.5 0 0 1 0 3H9"></path></svg>', defaultPolicy: 'Metadata sync within 2 days' },
         'coin_contract': { title: 'Coin Contracts', category: 'Coins', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>', defaultPolicy: 'Multi-chain token address tracking' },
-        'coin_price_history': { title: 'Coin Price History', category: 'Coins', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>', defaultPolicy: 'Daily candles within 2 days' },
-        'liquidity_pool': { title: 'Liquidity Pools', category: 'Liquidity Pool', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>', defaultPolicy: 'Active DEX pool registry' },
+         'coin_price_history': { title: 'Coin Price History', category: 'Coins', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>', defaultPolicy: 'Daily candles within 2 days' },
+         'route_taxonomy': { title: 'Route Taxonomy', category: 'Route Taxonomy', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="5" r="2"></circle><circle cx="19" cy="19" r="2"></circle><path d="M7 12h5a5 5 0 0 0 5-5"></path><path d="M7 12h5a5 5 0 0 1 5 5"></path><path d="M7 12h5a5 5 0 0 1 5 5"></path></svg>', defaultPolicy: 'Route endpoint pairs, paths, and daily statistics' },
+         'liquidity_pool': { title: 'Liquidity Pools', category: 'Liquidity Pool', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>', defaultPolicy: 'Active DEX pool registry' },
         'liquidity_pool_history': { title: 'Pool History Metrics', category: 'Liquidity Pool', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>', defaultPolicy: 'Daily TVL & Volume metrics within 2 days' },
         'liquidity_pool_position': { title: 'LP Positions', category: 'Liquidity Pool Positions', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', defaultPolicy: 'Tracked user NFT & pool positions' },
         'liquidity_pool_position_event': { title: 'LP Position Events', category: 'Liquidity Pool Positions', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline></svg>', defaultPolicy: 'On-chain mint, burn, collect logs' },
@@ -1145,6 +1156,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // 5. Coin price history coverage breakdown
+                if (tName === 'swaps' && tData.route_assignment) {
+                    const assignment = tData.route_assignment;
+                    breakdownHtml += `
+                        <div class="breakdown-subpanel">
+                            <div class="subpanel-title">Route Assignment Coverage</div>
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+                                <div>
+                                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                                        <span class="dim-text">Assigned to a route</span>
+                                        <span class="font-bold text-success">${formatNumber(assignment.assigned_count)} (${assignment.assigned_percentage}%)</span>
+                                    </div>
+                                    <div class="health-meter-track"><div class="health-meter-fill ${assignment.assigned_percentage >= 99 ? 'fill-green' : 'fill-yellow'}" style="width:${Math.min(100, assignment.assigned_percentage)}%;"></div></div>
+                                </div>
+                                <div>
+                                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                                        <span class="dim-text">Not assigned</span>
+                                        <span class="font-bold ${assignment.unassigned_count > 0 ? 'text-warning' : 'text-success'}">${formatNumber(assignment.unassigned_count)}</span>
+                                    </div>
+                                    <div class="health-meter-track"><div class="health-meter-fill ${assignment.unassigned_count > 0 ? 'fill-yellow' : 'fill-green'}" style="width:${assignment.total_count ? Math.min(100, assignment.unassigned_count / assignment.total_count * 100) : 0}%;"></div></div>
+                                </div>
+                            </div>
+                            <div class="dim-text" style="font-size:0.75rem; margin-top:10px;">${formatNumber(assignment.assigned_count)} of ${formatNumber(assignment.total_count)} swap log entries have a route assignment.</div>
+                        </div>
+                    `;
+                }
+
+                // 6. Coin price history coverage breakdown
                 if (tName === 'coin_price_history' && tData.covered_coins) {
                     const cc = tData.covered_coins;
                     breakdownHtml += `
@@ -1220,6 +1258,44 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }
 
+                // Route taxonomy chain breakdown
+                if (tName === 'route_taxonomy' && tData.chains) {
+                    _taxonomyData = tData;
+                    const taxoBtnStyle = (val) => {
+                        const active = !_taxonomyMode || _taxonomyMode === 'counts';
+                        const isActive = val === _taxonomyMode || (val === 'counts' && active);
+                        return isActive
+                            ? 'background:rgba(99,102,241,0.2); color:#818cf8; cursor:pointer; border:0; border-radius:6px; padding:4px 10px; font-size:0.75rem; font-weight:600; transition:all 0.15s;'
+                            : 'background:transparent; color:#9ca3af; cursor:pointer; border:0; border-radius:6px; padding:4px 10px; font-size:0.75rem; font-weight:400; transition:all 0.15s;';
+                    };
+                    breakdownHtml += `
+                        <div class="breakdown-subpanel">
+                            <div class="subpanel-title" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+                                <span>Route Taxonomy by Chain</span>
+                                <div class="matrix-filter-group" style="display:inline-flex; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:2px;">
+                                    <button onclick="window._taxonomySetMode('counts')" style="${taxoBtnStyle('counts')}">Counts</button>
+                                    <button onclick="window._taxonomySetMode('pct')" style="${taxoBtnStyle('pct')}">% of Routes</button>
+                                </div>
+                            </div>
+                            <div style="overflow-x:auto;">
+                                <table class="indexer-matrix-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align:left;">Chain</th>
+                                            <th style="text-align:right;">Origin/Destination Pairs</th>
+                                            <th style="text-align:right;">Routes</th>
+                                            <th style="text-align:right;">Daily Stats</th>
+                                            <th style="text-align:right;">Distribution Buckets</th>
+                                            <th style="text-align:right;">Route Hops</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="route-taxonomy-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 // Assemble Table Detail Card HTML
                 html += `
                     <div class="table-detail-card glass-card" id="table-detail-${tName}">
@@ -1277,6 +1353,46 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         tablesDetailContainerEl.innerHTML = html || `<div class="empty-state glass-card">No matching warehouse tables found</div>`;
+
+        // Dynamic taxonomy table rendering (counts / % of Routes)
+        if (_taxonomyData) {
+            const renderTaxonomyTable = () => {
+                const tbody = document.getElementById('route-taxonomy-tbody');
+                if (!tbody) return;
+                const isPct = _taxonomyMode === 'pct';
+                const formatPct = (v, total) => total > 0 ? (v / total * 100).toFixed(1) + '%' : '0.0%';
+                const chains = Object.entries(_taxonomyData.chains).sort(([a], [b]) => a.localeCompare(b));
+                const renderCell = (value, total, color) => {
+                    const text = isPct ? formatPct(value, total) : formatNumber(value);
+                    return `<td class="font-mono" style="text-align:right; color:${color}; font-weight:700;">${text}</td>`;
+                };
+                tbody.innerHTML = chains.map(([chainName, counts]) => {
+                    const routes = counts.routes || 1;
+                    return `<tr>
+                        <td class="font-mono" style="color:#cbd5e1;">${chainName}</td>
+                        ${renderCell(counts.pairs, routes, '#67e8f9')}
+                        <td class="font-mono" style="text-align:right; color:#a78bfa; font-weight:700;">${formatNumber(counts.routes)}</td>
+                        ${renderCell(counts.daily_stats, routes, '#fbbf24')}
+                        ${renderCell(counts.route_distribution_bucket, routes, '#34d399')}
+                        ${renderCell(counts.route_hop, routes, '#f472b6')}
+                    </tr>`;
+                }).join('');
+                const allTotal = _taxonomyData.routes_count || 1;
+                tbody.innerHTML += `<tr>
+                    <td class="font-mono font-bold" style="border-top:2px solid rgba(99,102,241,0.75); color:#a78bfa;">All Chains</td>
+                    ${renderCell(_taxonomyData.pairs_count, allTotal, '#67e8f9')}
+                    <td class="font-mono font-bold" style="text-align:right; border-top:2px solid rgba(99,102,241,0.75); color:#a78bfa;">${formatNumber(_taxonomyData.routes_count)}</td>
+                    ${renderCell(_taxonomyData.daily_stats_count, allTotal, '#fbbf24')}
+                    ${renderCell(_taxonomyData.route_distribution_bucket_count, allTotal, '#34d399')}
+                    ${renderCell(_taxonomyData.route_hop_count, allTotal, '#f472b6')}
+                </tr>`;
+            };
+            window._taxonomySetMode = (mode) => {
+                _taxonomyMode = mode;
+                renderTaxonomyTable();
+            };
+            renderTaxonomyTable();
+        }
     };
 
     // Modal JSON Inspector Handler

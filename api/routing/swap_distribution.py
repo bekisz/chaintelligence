@@ -356,6 +356,139 @@ def analyze_sizes_by_chain(groups: Dict[str, List[float]], nbins: int = 120,
     return result
 
 
+def analyze_bucket_groups(groups: Dict[str, Dict], curve_points: int = 400) -> Optional[Dict]:
+    """Analyze fixed logarithmic bucket aggregates without raw swap values.
+
+    This intentionally returns the same response shape as analyze_sizes_by_chain.
+    Quantiles and fitted curves are estimates because each bucket is represented
+    by its geometric midpoint. The stored log moments improve the lognormal fit.
+    """
+    groups = {name: value for name, value in groups.items()
+              if value and sum(value.get('counts', [])) > 0}
+    if not groups:
+        return None
+
+    first = next(iter(groups.values()))
+    edges = list(first['edges'])
+    nbins = len(edges) - 1
+    mids = [math.sqrt(edges[i] * edges[i + 1]) for i in range(nbins)]
+    total_counts = [0] * nbins
+    total_sums = [0.0] * nbins
+    total_n = 0
+    total_log_sum = 0.0
+    total_log_sum2 = 0.0
+    total_min = None
+    total_max = None
+    chain_rows = []
+
+    for name, data in groups.items():
+        counts = [int(v) for v in data['counts']]
+        sums = [float(v) for v in data['sums']]
+        for i in range(min(nbins, len(counts))):
+            total_counts[i] += counts[i]
+            total_sums[i] += sums[i]
+        n = sum(counts)
+        log_sum = float(data.get('log_sum', 0.0))
+        log_sum2 = float(data.get('log_sum2', 0.0))
+        total_n += n
+        total_log_sum += log_sum
+        total_log_sum2 += log_sum2
+        gmin = data.get('min') or edges[0]
+        gmax = data.get('max') or edges[-1]
+        total_min = gmin if total_min is None else min(total_min, gmin)
+        total_max = gmax if total_max is None else max(total_max, gmax)
+        chain_rows.append({
+            'name': name,
+            'n': n,
+            'min': gmin,
+            'max': gmax,
+            'sum_log': round(log_sum, 6),
+            'sum_log2': round(log_sum2, 6),
+            'dens_log': _bucket_density(counts, edges, total_n),
+            'counts': counts,
+            'sums': sums,
+            'fees': [0.0] * nbins,
+            # Fixed log buckets are the only lossless aggregate available;
+            # expose them for the linear UI mode rather than returning arrays
+            # with a different length.
+            'linear_counts': counts,
+            'linear_sums': sums,
+            'linear_fees': [0.0] * nbins,
+        })
+
+    for row in chain_rows:
+        row['dens_log'] = _bucket_density(row['counts'], edges, total_n)
+
+    def percentile(p):
+        target = max(1, int(round(p * total_n)))
+        cumulative = 0
+        for i, count in enumerate(total_counts):
+            cumulative += count
+            if cumulative >= target:
+                return mids[i]
+        return total_max or mids[-1]
+
+    lo = math.log10(total_min or edges[0])
+    hi = math.log10(total_max or edges[-1])
+    if total_n:
+        mu = total_log_sum / total_n
+        variance = max(0.0, total_log_sum2 / total_n - mu * mu)
+        sigma = math.sqrt(variance)
+        scale = math.exp(mu)
+    else:
+        sigma = scale = 0.0
+    xmin = percentile(0.90)
+    tail_count = 0
+    tail_log_sum = 0.0
+    for i, count in enumerate(total_counts):
+        if mids[i] >= xmin:
+            tail_count += count
+            tail_log_sum += count * math.log(mids[i] / xmin)
+    alpha = tail_count / tail_log_sum if tail_count >= 2 and tail_log_sum > 0 else 0.0
+    lsizes = [lo + (hi - lo) * i / max(1, curve_points - 1) for i in range(curve_points)]
+    ln_curve = [10.0 ** s * math.log(10.0) * _ln_pdf(10.0 ** s, sigma, scale) for s in lsizes]
+    base = _ln_pdf(xmin, sigma, scale)
+    composite = []
+    for s in lsizes:
+        value = 10.0 ** s
+        if value <= xmin or alpha <= 0:
+            value_y = value * math.log(10.0) * _ln_pdf(value, sigma, scale)
+        else:
+            value_y = value * math.log(10.0) * base * (value / xmin) ** -(alpha + 1.0)
+        composite.append(value_y)
+
+    return {
+        'n': total_n,
+        'min': total_min,
+        'max': total_max,
+        'median': percentile(0.50),
+        'p90': percentile(0.90),
+        'p99': percentile(0.99),
+        'histogram': {
+            'edges': edges,
+            'mids': mids,
+            'dens_log': _bucket_density(total_counts, edges, total_n),
+            'counts': total_counts,
+            'sums': total_sums,
+            'linear': {'edges': edges, 'counts': total_counts, 'sums': total_sums},
+        },
+        'chains': sorted(chain_rows, key=lambda row: -row['n']),
+        'lognormal': {'s': round(sigma, 4), 'scale': round(scale, 2)},
+        'pareto': {'alpha': round(alpha, 4), 'xmin': round(xmin, 2)},
+        'curves': {'lsizes': lsizes, 'ln': ln_curve, 'composite': composite},
+    }
+
+
+def _bucket_density(counts: List[int], edges: List[float], total_n: int) -> List[float]:
+    if total_n <= 0:
+        return [0.0] * (len(edges) - 1)
+    return [
+        count / (total_n * (edges[i + 1] - edges[i]))
+        * math.sqrt(edges[i] * edges[i + 1]) * math.log(10.0)
+        for i, count in enumerate(counts)
+    ]
+
+
 def main():
     import argparse
     import sys
