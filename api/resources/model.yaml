@@ -1,0 +1,209 @@
+# Chaintelligence object model — one composite graph served as JSON:API
+# compound documents.
+#
+# Every node in the graph is a *resource* with an id, attributes (its own
+# fields) and relationships (pointers to other resources). Endpoints return
+# the requested node(s) as `data` and any selected relatives in `included`.
+#
+#   od (aggregate root) ──routes[]──► route ──hops[]──► hop ──pool──► pool
+#     ├─origin_coin                                          ├─coin0──► coin
+#     └─destination_coin                                     └─coin1──► coin
+#   route ──daily_stats[]──► route_daily_stat (per route+day)
+#        └─daily_stats_bucket[]──► route_daily_stat_bucket (per route+day+bucket)
+#   pool ──daily_stats[]──► pool_daily_stat (per pool+day)
+#       └─daily_stats_bucket[]──► pool_daily_stat_bucket (per pool+day+bucket)
+#   coin ──contracts[]──► coin_contract        coin ──families[]──► coin_family ──members[]──► coin
+#
+# `include` and `fields` query params select how deep to descend:
+#   GET /api/od/{od_hash}?include=routes.hops.pool,routes.hops.pool.coin0,routes.hops.pool.coin1
+#   GET /api/ods?origin_symbol=WBNB&include=routes.hops
+#   GET /api/coins/{coin_id}?include=contracts,families
+#   GET /api/ods/search-by-contract?...&fields[od]=chain,origin_symbol,dest_symbol
+#
+# Relationship paths are validated against this schema by
+# api/resources/serializer.py, so a typo like `routes.hops.chain.foo` is a 400
+# before it ever touches the DB.
+
+resources:
+  od:
+    id: od_hash
+    attributes:
+      - chain_id
+      - chain
+      - origin_coin_contract_address
+      - destination_coin_contract_address
+      - origin_coin_id
+      - dest_coin_id
+      - origin_symbol
+      - dest_symbol
+      - first_seen
+      - last_seen
+    relationships:
+      origin_coin: { type: coin }
+      destination_coin: { type: coin }
+      routes: { type: route, many: true }
+
+  route:
+    id: route_hash
+    attributes:
+      - hops
+      - first_seen
+      - last_seen
+      - chain_id
+      - chain
+      - window_stats
+    relationships:
+      pair: { type: od }
+      chain: { type: chain }
+      hops: { type: hop, many: true }
+      daily_stats: { type: route_daily_stat, many: true }
+      daily_stats_bucket: { type: route_daily_stat_bucket, many: true }
+
+  route_daily_stat:
+    id: "{route_hash}:{day}"
+    attributes:
+      - day
+      - tx_count
+      - swap_count
+      - volume_usd
+      - fees_usd
+    relationships:
+      route: { type: route }
+      daily_stats_bucket: { type: route_daily_stat_bucket, many: true }
+
+  route_daily_stat_bucket:
+    id: "{route_hash}:{day}:{bucket_index}"
+    attributes:
+      - day
+      - bucket_index
+      - tx_count
+      - sample_count
+      - volume_usd
+      - fees_usd
+      - log_sum
+      - log_sum2
+    relationships:
+      route: { type: route }
+
+  hop:
+    id: "{route_id}:{seq}"
+    attributes:
+      - seq
+      - token_in
+      - token_out
+      - token_in_symbol
+      - token_out_symbol
+    relationships:
+      route: { type: route }
+      pool: { type: pool }
+      token_in: { type: coin }
+      token_out: { type: coin }
+
+  pool:
+    id: pool_id
+    attributes:
+      - pool_address
+      - pool_id
+      - fee_bps
+      - fee_tier
+      - protocol
+      - canonical_address
+      - defillama_uuid
+      - tvl_usd
+      - volume_usd
+      - volume_usd_24h
+      - tx_count
+      - created_at
+      - links
+      - history
+      - window_stats
+      - apr
+    relationships:
+      chain: { type: chain }
+      coin0: { type: coin }
+      coin1: { type: coin }
+      daily_stats: { type: pool_daily_stat, many: true }
+      daily_stats_bucket: { type: pool_daily_stat_bucket, many: true }
+
+  pool_daily_stat:
+    id: "{pool_id}:{day}"
+    attributes:
+      - day
+      - tx_count
+      - volume_usd
+      - tvl_usd
+    relationships:
+      pool: { type: pool }
+      daily_stats_bucket: { type: pool_daily_stat_bucket, many: true }
+
+  pool_daily_stat_bucket:
+    id: "{pool_id}:{day}:{bucket_index}"
+    attributes:
+      - day
+      - bucket_index
+      - tx_count
+      - sample_count
+      - volume_usd
+      - fees_usd
+      - log_sum
+      - log_sum2
+    relationships:
+      pool: { type: pool }
+
+  coin:
+    id: coin_id
+    attributes:
+      - symbol
+      - name
+      - slug
+      - hardness
+      - cmc_rank
+      - cmc_id
+      - first_historical_data
+      - image_url
+      - price
+      - price_timestamp
+      - decimals
+      - percent_change_1h
+      - percent_change_24h
+      - percent_change_7d
+      - percent_change_30d
+      - percent_change_60d
+      - percent_change_90d
+      - market_cap
+      - market_cap_dominance
+      - fully_diluted_market_cap
+      - tvl
+      - total_supply
+      - circulating_supply
+      - max_supply
+      - cmc_last_updated
+    relationships:
+      contracts: { type: coin_contract, many: true }
+      families: { type: coin_family, many: true }
+
+  coin_contract:
+    id: "{coin_id}:{chain}"
+    attributes:
+      - chain
+      - contract_address
+      - decimals
+      - is_native
+      - verified_at
+      - tracked
+      - source
+      - confidence_score
+    relationships:
+      coin: { type: coin }
+
+  coin_family:
+    id: family_name
+    attributes:
+      - name
+    relationships:
+      members: { type: coin, many: true }
+
+  chain:
+    id: chain_id
+    attributes:
+      - name

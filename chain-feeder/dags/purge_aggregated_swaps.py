@@ -5,10 +5,11 @@ API still has raw-swap fallbacks for unconfigured routes, so enabling cleanup is
 an operational decision after the aggregate coverage has been verified.
 
 Cleans up:
-  - `swaps_staging` (short-lived raw store). Rows older than
-    RAW_SWAP_RETENTION_DAYS that are covered by route_daily_stats (and by
-    route_distribution_bucket where that route is configured) are deleted, and
-    whole monthly partitions older than the retention window may be dropped.
+  -     `swaps_staging` (short-lived raw store). Rows older than
+    RAW_SWAP_RETENTION_DAYS that are covered by route_daily_stats and by
+    route_daily_stats_bucket for the same day (every route is bucketed daily)
+    are deleted, and whole monthly partitions older than the retention window
+    may be dropped.
   - legacy `swaps`, only as long as SWAP_LEGACY_MIRROR is on; once the mirror is
     off the permanent table should be retired via DROP.
 """
@@ -38,18 +39,11 @@ def _purge_table(cur, target_table, retention_days, batch_size):
                   WHERE rds.route_id = s2.route_id
                     AND rds.day = s2.ts::date
               )
-              AND (
-                  NOT EXISTS (
-                      SELECT 1
-                      FROM route_distribution_config dc
-                      WHERE dc.route_id = s2.route_id AND dc.enabled
-                  )
-                  OR EXISTS (
-                      SELECT 1
-                      FROM route_distribution_bucket db
-                      WHERE db.route_id = s2.route_id
-                        AND db.day = s2.ts::date
-                  )
+              AND EXISTS (
+                  SELECT 1
+                  FROM route_daily_stats_bucket db
+                  WHERE db.route_id = s2.route_id
+                    AND db.day = s2.ts::date
               )
             ORDER BY s2.ts
             LIMIT {batch_size}

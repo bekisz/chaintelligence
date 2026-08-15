@@ -49,8 +49,8 @@ _HEADERS = {'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}
 
 
 def _epoch(d) -> int:
-    if isinstance(d, (datetime.date, datetime.datetime)):
-        return int(datetime.datetime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc).timestamp())
+    if isinstance(d, (datetime.day, datetime.daytime)):
+        return int(datetime.daytime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc).timestamp())
     return int(d)
 
 
@@ -118,8 +118,8 @@ def fetch_rows(net):
         SELECT lp.id, lp.pool_name, lp.fee_bps, LOWER(COALESCE(lp.pool_id,'')),
                LOWER(COALESCE(lp.pool_address,'')),
                cc0.contract_address, cc1.contract_address,
-               (SELECT MIN(h.date) FROM liquidity_pool_history h WHERE h.pool_id=lp.id),
-               (SELECT MAX(h.date) FROM liquidity_pool_history h WHERE h.pool_id=lp.id),
+               (SELECT MIN(h.day) FROM liquidity_pool_daily_stats h WHERE h.pool_id=lp.id),
+               (SELECT MAX(h.day) FROM liquidity_pool_daily_stats h WHERE h.pool_id=lp.id),
                lp.chain_id, lp.protocol_id
         FROM liquidity_pool lp
         JOIN chain ch ON lp.chain_id=ch.id

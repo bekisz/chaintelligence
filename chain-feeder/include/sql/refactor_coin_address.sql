@@ -4,7 +4,7 @@
 -- 1. Cleanup dependencies
 DELETE FROM coin_family WHERE symbol IN (SELECT symbol FROM coin WHERE ethereum_address IS NULL);
 
-DELETE FROM liquidity_pool_history WHERE pool_id IN (
+DELETE FROM liquidity_pool_daily_stats WHERE pool_id IN (
     SELECT id FROM liquidity_pool WHERE coin0_symbol IN (SELECT symbol FROM coin WHERE ethereum_address IS NULL)
     OR coin1_symbol IN (SELECT symbol FROM coin WHERE ethereum_address IS NULL)
 );

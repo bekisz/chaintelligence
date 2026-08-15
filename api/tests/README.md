@@ -69,8 +69,25 @@ python3 test_api.py TestChaintelligenceAPI.test_06_price_by_cmc_id_single -v
 
 ### Public Endpoints (No Auth Required)
 
-- `test_01_coin_list` - GET /api/coin/list
-- `test_02_price_history` - GET /api/coin/price-history
+- `test_02_coin_list` - GET /api/coins/list
+- `test_03_price_history` - GET /api/coin/price-history
+
+### Coin Search Endpoints (No Auth Required)
+
+- `test_29_coins_search_by_symbol` - GET /api/coins/search-by-symbol (coin info + contracts)
+- `test_30_coins_search_by_symbol_lowercase` - Case-insensitive symbol search
+- `test_31_coins_search_by_symbol_family_expansion` - include_coin_families=true (default) expands to family members
+- `test_32_coins_search_by_symbol_no_family_expansion` - include_coin_families=false returns exact symbol only
+- `test_33_coins_search_by_symbol_not_found` - Unknown symbol returns 404
+
+### Origin & Destination Pairs (Auth Required)
+
+- `test_23_ods_search_by_contract` - GET /api/ods/search-by-contract (default show_routes=true)
+- `test_24_ods_search_by_contract_show_routes_false` - show_routes=false omits routes
+- `test_25_ods_search_by_contract_no_match` - Unknown pair returns empty list
+- `test_26_od_by_hash` - GET /api/od/{od_hash} returns the full O&D row
+- `test_27_od_by_hash_not_found` - Unknown hash returns 404
+- `test_28_od_by_hash_invalid` - Malformed hash returns 400
 
 ### Protected Endpoints (Auth Required)
 

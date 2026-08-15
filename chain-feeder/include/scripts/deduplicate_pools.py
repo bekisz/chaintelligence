@@ -31,7 +31,7 @@ def get_conn():
 
 
 def phase1_find_merge_map(cur):
-    cur.execute("SELECT pool_id, COUNT(*) FROM liquidity_pool_history GROUP BY pool_id")
+    cur.execute("SELECT pool_id, COUNT(*) FROM liquidity_pool_daily_stats GROUP BY pool_id")
     hist_counts = dict(cur.fetchall())
     cur.execute("SELECT pool_id, COUNT(*) FROM swaps GROUP BY pool_id")
     swap_counts = dict(cur.fetchall())
@@ -73,13 +73,13 @@ def phase1_find_merge_map(cur):
 
 def reparent_pool(cur, conn, doomed, survivor):
     cur.execute("""
-        UPDATE liquidity_pool_history SET pool_id = %s
-        WHERE pool_id = %s AND date NOT IN (
-            SELECT date FROM liquidity_pool_history WHERE pool_id = %s
+        UPDATE liquidity_pool_daily_stats SET pool_id = %s
+        WHERE pool_id = %s AND day NOT IN (
+            SELECT day FROM liquidity_pool_daily_stats WHERE pool_id = %s
         )
     """, (survivor, doomed, survivor))
     hist_moved = cur.rowcount
-    cur.execute("DELETE FROM liquidity_pool_history WHERE pool_id = %s", (doomed,))
+    cur.execute("DELETE FROM liquidity_pool_daily_stats WHERE pool_id = %s", (doomed,))
     hist_del = cur.rowcount
     conn.commit()
 

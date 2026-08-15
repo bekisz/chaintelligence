@@ -8,7 +8,7 @@ compute_route_id) and repo DDL declares BIGINT. This drift causes the
 
 This script:
   1. Reads the current route taxonomy and remaps every pair/route/hop/stats/
-     bucket/config id to its 64-bit hash equivalent (identical to the
+     bucket id to its 64-bit hash equivalent (identical to the
      classifier's own compute_pair_id/compute_route_id/canonical_key).
   2. Drops the reference FKs, widens id columns to BIGINT, drops the serial
      defaults, applies the remapped ids, and recreates the FKs.
@@ -66,8 +66,7 @@ FK_CONSTRAINTS = [
     ('route', 'route_pair_id_fkey'),
     ('route_hop', 'route_hop_route_id_fkey'),
     ('route_daily_stats', 'route_daily_stats_route_id_fkey'),
-    ('route_distribution_bucket', 'route_distribution_bucket_route_id_fkey'),
-    ('route_distribution_config', 'route_distribution_config_route_id_fkey'),
+    ('route_daily_stats_bucket', 'route_daily_stats_bucket_route_id_fkey'),
     ('swaps', 'swaps_route_id_fkey'),
     ('swaps_staging', 'swaps_staging_route_id_fkey'),
 ]
@@ -181,8 +180,7 @@ def apply(cur, pair_map, route_map):
         FROM _route_map m
         WHERE r.route_id = m.old_id
     """)
-    for table in ('route_hop', 'route_daily_stats', 'route_distribution_bucket',
-                  'route_distribution_config'):
+    for table in ('route_hop', 'route_daily_stats', 'route_daily_stats_bucket'):
         cur.execute(f"""
             UPDATE {table} t
             SET route_id = m.new_rid
@@ -213,10 +211,7 @@ def apply(cur, pair_map, route_map):
         "ALTER TABLE route_daily_stats ADD CONSTRAINT route_daily_stats_route_id_fkey "
         "FOREIGN KEY (route_id) REFERENCES route(route_id) ON DELETE CASCADE")
     cur.execute(
-        "ALTER TABLE route_distribution_bucket ADD CONSTRAINT route_distribution_bucket_route_id_fkey "
-        "FOREIGN KEY (route_id) REFERENCES route(route_id) ON DELETE CASCADE")
-    cur.execute(
-        "ALTER TABLE route_distribution_config ADD CONSTRAINT route_distribution_config_route_id_fkey "
+        "ALTER TABLE route_daily_stats_bucket ADD CONSTRAINT route_daily_stats_bucket_route_id_fkey "
         "FOREIGN KEY (route_id) REFERENCES route(route_id) ON DELETE CASCADE")
     cur.execute(
         "ALTER TABLE swaps_staging ADD CONSTRAINT swaps_staging_route_id_fkey "

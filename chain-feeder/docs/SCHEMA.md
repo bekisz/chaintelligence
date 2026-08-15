@@ -14,7 +14,7 @@ erDiagram
     coin ||--o{ swaps : "t0_coin_id"
     coin ||--o{ swaps : "t1_coin_id"
     liquidity_pool ||--o{ liquidity_pool_position : "has positions"
-    liquidity_pool ||--o{ liquidity_pool_history : "has daily history"
+    liquidity_pool ||--o{ liquidity_pool_daily_stats : "has daily history"
     liquidity_pool_position ||--o{ liquidity_pool_position_snapshot : "has snapshots"
     liquidity_pool_position ||--o{ liquidity_pool_position_event : "has events"
 ```
@@ -29,7 +29,7 @@ erDiagram
 | 6 | `liquidity_pool_position` | User positions within pools (ticks, ranges, token IDs) |
 | 7 | `liquidity_pool_position_snapshot` | Time-series balance and fee data per position |
 | 8 | `liquidity_pool_position_event` | On-chain lifecycle events (mints, burns, collects) |
-| 9 | `liquidity_pool_history` | Aggregated daily pool metrics (volume, TVL) |
+| 9 | `liquidity_pool_daily_stats` | Aggregated daily pool metrics (volume, TVL) |
 | 10 | `swaps` | Unified, monthly-partitioned swap event log |
 
 Schema source: [init_db.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/init_db.sql), [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql)
@@ -246,23 +246,21 @@ Written by `rpc_all_uniswap_v3_liquidity_pool_position_event` and `rpc_ethereum_
 
 ---
 
-### 9. `liquidity_pool_history`
+### 9. `liquidity_pool_daily_stats`
 
 Aggregated daily performance metrics per pool. Used for volume and TVL analytics.
 
-**Primary Key**: `id` (SERIAL)
-**Unique Constraint**: (`pool_id`, `date`)
+**Primary Key**: (`pool_id`, `day`)
 
 | Column | Type | Description |
 |:---|:---|:---|
-| `id` | SERIAL (PK) | History record ID. |
 | `pool_id` | INT (FK → liquidity_pool) | The pool. |
-| `date` | DATE | Calendar date (daily granularity). |
+| `day` | DATE | Calendar date (daily granularity). |
 | `tx_count` | INTEGER | Number of swap transactions that day (default: 0). |
-| `volume_usd` | NUMERIC | Total swap volume in USD (default: 0). |
-| `tvl_usd` | NUMERIC | Total Value Locked at end of day (default: 0). |
+| `volume_usd` | DOUBLE PRECISION | Total swap volume in USD (default: 0). |
+| `tvl_usd` | DOUBLE PRECISION | Total Value Locked at end of day (default: 0). |
 
-Written by the per-network `graph_*_liquidity_pool_history` DAGs, `global_liquidity_pool_history_rollup`, and `rpc_tvl_sync`.
+Written by the per-network `graph_*_liquidity_pool_daily_stats` DAGs, `global_liquidity_pool_daily_stats_rollup`, and `rpc_tvl_sync`.
 
 ---
 
@@ -355,6 +353,40 @@ Pre-aggregated rollup read model. One row per `(route, day)`. Written idempotent
 Primary key: `(route_id, day)`; index on `day` for windowed reads.
 
 The API's `/api/routes/analyze` first tries to read these stats per requested direction and falls back to the streaming `swaps`-sweep + `RouteAnalyzer` path when the route tables are empty.
+
+### `route_daily_stats_bucket`
+
+Compact log-volume distribution for **every** route. One row per `(route, day, bucket_index)`; each routed transaction contributes its first route leg once. Bucket parameters (`bucket_count`, `min_amount_usd`, `max_amount_usd`) are global, from `config/swap-distribution.yaml`. Written by `route_classifier.recompute_distribution_buckets` (hourly rollup + classification queue), which buckets all routes with swap legs in the window.
+
+| Column | Type | Description |
+|:---|:---|:---|
+| `route_id` | BIGINT (FK → route, ON DELETE CASCADE) | Owning route. |
+| `day` | DATE | UTC day of the aggregation bucket. |
+| `bucket_index` | SMALLINT | 1-based log-volume bin (1..256). |
+| `tx_count` | INT | Number of distinct transactions in the bin. |
+| `sample_count` | BIGINT | Number of samples in the bin (== tx_count here). |
+| `volume_usd` | DOUBLE PRECISION | Sum of first-leg `amount_usd` in the bin. |
+| `fees_usd` | DOUBLE PRECISION | Sum of `amount_usd * fee_bps / 10000` in the bin. |
+| `log_sum`, `log_sum2` | DOUBLE PRECISION | Log-volume moments for lognormal fitting. |
+
+Primary key: `(route_id, day, bucket_index)`; index on `(day, route_id)`.
+
+### `liquidity_pool_daily_stats_bucket`
+
+Pool-grain mirror of the route bucket table for **every** pool. One row per `(pool_id, day, bucket_index)`; each transaction contributes its first swap leg on the pool once. Bucket parameters are global, from `config/swap-distribution.yaml`. Written by `route_classifier.recompute_pool_distribution_buckets` (global pool rollup + hourly route rollup + classification queue), which buckets all pools with swap legs in the window.
+
+| Column | Type | Description |
+|:---|:---|:---|
+| `pool_id` | INTEGER (FK → liquidity_pool, ON DELETE CASCADE) | Owning pool. |
+| `day` | DATE | UTC day of the aggregation bucket. |
+| `bucket_index` | SMALLINT | 1-based log-volume bin (1..256). |
+| `tx_count` | INT | Number of distinct transactions in the bin. |
+| `sample_count` | BIGINT | Number of samples in the bin (== tx_count here). |
+| `volume_usd` | DOUBLE PRECISION | Sum of first-leg `amount_usd` in the bin. |
+| `fees_usd` | DOUBLE PRECISION | Sum of `amount_usd * fee_bps / 10000` in the bin. |
+| `log_sum`, `log_sum2` | DOUBLE PRECISION | Log-volume moments for lognormal fitting. |
+
+Primary key: `(pool_id, day, bucket_index)`; index on `(day, pool_id)`.
 
 ## Views
 

@@ -12,7 +12,11 @@ import pendulum
 from datetime import timedelta
 import logging
 
-from include.route_classifier import recompute_daily_stats, recompute_distribution_buckets
+from include.route_classifier import (
+    recompute_daily_stats,
+    recompute_distribution_buckets,
+    recompute_pool_distribution_buckets,
+)
 
 LOOKBACK_DAYS = 3
 
@@ -23,6 +27,7 @@ def _rollup_days(pg_hook, days: list):
         with conn.cursor() as cur:
             recompute_daily_stats(cur, days)
             recompute_distribution_buckets(cur, days)
+            recompute_pool_distribution_buckets(cur, days)
         conn.commit()
     finally:
         conn.close()

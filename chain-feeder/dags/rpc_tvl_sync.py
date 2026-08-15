@@ -2,7 +2,7 @@
 
 Queries on-chain balances via Multicall3 / eth_getStorageAt to get the real
 reserves for each pool, computes USD TVL from token prices, and upserts into
-liquidity_pool_history. This bypasses The Graph, which often reports 0 TVL for
+liquidity_pool_daily_stats. This bypasses The Graph, which often reports 0 TVL for
 stablecoin pools and other high-liquidity pairs.
 
 - V3 pools: pool address derived via CREATE2, then slot0() + liquidity() called
@@ -359,12 +359,12 @@ def group_pools_by_network(pools):
 def upsert_tvl(conn, pool_db_id, date_val, tvl_usd):
     cur = conn.cursor()
     cur.execute(
-        """INSERT INTO liquidity_pool_history (pool_id, date, tvl_usd)
+        """INSERT INTO liquidity_pool_daily_stats (pool_id, day, tvl_usd)
            VALUES (%s, %s, %s)
-           ON CONFLICT (pool_id, date) DO UPDATE
+           ON CONFLICT (pool_id, day) DO UPDATE
            SET tvl_usd = CASE
                WHEN EXCLUDED.tvl_usd IS NOT NULL AND EXCLUDED.tvl_usd > 1.0 THEN EXCLUDED.tvl_usd
-               WHEN liquidity_pool_history.tvl_usd IS NOT NULL AND liquidity_pool_history.tvl_usd > 0 THEN liquidity_pool_history.tvl_usd
+               WHEN liquidity_pool_daily_stats.tvl_usd IS NOT NULL AND liquidity_pool_daily_stats.tvl_usd > 0 THEN liquidity_pool_daily_stats.tvl_usd
                ELSE GREATEST(0, COALESCE(EXCLUDED.tvl_usd, 0))
            END""",
         (pool_db_id, date_val, tvl_usd),
@@ -376,19 +376,19 @@ def upsert_tvl(conn, pool_db_id, date_val, tvl_usd):
 def forward_fill_tvl(conn, pool_db_id, max_days=90):
     cur = conn.cursor()
     cur.execute(
-        """UPDATE liquidity_pool_history lph
+        """UPDATE liquidity_pool_daily_stats lph
            SET tvl_usd = (
                SELECT lph2.tvl_usd
-               FROM liquidity_pool_history lph2
+               FROM liquidity_pool_daily_stats lph2
                WHERE lph2.pool_id = %s
-                 AND lph2.date = CURRENT_DATE
+                 AND lph2.day = CURRENT_DATE
                  AND lph2.tvl_usd IS NOT NULL
                  AND lph2.tvl_usd > 0
                LIMIT 1
            )
            WHERE lph.pool_id = %s
-             AND lph.date >= CURRENT_DATE - INTERVAL '%s days'
-             AND lph.date < CURRENT_DATE
+             AND lph.day >= CURRENT_DATE - INTERVAL '%s days'
+             AND lph.day < CURRENT_DATE
              AND (lph.tvl_usd IS NULL OR lph.tvl_usd <= 0)""",
         (pool_db_id, pool_db_id, max_days),
     )

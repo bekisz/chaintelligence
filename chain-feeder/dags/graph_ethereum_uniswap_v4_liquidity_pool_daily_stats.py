@@ -190,7 +190,7 @@ def sync_v4_pool_ids():
 def sync_tvl_from_graph():
     """
     Fetches daily TVL/Volume/TxCount from The Graph for all active pools
-    and upserts into liquidity_pool_history.
+    and upserts into liquidity_pool_daily_stats.
     """
     from common.utils.uniswap_utils import UniswapV4Fetcher
     
@@ -273,10 +273,10 @@ def sync_tvl_from_graph():
         logging.info(f"Upserting {len(data)} records for pool {c0}-{c1} (TVL/Vol)")
         for d in data:
             cur.execute("""
-                INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd, tvl_usd)
+                INSERT INTO liquidity_pool_daily_stats (pool_id, day, tx_count, volume_usd, tvl_usd)
                 VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (pool_id, date) DO UPDATE 
-                SET tvl_usd = COALESCE(NULLIF(liquidity_pool_history.tvl_usd, 0), CASE
+                ON CONFLICT (pool_id, day) DO UPDATE 
+                SET tvl_usd = COALESCE(NULLIF(liquidity_pool_daily_stats.tvl_usd, 0), CASE
                     WHEN EXCLUDED.tvl_usd IS NOT NULL AND EXCLUDED.tvl_usd > 1.0 THEN EXCLUDED.tvl_usd
                     ELSE GREATEST(0, COALESCE(EXCLUDED.tvl_usd, 0))
                 END),
@@ -295,7 +295,7 @@ def sync_tvl_from_onchain():
     """On-chain TVL fallback for V4 pools where the subgraph reports 0 TVL.
 
     Reads PoolManager storage (sqrtPriceX96 + liquidity) via RPC, computes
-    USD TVL, and fills missing today entries in liquidity_pool_history.
+    USD TVL, and fills missing today entries in liquidity_pool_daily_stats.
 
     Only runs for Ethereum and Arbitrum (PoolManager isn't deployed on Base;
     BNB has no Uniswap V4 deployment).
@@ -333,12 +333,12 @@ def sync_tvl_from_onchain():
               AND lp.pool_id IS NOT NULL
               AND (
                   NOT EXISTS (
-                      SELECT 1 FROM liquidity_pool_history lph
-                      WHERE lph.pool_id = lp.id AND lph.date = CURRENT_DATE
+                      SELECT 1 FROM liquidity_pool_daily_stats lph
+                      WHERE lph.pool_id = lp.id AND lph.day = CURRENT_DATE
                   )
                   OR (
-                      SELECT COALESCE(lph.tvl_usd, 0) FROM liquidity_pool_history lph
-                      WHERE lph.pool_id = lp.id AND lph.date = CURRENT_DATE
+                      SELECT COALESCE(lph.tvl_usd, 0) FROM liquidity_pool_daily_stats lph
+                      WHERE lph.pool_id = lp.id AND lph.day = CURRENT_DATE
                   ) = 0
               )
         """, (network,))
@@ -409,12 +409,12 @@ def sync_tvl_from_onchain():
 
             # Upsert today's TVL
             cur.execute("""
-                INSERT INTO liquidity_pool_history (pool_id, date, tvl_usd)
+                INSERT INTO liquidity_pool_daily_stats (pool_id, day, tvl_usd)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (pool_id, date) DO UPDATE
+                ON CONFLICT (pool_id, day) DO UPDATE
                 SET tvl_usd = CASE
                     WHEN EXCLUDED.tvl_usd IS NOT NULL AND EXCLUDED.tvl_usd > 1.0 THEN EXCLUDED.tvl_usd
-                    WHEN liquidity_pool_history.tvl_usd IS NOT NULL AND liquidity_pool_history.tvl_usd > 0 THEN liquidity_pool_history.tvl_usd
+                    WHEN liquidity_pool_daily_stats.tvl_usd IS NOT NULL AND liquidity_pool_daily_stats.tvl_usd > 0 THEN liquidity_pool_daily_stats.tvl_usd
                     ELSE GREATEST(0, COALESCE(EXCLUDED.tvl_usd, 0))
                 END
             """, (pid, today, tvl_usd))
@@ -423,16 +423,16 @@ def sync_tvl_from_onchain():
 
             # Forward-fill past 90 days
             cur.execute("""
-                UPDATE liquidity_pool_history lph
+                UPDATE liquidity_pool_daily_stats lph
                 SET tvl_usd = (
-                    SELECT lph2.tvl_usd FROM liquidity_pool_history lph2
-                    WHERE lph2.pool_id = %s AND lph2.date = CURRENT_DATE
+                    SELECT lph2.tvl_usd FROM liquidity_pool_daily_stats lph2
+                    WHERE lph2.pool_id = %s AND lph2.day = CURRENT_DATE
                       AND lph2.tvl_usd IS NOT NULL AND lph2.tvl_usd > 0
                     LIMIT 1
                 )
                 WHERE lph.pool_id = %s
-                  AND lph.date >= CURRENT_DATE - INTERVAL '90 days'
-                  AND lph.date < CURRENT_DATE
+                  AND lph.day >= CURRENT_DATE - INTERVAL '90 days'
+                  AND lph.day < CURRENT_DATE
                   AND (lph.tvl_usd IS NULL OR lph.tvl_usd <= 0)
             """, (pid, pid))
             conn.commit()
@@ -444,7 +444,7 @@ def sync_tvl_from_onchain():
 
 
 with DAG(
-    'graph_ethereum_uniswap_v4_liquidity_pool_history',
+    'graph_ethereum_uniswap_v4_liquidity_pool_daily_stats',
     max_active_runs=1,
     default_args=default_args,
     description='Derived daily history for Uniswap V4 Pools',

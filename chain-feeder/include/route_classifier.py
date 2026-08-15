@@ -21,6 +21,11 @@ from collections import defaultdict
 from typing import Dict, List, Optional
 import psycopg2.extras
 
+try:
+    from include.settings import load_distribution_config
+except ImportError:
+    from settings import load_distribution_config
+
 log = logging.getLogger(__name__)
 
 LEG_AMOUNT_GATE = "(amount_usd >= 10.0 OR amount_usd = 0.0 OR amount_usd IS NULL)"
@@ -616,19 +621,54 @@ def recompute_daily_stats(cur, days: List[str], chunk_days: int = 7, table_name:
 
 
 def recompute_distribution_buckets(cur, days: List[str], chunk_days: int = 7, table_name: str = None) -> int:
-    """Rebuild configured route-size buckets for the supplied days.
+    """Rebuild swap-size buckets for EVERY route for the supplied days.
 
     A routed transaction contributes its first route leg once, matching the
-    input-volume semantics used by route analysis. Routes not present in
-    route_distribution_config incur no work and retain the raw-swap path.
+    input-volume semantics used by route analysis. The bucket parameters
+    (bucket_count, min/max amount USD) come from the global
+    ``config/swap-distribution.yaml`` — there is no per-route config anymore.
+    """
+    cfg = load_distribution_config()
+    return _recompute_distribution_buckets(
+        cur, days, chunk_days, table_name,
+        grain='route_id',
+        bucket_table='route_daily_stats_bucket',
+        bucket_count=cfg['bucket_count'],
+        min_amount_usd=cfg['min_amount_usd'],
+        max_amount_usd=cfg['max_amount_usd'],
+    )
+
+
+def recompute_pool_distribution_buckets(cur, days: List[str], chunk_days: int = 7, table_name: str = None) -> int:
+    """Rebuild swap-size buckets for EVERY pool for the supplied days.
+
+    Mirrors the route distribution buckets at the pool grain: a transaction
+    contributes its first swap leg on a pool once, bucketed by log-volume.
+    The bucket parameters come from the global ``config/swap-distribution.yaml``.
+    """
+    cfg = load_distribution_config()
+    return _recompute_distribution_buckets(
+        cur, days, chunk_days, table_name,
+        grain='pool_id',
+        bucket_table='liquidity_pool_daily_stats_bucket',
+        bucket_count=cfg['bucket_count'],
+        min_amount_usd=cfg['min_amount_usd'],
+        max_amount_usd=cfg['max_amount_usd'],
+    )
+
+
+def _recompute_distribution_buckets(cur, days: List[str], chunk_days: int, table_name: str,
+                                    grain: str, bucket_table: str,
+                                    bucket_count: int, min_amount_usd: float, max_amount_usd: float) -> int:
+    """Shared log-volume bucket rebuild used by the route and pool variants.
+
+    Bucketing is unconditional: every route (or pool) with swap legs in the
+    window is bucketed with the supplied global parameters.
     """
     if not days:
         return 0
 
     source_table = (table_name or RAW_SWAP_TABLE).strip()
-    cur.execute("SELECT to_regclass('public.route_distribution_config')")
-    if cur.fetchone()[0] is None:
-        return 0
 
     sorted_days = sorted(set(days))
     from datetime import datetime, timedelta
@@ -639,65 +679,67 @@ def recompute_distribution_buckets(cur, days: List[str], chunk_days: int = 7, ta
     while curr <= end_dt:
         chunk_end = min(curr + timedelta(days=chunk_days), end_dt + timedelta(days=1))
         cur.execute(
-            """
-            DELETE FROM route_distribution_bucket b
-            USING route_distribution_config c
-            WHERE b.route_id = c.route_id
-              AND c.enabled
-              AND b.day >= %s AND b.day < %s
+            f"""
+            DELETE FROM {bucket_table}
+            WHERE day >= %s AND day < %s
             """,
             (curr.isoformat(), chunk_end.isoformat()),
         )
         cur.execute(
             f"""
-            WITH first_route_legs AS (
-                SELECT DISTINCT ON (s.route_id, s.tx_hash, s.ts::date)
-                    s.route_id,
+            WITH first_legs AS (
+                SELECT DISTINCT ON (s.{grain}, s.tx_hash, s.ts::date)
+                    s.{grain},
                     s.tx_hash,
                     s.ts::date AS day,
                     s.amount_usd,
-                    c.bucket_count,
-                    c.min_amount_usd,
-                    c.max_amount_usd
+                    s.amount_usd * COALESCE(lp.fee_bps, 0) / 10000.0 AS fee_usd
                 FROM {source_table} s
-                JOIN route_distribution_config c
-                  ON c.route_id = s.route_id AND c.enabled
+                JOIN liquidity_pool lp ON s.pool_id = lp.id
                 WHERE s.ts >= %s::timestamp
                   AND s.ts < %s::timestamp
-                  AND s.amount_usd >= c.min_amount_usd
-                  AND s.amount_usd <= c.max_amount_usd
-                ORDER BY s.route_id, s.tx_hash, s.ts::date, s.log_index
+                  AND s.{grain} IS NOT NULL
+                  AND s.amount_usd >= %s
+                  AND s.amount_usd <= %s
+                ORDER BY s.{grain}, s.tx_hash, s.ts::date, s.log_index
             ), bucketed AS (
                 SELECT
-                    route_id,
+                    {grain},
                     day,
-                    LEAST(bucket_count, width_bucket(
-                        LN(amount_usd), LN(min_amount_usd), LN(max_amount_usd), bucket_count
+                    LEAST(%s::int, width_bucket(
+                        LN(amount_usd), LN(%s::float8), LN(%s::float8), %s::int
                     ))::smallint AS bucket_index,
+                    tx_hash,
                     amount_usd,
+                    fee_usd,
                     LN(amount_usd) AS log_amount
-                FROM first_route_legs
+                FROM first_legs
             )
-            INSERT INTO route_distribution_bucket
-                (route_id, day, bucket_index, sample_count, volume_usd, log_sum, log_sum2)
-            SELECT route_id, day, bucket_index,
-                   COUNT(*), SUM(amount_usd), SUM(log_amount), SUM(log_amount * log_amount)
+            INSERT INTO {bucket_table}
+                ({grain}, day, bucket_index, tx_count, sample_count, volume_usd, fees_usd, log_sum, log_sum2)
+            SELECT {grain}, day, bucket_index,
+                   COUNT(DISTINCT tx_hash), COUNT(*), SUM(amount_usd), SUM(fee_usd),
+                   SUM(log_amount), SUM(log_amount * log_amount)
             FROM bucketed
             WHERE bucket_index BETWEEN 1 AND 256
-            GROUP BY route_id, day, bucket_index
-            ON CONFLICT (route_id, day, bucket_index) DO UPDATE SET
+            GROUP BY {grain}, day, bucket_index
+            ON CONFLICT ({grain}, day, bucket_index) DO UPDATE SET
+                tx_count = EXCLUDED.tx_count,
                 sample_count = EXCLUDED.sample_count,
                 volume_usd = EXCLUDED.volume_usd,
+                fees_usd = EXCLUDED.fees_usd,
                 log_sum = EXCLUDED.log_sum,
                 log_sum2 = EXCLUDED.log_sum2
             """,
-            (curr.isoformat(), chunk_end.isoformat()),
+            (curr.isoformat(), chunk_end.isoformat(),
+             min_amount_usd, max_amount_usd,
+             bucket_count, min_amount_usd, max_amount_usd, bucket_count),
         )
         total_rows += cur.rowcount if cur.rowcount > 0 else 0
         curr = chunk_end
 
-    log.info("Rebuilt %d configured route distribution bucket rows for %d days.",
-             total_rows, len(sorted_days))
+    log.info("Rebuilt %d %s bucket rows for %d days (%s).",
+             total_rows, grain, len(sorted_days), bucket_table)
     return total_rows
 
 

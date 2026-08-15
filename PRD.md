@@ -68,7 +68,7 @@ GET /api/routes/analyze?...&experiment=<exp_id>    -> Counterfactual route selec
 ```
 
 ### B. Persistence Schema (Immutable Experiment Models)
-Experiments and replay runs are append-only to preserve analytical integrity and auditability. Synthetic records are **never** written into factual warehouse tables (`swaps`, `liquidity_pool_history`, `liquidity_pool`).
+Experiments and replay runs are append-only to preserve analytical integrity and auditability. Synthetic records are **never** written into factual warehouse tables (`swaps`, `liquidity_pool_daily_stats`, `liquidity_pool`).
 
 1. `counterfactual_experiment`:
    - `experiment_id` (UUID PK)

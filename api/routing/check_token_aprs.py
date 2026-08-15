@@ -45,8 +45,8 @@ def get_token_aprs(symbols):
             # 2. Get history stats
             cur.execute("""
                 SELECT SUM(volume_usd), AVG(tvl_usd), COUNT(*)
-                FROM liquidity_pool_history
-                WHERE pool_id = %s AND date >= %s::date AND date <= %s::date
+                FROM liquidity_pool_daily_stats
+                WHERE pool_id = %s AND day >= %s::date AND day <= %s::date
             """, (pool_id, start_date, end_date))
             hist_row = cur.fetchone()
             

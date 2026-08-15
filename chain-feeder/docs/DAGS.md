@@ -24,7 +24,7 @@ graph LR
 
     subgraph DB["PostgreSQL (chaintelligence)"]
         CT[("coin<br/>coin_contract<br/>coin_family<br/>coin_price_history")]
-        LPT[("liquidity_pool<br/>liquidity_pool_history")]
+        LPT[("liquidity_pool<br/>liquidity_pool_daily_stats")]
         POS[("liquidity_pool_position<br/>liquidity_pool_position_snapshot<br/>liquidity_pool_position_event")]
         SW[("swaps")]
     end
@@ -235,7 +235,7 @@ Shared utilities live in [common/utils/uniswap_utils.py](file:///Users/szabi/git
 
 ### 3. History Pipeline — Daily Pool Metrics Aggregation
 
-These DAGs produce daily aggregated metrics (volume, TVL, tx count) per pool and write to `liquidity_pool_history` (auto-creating pool entries in `liquidity_pool` when needed).
+These DAGs produce daily aggregated metrics (volume, TVL, tx count) per pool and write to `liquidity_pool_daily_stats` (auto-creating pool entries in `liquidity_pool` when needed).
 
 ```mermaid
 graph TD
@@ -246,9 +246,9 @@ graph TD
     end
 
     subgraph DAGs["History DAGs"]
-        V3H["graph_*_uniswap_v3_<br/>liquidity_pool_history<br/>⏰ 0 1 * * *"]
-        V4H["graph_ethereum_uniswap_v4_<br/>liquidity_pool_history<br/>⏰ 0 1 * * *"]
-        PCS["graph_bnb_pancakeswap_v4_<br/>liquidity_pool_history<br/>⏰ 0 1 * * *"]
+        V3H["graph_*_uniswap_v3_<br/>liquidity_pool_daily_stats<br/>⏰ 0 1 * * *"]
+        V4H["graph_ethereum_uniswap_v4_<br/>liquidity_pool_daily_stats<br/>⏰ 0 1 * * *"]
+        PCS["graph_bnb_pancakeswap_v4_<br/>liquidity_pool_daily_stats<br/>⏰ 0 1 * * *"]
         ROLLUP["global_liquidity_pool_<br/>history_rollup<br/>⏰ 0 2 * * *"]
         TVL["rpc_tvl_sync<br/>⏰ 0 3 * * *"]
     end
@@ -262,7 +262,7 @@ graph TD
 
     subgraph Tables["Database Tables"]
         LP_T["liquidity_pool"]
-        LPH_T["liquidity_pool_history"]
+        LPH_T["liquidity_pool_daily_stats"]
     end
 
     V3H --> LP_T
@@ -277,19 +277,19 @@ graph TD
 
 | DAG | File | Schedule | Source | Tables Written | Networks |
 |---|---|---|---|---|---|
-| `graph_ethereum_uniswap_v3_liquidity_pool_history` | [graph_ethereum_uniswap_v3_liquidity_pool_history.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_ethereum_uniswap_v3_liquidity_pool_history.py) | `0 1 * * *` | The Graph (V3 pool day data) | `liquidity_pool`, `liquidity_pool_history` | Ethereum |
-| `graph_arbitrum_uniswap_v3_liquidity_pool_history` | [graph_arbitrum_uniswap_v3_liquidity_pool_history.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_arbitrum_uniswap_v3_liquidity_pool_history.py) | `0 1 * * *` | The Graph (V3 pool day data) | `liquidity_pool`, `liquidity_pool_history` | Arbitrum |
-| `graph_base_uniswap_v3_liquidity_pool_history` | [graph_base_uniswap_v3_liquidity_pool_history.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_base_uniswap_v3_liquidity_pool_history.py) | `0 1 * * *` | The Graph (V3 pool day data) | `liquidity_pool`, `liquidity_pool_history` | Base |
-| `graph_ethereum_uniswap_v4_liquidity_pool_history` | [graph_ethereum_uniswap_v4_liquidity_pool_history.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_ethereum_uniswap_v4_liquidity_pool_history.py) | `0 1 * * *` | The Graph (V4 pool day data) | `liquidity_pool`, `liquidity_pool_history` | Ethereum |
-| `graph_bnb_pancakeswap_v4_liquidity_pool_history` | [graph_bnb_pancakeswap_v4_liquidity_pool_history.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_bnb_pancakeswap_v4_liquidity_pool_history.py) | `0 1 * * *` | Swap tables (derived) + The Graph (pool IDs) | `liquidity_pool`, `liquidity_pool_history` | BNB |
-| `global_liquidity_pool_history_rollup` | [global_liquidity_pool_history_rollup.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/global_liquidity_pool_history_rollup.py) | `0 2 * * *` | `swaps` (derived) | `liquidity_pool_history` | all |
-| `rpc_tvl_sync` | [rpc_tvl_sync.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/rpc_tvl_sync.py) | `0 3 * * *` | EVM RPC (Multicall3 reserves) | `liquidity_pool_history` | all |
+| `graph_ethereum_uniswap_v3_liquidity_pool_daily_stats` | [graph_ethereum_uniswap_v3_liquidity_pool_daily_stats.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_ethereum_uniswap_v3_liquidity_pool_daily_stats.py) | `0 1 * * *` | The Graph (V3 pool day data) | `liquidity_pool`, `liquidity_pool_daily_stats` | Ethereum |
+| `graph_arbitrum_uniswap_v3_liquidity_pool_daily_stats` | [graph_arbitrum_uniswap_v3_liquidity_pool_daily_stats.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_arbitrum_uniswap_v3_liquidity_pool_daily_stats.py) | `0 1 * * *` | The Graph (V3 pool day data) | `liquidity_pool`, `liquidity_pool_daily_stats` | Arbitrum |
+| `graph_base_uniswap_v3_liquidity_pool_daily_stats` | [graph_base_uniswap_v3_liquidity_pool_daily_stats.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_base_uniswap_v3_liquidity_pool_daily_stats.py) | `0 1 * * *` | The Graph (V3 pool day data) | `liquidity_pool`, `liquidity_pool_daily_stats` | Base |
+| `graph_ethereum_uniswap_v4_liquidity_pool_daily_stats` | [graph_ethereum_uniswap_v4_liquidity_pool_daily_stats.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_ethereum_uniswap_v4_liquidity_pool_daily_stats.py) | `0 1 * * *` | The Graph (V4 pool day data) | `liquidity_pool`, `liquidity_pool_daily_stats` | Ethereum |
+| `graph_bnb_pancakeswap_v4_liquidity_pool_daily_stats` | [graph_bnb_pancakeswap_v4_liquidity_pool_daily_stats.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/graph_bnb_pancakeswap_v4_liquidity_pool_daily_stats.py) | `0 1 * * *` | Swap tables (derived) + The Graph (pool IDs) | `liquidity_pool`, `liquidity_pool_daily_stats` | BNB |
+| `global_liquidity_pool_daily_stats_rollup` | [global_liquidity_pool_daily_stats_rollup.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/global_liquidity_pool_daily_stats_rollup.py) | `0 2 * * *` | `swaps` (derived) | `liquidity_pool_daily_stats` | all |
+| `rpc_tvl_sync` | [rpc_tvl_sync.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/rpc_tvl_sync.py) | `0 3 * * *` | EVM RPC (Multicall3 reserves) | `liquidity_pool_daily_stats` | all |
 
 **Flow detail:**
 
-1. **Per-network history syncs** query The Graph for `poolDayData` entities, auto-create missing pool entries in `liquidity_pool`, then upsert daily metrics into `liquidity_pool_history`.
-2. **`global_liquidity_pool_history_rollup`** aggregates tx_count and USD volume from the `swaps` table into `liquidity_pool_history` for all pools, zero-fills dormant pools, and triggers the TVL-fallback backfill (`rpc_tvl_sync`). Runs daily at 2 AM.
-3. **`rpc_tvl_sync`** reads on-chain reserves via Multicall3 / `eth_getStorageAt` (bypassing The Graph, which reports 0 TVL for stablecoin pools), computes USD TVL, and upserts into `liquidity_pool_history`. Runs daily at 3 AM, forward-fills 90 days.
+1. **Per-network history syncs** query The Graph for `poolDayData` entities, auto-create missing pool entries in `liquidity_pool`, then upsert daily metrics into `liquidity_pool_daily_stats`.
+2. **`global_liquidity_pool_daily_stats_rollup`** aggregates tx_count and USD volume from the `swaps` table into `liquidity_pool_daily_stats` for all pools, zero-fills dormant pools, and triggers the TVL-fallback backfill (`rpc_tvl_sync`). Runs daily at 2 AM.
+3. **`rpc_tvl_sync`** reads on-chain reserves via Multicall3 / `eth_getStorageAt` (bypassing The Graph, which reports 0 TVL for stablecoin pools), computes USD TVL, and upserts into `liquidity_pool_daily_stats`. Runs daily at 3 AM, forward-fills 90 days.
 
 ---
 
@@ -379,11 +379,11 @@ Shows which tables are **written** by which pipeline groups and **read** by whic
 | `coin_family` | `yaml_global_coin_family` | `cmc_global_coin_tiered_price`, `defillama_global_coin_price_history` |
 | `coin_price_history` | `defillama_global_coin_price_history` | API (APR calculations) |
 | `liquidity_pool` | history DAGs, `graph_all_uniswap_v3_liquidity_pool_position_snapshot` | API (pool analytics), swap DAGs (pool_id FK) |
-| `liquidity_pool_history` | history DAGs, `global_liquidity_pool_history_rollup`, `rpc_tvl_sync` | API (pool analytics) |
+| `liquidity_pool_daily_stats` | history DAGs, `global_liquidity_pool_daily_stats_rollup`, `rpc_tvl_sync` | API (pool analytics) |
 | `liquidity_pool_position` | `graph_all_uniswap_v3_liquidity_pool_position_snapshot`, `rpc_ethereum_uniswap_v3_liquidity_pool_position`, `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` | API (`/api/lp/position-summary`) |
 | `liquidity_pool_position_snapshot` | `graph_all_uniswap_v3_liquidity_pool_position_snapshot`, `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` | `v_lp_snapshots_summary` view |
 | `liquidity_pool_position_event` | `rpc_all_uniswap_v3_liquidity_pool_position_event` | API (event timeline) |
-| `swaps` | all swap DAGs | `global_liquidity_pool_history_rollup`, history DAGs, API (route/trade analysis) |
+| `swaps` | all swap DAGs | `global_liquidity_pool_daily_stats_rollup`, history DAGs, API (route/trade analysis) |
 | `v_lp_snapshots_summary` | — (view) | API (`/api/lp/position-summary`) |
 
 ---
@@ -403,10 +403,10 @@ Shows which tables are **written** by which pipeline groups and **read** by whic
 | `graph_base_aerodrome_v3_swaps` | `@hourly` | hourly | Swap |
 | `graph_bnb_pancakeswap_v3_swaps` | `@hourly` | hourly | Swap |
 | `graph_bnb_pancakeswap_v4_swaps` | `@hourly` | hourly | Swap |
-| `graph_*_uniswap_v3_liquidity_pool_history` | `0 1 * * *` | daily 1 AM | History |
-| `graph_ethereum_uniswap_v4_liquidity_pool_history` | `0 1 * * *` | daily 1 AM | History |
-| `graph_bnb_pancakeswap_v4_liquidity_pool_history` | `0 1 * * *` | daily 1 AM | History |
-| `global_liquidity_pool_history_rollup` | `0 2 * * *` | daily 2 AM | History |
+| `graph_*_uniswap_v3_liquidity_pool_daily_stats` | `0 1 * * *` | daily 1 AM | History |
+| `graph_ethereum_uniswap_v4_liquidity_pool_daily_stats` | `0 1 * * *` | daily 1 AM | History |
+| `graph_bnb_pancakeswap_v4_liquidity_pool_daily_stats` | `0 1 * * *` | daily 1 AM | History |
+| `global_liquidity_pool_daily_stats_rollup` | `0 2 * * *` | daily 2 AM | History |
 | `rpc_tvl_sync` | `0 3 * * *` | daily 3 AM | History |
 | `graph_all_uniswap_v3_liquidity_pool_position_snapshot` | `*/15 * * * *` | 15 min | LP |
 | `rpc_ethereum_uniswap_v3_liquidity_pool_position` | `timedelta(hours=1)` | hourly | LP |
@@ -423,7 +423,7 @@ graph LR
     TIERED["cmc_global_coin_tiered_price"] -- "TriggerDagRunOperator" --> FAMILY["yaml_global_coin_family"]
     TIERED -- "TriggerDagRunOperator" --> CPRICE["cmc_global_coin_price"]
     FAMILY -- "TriggerDagRunOperator" --> CMETA["cmc_global_coin_metadata"]
-    ROLLUP["global_liquidity_pool_history_rollup"] -- "triggers TVL backfill" --> TVL["rpc_tvl_sync"]
+    ROLLUP["global_liquidity_pool_daily_stats_rollup"] -- "triggers TVL backfill" --> TVL["rpc_tvl_sync"]
 ```
 
 ---
@@ -453,4 +453,4 @@ graph LR
 | `coin_family_resolver.py` | [include/coin_family_resolver.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/coin_family_resolver.py) | `yaml_global_coin_family`, `defillama_global_coin_price_history` |
 | `contract_ingestion.py` | [include/contract_ingestion.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/contract_ingestion.py) | `cmc_global_coin_metadata` (MultiSourceContractEngine) |
 | `v4_pool.py` | [include/v4_pool.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/v4_pool.py) | V4 swap/history DAGs, API (`api/main.py`) |
-| `settings.py` | [include/settings.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/settings.py) | `data_warehouse_dsn()` — shared DSN derivation for both ETL and API configs |
+| `settings.py` | [include/settings.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/settings.py) | `data_warehouse_dsn()` — shared DSN derivation for both ETL and API configs; `load_distribution_config()` — global swap-size bucket params from `config/swap-distribution.yaml` |

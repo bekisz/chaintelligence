@@ -59,18 +59,18 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_coin_price_symbol_ts
 -- ============================================================================
 -- fetch_pool_stats (the "Querying pool stats & APRs..." phase)
 -- After the rewrite, pool stats are aggregated by pool_id with a date range:
---   WHERE pool_id = ANY(...) AND date BETWEEN $start AND $end
+--   WHERE pool_id = ANY(...) AND day BETWEEN $start AND $end
 -- and a TVL fallback:
---   SELECT DISTINCT ON (pool_id) ... ORDER BY pool_id, date DESC
--- The UNIQUE(pool_id, date) constraint already serves both (confirmed via
--- EXPLAIN ANALYZE: Bitmap Index Scan on liquidity_pool_history_pool_id_date_key),
+--   SELECT DISTINCT ON (pool_id) ... ORDER BY pool_id, day DESC
+-- The PRIMARY KEY (pool_id, day) constraint already serves both (confirmed via
+-- EXPLAIN ANALYZE: Bitmap Index Scan on liquidity_pool_daily_stats_pool_id_date_key),
 -- so no new index is needed here. We only DROP the now-redundant single-column
--- idx_lp_history_pool, since (pool_id, date) covers every pool_id lookup it did
+-- idx_lp_daily_stats_pool, since (pool_id, day) covers every pool_id lookup it did
 -- (the constraint's leading column is pool_id). This also reduces write overhead
 -- on the history table.
 -- ============================================================================
 
-DROP INDEX CONCURRENTLY IF EXISTS idx_lp_history_pool;
+DROP INDEX CONCURRENTLY IF EXISTS idx_lp_daily_stats_pool;
 
 -- ============================================================================
 -- Additional indexes for token-symbol queries (USDT-USDC and other pairs)

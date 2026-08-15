@@ -6,10 +6,56 @@ const TOKEN_SLUG_MAP = {};
 let ALL_TOKENS_LIST = [];
 let ALL_FAMILIES_LIST = [];
 
+// Server-side family expansion cache (keyed by normalized symbol) backed by
+// GET /api/coins/search-by-symbol, matching how the backend resolves families
+// in /api/routes/analyze.
+const FAMILY_SEARCH_CACHE = {};
+let familySearchSeq = 0;
+
 const tokenIconUrl = (symbol) => {
     const s = String(symbol || '').toLowerCase();
     if (!s) return '';
     return `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${s}.png`;
+};
+
+// Normalize the JSON:API compound document from /api/coins/search-by-symbol
+// back into the flat [{symbol, name, contracts:[{chain}]}] array the
+// dropdown rendering expects.
+const normalizeCoinSearch = (data) => {
+    if (!data || !data.data) return [];
+    const includedById = {};
+    (data.included || []).forEach(r => { includedById[r.type + ':' + r.id] = r; });
+    const coins = Array.isArray(data.data) ? data.data : [data.data];
+    return coins.map(c => {
+        const attrs = c.attributes || {};
+        const contractRefs = (c.relationships && c.relationships.contracts && c.relationships.contracts.data) || [];
+        const contracts = contractRefs.map(ref => {
+            const cc = includedById[ref.type + ':' + ref.id];
+            return cc && cc.attributes ? { chain: cc.attributes.chain } : null;
+        }).filter(Boolean);
+        return { symbol: attrs.symbol, name: attrs.name, contracts };
+    });
+};
+
+// Normalize the /api/coin-families compound document into the legacy
+// {families: {FAMILY:[symbols]}, symbol_family_map: {SYMBOL:FAMILY}} shape.
+const normalizeFamilyMap = (data) => {
+    const fams = data && data.data ? (Array.isArray(data.data) ? data.data : [data.data]) : [];
+    const includedById = {};
+    (data.included || []).forEach(r => { includedById[r.type + ':' + r.id] = r; });
+    const families = {};
+    const symbolFamilyMap = {};
+    fams.forEach(f => {
+        const famName = (f.attributes && f.attributes.name) || f.id;
+        const memberRefs = (f.relationships && f.relationships.members && f.relationships.members.data) || [];
+        const symbols = memberRefs.map(ref => {
+            const coin = includedById[ref.type + ':' + ref.id];
+            return coin && coin.attributes ? coin.attributes.symbol : null;
+        }).filter(Boolean);
+        families[famName] = symbols;
+        symbols.forEach(s => { if (!(s in symbolFamilyMap)) symbolFamilyMap[s] = famName; });
+    });
+    return { families, symbol_family_map: symbolFamilyMap };
 };
 
 const getPrincipalSymbol = (symbol) => {
@@ -41,7 +87,7 @@ const getPrincipalSymbol = (symbol) => {
 
 // Fetch token metadata + families for lookahead autocomplete.
 const loadTokenMetadata = () => {
-    fetch('/api/coin/list')
+    fetch('/api/coins/list')
         .then(response => response.json())
         .then(coins => {
             ALL_TOKENS_LIST = coins;
@@ -58,13 +104,37 @@ const loadTokenMetadata = () => {
     fetch('/api/coin-families')
         .then(res => res.json())
         .then(data => {
-            const fams = data.families || {};
+            const fams = normalizeFamilyMap(data).families || {};
             ALL_FAMILIES_LIST = Object.keys(fams).map(f => ({
                 name: f,
                 membersCount: fams[f]?.length || 0
             }));
         })
         .catch(err => console.error('Error fetching coin families:', err));
+};
+
+// Debounced server-side family lookup. GET /api/coins/search-by-symbol returns
+// every coin in the queried symbol's family plus its contracts; results are
+// cached per symbol so the dropdown renders instantly on subsequent keystrokes.
+const fetchFamilyExpansion = (symbol) => {
+    const key = (symbol || '').trim().toUpperCase();
+    if (!key || key === '*' || key in FAMILY_SEARCH_CACHE) return;
+    FAMILY_SEARCH_CACHE[key] = null;
+    const seq = ++familySearchSeq;
+    setTimeout(() => {
+        fetch(`/api/coins/search-by-symbol?symbol=${encodeURIComponent(key)}&include_coin_families=true`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (seq !== familySearchSeq) return;
+                FAMILY_SEARCH_CACHE[key] = normalizeCoinSearch(data);
+                document.querySelectorAll('.token-input-field, #token-input').forEach(el => {
+                    if (el.dataset.autocompleteInitialized && el.value.trim().toUpperCase() === key) {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+            })
+            .catch(() => { if (seq === familySearchSeq) FAMILY_SEARCH_CACHE[key] = []; });
+    }, 250);
 };
 
 const initTokenAutocomplete = (inputEl) => {
@@ -123,22 +193,59 @@ const initTokenAutocomplete = (inputEl) => {
         dropdown.innerHTML = '';
         selectedIndex = -1;
 
+        // Kick off a server-side family expansion for the current query;
+        // when the response lands the dropdown re-renders with the expanded
+        // members (plus their contracts).
+        if (q !== '' && q !== '*' && !(q in FAMILY_SEARCH_CACHE)) {
+            fetchFamilyExpansion(q);
+        }
+
         let matches = [];
 
         if (q === '' || q === '*') {
             matches.push({ type: 'wildcard', symbol: '*', name: 'Any Token (Wildcard)', icon: '/static/favicon.png' });
         }
 
-        ALL_FAMILIES_LIST.forEach(fam => {
-            if (q === '' || fam.name.includes(q)) {
+        // Server-side family expansion: GET /api/coins/search-by-symbol returns
+        // every coin in the queried symbol's family plus its contracts. The
+        // request only succeeds for an exact symbol/family name, so partial
+        // queries keep the client-side family-name entry as a fallback.
+        const cachedFamily = FAMILY_SEARCH_CACHE[q];
+        if (q !== '' && q !== '*') {
+            const expanded = cachedFamily || null;
+            if (expanded && expanded.length > 0) {
+                expanded.forEach(coin => {
+                    const sym = (coin.symbol || '').toUpperCase();
+                    const chains = (coin.contracts || []).map(c => c.chain).filter(Boolean);
+                    matches.push({
+                        type: 'family',
+                        symbol: sym,
+                        name: chains.length ? `${coin.name || sym} · ${chains.join(', ')}` : (coin.name || sym),
+                        icon: getPrincipalSymbol(sym.replace('_YBA', ''))
+                    });
+                });
+            } else {
+                ALL_FAMILIES_LIST.forEach(fam => {
+                    if (fam.name.includes(q)) {
+                        matches.push({
+                            type: 'family',
+                            symbol: fam.name,
+                            name: `Family (${fam.membersCount} coins)`,
+                            icon: getPrincipalSymbol(fam.name.replace('_YBA', ''))
+                        });
+                    }
+                });
+            }
+        } else {
+            ALL_FAMILIES_LIST.forEach(fam => {
                 matches.push({
                     type: 'family',
                     symbol: fam.name,
                     name: `Family (${fam.membersCount} coins)`,
                     icon: getPrincipalSymbol(fam.name.replace('_YBA', ''))
                 });
-            }
-        });
+            });
+        }
 
         let coinMatches = [];
         ALL_TOKENS_LIST.forEach(coin => {

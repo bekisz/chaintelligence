@@ -17,6 +17,7 @@ from include.route_classifier import (
     classify_tx_hashes,
     recompute_daily_stats,
     recompute_distribution_buckets,
+    recompute_pool_distribution_buckets,
     RAW_SWAP_TABLE,
 )
 
@@ -118,6 +119,7 @@ with DAG(
                 with conn.cursor() as cur:
                     recompute_daily_stats(cur, sorted(affected_days), table_name=RAW_SWAP_TABLE)
                     recompute_distribution_buckets(cur, sorted(affected_days), table_name=RAW_SWAP_TABLE)
+                    recompute_pool_distribution_buckets(cur, sorted(affected_days), table_name=RAW_SWAP_TABLE)
                 conn.commit()
             logging.info('Route queue run complete: %d completed, %d failed, %d days rolled up',
                          completed, failed, len(affected_days))

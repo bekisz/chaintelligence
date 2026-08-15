@@ -183,17 +183,16 @@ CREATE INDEX IF NOT EXISTS idx_snapshot_pos_time ON liquidity_pool_position_snap
 CREATE INDEX IF NOT EXISTS idx_snapshot_time ON liquidity_pool_position_snapshot(timestamp DESC);
 
 -- 4.5 LIQUIDITY POOL HISTORY TABLE
-CREATE TABLE IF NOT EXISTS liquidity_pool_history (
-    id SERIAL PRIMARY KEY,
-    pool_id INTEGER REFERENCES liquidity_pool(id),
-    date DATE NOT NULL,
-    tx_count INTEGER DEFAULT 0,
-    volume_usd NUMERIC DEFAULT 0,
-    tvl_usd NUMERIC DEFAULT 0,
-    UNIQUE(pool_id, date)
+CREATE TABLE IF NOT EXISTS liquidity_pool_daily_stats (
+    pool_id    INTEGER REFERENCES liquidity_pool(id),
+    day        DATE NOT NULL,
+    tx_count   INTEGER DEFAULT 0,
+    volume_usd DOUBLE PRECISION DEFAULT 0,
+    tvl_usd    DOUBLE PRECISION DEFAULT 0,
+    PRIMARY KEY (pool_id, day)
 );
-CREATE INDEX IF NOT EXISTS idx_lp_history_date ON liquidity_pool_history(date);
-CREATE INDEX IF NOT EXISTS idx_lp_history_pool ON liquidity_pool_history(pool_id);
+CREATE INDEX IF NOT EXISTS idx_lp_daily_stats_day ON liquidity_pool_daily_stats(day);
+CREATE INDEX IF NOT EXISTS idx_lp_daily_stats_pool ON liquidity_pool_daily_stats(pool_id);
 
 -- 5. UNISWAP V3 SWAPS (Existing table)
 CREATE TABLE IF NOT EXISTS uniswap_v3_swaps (
@@ -497,31 +496,41 @@ CREATE INDEX IF NOT EXISTS idx_route_daily_stats_day ON route_daily_stats (day);
 CREATE INDEX IF NOT EXISTS idx_route_hop_pool ON route_hop (pool_id);
 CREATE INDEX IF NOT EXISTS idx_route_pair ON route (pair_id);
 
--- 8.6 Optional compact swap-size distributions for selected routes.
-CREATE TABLE IF NOT EXISTS route_distribution_config (
-    route_id        BIGINT PRIMARY KEY REFERENCES route(route_id) ON DELETE CASCADE,
-    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
-    bucket_count    SMALLINT NOT NULL DEFAULT 80 CHECK (bucket_count BETWEEN 8 AND 256),
-    min_amount_usd  DOUBLE PRECISION NOT NULL DEFAULT 10.0 CHECK (min_amount_usd > 0),
-    max_amount_usd  DOUBLE PRECISION NOT NULL DEFAULT 100000000.0
-        CHECK (max_amount_usd > min_amount_usd),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS route_distribution_bucket (
+-- 8.6 Compact swap-size distributions for every route.
+CREATE TABLE IF NOT EXISTS route_daily_stats_bucket (
     route_id       BIGINT NOT NULL REFERENCES route(route_id) ON DELETE CASCADE,
     day            DATE NOT NULL,
     bucket_index   SMALLINT NOT NULL,
+    tx_count       INT NOT NULL DEFAULT 0,
     sample_count   BIGINT NOT NULL DEFAULT 0,
     volume_usd     DOUBLE PRECISION NOT NULL DEFAULT 0,
+    fees_usd       DOUBLE PRECISION NOT NULL DEFAULT 0,
     log_sum        DOUBLE PRECISION NOT NULL DEFAULT 0,
     log_sum2       DOUBLE PRECISION NOT NULL DEFAULT 0,
     PRIMARY KEY (route_id, day, bucket_index),
     CHECK (bucket_index >= 1)
 );
 
-CREATE INDEX IF NOT EXISTS idx_route_distribution_bucket_day
-    ON route_distribution_bucket (day, route_id);
+CREATE INDEX IF NOT EXISTS idx_route_daily_stats_bucket_day
+    ON route_daily_stats_bucket (day, route_id);
+
+-- 8.7 Compact swap-size distributions for every liquidity pool.
+CREATE TABLE IF NOT EXISTS liquidity_pool_daily_stats_bucket (
+    pool_id        INTEGER NOT NULL REFERENCES liquidity_pool(id) ON DELETE CASCADE,
+    day            DATE NOT NULL,
+    bucket_index   SMALLINT NOT NULL,
+    tx_count       INT NOT NULL DEFAULT 0,
+    sample_count   BIGINT NOT NULL DEFAULT 0,
+    volume_usd     DOUBLE PRECISION NOT NULL DEFAULT 0,
+    fees_usd       DOUBLE PRECISION NOT NULL DEFAULT 0,
+    log_sum        DOUBLE PRECISION NOT NULL DEFAULT 0,
+    log_sum2       DOUBLE PRECISION NOT NULL DEFAULT 0,
+    PRIMARY KEY (pool_id, day, bucket_index),
+    CHECK (bucket_index >= 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lp_daily_stats_bucket_day
+    ON liquidity_pool_daily_stats_bucket (day, pool_id);
 
 -- 6. Asynchronous route-classification work queue.
 CREATE TABLE IF NOT EXISTS route_classification_queue (

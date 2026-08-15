@@ -25,8 +25,8 @@ class TestChaintelligenceAPI(unittest.TestCase):
         self.assertIn("timestamp", data)
 
     def test_02_coin_list(self):
-        """Test public endpoint: /api/coin/list"""
-        url = f"{BASE_URL}/api/coin/list"
+        """Test public endpoint: /api/coins/list"""
+        url = f"{BASE_URL}/api/coins/list"
         response = requests.get(url)
         self.assertEqual(response.status_code, 200, f"Failed to fetch coin list: {response.text}")
         data = response.json()
@@ -180,20 +180,25 @@ class TestChaintelligenceAPI(unittest.TestCase):
                 self.assertIn("share_percent", data[0])
 
     def test_14_pool_by_id(self):
-        """Test /api/pool/{id} — fetch by numeric liquidity_pool.id."""
+        """Test /api/pool/{id} — fetch by numeric liquidity_pool.id (compound doc)."""
         # Use a known pool — WETH-USDC (id=1 is typically the first pool).
         url = f"{BASE_URL}/api/pool/1"
         response = requests.get(url, auth=self.auth)
         self.assertEqual(response.status_code, 200, f"Failed: {response.text}")
-        data = response.json()
+        doc = response.json()
+        data = doc["data"]
+        self.assertEqual(data["type"], "pool")
         self.assertEqual(data["id"], 1)
-        self.assertIn("pool_address", data)
-        self.assertIn("links", data)
-        self.assertIn("history", data)
-        self.assertIn("token0", data)
-        self.assertIn("token1", data)
-        self.assertIn("chain", data)
-        self.assertIn("protocol", data)
+        attrs = data.get("attributes", {})
+        self.assertIn("pool_address", attrs)
+        self.assertIn("links", attrs)
+        self.assertIn("history", attrs)
+        self.assertIn("protocol", attrs)
+        rels = data.get("relationships", {})
+        self.assertIn("coin0", rels)
+        self.assertIn("coin1", rels)
+        # default include = coin0,coin1
+        self.assertIn("coin", {r["type"] for r in doc.get("included", [])})
 
     def test_15_pool_by_address(self):
         """Test /api/pool/{address} — fetch by V3 contract address."""
@@ -202,32 +207,34 @@ class TestChaintelligenceAPI(unittest.TestCase):
         url = f"{BASE_URL}/api/pool/{addr}"
         response = requests.get(url, auth=self.auth)
         self.assertEqual(response.status_code, 200, f"Failed: {response.text}")
-        data = response.json()
-        self.assertEqual(data["pool_address"].lower(), addr.lower())
+        data = response.json()["data"]
+        attrs = data["attributes"]
+        self.assertEqual(attrs["pool_address"].lower(), addr.lower())
 
         # Exact external link URLs.
         self.assertEqual(
-            data["links"].get("uniswap"),
+            attrs["links"].get("uniswap"),
             "https://app.uniswap.org/explore/pools/ethereum/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
         )
         self.assertEqual(
-            data["links"].get("revert"),
+            attrs["links"].get("revert"),
             "https://revert.finance/#/pool/mainnet/uniswapv3/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
         )
         self.assertEqual(
-            data["links"].get("dexscreener"),
+            attrs["links"].get("dexscreener"),
             "https://dexscreener.com/ethereum/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
         )
         self.assertEqual(
-            data["links"].get("defillama"),
+            attrs["links"].get("defillama"),
             "https://defillama.com/yields/pool/665dc8bc-c79d-4800-97f7-304bf368e547",
         )
 
         # TVL sanity check: between 100k USD and 1B USD.
-        if data.get("tvl_usd") is not None:
-            self.assertGreater(data["tvl_usd"], 100_000,
+        tvl = attrs.get("tvl_usd")
+        if tvl is not None:
+            self.assertGreater(tvl, 100_000,
                                "TVL should be > $100k for a major pool")
-            self.assertLess(data["tvl_usd"], 1_000_000_000,
+            self.assertLess(tvl, 1_000_000_000,
                             "TVL should be < $1B")
 
     def test_16_pool_not_found(self):
@@ -246,13 +253,12 @@ class TestChaintelligenceAPI(unittest.TestCase):
 
     def test_18_pool_links_present(self):
         """Test /api/pool/{id} — external links are populated for a real V3 pool."""
-        # Arbitrum UNI-USDT 0.3% (pool_id 41294 from earlier investigation).
+        # Arbitrum UNI-USDT 0.3% (pool_id 41338 from earlier investigation).
         url = f"{BASE_URL}/api/pool/41338"
         response = requests.get(url, auth=self.auth)
         self.assertEqual(response.status_code, 200, f"Failed: {response.text}")
-        data = response.json()
-        self.assertIn("links", data)
-        links = data["links"]
+        attrs = response.json()["data"]["attributes"]
+        links = attrs.get("links") or {}
         # A real Uniswap V3 pool should have at least a uniswap + dexscreener link.
         self.assertIn("uniswap", links, "Uniswap link missing")
         self.assertIn("dexscreener", links, "DexScreener link missing")
@@ -265,10 +271,10 @@ class TestChaintelligenceAPI(unittest.TestCase):
         url = f"{BASE_URL}/api/pool/1"
         response = requests.get(url, auth=self.auth)
         self.assertEqual(response.status_code, 200, f"Failed: {response.text}")
-        data = response.json()
-        self.assertIsInstance(data["history"], list)
-        if data["history"]:
-            entry = data["history"][0]
+        history = response.json()["data"]["attributes"].get("history")
+        self.assertIsInstance(history, list)
+        if history:
+            entry = history[0]
             self.assertIn("date", entry)
             self.assertIn("tvl_usd", entry)
             self.assertIn("volume_usd", entry)
@@ -304,12 +310,15 @@ class TestChaintelligenceAPI(unittest.TestCase):
             proto = (pool.get("protocol") or "").lower()
             if "uniswap" not in proto and "v3" not in proto and "v2" not in proto:
                 continue
-            detail = requests.get(f"{BASE_URL}/api/pool/{pool['id']}", auth=self.auth).json()
-            uniswap_url = detail.get("links", {}).get("uniswap")
+            detail_doc = requests.get(f"{BASE_URL}/api/pool/{pool['id']}", auth=self.auth).json()
+            detail = detail_doc.get("data", {})
+            detail_attrs = detail.get("attributes", {})
+            detail_rels = detail.get("relationships", {})
+            uniswap_url = (detail_attrs.get("links") or {}).get("uniswap")
             if not uniswap_url:
                 continue
 
-            chain_lower = detail.get("chain", "").lower()
+            chain_lower = (detail_attrs.get("chain") or "").lower()
             if "arbitrum" in chain_lower:
                 uniswap_chain = "ARBITRUM"
             elif "base" in chain_lower:
@@ -323,17 +332,25 @@ class TestChaintelligenceAPI(unittest.TestCase):
             else:
                 uniswap_chain = "ETHEREUM"
 
-            proto = detail.get("protocol", "").lower()
+            proto = (detail_attrs.get("protocol") or "").lower()
             is_v2 = "v2" in proto
             is_v4 = "v4" in proto
             ver = "v2" if is_v2 else ("v4" if is_v4 else "v3")
 
             link_addr = uniswap_url.rstrip("/").rsplit("/", 1)[-1]
-            pool_addr = detail.get("pool_address", "").lower()
+            pool_addr = (detail_attrs.get("pool_address") or "").lower()
+
+            def _pair_symbols():
+                coins = detail_doc.get("included") or []
+                by_id = {c["id"]: c for c in coins if c["type"] == "coin"}
+                s0 = by_id.get((detail_rels.get("coin0") or {}).get("data", {}).get("id"), {}).get("attributes", {}).get("symbol")
+                s1 = by_id.get((detail_rels.get("coin1") or {}).get("data", {}).get("id"), {}).get("attributes", {}).get("symbol")
+                return f"{s0 or '?'}/{s1 or '?'}"
+
             if not is_v4 and pool_addr and link_addr.lower() != pool_addr:
-                url_failures.append((detail["id"], f"{detail['token0']['symbol']}/{detail['token1']['symbol']}",
+                url_failures.append((detail["id"], _pair_symbols(),
                     uniswap_url, f"Link address {link_addr} differs from pool_address {pool_addr}"))
-            pair = f"{detail['token0']['symbol']}/{detail['token1']['symbol']}"
+            pair = _pair_symbols()
             targets.append((detail["id"], pair, uniswap_url, uniswap_chain, ver, link_addr))
 
         self.assertGreater(len(targets), 0, "No Uniswap links found among top pools")
@@ -442,13 +459,20 @@ class TestChaintelligenceAPI(unittest.TestCase):
 
         targets = []
         for pool in raw_pools:
-            d = requests.get(f"{BASE_URL}/api/pool/{pool['id']}", auth=self.auth).json()
-            pcs_url = d.get("links", {}).get("pancakeswap")
+            d_doc = requests.get(f"{BASE_URL}/api/pool/{pool['id']}", auth=self.auth).json()
+            d = d_doc.get("data", {})
+            d_attrs = d.get("attributes", {})
+            pcs_url = (d_attrs.get("links") or {}).get("pancakeswap")
             if not pcs_url:
                 continue
-            proto = d.get("protocol", "").lower()
+            proto = (d_attrs.get("protocol") or "").lower()
             is_v4 = "v4" in proto
-            pair = f"{d['token0']['symbol']}/{d['token1']['symbol']}"
+            coins = d_doc.get("included") or []
+            by_id = {c["id"]: c for c in coins if c["type"] == "coin"}
+            rels = d.get("relationships", {})
+            s0 = by_id.get((rels.get("coin0") or {}).get("data", {}).get("id"), {}).get("attributes", {}).get("symbol")
+            s1 = by_id.get((rels.get("coin1") or {}).get("data", {}).get("id"), {}).get("attributes", {}).get("symbol")
+            pair = f"{s0 or '?'}/{s1 or '?'}"
             link_addr = pcs_url.rstrip("/").rsplit("/", 1)[-1].split("?")[0]
             targets.append((d["id"], pair, pcs_url, link_addr, is_v4))
 
@@ -556,6 +580,379 @@ class TestChaintelligenceAPI(unittest.TestCase):
 
         if msg_parts:
             self.fail("\n".join(msg_parts))
+
+    def test_23_ods_search_by_contract(self):
+        """Test /api/ods/search-by-contract with show_routes default (true)."""
+        # WBNB -> USDT on BNB
+        url = (
+            f"{BASE_URL}/api/ods/search-by-contract"
+            f"?origin_coin_contract_address=0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+            f"&destination_coin_contract_address=0x55d398326f99059ff775485246999027b3197955"
+            f"&direction=forward"
+        )
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"ODS search failed: {resp.text}")
+        doc = resp.json()
+        data = doc.get("data")
+        self.assertIsNotNone(data, "Missing data block")
+        items = data if isinstance(data, list) else [data]
+        self.assertGreater(doc.get("meta", {}).get("n", 0), 0, "Expected at least one O&D pair")
+        od = items[0]
+        # O&D resources are JSON:API — type/id/attributes/relationships
+        self.assertEqual(od["type"], "od")
+        attrs = od["attributes"]
+        self.assertEqual(attrs["chain"], "BNB")
+        for key in ("chain_id", "origin_coin_contract_address",
+                    "destination_coin_contract_address", "origin_coin_id", "dest_coin_id",
+                    "origin_symbol", "dest_symbol", "first_seen", "last_seen"):
+            self.assertIn(key, attrs, f"O&D missing field: {key}")
+        self.assertIn("routes", od.get("relationships", {}))
+        # show_routes default -> routes embedded in `included`
+        included_types = {r["type"] for r in doc.get("included", [])}
+        self.assertIn("route", included_types, "routes should be included by default")
+        self.assertIn("hop", included_types, "route hops should be included")
+
+    def test_24_ods_search_by_contract_show_routes_false(self):
+        """Test /api/ods/search-by-contract with show_routes=false omits routes."""
+        url = (
+            f"{BASE_URL}/api/ods/search-by-contract"
+            f"?origin_coin_contract_address=0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+            f"&destination_coin_contract_address=0x55d398326f99059ff775485246999027b3197955"
+            f"&direction=forward&show_routes=false"
+        )
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"ODS search failed: {resp.text}")
+        doc = resp.json()
+        self.assertGreater(doc.get("meta", {}).get("n", 0), 0)
+        included_types = {r["type"] for r in doc.get("included", [])}
+        self.assertNotIn("route", included_types, "routes should be omitted when show_routes=false")
+
+    def test_25_ods_search_by_contract_no_match(self):
+        """Test /api/ods/search-by-contract returns an empty list for an unknown pair."""
+        url = (
+            f"{BASE_URL}/api/ods/search-by-contract"
+            f"?origin_coin_contract_address=0x000000000000000000000000000000000000dead"
+            f"&destination_coin_contract_address=0x55d398326f99059ff775485246999027b3197955"
+        )
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"ODS search failed: {resp.text}")
+        doc = resp.json()
+        self.assertEqual(doc.get("meta", {}).get("n", 0), 0)
+        self.assertEqual(doc.get("data"), [])
+
+    def test_26_od_by_hash(self):
+        """Test /api/od/{od_hash} returns the full O&D pair as a compound document."""
+        url = f"{BASE_URL}/api/od/2ac53c78a580597e"  # WBNB -> USDT on BNB
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"OD by hash failed: {resp.text}")
+        doc = resp.json()
+        od = doc["data"]
+        self.assertIsNotNone(od, "Missing data block")
+        self.assertEqual(od["type"], "od")
+        self.assertEqual(od["id"], "2ac53c78a580597e")
+        attrs = od["attributes"]
+        self.assertEqual(attrs["chain"], "BNB")
+        self.assertEqual(attrs["origin_symbol"], "WBNB")
+        self.assertEqual(attrs["dest_symbol"], "USDT")
+        for key in ("chain_id", "origin_coin_contract_address", "destination_coin_contract_address",
+                    "origin_coin_id", "dest_coin_id", "first_seen", "last_seen"):
+            self.assertIn(key, attrs, f"O&D missing field: {key}")
+        # Default include = full drill-down
+        included_types = {r["type"] for r in doc.get("included", [])}
+        self.assertTrue({"route", "hop", "pool", "coin"}.issubset(included_types),
+                        f"expected route/hop/pool/coin in included, got {included_types}")
+
+    def test_27_od_by_hash_not_found(self):
+        """Test /api/od/{od_hash} returns 404 for an unknown pair hash."""
+        url = f"{BASE_URL}/api/od/0000000000000000"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 404, f"Expected 404 for unknown od_hash, got {resp.status_code}")
+
+    def test_28_od_by_hash_invalid(self):
+        """Test /api/od/{od_hash} returns 400 for a malformed hash."""
+        url = f"{BASE_URL}/api/od/XYZ"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 400, f"Expected 400 for invalid od_hash, got {resp.status_code}")
+
+    def test_29_coins_search_by_symbol(self):
+        """Test public endpoint: /api/coins/search-by-symbol returns coin info + contracts."""
+        url = f"{BASE_URL}/api/coins/search-by-symbol?symbol=WETH"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Coin search failed: {resp.text}")
+        doc = resp.json()
+        data = doc.get("data")
+        self.assertIsNotNone(data, "Missing data block")
+        items = data if isinstance(data, list) else [data]
+        self.assertGreater(doc.get("meta", {}).get("n", 0), 0, "Expected at least one coin")
+        coin = items[0]
+        self.assertEqual(coin["type"], "coin")
+        attrs = coin["attributes"]
+        self.assertEqual(attrs["symbol"].upper(), "WETH")
+        self.assertIn("name", attrs)
+        self.assertIn("price", attrs)
+        rels = coin.get("relationships", {})
+        self.assertIn("contracts", rels)
+        included = {r["type"] for r in doc.get("included", [])}
+        self.assertIn("coin_contract", included, "Expected contracts in included")
+        contracts = [r for r in doc.get("included", []) if r["type"] == "coin_contract"]
+        self.assertGreater(len(contracts), 0, "Expected at least one contract")
+        contract = contracts[0]["attributes"]
+        for key in ("chain", "contract_address", "decimals", "is_native", "tracked"):
+            self.assertIn(key, contract, f"Contract missing field: {key}")
+
+    def test_30_coins_search_by_symbol_lowercase(self):
+        """Test /api/coins/search-by-symbol is case-insensitive."""
+        url = f"{BASE_URL}/api/coins/search-by-symbol?symbol=weth"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Coin search failed: {resp.text}")
+        doc = resp.json()
+        data = doc.get("data")
+        items = data if isinstance(data, list) else [data]
+        self.assertGreater(doc.get("meta", {}).get("n", 0), 0)
+        self.assertEqual(items[0]["attributes"]["symbol"].upper(), "WETH")
+
+    def test_31_coins_search_by_symbol_family_expansion(self):
+        """Test /api/coins/search-by-symbol expands to the coin family by default."""
+        url = f"{BASE_URL}/api/coins/search-by-symbol?symbol=BTC"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Coin search failed: {resp.text}")
+        doc = resp.json()
+        data = doc.get("data")
+        items = data if isinstance(data, list) else [data]
+        self.assertTrue(doc.get("meta", {}).get("include_coin_families"))
+        symbols = {i["attributes"]["symbol"].upper() for i in items}
+        self.assertIn("BTC", symbols)
+        self.assertGreater(doc.get("meta", {}).get("n", 0), 1, "Expected family expansion to return wrapped BTC variants")
+
+    def test_32_coins_search_by_symbol_no_family_expansion(self):
+        """Test /api/coins/search-by-symbol with include_coin_families=false returns exact symbol only."""
+        url = f"{BASE_URL}/api/coins/search-by-symbol?symbol=BTC&include_coin_families=false"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Coin search failed: {resp.text}")
+        doc = resp.json()
+        data = doc.get("data")
+        items = data if isinstance(data, list) else [data]
+        self.assertFalse(doc.get("meta", {}).get("include_coin_families"))
+        self.assertEqual(doc.get("meta", {}).get("n", 0), 1)
+        self.assertEqual(items[0]["attributes"]["symbol"].upper(), "BTC")
+
+    def test_33_coins_search_by_symbol_not_found(self):
+        """Test /api/coins/search-by-symbol returns 404 for an unknown symbol."""
+        url = f"{BASE_URL}/api/coins/search-by-symbol?symbol=ZZZZNOTREAL"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 404, f"Expected 404 for unknown symbol, got {resp.status_code}")
+
+    def test_34_od_list(self):
+        """Test /api/ods list endpoint with filters + pagination."""
+        url = f"{BASE_URL}/api/ods?origin_symbol=WBNB&limit=5"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"ODS list failed: {resp.text}")
+        doc = resp.json()
+        data = doc.get("data")
+        items = data if isinstance(data, list) else [data]
+        self.assertGreater(len(items), 0)
+        self.assertEqual(items[0]["type"], "od")
+        self.assertIn("attributes", items[0])
+
+    def test_35_route_by_hash(self):
+        """Test /api/routes/{route_hash} compound document."""
+        url = f"{BASE_URL}/api/routes/837dc52fa8bde82c"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Route by hash failed: {resp.text}")
+        doc = resp.json()
+        route = doc["data"]
+        self.assertEqual(route["type"], "route")
+        self.assertEqual(route["id"], "837dc52fa8bde82c")
+        included_types = {r["type"] for r in doc.get("included", [])}
+        self.assertTrue({"hop", "pool", "coin"}.issubset(included_types),
+                        f"expected hop/pool/coin in included, got {included_types}")
+
+    def test_36_coin_by_id(self):
+        """Test /api/coins/{coin_id} compound document."""
+        url = f"{BASE_URL}/api/coins/290"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Coin by id failed: {resp.text}")
+        doc = resp.json()
+        coin = doc["data"]
+        self.assertEqual(coin["type"], "coin")
+        self.assertEqual(coin["id"], 290)
+        self.assertEqual(coin["attributes"]["symbol"].upper(), "BTC")
+        included_types = {r["type"] for r in doc.get("included", [])}
+        self.assertTrue({"coin_contract", "coin_family"}.issubset(included_types),
+                        f"expected contracts+families in included, got {included_types}")
+
+    def test_37_bad_include_400(self):
+        """Test bad ?include= path returns 400, not 500."""
+        for url in (
+            f"{BASE_URL}/api/od/2ac53c78a580597e?include=routes.hops.bogus",
+            f"{BASE_URL}/api/coins/290?include=contracts.bogus",
+            f"{BASE_URL}/api/pool/1?include=coin0.bogus",
+        ):
+            resp = requests.get(url, auth=self.auth)
+            self.assertEqual(resp.status_code, 400, f"Expected 400 for {url}, got {resp.status_code}: {resp.text}")
+
+    def test_38_route_daily_stats(self):
+        """Test /api/routes/{route_hash}/daily-stats compound document."""
+        url = f"{BASE_URL}/api/routes/837dc52fa8bde82c/daily-stats"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Route daily stats failed: {resp.text}")
+        doc = resp.json()
+        route = doc["data"]
+        self.assertEqual(route["type"], "route")
+        self.assertEqual(route["id"], "837dc52fa8bde82c")
+        stats_refs = route["relationships"]["daily_stats"]["data"]
+        self.assertGreater(len(stats_refs), 0, "Expected at least one daily stat row")
+        included_types = {r["type"] for r in doc.get("included", [])}
+        self.assertIn("route_daily_stat", included_types, "Expected route_daily_stat in included")
+        stat = next(r for r in doc["included"] if r["type"] == "route_daily_stat")
+        for key in ("day", "tx_count", "swap_count", "volume_usd", "fees_usd"):
+            self.assertIn(key, stat["attributes"], f"route_daily_stat missing field: {key}")
+        self.assertEqual(stat["relationships"]["route"]["data"]["id"], "837dc52fa8bde82c")
+        # Default include also brings the bucket distribution.
+        self.assertIn("route_daily_stat_bucket", included_types,
+                      "Expected route_daily_stat_bucket in default include")
+        bucket = next(r for r in doc["included"] if r["type"] == "route_daily_stat_bucket")
+        for key in ("day", "bucket_index", "tx_count", "sample_count", "volume_usd",
+                    "fees_usd", "log_sum", "log_sum2"):
+            self.assertIn(key, bucket["attributes"], f"route_daily_stat_bucket missing field: {key}")
+        # Each daily stat links to its same-day buckets.
+        bucket_refs = stat["relationships"]["daily_stats_bucket"]["data"]
+        if bucket_refs:
+            for ref in bucket_refs:
+                self.assertTrue(ref["id"].startswith(stat["id"] + ":"),
+                                f"bucket {ref['id']} should be under daily stat {stat['id']}")
+
+    def test_39_route_daily_stats_not_found(self):
+        """Test /api/routes/{route_hash}/daily-stats 404 for unknown route."""
+        url = f"{BASE_URL}/api/routes/0000000000000000/daily-stats"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 404, f"Expected 404, got {resp.status_code}: {resp.text}")
+
+    def test_40_route_daily_stats_bad_include(self):
+        """Test /api/routes/{route_hash}/daily-stats bad include returns 400."""
+        url = f"{BASE_URL}/api/routes/837dc52fa8bde82c/daily-stats?include=daily_stats.bogus"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 400, f"Expected 400, got {resp.status_code}: {resp.text}")
+        self.assertIn("bogus", resp.json().get("detail", ""))
+
+    def test_41_pool_daily_stats(self):
+        """Test /api/pool/{identifier}/daily-stats compound document."""
+        url = f"{BASE_URL}/api/pool/165681/daily-stats"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Pool daily stats failed: {resp.text}")
+        doc = resp.json()
+        pool = doc["data"]
+        self.assertEqual(pool["type"], "pool")
+        self.assertEqual(pool["id"], 165681)
+        stats_refs = pool["relationships"]["daily_stats"]["data"]
+        self.assertGreater(len(stats_refs), 0, "Expected at least one daily stat row")
+        included_types = {r["type"] for r in doc.get("included", [])}
+        self.assertIn("pool_daily_stat", included_types, "Expected pool_daily_stat in included")
+        stat = next(r for r in doc["included"] if r["type"] == "pool_daily_stat")
+        for key in ("day", "tx_count", "volume_usd", "tvl_usd"):
+            self.assertIn(key, stat["attributes"], f"pool_daily_stat missing field: {key}")
+        self.assertEqual(stat["relationships"]["pool"]["data"]["id"], 165681)
+        # Default include also brings the bucket distribution.
+        self.assertIn("pool_daily_stat_bucket", included_types,
+                      "Expected pool_daily_stat_bucket in default include")
+        bucket = next(r for r in doc["included"] if r["type"] == "pool_daily_stat_bucket")
+        for key in ("day", "bucket_index", "tx_count", "sample_count", "volume_usd",
+                    "fees_usd", "log_sum", "log_sum2"):
+            self.assertIn(key, bucket["attributes"], f"pool_daily_stat_bucket missing field: {key}")
+        # Each daily stat links to its same-day buckets.
+        bucket_refs = stat["relationships"]["daily_stats_bucket"]["data"]
+        if bucket_refs:
+            for ref in bucket_refs:
+                self.assertTrue(ref["id"].startswith(stat["id"] + ":"),
+                                f"bucket {ref['id']} should be under daily stat {stat['id']}")
+
+    def test_42_pool_daily_stats_by_address(self):
+        """Test /api/pool/{identifier}/daily-stats resolves a V3 contract address."""
+        url = f"{BASE_URL}/api/pool/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640/daily-stats"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Pool daily stats by address failed: {resp.text}")
+        doc = resp.json()
+        self.assertEqual(doc["data"]["id"], 165681)
+        self.assertGreater(len(doc["data"]["relationships"]["daily_stats"]["data"]), 0)
+
+    def test_43_pool_daily_stats_errors(self):
+        """Test pool daily-stats 404 (unknown id), 400 (bad identifier), 400 (bad include)."""
+        urls_404 = (f"{BASE_URL}/api/pool/999999999/daily-stats",)
+        for url in urls_404:
+            resp = requests.get(url, auth=self.auth)
+            self.assertEqual(resp.status_code, 404, f"Expected 404 for {url}, got {resp.status_code}: {resp.text}")
+        url_bad_id = f"{BASE_URL}/api/pool/XYZ/daily-stats"
+        resp = requests.get(url_bad_id, auth=self.auth)
+        self.assertEqual(resp.status_code, 400, f"Expected 400 for {url_bad_id}, got {resp.status_code}: {resp.text}")
+        url_bad_inc = f"{BASE_URL}/api/pool/165681/daily-stats?include=daily_stats.bogus"
+        resp = requests.get(url_bad_inc, auth=self.auth)
+        self.assertEqual(resp.status_code, 400, f"Expected 400 for {url_bad_inc}, got {resp.status_code}: {resp.text}")
+        self.assertIn("bogus", resp.json().get("detail", ""))
+
+    def test_44_route_window_stats(self):
+        """Route daily-stats carries a window_stats attribute matching analyze."""
+        url = f"{BASE_URL}/api/routes/837dc52fa8bde82c/daily-stats"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Route daily stats failed: {resp.text}")
+        route = resp.json()["data"]
+        ws = route["attributes"].get("window_stats")
+        self.assertIsNotNone(ws, "Expected window_stats attribute on route")
+        for key in ("start_date", "end_date", "tx_count", "swap_count", "volume_usd",
+                    "fees_usd", "market_size", "avg_volume", "pct_volume", "last_activity"):
+            self.assertIn(key, ws, f"route window_stats missing field: {key}")
+        # window sums must equal the sum of the included per-day rows.
+        daily = [r for r in resp.json().get("included", []) if r["type"] == "route_daily_stat"]
+        self.assertGreater(len(daily), 0)
+        self.assertEqual(ws["tx_count"], sum(d["attributes"]["tx_count"] for d in daily))
+        self.assertEqual(ws["swap_count"], sum(d["attributes"]["swap_count"] for d in daily))
+        self.assertAlmostEqual(ws["volume_usd"], sum(d["attributes"]["volume_usd"] for d in daily), places=2)
+        self.assertEqual(ws["last_activity"], max(d["attributes"]["day"] for d in daily))
+
+    def test_45_route_window_stats_explicit_dates(self):
+        """?start_date/end_date narrows the window; ?days resolves a lookback."""
+        url = f"{BASE_URL}/api/routes/837dc52fa8bde82c/daily-stats?start_date=2026-08-12&end_date=2026-08-13"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Route window stats failed: {resp.text}")
+        ws = resp.json()["data"]["attributes"]["window_stats"]
+        self.assertEqual(ws["start_date"], "2026-08-12")
+        self.assertEqual(ws["end_date"], "2026-08-13")
+        self.assertAlmostEqual(ws["volume_usd"], 1154.54, places=2)
+        url_days = f"{BASE_URL}/api/routes/837dc52fa8bde82c/daily-stats?days=3"
+        resp_days = requests.get(url_days, auth=self.auth)
+        self.assertEqual(resp_days.status_code, 200, f"Route days window failed: {resp_days.text}")
+        ws_days = resp_days.json()["data"]["attributes"]["window_stats"]
+        self.assertEqual(ws_days["start_date"], "2026-08-12")
+        self.assertEqual(ws_days["end_date"], "2026-08-15")
+
+    def test_46_pool_window_stats_apr(self):
+        """Pool daily-stats carries window_stats + apr matching analyze."""
+        url = f"{BASE_URL}/api/pool/165681/daily-stats"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Pool daily stats failed: {resp.text}")
+        pool = resp.json()["data"]
+        attrs = pool["attributes"]
+        ws = attrs.get("window_stats")
+        self.assertIsNotNone(ws, "Expected window_stats attribute on pool")
+        for key in ("start_date", "end_date", "tx_count", "volume_usd", "tvl_usd", "fees_usd"):
+            self.assertIn(key, ws, f"pool window_stats missing field: {key}")
+        daily = [r for r in resp.json().get("included", []) if r["type"] == "pool_daily_stat"]
+        self.assertGreater(len(daily), 0)
+        self.assertEqual(ws["tx_count"], sum(d["attributes"]["tx_count"] for d in daily))
+        self.assertAlmostEqual(ws["volume_usd"], sum(d["attributes"]["volume_usd"] for d in daily), places=2)
+        self.assertIn("apr", attrs, "Expected apr attribute on pool")
+        # 0.05% WETH/USDC pool over its full history -> apr ~4.05% (0.0405)
+        self.assertIsNotNone(attrs["apr"])
+        self.assertAlmostEqual(attrs["apr"], 0.0405, places=4)
+
+    def test_47_pool_window_stats_apr_dates(self):
+        """?start_date/end_date on the pool window changes apr."""
+        url = f"{BASE_URL}/api/pool/165681/daily-stats?start_date=2026-08-01&end_date=2026-08-15"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"Pool window stats failed: {resp.text}")
+        pool = resp.json()["data"]["attributes"]
+        self.assertEqual(pool["window_stats"]["start_date"], "2026-08-01")
+        self.assertEqual(pool["window_stats"]["end_date"], "2026-08-15")
+        self.assertAlmostEqual(pool["apr"], 0.0293, places=4)
 
 
 if __name__ == "__main__":

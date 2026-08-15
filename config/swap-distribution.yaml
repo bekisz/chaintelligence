@@ -1,0 +1,13 @@
+# Global swap-size distribution bucketing parameters.
+#
+# These apply to every route (route_daily_stats_bucket) and every pool
+# (liquidity_pool_daily_stats_bucket) — there is no per-route/pool override
+# anymore. The classifier and the API read this file.
+#
+# bucket_count:   number of log-volume buckets (8..256)
+# min_amount_usd: swaps with amount_usd < this are excluded from buckets
+# max_amount_usd: swaps with amount_usd > this are excluded from buckets
+
+bucket_count: 80
+min_amount_usd: 10.0
+max_amount_usd: 100000000.0

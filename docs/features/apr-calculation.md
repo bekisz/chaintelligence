@@ -29,7 +29,7 @@ To maximize performance, pool metrics are queried and computed in **three progre
 
 ```mermaid
 graph TD
-    A["Start: List of pools (t0, t1, fee)"] --> B["Phase 2: Query liquidity_pool_history"]
+    A["Start: List of pools (t0, t1, fee)"] --> B["Phase 2: Query liquidity_pool_daily_stats"]
     B --> C{"TVL is zero or <= 1.0?"}
     C -- Yes --> D["Phase 2b: Fallback to latest non-zero TVL snapshot"]
     C -- No --> E["Phase 3: Fallback volume from swaps table"]
@@ -40,13 +40,13 @@ graph TD
 ```
 
 ### Phase 2: Historical snap queries
-Query the `liquidity_pool_history` table for time-weighted average TVL and aggregate trading volume:
+Query the `liquidity_pool_daily_stats` table for time-weighted average TVL and aggregate trading volume:
 ```sql
 SELECT pool_id,
        SUM(volume_usd) AS total_vol,
        SUM(tvl_usd * n_days) / SUM(n_days) AS avg_tvl
-FROM liquidity_pool_history
-WHERE pool_id = ANY(%s) AND date >= %s AND date <= %s
+FROM liquidity_pool_daily_stats
+WHERE pool_id = ANY(%s) AND day >= %s AND day <= %s
 GROUP BY pool_id;
 ```
 
@@ -54,9 +54,9 @@ GROUP BY pool_id;
 For pools with no historical snapshot data in the active range, query the most recent non-zero TVL value across all history (to ensure we do not divide by zero):
 ```sql
 SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl
-FROM liquidity_pool_history
+FROM liquidity_pool_daily_stats
 WHERE pool_id = ANY(%s) AND tvl_usd <> 0
-ORDER BY pool_id, date DESC;
+ORDER BY pool_id, day DESC;
 ```
 
 ### Phase 3: Transaction Swap Volume Fallback

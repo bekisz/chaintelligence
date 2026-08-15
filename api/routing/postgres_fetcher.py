@@ -683,7 +683,7 @@ class PostgresFetcher:
                             (across all history), i.e. the pool's current size.
 
         use_swaps_fallback: when True, pools still at zero volume after the
-            liquidity_pool_history aggregation fall back to the raw swaps table
+            liquidity_pool_daily_stats aggregation fall back to the raw swaps table
             for volume. This is intentionally opt-in: only the counterfactual
             tools (/api/routes/undercut, /api/sps/find) pass it, because they
             are exempt from the no-raw-swaps rule; the main analytics endpoints
@@ -692,11 +692,11 @@ class PostgresFetcher:
 
         Implementation note: this used to build one UNION ALL subquery *per pool*
         (plus a correlated TVL-fallback subquery per pool) and join
-        liquidity_pool_history -> liquidity_pool on symbol pairs every time. That
+        liquidity_pool_daily_stats -> liquidity_pool on symbol pairs every time. That
         made latency grow linearly with the number of pools and defeated the
         symbol-pair indexes. The current shape resolves every requested pool to
         its pool_id(s) in ONE query, then runs ONE grouped aggregation over
-        liquidity_pool_history keyed by pool_id, with ONE batched TVL-fallback
+        liquidity_pool_daily_stats keyed by pool_id, with ONE batched TVL-fallback
         query for pools that had no non-zero TVL in range.
         """
         if not pools:
@@ -812,7 +812,7 @@ class PostgresFetcher:
             all_pool_ids = sorted({pid for m in pool_meta.values() for pid in m['pool_ids']})
 
             # ------------------------------------------------------------------
-            # Phase 2: ONE grouped aggregation over liquidity_pool_history keyed
+            # Phase 2: ONE grouped aggregation over liquidity_pool_daily_stats keyed
             # by pool_id. COUNT(*) FILTER lets us reconstruct the exact row-count-
             # weighted AVG(ABS(tvl_usd)) across all pools sharing a key, which is
             # what the old per-pool AVG computed.
@@ -830,9 +830,9 @@ class PostgresFetcher:
                            COALESCE(SUM(ABS(volume_usd)), 0) AS total_vol,
                            AVG(ABS(tvl_usd)) FILTER (WHERE tvl_usd <> 0) AS avg_tvl,
                            COUNT(*) FILTER (WHERE tvl_usd <> 0) AS n_rows
-                    FROM liquidity_pool_history
+                    FROM liquidity_pool_daily_stats
                     WHERE pool_id = ANY(%s)
-                      AND date >= %s::date AND date <= %s::date
+                      AND day >= %s::date AND day <= %s::date
                     GROUP BY pool_id
                 """, (all_pool_ids, start_date, end_date))
                 for pid, total_vol, avg_tvl, n_rows in cur.fetchall():
@@ -860,10 +860,10 @@ class PostgresFetcher:
             latest_tvl = {}
             if all_pool_ids:
                 cur.execute("""
-                    SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, date
-                    FROM liquidity_pool_history
+                    SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, day
+                    FROM liquidity_pool_daily_stats
                     WHERE pool_id = ANY(%s) AND tvl_usd <> 0
-                    ORDER BY pool_id, date DESC
+                    ORDER BY pool_id, day DESC
                 """, (all_pool_ids,))
                 for pid, tvl, dt in cur.fetchall():
                     latest_tvl[pid] = (dt, float(tvl or 0))
@@ -890,7 +890,7 @@ class PostgresFetcher:
             # Phase 3: volume fallback from the raw swaps table. Opt-in only:
             # the counterfactual tools (/api/routes/undercut, /api/sps/find) are
             # exempt from the no-raw-swaps rule and rely on this to price pools
-            # that have no liquidity_pool_history rows yet. The main analytics
+            # that have no liquidity_pool_daily_stats rows yet. The main analytics
             # endpoints never set use_swaps_fallback, so they stay raw-free.
             # Each key gets its own tightly-scoped subquery (one exact symbol
             # pair, one network/protocol, two fee-tier forms) so the planner
@@ -1056,7 +1056,7 @@ class PostgresFetcher:
                                   offset: int = 0,
                                   sort_by: str = "volume") -> List[Dict]:
         """
-        Fetch aggregated pool statistics directly from liquidity_pool_history & liquidity_pool.
+        Fetch aggregated pool statistics directly from liquidity_pool_daily_stats & liquidity_pool.
         Sub-second execution that avoids scanning raw swaps.
 
         Args:
@@ -1095,7 +1095,7 @@ class PostgresFetcher:
                      lt.tvl_usd,
                      0.0
                  ) AS avg_tvl,
-                 MAX(lph.date) FILTER (WHERE lph.volume_usd <> 0) AS last_activity,
+                 MAX(lph.day) FILTER (WHERE lph.volume_usd <> 0) AS last_activity,
                  cc0.contract_address AS addr0,
                  cc1.contract_address AS addr1,
                  lp.created_at
@@ -1104,19 +1104,19 @@ class PostgresFetcher:
             JOIN protocol pr ON lp.protocol_id = pr.id
             JOIN coin c0 ON lp.coin0_id = c0.coin_id
             JOIN coin c1 ON lp.coin1_id = c1.coin_id
-            JOIN liquidity_pool_history lph ON lph.pool_id = lp.id
+            JOIN liquidity_pool_daily_stats lph ON lph.pool_id = lp.id
             LEFT JOIN coin_contract cc0 ON cc0.coin_id = lp.coin0_id AND cc0.chain_id = lp.chain_id
             LEFT JOIN coin_contract cc1 ON cc1.coin_id = lp.coin1_id AND cc1.chain_id = lp.chain_id
             LEFT JOIN LATERAL (
                 SELECT lph2.tvl_usd
-                FROM liquidity_pool_history lph2
+                FROM liquidity_pool_daily_stats lph2
                 WHERE lph2.pool_id = lp.id
                   AND lph2.tvl_usd IS NOT NULL
                   AND lph2.tvl_usd > 0
-                ORDER BY lph2.date DESC
+                ORDER BY lph2.day DESC
                 LIMIT 1
             ) lt ON TRUE
-            WHERE lph.date >= %s::date AND lph.date <= %s::date
+            WHERE lph.day >= %s::date AND lph.day <= %s::date
         """
         params = [start_date, end_date]
         if token_where:

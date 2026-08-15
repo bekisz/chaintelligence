@@ -8,7 +8,7 @@ import psycopg2
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
 import requests
-from fastapi import FastAPI, HTTPException, Query, Request, Response, Body
+from fastapi import FastAPI, HTTPException, Query, Request, Response, Body, Path
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -47,6 +47,10 @@ API_ROUTING = os.path.join(ROOT_DIR, 'api', 'routing')
 if API_ROUTING not in sys.path:
     sys.path.insert(0, API_ROUTING)
 
+API_RESOURCES = os.path.join(ROOT_DIR, 'api', 'resources')
+if API_RESOURCES not in sys.path:
+    sys.path.insert(0, API_RESOURCES)
+
 # Import graph discovery client
 
 
@@ -55,6 +59,11 @@ if GRAPH_CLIENT_DIR not in sys.path:
     sys.path.insert(0, GRAPH_CLIENT_DIR)
 if os.path.join(GRAPH_CLIENT_DIR, 'include') not in sys.path:
     sys.path.insert(0, os.path.join(GRAPH_CLIENT_DIR, 'include'))
+
+from include.settings import load_distribution_config  # noqa: E402
+
+# Global swap-size distribution bucket parameters (config/swap-distribution.yaml).
+DISTRIBUTION_CONFIG = load_distribution_config()
 
 # Import graph discovery client
 def get_factory_and_hash(protocol: str, network: str):
@@ -121,6 +130,119 @@ def route_hash_hex(route_id):
     return format((route_id & ((1 << 64) - 1)), '016x')
 
 
+async def load_pool_row(identifier: str) -> dict:
+    """Resolve a pool identifier (id / V3 address / V4 pool_id) to its pool row.
+
+    Returns the pool dict (pool_id/pool_address/v4_pool_id/chain_id/protocol/
+    coin0_id/coin1_id/fee_bps/fee_tier/created_at) or raises HTTPException
+    400/404.
+    """
+    conn = psycopg2.connect(DATA_WAREHOUSE_DB)
+    try:
+        cur = conn.cursor()
+        if identifier.isdigit():
+            col_clause = "lp.id = %s"
+            param = int(identifier)
+        elif len(identifier) == 42 and identifier.startswith("0x"):
+            col_clause = "LOWER(lp.pool_address) = LOWER(%s)"
+            param = identifier
+        elif len(identifier) == 66 and identifier.startswith("0x"):
+            col_clause = "LOWER(lp.pool_id) = LOWER(%s) OR LOWER(lp.pool_address) = LOWER(%s)"
+            param = (identifier, identifier)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Identifier must be a numeric id, a 42-char 0x contract address, or a 66-char 0x V4 pool_id",
+            )
+        q = f"""
+            SELECT lp.id, lp.pool_address, lp.pool_id, lp.fee_bps, lp.chain_id,
+                   ch.name AS network, pr.name AS protocol,
+                   c0.coin_id AS c0_id,
+                   c1.coin_id AS c1_id,
+                   lp.created_at
+            FROM liquidity_pool lp
+            JOIN chain ch ON lp.chain_id = ch.id
+            JOIN protocol pr ON lp.protocol_id = pr.id
+            JOIN coin c0 ON lp.coin0_id = c0.coin_id
+            JOIN coin c1 ON lp.coin1_id = c1.coin_id
+            WHERE {col_clause}
+            LIMIT 1
+        """
+        if isinstance(param, tuple):
+            cur.execute(q, param)
+        else:
+            cur.execute(q, (param,))
+        row = cur.fetchone()
+        cur.close()
+        if not row:
+            raise HTTPException(status_code=404, detail="Pool not found")
+        (pool_id, pool_address, v4_pool_id, fee_bps, chain_id,
+         network, protocol, coin0_id, coin1_id, created_at) = row
+        fee_val = round(fee_bps) if fee_bps else None
+        return {
+            "pool_id": pool_id,
+            "pool_address": pool_address or v4_pool_id or "",
+            "v4_pool_id": v4_pool_id or pool_address or "",
+            "chain_id": chain_id,
+            "network": network,
+            "protocol": protocol,
+            "coin0_id": coin0_id,
+            "coin1_id": coin1_id,
+            "fee_bps": float(fee_bps) if fee_bps else None,
+            "fee_tier": f"{fee_val / 100.0:.2f}%" if fee_val else ("Dynamic" if fee_bps is None else None),
+            "created_at": created_at.isoformat() if created_at else None,
+        }
+    finally:
+        conn.close()
+
+
+async def load_route_row(route_hash: str) -> dict:
+    """Validate a 16-char route hash and load its route row.
+
+    Returns the route dict (route_id/pair_id/hops/chain/first_seen/last_seen/
+    od_hash) or raises HTTPException 400/404.
+    """
+    route_hash = route_hash.strip().lower()
+    if len(route_hash) != 16 or any(c not in '0123456789abcdef' for c in route_hash):
+        raise HTTPException(status_code=400, detail="route_hash must be a 16-char lowercase hex string")
+    route_id = int(route_hash, 16)
+    if route_id >= (1 << 63):
+        route_id -= (1 << 64)
+
+    def _query():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT r.route_id, r.pair_id, r.hops, r.chain_id, ch.name AS chain,
+                       r.first_seen, r.last_seen,
+                       pair.origin_symbol, pair.dest_symbol
+                FROM route r
+                JOIN chain ch ON r.chain_id = ch.id
+                JOIN origin_destination_pair pair ON r.pair_id = pair.id
+                WHERE r.route_id = %s
+            """, (route_id,))
+            row = cur.fetchone()
+            cur.close()
+            return row
+
+    row = await asyncio.to_thread(_query)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No route found for hash {route_hash}")
+
+    (route_id, pair_id, hops, chain_id, chain, first_seen, last_seen,
+     origin_symbol, dest_symbol) = row
+    return {
+        "route_id": route_id,
+        "pair_id": pair_id,
+        "hops": int(hops or 1),
+        "chain_id": chain_id,
+        "chain": chain,
+        "first_seen": first_seen.isoformat() if first_seen else None,
+        "last_seen": last_seen.isoformat() if last_seen else None,
+        "od_hash": route_hash_hex(pair_id),
+    }
+
+
 def format_apr(apr_val):
     if apr_val is None:
         return "N/A"
@@ -133,6 +255,25 @@ def format_apr(apr_val):
     if rounded == int(rounded):
         return f"{int(rounded)}%"
     return f"{rounded}%"
+
+
+def resolve_stats_window(days: Optional[float], start_date: Optional[str],
+                         end_date: Optional[str], default_range: Optional[tuple] = None) -> Optional[tuple]:
+    """Resolve a (start_date, end_date) ISO-string window for windowed stats.
+
+    Precedence: explicit `start_date`/`end_date` > `days` lookback > the
+    resource's full available day range (``default_range``). Returns None when
+    nothing can be resolved (e.g. a route with no stats rows yet).
+    """
+    if start_date:
+        start = start_date
+        end = end_date if end_date else datetime.now().strftime('%Y-%m-%d')
+        return (start, end)
+    if days is not None and days > 0:
+        end = datetime.now()
+        start = end - timedelta(days=days)
+        return (start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d'))
+    return default_range
 
 
 import requests
@@ -591,6 +732,10 @@ try:
     from config import DATA_WAREHOUSE_DB
     import undercut_analyzer as ua
     import swap_distribution as sd
+    from graph import (  # JSON:API object-graph serializer
+        build_coin_documents, build_coin_family_documents,
+        build_od_documents, build_pool_documents, build_route_documents,
+    )
 except ImportError as e:
     print(f"Error importing routing modules from {API_ROUTING}: {e}")
     sys.exit(1)
@@ -610,7 +755,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coin/list", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status", "/pool-arena", "/api/pool-arena", "/api/swap-distribution"]
+    exempt_paths = ["/api/coins/list", "/api/coins/search-by-symbol", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status", "/pool-arena", "/api/pool-arena", "/api/swap-distribution"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -722,7 +867,7 @@ def resolve_token_input(input_str: str) -> list[str]:
 # Global memory cache for resolved token symbols to contract addresses per network to prevent repetitive slow DB queries
 TOKEN_ADDRESS_CACHE = {}
 
-@app.get("/api/routes/analyze", tags=["Route Analytics"])
+@app.get("/api/routes/analyze", tags=["Route"])
 async def analyze(
     start_token: str,
     end_token: str,
@@ -835,7 +980,7 @@ async def analyze(
             if not has_data:
                 # No route stats for this token pair in the window. Report an
                 # empty result with the available data range sourced from
-                # liquidity_pool_history (no raw-swaps read).
+                # liquidity_pool_daily_stats (no raw-swaps read).
                 yield json.dumps({"type": "progress", "pct": 40.0, "message": "No route data for this window..."}) + "\n"
                 await asyncio.sleep(0.01)
 
@@ -845,14 +990,14 @@ async def analyze(
                         cur.execute("SET LOCAL statement_timeout = '30s'")
                         if network and network.lower() != 'all':
                             cur.execute("""
-                                SELECT MIN(lph.date)::date, MAX(lph.date)::date
-                                FROM liquidity_pool_history lph
+                                SELECT MIN(lph.day)::date, MAX(lph.day)::date
+                                FROM liquidity_pool_daily_stats lph
                                 JOIN liquidity_pool lp ON lph.pool_id = lp.id
                                 JOIN chain ch ON lp.chain_id = ch.id
                                 WHERE LOWER(ch.name) = LOWER(%s)
                             """, (network,))
                         else:
-                            cur.execute("SELECT MIN(date)::date, MAX(date)::date FROM liquidity_pool_history")
+                            cur.execute("SELECT MIN(day)::date, MAX(day)::date FROM liquidity_pool_daily_stats")
                         return cur.fetchone()
 
                 row = await asyncio.to_thread(_db_range)
@@ -1474,7 +1619,7 @@ async def analyze(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/routes/undercut", tags=["Route Analytics"])
+@app.get("/api/routes/undercut", tags=["Route"])
 async def undercut(
     start_token: str,
     end_token: str,
@@ -1995,21 +2140,23 @@ async def swap_distribution(
     limit: int = Query(500000, ge=100, le=2000000, description="Max swap rows sampled"),
     exclude_chains: Optional[str] = Query(None, description="Comma-separated chain names to exclude"),
     group_by: str = Query("route", pattern="^route$",
-                          description="Split the histogram groups. Only 'route' is served (from pre-aggregated route_distribution_bucket); other groupings were dropped with the raw-swaps migration."),
+                          description="Split the histogram groups. Only 'route' is served (from pre-aggregated route_daily_stats_bucket); other groupings were dropped with the raw-swaps migration."),
     direction: str = Query("both", pattern="^(both|forward|reverse)$",
                            description="Restrict to a single swap direction: both (default), forward (start→end), or reverse (end→start)"),
     max_hops: Optional[int] = Query(None, description="Max route hop count (1 for direct routes only)")
 ):
     """Analyze the swap-size distribution for a token route.
 
-    Served from pre-aggregated route_distribution_bucket rows for configured
-    routes (no raw swaps reads). Aggregates per-route bucket counts/volumes,
-    fits a lognormal body + Pareto tail, and returns the log-binned histogram
-    plus fitted curves for the frontend to render as pure SVG.
+    Served from pre-aggregated route_daily_stats_bucket rows (no raw swaps
+    reads). Bucket parameters (bucket count, min/max amount USD) come from the
+    global config/swap-distribution.yaml. Aggregates per-route bucket
+    counts/volumes, fits a lognormal body + Pareto tail, and returns the
+    log-binned histogram plus fitted curves for the frontend to render as pure
+    SVG.
 
-    Only `group_by=route` is supported. Routes must be present in
-    route_distribution_config with a completed daily bucket rollup; otherwise
-    the query returns no data (the raw-swaps fallback was removed).
+    Only `group_by=route` is supported. Every route is bucketed daily, so a
+    query whose routes have no completed bucket rollup in the window returns no
+    data (the raw-swaps fallback was removed).
     """
     try:
         now = datetime.now()
@@ -2113,10 +2260,10 @@ async def swap_distribution(
                 except Exception as e:
                     pass
 
-                # Configured routes can be served from compact daily buckets
-                # after their raw swap rows are purged. Unconfigured routes
-                # have no data once the raw-swaps fallback is gone, so the
-                # selection is restricted to routes with an enabled config.
+                # Every route is bucketed daily into route_daily_stats_bucket
+                # using the global swap-distribution.yaml parameters, so any
+                # direction-matched route with a completed rollup can be served
+                # from the compact daily buckets.
                 if group_by == "route" and route_infos:
                     selected_infos = {}
                     for rid, info in route_infos.items():
@@ -2126,42 +2273,28 @@ async def swap_distribution(
                             continue
                         selected_infos[rid] = info
                     if selected_infos:
-                        ccursor = conn.cursor()
-                        ccursor.execute("""
-                            SELECT c.route_id
-                            FROM route_distribution_config c
-                            WHERE c.enabled AND c.route_id = ANY(%s)
-                        """, (list(selected_infos),))
-                        configured_ids = {row[0] for row in ccursor.fetchall()}
-                        ccursor.close()
-                        if not configured_ids:
-                            return None
-                        selected_infos = {rid: info for rid, info in selected_infos.items()
-                                          if rid in configured_ids}
+                        bucket_count = int(DISTRIBUTION_CONFIG['bucket_count'])
+                        min_usd = float(DISTRIBUTION_CONFIG['min_amount_usd'])
+                        max_usd = float(DISTRIBUTION_CONFIG['max_amount_usd'])
                         route_id_by_path = {info['path_str']: rid for rid, info in selected_infos.items()}
                         bcur = conn.cursor()
                         bcur.execute("""
-                            SELECT c.route_id, c.bucket_count, c.min_amount_usd,
-                                   c.max_amount_usd, b.bucket_index,
-                                   b.sample_count, b.volume_usd, b.log_sum, b.log_sum2
-                            FROM route_distribution_config c
-                            LEFT JOIN route_distribution_bucket b
-                              ON b.route_id = c.route_id
-                             AND b.day >= %s::date AND b.day <= %s::date
-                            WHERE c.enabled AND c.route_id = ANY(%s)
-                            ORDER BY c.route_id, b.bucket_index
-                        """, (start_dt, end_dt, list(selected_infos)))
+                            SELECT b.route_id, b.bucket_index,
+                                   b.tx_count, b.sample_count, b.volume_usd, b.fees_usd,
+                                   b.log_sum, b.log_sum2
+                            FROM route_daily_stats_bucket b
+                            WHERE b.route_id = ANY(%s)
+                              AND b.day >= %s::date AND b.day <= %s::date
+                            ORDER BY b.route_id, b.bucket_index
+                        """, (list(selected_infos), start_dt, end_dt))
                         bucket_rows = bcur.fetchall()
                         bcur.close()
-                        configs = {}
                         bucket_groups = {}
-                        for rid, bucket_count, min_usd, max_usd, bucket_idx, count, volume, log_sum, log_sum2 in bucket_rows:
-                            configs[rid] = (int(bucket_count), float(min_usd), float(max_usd))
-                            if bucket_idx is None:
-                                continue
+                        for rid, bucket_idx, tx_count, count, volume, fees, log_sum, log_sum2 in bucket_rows:
                             group = bucket_groups.setdefault(rid, {
-                                'counts': [0] * int(bucket_count),
-                                'sums': [0.0] * int(bucket_count),
+                                'counts': [0] * bucket_count,
+                                'sums': [0.0] * bucket_count,
+                                'fees': [0.0] * bucket_count,
                                 'log_sum': 0.0,
                                 'log_sum2': 0.0,
                             })
@@ -2169,48 +2302,48 @@ async def swap_distribution(
                             if 0 <= index < len(group['counts']):
                                 group['counts'][index] += int(count or 0)
                                 group['sums'][index] += float(volume or 0.0)
+                                group['fees'][index] += float(fees or 0.0)
                             group['log_sum'] += float(log_sum or 0.0)
                             group['log_sum2'] += float(log_sum2 or 0.0)
 
-                        # Do not return a partial aggregate result. This lets a
-                        # newly configured route safely use the raw fallback
-                        # until its first bucket rollup has completed.
-                        if (len(configs) == len(selected_infos)
-                                and len(bucket_groups) == len(selected_infos)):
-                            config_values = set(configs.values())
-                            if len(config_values) == 1:
-                                bucket_count, min_usd, max_usd = next(iter(config_values))
-                                edges = [min_usd * (max_usd / min_usd) ** (i / bucket_count)
-                                         for i in range(bucket_count + 1)]
-                                aggregate_groups = {}
-                                for rid, group in bucket_groups.items():
-                                    info = selected_infos[rid]
-                                    counts = group['counts']
-                                    nonzero = [i for i, value in enumerate(counts) if value]
-                                    if not nonzero:
-                                        continue
-                                    group['edges'] = edges
-                                    group['min'] = edges[nonzero[0]]
-                                    group['max'] = edges[nonzero[-1] + 1]
-                                    aggregate_groups[info['path_str']] = group
-                                bucket_result = sd.analyze_bucket_groups(aggregate_groups)
-                                if bucket_result:
-                                    bucket_result['route_chains'] = bucket_result['chains']
-                                    for ch in bucket_result['route_chains']:
-                                        r_id = route_id_by_path.get(ch['name'])
-                                        if r_id is not None:
-                                            ch['route_id'] = route_hash_hex(r_id)
-                                    bucket_result['dir_chains'] = []
-                                    bucket_result['fee_tier_chains'] = []
-                                    bucket_result['protocol_chains'] = []
-                                    bucket_result['split_chains'] = []
-                                    bucket_result['hops_chains'] = []
-                                    return bucket_result
+                        # Serve the routes that have bucket rows in the window.
+                        # Every route is bucketed daily, so routes without rows
+                        # simply had no qualifying swaps in that window and
+                        # contribute zero volume to the aggregate.
+                        if bucket_groups:
+                            edges = [min_usd * (max_usd / min_usd) ** (i / bucket_count)
+                                     for i in range(bucket_count + 1)]
+                            aggregate_groups = {}
+                            for rid, group in bucket_groups.items():
+                                info = selected_infos.get(rid)
+                                if info is None:
+                                    continue
+                                counts = group['counts']
+                                nonzero = [i for i, value in enumerate(counts) if value]
+                                if not nonzero:
+                                    continue
+                                group['edges'] = edges
+                                group['min'] = edges[nonzero[0]]
+                                group['max'] = edges[nonzero[-1] + 1]
+                                aggregate_groups[info['path_str']] = group
+                            bucket_result = sd.analyze_bucket_groups(aggregate_groups)
+                            if bucket_result:
+                                bucket_result['route_chains'] = bucket_result['chains']
+                                for ch in bucket_result['route_chains']:
+                                    r_id = route_id_by_path.get(ch['name'])
+                                    if r_id is not None:
+                                        ch['route_id'] = route_hash_hex(r_id)
+                                bucket_result['dir_chains'] = []
+                                bucket_result['fee_tier_chains'] = []
+                                bucket_result['protocol_chains'] = []
+                                bucket_result['split_chains'] = []
+                                bucket_result['hops_chains'] = []
+                                return bucket_result
 
             # The endpoint is served exclusively from pre-aggregated
-            # route_distribution_bucket data. Queries whose routes are not
-            # yet configured (or whose bucket rollup is incomplete) have no
-            # data — the raw-swaps fallback was removed as part of the
+            # route_daily_stats_bucket data. Queries whose bucket rollup has not
+            # completed for the requested window have no data regardless of
+            # configuration — the raw-swaps fallback was removed as part of the
             # no-raw-swaps migration.
             return None
 
@@ -2236,7 +2369,7 @@ async def swap_distribution(
         raise HTTPException(status_code=500, detail=f"Error analyzing swap distribution: {e}")
 
 
-@app.get("/api/swap-time-series", tags=["Route Analytics"])
+@app.get("/api/swap-time-series", tags=["Route"])
 async def swap_time_series(
     start_token: str,
     end_token: str,
@@ -2530,6 +2663,710 @@ async def swap_time_series(
         raise HTTPException(status_code=500, detail=f"Error analyzing swap time series: {e}")
 
 
+@app.get("/api/ods/search-by-contract", tags=["Origin & Destination"],
+         responses={
+             200: {
+                 "description": "List of origin/destination pairs matching the contract addresses",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": {
+                                 "origin_coin_contract_address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                                 "destination_coin_contract_address": "0x55d398326f99059ff775485246999027b3197955",
+                                 "direction": "both",
+                                 "chain": "all",
+                                 "show_routes": True,
+                                 "n": 1,
+                                 "ods": [
+                                     {
+                                         "od_hash": "2ac53c78a580597e",
+                                         "chain_id": 4,
+                                         "chain": "BNB",
+                                         "origin_coin_contract_address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                                         "destination_coin_contract_address": "0x55d398326f99059ff775485246999027b3197955",
+                                         "origin_coin_id": 4,
+                                         "dest_coin_id": 240,
+                                         "origin_symbol": "WBNB",
+                                         "dest_symbol": "USDT",
+                                         "first_seen": "2026-06-23T21:55:25+00:00",
+                                         "last_seen": "2026-08-14T07:48:29+00:00",
+                                         "routes": [
+                                             {
+                                                 "route_hash": "837dc52fa8bde82c",
+                                                 "hops": 1,
+                                                 "route_hops": [
+                                                     {"seq": 1, "pool_id": 12345,
+                                                      "token_in": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                                                      "token_in_symbol": "WBNB",
+                                                      "token_out": "0x55d398326f99059ff775485246999027b3197955",
+                                                      "token_out_symbol": "USDT"}
+                                                 ]
+                                             }
+                                         ]
+                                     }
+                                 ]
+                             }
+                         }
+                     }
+                 }
+             }
+         })
+async def origin_dest_pair_routes(
+    origin_coin_contract_address: str = Query(...,
+        description="Origin coin contract address (lowercase or mixed case, with or without 0x). Example: `0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c`"),
+    destination_coin_contract_address: str = Query(...,
+        description="Destination coin contract address (lowercase or mixed case, with or without 0x). Example: `0x55d398326f99059ff775485246999027b3197955`"),
+    direction: str = Query("both", pattern="^(both|forward|backward)$",
+                           description="Route direction: forward (origin->destination), backward (destination->origin), or both (default). Example: `both`"),
+    chain: str = Query("all", description="Filter routes by chain name (e.g. Ethereum, BNB, Base). 'all' (default) returns routes on every chain. Example: `all`"),
+    show_routes: bool = Query(True, description="Compatibility flag: when true, routes+hops are embedded (same as `include=routes.hops`). Default: `true`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths of related resources to embed in `included`. Overrides show_routes. Example: `routes.hops.pool,routes.hops.pool.coin0`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets in JSON:API `type[attr1,attr2]` form to slim the payload. Example: `od[chain,origin_symbol,dest_symbol]`"),
+    request: Request = None,
+):
+    """Return origin/destination pairs matching two contract addresses as a JSON:API compound document.
+
+    ``data`` is an array of ``od`` resources and ``included`` holds the
+    requested relatives (routes, hops, pools, coins).
+
+    Example (WBNB → USDT on BNB):
+
+        GET /api/ods/search-by-contract?origin_coin_contract_address=0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c&destination_coin_contract_address=0x55d398326f99059ff775485246999027b3197955&chain=BNB&include=routes.hops.pool
+
+        {
+          "data": [
+            { "type": "od", "id": "2ac53c78a580597e",
+              "attributes": { "chain": "BNB", "origin_symbol": "WBNB", "dest_symbol": "USDT", ... },
+              "relationships": { "origin_coin": { "data": { "type": "coin", "id": 4 } },
+                                 "destination_coin": { "data": { "type": "coin", "id": 240 } },
+                                 "routes": { "data": [ { "type": "route", "id": "837dc52fa8bde82c" } ] } } }
+          ],
+          "included": [ { "type": "route", ... }, { "type": "hop", ... }, { "type": "pool", ... } ]
+        }
+
+    The contract addresses are normalized to lowercase 0x form; the same O&D
+    can match in either direction when `direction=both`.
+    """
+    try:
+        def _norm_addr(a: str) -> str:
+            s = a.strip().lower()
+            return s if s.startswith('0x') else '0x' + s
+
+        addr_a = _norm_addr(origin_coin_contract_address)
+        addr_b = _norm_addr(destination_coin_contract_address)
+
+        net_sql = ""
+        net_params: List = []
+        if chain and chain.lower() not in ("all", "*"):
+            net_sql = " AND LOWER(ch.name) = LOWER(%s)"
+            net_params = [chain]
+
+        if direction == "forward":
+            dir_sql = "(LOWER(pair.origin_contract) = %s AND LOWER(pair.dest_contract) = %s)"
+            dir_params = [addr_a, addr_b]
+        elif direction == "backward":
+            dir_sql = "(LOWER(pair.origin_contract) = %s AND LOWER(pair.dest_contract) = %s)"
+            dir_params = [addr_b, addr_a]
+        else:
+            dir_sql = "((LOWER(pair.origin_contract) = %s AND LOWER(pair.dest_contract) = %s)" \
+                      " OR (LOWER(pair.origin_contract) = %s AND LOWER(pair.dest_contract) = %s))"
+            dir_params = [addr_a, addr_b, addr_b, addr_a]
+
+        def _query():
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute(f"""
+                    SELECT pair.id, pair.chain_id, ch.name AS chain_name,
+                           pair.origin_contract, pair.dest_contract,
+                           pair.origin_coin_id, pair.dest_coin_id,
+                           pair.origin_symbol, pair.dest_symbol,
+                           pair.first_seen, pair.last_seen
+                    FROM origin_destination_pair pair
+                    JOIN chain ch ON pair.chain_id = ch.id
+                    WHERE {dir_sql}
+                      {net_sql}
+                    ORDER BY ch.name, pair.id
+                """, dir_params + net_params)
+                rows = cur.fetchall()
+                cur.close()
+                return rows
+
+        ods_rows = await asyncio.to_thread(_query)
+
+        ods = []
+        for (pair_id, chain_id, chain_name, origin_contract, dest_contract,
+             origin_coin_id, dest_coin_id, origin_symbol, dest_symbol,
+             first_seen, last_seen) in ods_rows:
+            ods.append({
+                "od_hash": route_hash_hex(pair_id),
+                "chain_id": chain_id,
+                "chain": chain_name,
+                "origin_coin_contract_address": origin_contract,
+                "destination_coin_contract_address": dest_contract,
+                "origin_coin_id": origin_coin_id,
+                "dest_coin_id": dest_coin_id,
+                "origin_symbol": origin_symbol,
+                "dest_symbol": dest_symbol,
+                "first_seen": first_seen.isoformat() if first_seen else None,
+                "last_seen": last_seen.isoformat() if last_seen else None,
+            })
+
+        if include is None:
+            include = "routes.hops" if show_routes else ""
+
+        return build_od_documents(
+            ods, include_spec=include, fields_spec=fields,
+            links={"self": str(request.url)},
+            meta={
+                "query": {
+                    "origin_coin_contract_address": addr_a,
+                    "destination_coin_contract_address": addr_b,
+                    "direction": direction,
+                    "chain": chain,
+                },
+                "n": len(ods),
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[origin-dest-pairs] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error looking up origin/destination pair routes: {e}")
+
+
+@app.get("/api/od/{od_hash}", tags=["Origin & Destination"],
+         responses={
+             200: {
+                 "description": "Full origin/destination pair row",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": {
+                                 "od_hash": "2ac53c78a580597e",
+                                 "chain_id": 4,
+                                 "chain": "BNB",
+                                 "origin_coin_contract_address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                                 "destination_coin_contract_address": "0x55d398326f99059ff775485246999027b3197955",
+                                 "origin_coin_id": 4,
+                                 "dest_coin_id": 240,
+                                 "origin_symbol": "WBNB",
+                                 "dest_symbol": "USDT",
+                                 "first_seen": "2026-06-23T21:55:25+00:00",
+                                 "last_seen": "2026-08-14T07:48:29+00:00"
+                             }
+                         }
+                     }
+                 }
+             }
+         })
+async def origin_destination_pair_by_hash(
+    od_hash: str = Path(..., description="16-char hex pair hash (the pair_hash from search-by-contract). Example: `2ac53c78a580597e`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths of related resources to embed in `included`. Default: `routes.hops.pool,routes.hops.pool.coin0,routes.hops.pool.coin1`. Example: `routes.hops.pool`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets in JSON:API `type[attr1,attr2]` form to slim the payload. Example: `od[chain,origin_symbol,dest_symbol],pool[fee_bps]`"),
+):
+    """Return one origin/destination pair as a JSON:API compound document.
+
+    This is the aggregate root of the Chaintelligence object graph. The
+    response's ``data`` is the ``od`` resource and ``included`` holds the
+    requested relatives (routes, hops, pools, coins) all in a single call.
+
+    Example — full drill-down (WBNB → USDT on BNB):
+
+        GET /api/od/2ac53c78a580597e?include=routes.hops.pool,routes.hops.pool.coin0,routes.hops.pool.coin1
+
+        {
+          "data": { "type": "od", "id": "2ac53c78a580597e",
+            "attributes": { "chain": "BNB", "origin_symbol": "WBNB",
+                            "destination_symbol": "USDT", ... },
+            "relationships": {
+              "origin_coin":      { "data": { "type": "coin", "id": 4 } },
+              "destination_coin": { "data": { "type": "coin", "id": 240 } },
+              "routes": { "data": [ { "type": "route", "id": "837dc52fa8bde82c" } ] } } },
+          "included": [
+            { "type": "route", "id": "837dc52fa8bde82c", "attributes": { "hops": 1 }, ... },
+            { "type": "hop",   "id": "837dc52fa8bde82c:0", ... },
+            { "type": "pool",  "id": 12345, "attributes": { "fee_bps": 500 }, ... },
+            { "type": "coin",  "id": 4, "attributes": { "symbol": "WBNB" }, ... }
+          ]
+        }
+
+    Slim variant — just the pair row with no relatives:
+
+        GET /api/od/2ac53c78a580597e?include=
+
+    ``od_hash`` is the 16-char lowercase hex rendering of the signed 64-bit
+    pair id (same format as the ``pair_hash`` field returned by
+    /api/ods/search-by-contract).
+    """
+    try:
+        od_hash = od_hash.strip().lower()
+        if len(od_hash) != 16 or any(c not in '0123456789abcdef' for c in od_hash):
+            raise HTTPException(status_code=400, detail="od_hash must be a 16-char lowercase hex string")
+        pair_id = int(od_hash, 16)
+        if pair_id >= (1 << 63):
+            pair_id -= (1 << 64)
+
+        def _query():
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT pair.id, pair.chain_id, ch.name AS chain_name,
+                           pair.origin_contract, pair.dest_contract,
+                           pair.origin_coin_id, pair.dest_coin_id,
+                           pair.origin_symbol, pair.dest_symbol,
+                           pair.first_seen, pair.last_seen
+                    FROM origin_destination_pair pair
+                    JOIN chain ch ON pair.chain_id = ch.id
+                    WHERE pair.id = %s
+                """, (pair_id,))
+                row = cur.fetchone()
+                cur.close()
+                return row
+
+        row = await asyncio.to_thread(_query)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"No origin/destination pair found for hash {od_hash}")
+
+        (pair_id, chain_id, chain_name, origin_contract, dest_contract,
+         origin_coin_id, dest_coin_id, origin_symbol, dest_symbol,
+         first_seen, last_seen) = row
+
+        od_row = {
+            "od_hash": route_hash_hex(pair_id),
+            "chain_id": chain_id,
+            "chain": chain_name,
+            "origin_coin_contract_address": origin_contract,
+            "destination_coin_contract_address": dest_contract,
+            "origin_coin_id": origin_coin_id,
+            "dest_coin_id": dest_coin_id,
+            "origin_symbol": origin_symbol,
+            "dest_symbol": dest_symbol,
+            "first_seen": first_seen.isoformat() if first_seen else None,
+            "last_seen": last_seen.isoformat() if last_seen else None,
+        }
+
+        include = include if include is not None else \
+            "routes.hops.pool,routes.hops.pool.coin0,routes.hops.pool.coin1"
+        return build_od_documents(
+            [od_row], include_spec=include, fields_spec=fields,
+            links={"self": f"/api/od/{od_hash}"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[od-by-hash] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error looking up origin/destination pair: {e}")
+
+
+@app.get("/api/ods", tags=["Origin & Destination"],
+         responses={
+             200: {
+                 "description": "List of origin/destination pairs (optionally with routes embedded)",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": [
+                                 {
+                                     "type": "od",
+                                     "id": "2ac53c78a580597e",
+                                     "attributes": {"chain": "BNB", "origin_symbol": "WBNB", "dest_symbol": "USDT"},
+                                     "relationships": {
+                                         "origin_coin": {"data": {"type": "coin", "id": 4}},
+                                         "destination_coin": {"data": {"type": "coin", "id": 240}},
+                                         "routes": {"data": [{"type": "route", "id": "837dc52fa8bde82c"}]},
+                                     },
+                                 }
+                             ]
+                         }
+                     }
+                 }
+             }
+         })
+async def list_ods(
+    origin_symbol: Optional[str] = Query(None, description="Filter by origin coin symbol (case-insensitive). Example: `WBNB`"),
+    destination_symbol: Optional[str] = Query(None, description="Filter by destination coin symbol (case-insensitive). Example: `USDT`"),
+    chain: Optional[str] = Query(None, description="Filter by chain name (e.g. Ethereum, BNB, Base). Example: `BNB`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths of related resources to embed. Example: `routes.hops.pool`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `od[chain,origin_symbol,dest_symbol]`"),
+    limit: int = Query(50, ge=1, le=500, description="Max O&D rows to return. Default: `50`"),
+    offset: int = Query(0, ge=0, description="Number of rows to skip (pagination). Default: `0`"),
+    request: Request = None,
+):
+    """List origin/destination pairs as a JSON:API compound document.
+
+    The aggregate-root view of the object graph: ``data`` is an array of ``od``
+    resources and ``included`` holds any requested relatives (routes, hops,
+    pools, coins).
+
+    Example — WBNB/USDT pairs on BNB with their routes:
+
+        GET /api/ods?origin_symbol=WBNB&destination_symbol=USDT&chain=BNB&include=routes.hops
+
+    Example — browse all pairs with full drill-down on the first page:
+
+        GET /api/ods?limit=10&include=routes.hops.pool,routes.hops.pool.coin0
+    """
+    try:
+        sql = """
+            SELECT pair.id, pair.chain_id, ch.name AS chain_name,
+                   pair.origin_contract, pair.dest_contract,
+                   pair.origin_coin_id, pair.dest_coin_id,
+                   pair.origin_symbol, pair.dest_symbol,
+                   pair.first_seen, pair.last_seen
+            FROM origin_destination_pair pair
+            JOIN chain ch ON pair.chain_id = ch.id
+            WHERE 1=1
+        """
+        params: List = []
+        if origin_symbol:
+            sql += " AND UPPER(pair.origin_symbol) = UPPER(%s)"
+            params.append(origin_symbol)
+        if destination_symbol:
+            sql += " AND UPPER(pair.dest_symbol) = UPPER(%s)"
+            params.append(destination_symbol)
+        if chain:
+            sql += " AND LOWER(ch.name) = LOWER(%s)"
+            params.append(chain)
+        sql += " ORDER BY ch.name, pair.last_seen DESC NULLS LAST, pair.id"
+        sql += " LIMIT %s OFFSET %s"
+        params += [limit, offset]
+
+        def _query():
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+                cur.close()
+                return rows
+
+        ods_rows = await asyncio.to_thread(_query)
+        ods = []
+        for (pair_id, chain_id, chain_name, origin_contract, dest_contract,
+             origin_coin_id, dest_coin_id, origin_symbol_s, dest_symbol_s,
+             first_seen, last_seen) in ods_rows:
+            ods.append({
+                "od_hash": route_hash_hex(pair_id),
+                "chain_id": chain_id,
+                "chain": chain_name,
+                "origin_coin_contract_address": origin_contract,
+                "destination_coin_contract_address": dest_contract,
+                "origin_coin_id": origin_coin_id,
+                "dest_coin_id": dest_coin_id,
+                "origin_symbol": origin_symbol_s,
+                "dest_symbol": dest_symbol_s,
+                "first_seen": first_seen.isoformat() if first_seen else None,
+                "last_seen": last_seen.isoformat() if last_seen else None,
+            })
+
+        return build_od_documents(
+            ods, include_spec=include, fields_spec=fields,
+            links={"self": str(request.url)} if request else None,
+            meta={"n": len(ods), "limit": limit, "offset": offset},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[list-ods] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error listing origin/destination pairs: {e}")
+
+
+@app.get("/api/routes/date-range", tags=["Route"])
+async def get_date_range(network: Optional[str] = Query(None, description="Filter by network")):
+    """Get the available date range from the swap data, optionally scoped to a network.
+
+    DB work is offloaded to a worker thread so the event loop stays responsive
+    (this endpoint is hit on every page load). The date range is cached per
+    network for _DATE_RANGE_CACHE_TTL seconds.
+
+    Both modes use index-only MIN/MAX scans:
+      - "all":  SELECT MIN(day), MAX(day) FROM liquidity_pool_daily_stats  (idx_lp_daily_stats_day)
+      - network: resolve that network's pool_ids, then MIN/MAX over
+        liquidity_pool_daily_stats via the (pool_id) index using = ANY(ARRAY(...)).
+    The previous shape joined the full 45M-row swaps table to liquidity_pool and
+    grouped by network — a post-normalization full scan that blocked the event
+    loop for tens of seconds and wedged the whole server.
+    """
+    cache_key = (network or 'all').lower()
+    now = time.time()
+    cached = _DATE_RANGE_CACHE.get(cache_key)
+    if cached and (now - cached[1]) < _DATE_RANGE_CACHE_TTL:
+        return cached[0]
+
+    def _query():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            try:
+                # Bound the worst case so a degraded/cold DB can't hold a
+                # pool connection (and thus a worker thread) indefinitely.
+                cur.execute("SET LOCAL statement_timeout = '30s'")
+                if network and network.lower() != 'all':
+                    # Per-network min/max from liquidity_pool_daily_stats (small
+                    # table, day-granular). The LATERAL join does one index
+                    # seek per pool, so cost is bounded by pool count.
+                    cur.execute("""
+                        SELECT MIN(p.mn)::date, MAX(p.mx)::date FROM (
+                            SELECT l.mn, l.mx
+                            FROM unnest(ARRAY(
+                                SELECT lp.id FROM liquidity_pool lp
+                                JOIN chain ch ON lp.chain_id = ch.id
+                                WHERE LOWER(ch.name) = LOWER(%s)
+                            )) AS pid
+                            CROSS JOIN LATERAL (
+                                SELECT MIN(lph.day) AS mn, MAX(lph.day) AS mx
+                                FROM liquidity_pool_daily_stats lph
+                                WHERE lph.pool_id = pid
+                            ) l
+                        ) p
+                    """, (network,))
+                else:
+                    # Full available data range across all networks.
+                    cur.execute("SELECT MIN(day)::date, MAX(day)::date FROM liquidity_pool_daily_stats")
+                return cur.fetchone()
+            finally:
+                cur.close()
+
+    try:
+        row = await asyncio.to_thread(_query)
+        if row and row[0] and row[1]:
+            result = {"min_date": row[0].isoformat(), "max_date": row[1].isoformat()}
+        else:
+            result = {"min_date": None, "max_date": None}
+        _DATE_RANGE_CACHE[cache_key] = (result, time.time())
+        return result
+    except Exception as e:
+        # Serve stale cache rather than erroring if the DB is momentarily slow.
+        if cached:
+            return cached[0]
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/routes/{route_hash}", tags=["Origin & Destination"],
+         responses={
+             200: {
+                 "description": "Single route with its hops, pools and coins",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": {
+                                 "type": "route",
+                                 "id": "837dc52fa8bde82c",
+                                 "attributes": {"hops": 1},
+                                 "relationships": {
+                                     "pair": {"data": {"type": "od", "id": "2ac53c78a580597e"}},
+                                     "hops": {"data": [{"type": "hop", "id": "837dc52fa8bde82c:0"}]},
+                                 },
+                             }
+                         }
+                     }
+                 }
+             }
+         })
+async def get_route_by_hash(
+    route_hash: str = Path(..., description="16-char hex route hash. Example: `837dc52fa8bde82c`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths to embed. Default: `hops.pool,routes.hops.pool.coin0`. Example: `hops.pool`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `route[hops],pool[fee_bps]`"),
+    request: Request = None,
+):
+    """Return a single route as a JSON:API compound document.
+
+    Example — one route with its hops and pools:
+
+        GET /api/routes/837dc52fa8bde82c?include=hops.pool
+
+    Example — add the pool's two coins and their metadata:
+
+        GET /api/routes/837dc52fa8bde82c?include=hops.pool,hops.pool.coin0,hops.pool.coin1
+    """
+    try:
+        route_row = await load_route_row(route_hash)
+        include = include if include is not None else \
+            "hops.pool,hops.pool.coin0,hops.pool.coin1"
+        return build_route_documents(
+            [route_row], include_spec=include, fields_spec=fields,
+            links={"self": f"/api/routes/{route_hash}"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[route-by-hash] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error looking up route: {e}")
+
+
+@app.get("/api/routes/{route_hash}/daily-stats", tags=["Origin & Destination"],
+         responses={
+             200: {
+                 "description": "Daily stats + bucket distribution for one route",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": {
+                                 "type": "route",
+                                 "id": "837dc52fa8bde82c",
+                                 "relationships": {
+                                     "daily_stats": {"data": [
+                                         {"type": "route_daily_stat", "id": "837dc52fa8bde82c:2026-08-13"}
+                                     ]},
+                                 },
+                             },
+                             "included": [
+                                 {"type": "route_daily_stat",
+                                  "id": "837dc52fa8bde82c:2026-08-13",
+                                  "attributes": {"day": "2026-08-13", "tx_count": 19, "swap_count": 19,
+                                                 "volume_usd": 1000.44, "fees_usd": 0.10}},
+                             ],
+                         }
+                     }
+                 }
+             }
+         })
+async def get_route_daily_stats(
+    route_hash: str = Path(..., description="16-char hex route hash. Example: `837dc52fa8bde82c`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths to embed. Default: `daily_stats,daily_stats_bucket`. Example: `daily_stats`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `route_daily_stat[day,volume_usd]`"),
+    days: Optional[float] = Query(None, description="Window lookback in days for `window_stats` (defaults to the route's full available range)"),
+    start_date: Optional[str] = Query(None, description="ISO start date (YYYY-MM-DD) for `window_stats`"),
+    end_date: Optional[str] = Query(None, description="ISO end date (YYYY-MM-DD) for `window_stats`"),
+):
+    """Return one route's pre-aggregated daily stats as a JSON:API compound document.
+
+    Served from `route_daily_stats` (per route+day) and
+    `route_daily_stats_bucket` (per route+day+bucket log-volume distribution),
+    the same pre-aggregated read models used by `/api/routes/analyze` and
+    `/api/swap-distribution`.
+
+    When a window is given (`days`, or `start_date`/`end_date`), the route
+    resource also carries a `window_stats` attribute with the window-aggregated
+    sums and derived metrics (tx/swap counts, volume, fees, market_size,
+    avg_volume, pct_volume, last_activity) matching `/api/routes/analyze`.
+
+    Examples:
+
+        GET /api/routes/837dc52fa8bde82c/daily-stats
+        GET /api/routes/837dc52fa8bde82c/daily-stats?include=daily_stats
+        GET /api/routes/837dc52fa8bde82c/daily-stats?days=7
+        GET /api/routes/837dc52fa8bde82c/daily-stats?fields=route_daily_stat[day,volume_usd]
+    """
+    try:
+        route_row = await load_route_row(route_hash)
+        include = include if include is not None else "daily_stats,daily_stats_bucket"
+        from resources.graph import _fetch_route_stats_range
+        default_range = _fetch_route_stats_range([route_row['route_id']])
+        window = resolve_stats_window(days, start_date, end_date, default_range)
+        return build_route_documents(
+            [route_row], include_spec=include, fields_spec=fields,
+            links={"self": f"/api/routes/{route_hash}/daily-stats"},
+            window=window,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[route-daily-stats] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error looking up route daily stats: {e}")
+
+
+@app.get("/api/coins/{coin_id:int}", tags=["Coins"],
+         responses={
+             200: {
+                 "description": "Single coin with its contracts and families",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": {
+                                 "type": "coin",
+                                 "id": 4,
+                                 "attributes": {"symbol": "WBNB", "name": "Wrapped BNB", "price": 520.5},
+                                 "relationships": {
+                                     "contracts": {"data": [{"type": "coin_contract", "id": "4:BNB"}]},
+                                     "families": {"data": []},
+                                 },
+                             }
+                         }
+                     }
+                 }
+             }
+         })
+async def get_coin_by_id(
+    coin_id: int = Path(..., description="Integer coin id (primary key of the `coin` table). Example: `4`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths to embed. Default: `contracts,families`. Example: `contracts`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `coin[symbol,name]`"),
+    request: Request = None,
+):
+    """Return a single coin as a JSON:API compound document.
+
+    Example — coin with its on-chain contracts and families:
+
+        GET /api/coins/4?include=contracts,families
+
+    Example — slim, just the identity fields:
+
+        GET /api/coins/4?fields=coin[symbol,name]
+    """
+    try:
+        def _query():
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT c.coin_id, c.symbol, c.name, c.slug, c.hardness,
+                           c.cmc_rank, c.cmc_id, c.first_historical_data,
+                           c.image_url, c.price, c.price_timestamp, c.decimals,
+                           c.percent_change_1h, c.percent_change_24h, c.percent_change_7d,
+                           c.percent_change_30d, c.percent_change_60d, c.percent_change_90d,
+                           c.market_cap, c.market_cap_dominance, c.fully_diluted_market_cap,
+                           c.tvl, c.total_supply, c.circulating_supply, c.max_supply,
+                           c.cmc_last_updated
+                    FROM coin c
+                    WHERE c.coin_id = %s
+                """, (coin_id,))
+                row = cur.fetchone()
+                cur.close()
+                return row
+
+        row = await asyncio.to_thread(_query)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"No coin found for id {coin_id}")
+
+        cols = ["coin_id", "symbol", "name", "slug", "hardness", "cmc_rank", "cmc_id",
+                "first_historical_data", "image_url", "price", "price_timestamp", "decimals",
+                "percent_change_1h", "percent_change_24h", "percent_change_7d",
+                "percent_change_30d", "percent_change_60d", "percent_change_90d",
+                "market_cap", "market_cap_dominance", "fully_diluted_market_cap",
+                "tvl", "total_supply", "circulating_supply", "max_supply", "cmc_last_updated"]
+        coin = dict(zip(cols, row))
+        coin['price'] = float(coin['price']) if coin['price'] is not None else None
+        for col in ("percent_change_1h", "percent_change_24h", "percent_change_7d",
+                    "percent_change_30d", "percent_change_60d", "percent_change_90d",
+                    "market_cap", "market_cap_dominance", "fully_diluted_market_cap",
+                    "tvl", "total_supply", "circulating_supply", "max_supply"):
+            if coin[col] is not None:
+                coin[col] = float(coin[col])
+        for col in ("first_historical_data", "price_timestamp", "cmc_last_updated"):
+            if coin[col] is not None:
+                coin[col] = coin[col].isoformat()
+
+        include = include if include is not None else "contracts,families"
+        return build_coin_documents(
+            [coin], include_spec=include, fields_spec=fields,
+            links={"self": f"/api/coins/{coin_id}"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[coin-by-id] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error looking up coin: {e}")
+
+
 @app.get("/api/pools/search", tags=["Liquidity Pools"])
 async def analyze_pools(
     start_token: str,
@@ -2677,10 +3514,10 @@ async def analyze_pools(
                     with get_conn() as conn:
                         cur = conn.cursor()
                         cur.execute("""
-                            SELECT pool_id, date, tvl_usd, volume_usd, tx_count
-                            FROM liquidity_pool_history
-                            WHERE pool_id = ANY(%s) AND date >= %s::date AND date <= %s::date
-                            ORDER BY pool_id, date DESC
+                            SELECT pool_id, day, tvl_usd, volume_usd, tx_count
+                            FROM liquidity_pool_daily_stats
+                            WHERE pool_id = ANY(%s) AND day >= %s::date AND day <= %s::date
+                            ORDER BY pool_id, day DESC
                         """, (pool_ids, start_dt, end_dt))
                         hist_by_pool = {}
                         for pid, d, tvl, vol, txc in cur.fetchall():
@@ -2735,76 +3572,6 @@ async def analyze_pools(
 # every page load / network switch. Key: lowercased network name or "all".
 _DATE_RANGE_CACHE: Dict[str, tuple] = {}
 _DATE_RANGE_CACHE_TTL = 600  # seconds
-
-
-@app.get("/api/routes/date-range", tags=["Route Analytics"])
-async def get_date_range(network: Optional[str] = Query(None, description="Filter by network")):
-    """Get the available date range from the swap data, optionally scoped to a network.
-
-    DB work is offloaded to a worker thread so the event loop stays responsive
-    (this endpoint is hit on every page load). The date range is cached per
-    network for _DATE_RANGE_CACHE_TTL seconds.
-
-    Both modes use index-only MIN/MAX scans:
-      - "all":  SELECT MIN(date), MAX(date) FROM liquidity_pool_history  (idx_lp_history_date)
-      - network: resolve that network's pool_ids, then MIN/MAX over
-        liquidity_pool_history via the (pool_id) index using = ANY(ARRAY(...)).
-    The previous shape joined the full 45M-row swaps table to liquidity_pool and
-    grouped by network — a post-normalization full scan that blocked the event
-    loop for tens of seconds and wedged the whole server.
-    """
-    cache_key = (network or 'all').lower()
-    now = time.time()
-    cached = _DATE_RANGE_CACHE.get(cache_key)
-    if cached and (now - cached[1]) < _DATE_RANGE_CACHE_TTL:
-        return cached[0]
-
-    def _query():
-        with get_conn() as conn:
-            cur = conn.cursor()
-            try:
-                # Bound the worst case so a degraded/cold DB can't hold a
-                # pool connection (and thus a worker thread) indefinitely.
-                cur.execute("SET LOCAL statement_timeout = '30s'")
-                if network and network.lower() != 'all':
-                    # Per-network min/max from liquidity_pool_history (small
-                    # table, day-granular). The LATERAL join does one index
-                    # seek per pool, so cost is bounded by pool count.
-                    cur.execute("""
-                        SELECT MIN(p.mn)::date, MAX(p.mx)::date FROM (
-                            SELECT l.mn, l.mx
-                            FROM unnest(ARRAY(
-                                SELECT lp.id FROM liquidity_pool lp
-                                JOIN chain ch ON lp.chain_id = ch.id
-                                WHERE LOWER(ch.name) = LOWER(%s)
-                            )) AS pid
-                            CROSS JOIN LATERAL (
-                                SELECT MIN(lph.date) AS mn, MAX(lph.date) AS mx
-                                FROM liquidity_pool_history lph
-                                WHERE lph.pool_id = pid
-                            ) l
-                        ) p
-                    """, (network,))
-                else:
-                    # Full available data range across all networks.
-                    cur.execute("SELECT MIN(date)::date, MAX(date)::date FROM liquidity_pool_history")
-                return cur.fetchone()
-            finally:
-                cur.close()
-
-    try:
-        row = await asyncio.to_thread(_query)
-        if row and row[0] and row[1]:
-            result = {"min_date": row[0].isoformat(), "max_date": row[1].isoformat()}
-        else:
-            result = {"min_date": None, "max_date": None}
-        _DATE_RANGE_CACHE[cache_key] = (result, time.time())
-        return result
-    except Exception as e:
-        # Serve stale cache rather than erroring if the DB is momentarily slow.
-        if cached:
-            return cached[0]
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/lp/position-summary", tags=["Liquidity Pool Positions"])
@@ -3232,13 +3999,55 @@ async def lp_history(position_key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/pool/{identifier}", tags=["Liquidity Pools"])
-async def get_pool(identifier: str):
-    """Get pool metadata, analytics, and external links.
+@app.get("/api/pool/{identifier}", tags=["Liquidity Pools"],
+         responses={
+             200: {
+                 "description": "Single pool as a JSON:API compound document",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": {
+                                 "type": "pool",
+                                 "id": 1,
+                                 "attributes": {
+                                     "pool_address": "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
+                                     "fee_bps": 500,
+                                     "fee_tier": "0.05%",
+                                     "protocol": "uniswap_v3",
+                                     "chain": "Ethereum",
+                                     "tvl_usd": 1234567.0,
+                                 },
+                                 "relationships": {
+                                     "coin0": {"data": {"type": "coin", "id": 506}},
+                                     "coin1": {"data": {"type": "coin", "id": 4}},
+                                 },
+                             },
+                             "included": [
+                                 {"type": "coin", "id": 506, "attributes": {"symbol": "WETH"}},
+                                 {"type": "coin", "id": 4, "attributes": {"symbol": "USDC"}},
+                             ],
+                         }
+                     }
+                 }
+             }
+         })
+async def get_pool(
+    identifier: str = Path(..., description="Numeric liquidity_pool.id, a 42-char 0x V3 contract address, or a 66-char 0x V4 pool_id. Example: `1` or `0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths to embed. Default: `coin0,coin1`. Example: `coin0.contracts,coin1`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `pool[pool_address,fee_bps,tvl_usd]`"),
+    request: Request = None,
+):
+    """Get pool metadata, analytics, and external links as a JSON:API compound document.
 
     Accepts a liquidity_pool.id (integer), a V3 contract address (0x + 40 hex,
-    42 chars), or a V4 pool_id (0x + 64 hex, 66 chars). Returns a single pool
-    object (or 404 if not found).
+    42 chars), or a V4 pool_id (0x + 64 hex, 66 chars). ``data`` is the ``pool``
+    resource (including ``links`` and 90-day ``history``); ``included`` holds
+    the coins of the pair (default) plus any relatives you request via
+    ``?include=``.
+
+    Example:
+
+        GET /api/pool/1?include=coin0,coin1
     """
     try:
         conn = psycopg2.connect(DATA_WAREHOUSE_DB)
@@ -3262,7 +4071,7 @@ async def get_pool(identifier: str):
 
         # Fetch pool metadata.
         q = f"""
-            SELECT lp.id, lp.pool_address, lp.pool_id, lp.fee_bps,
+            SELECT lp.id, lp.pool_address, lp.pool_id, lp.fee_bps, lp.chain_id,
                    ch.name AS network, pr.name AS protocol,
                    c0.coin_id AS c0_id, c0.symbol AS c0_sym,
                    c1.coin_id AS c1_id, c1.symbol AS c1_sym,
@@ -3289,7 +4098,7 @@ async def get_pool(identifier: str):
             raise HTTPException(status_code=404, detail="Pool not found")
 
         (
-            pool_id, pool_address, v4_pool_id, fee_bps,
+            pool_id, pool_address, v4_pool_id, fee_bps, chain_id,
             network, protocol,
             coin0_id, coin0_sym,
             coin1_id, coin1_sym,
@@ -3340,18 +4149,19 @@ async def get_pool(identifier: str):
         addr_for_lookup = canonical_address or pool_address or v4_pool_id or ""
         defillama_uuid = get_defillama_pool_uuid(addr_for_lookup)
 
-        # TVL and volume from liquidity_pool_history.
+        # TVL and volume from liquidity_pool_daily_stats.
         cur.execute("""
-            SELECT date, tvl_usd, volume_usd, tx_count
-            FROM liquidity_pool_history
+            SELECT day, tvl_usd, volume_usd, tx_count
+            FROM liquidity_pool_daily_stats
             WHERE pool_id = %s
-              AND date >= NOW() - INTERVAL '90 days'
-            ORDER BY date DESC
+              AND day >= NOW() - INTERVAL '90 days'
+            ORDER BY day DESC
         """, (pool_id,))
         history_rows = cur.fetchall()
 
         latest_tvl = None
         latest_volume = None
+        latest_tx_count = 0
         history = []
         for hr in history_rows:
             d, tvl, vol, txs = hr
@@ -3365,6 +4175,8 @@ async def get_pool(identifier: str):
                 latest_tvl = float(tvl)
             if latest_volume is None and vol:
                 latest_volume = float(vol)
+            if txs:
+                latest_tx_count = txs or latest_tx_count
 
         # Fallback TVL from DeFiLlama if history had none.
         if latest_tvl is None:
@@ -3375,28 +4187,121 @@ async def get_pool(identifier: str):
 
         links = build_pool_links(pool_address, v4_pool_id, protocol, network, defillama_uuid)
 
-        return {
-            "id": pool_id,
+        pool_row = {
+            "pool_id": pool_id,
             "pool_address": pool_address or v4_pool_id or "",
-            "pool_id": v4_pool_id or pool_address or "",
-            "canonical_address": canonical_address or "",
-            "chain": network,
+            "v4_pool_id": v4_pool_id or pool_address or "",
+            "chain_id": chain_id,
             "protocol": protocol,
-            "token0": {"coin_id": coin0_id, "symbol": coin0_sym},
-            "token1": {"coin_id": coin1_id, "symbol": coin1_sym},
+            "coin0_id": coin0_id,
+            "coin1_id": coin1_id,
             "fee_bps": float(fee_bps) if fee_bps else None,
             "fee_tier": f"{fee_val / 100.0:.2f}%" if fee_val else ("Dynamic" if fee_bps is None else None),
-            "created_at": created_at.isoformat() if created_at else None,
+            "canonical_address": canonical_address or "",
             "defillama_uuid": defillama_uuid,
             "tvl_usd": latest_tvl or None,
             "volume_usd_24h": latest_volume or None,
+            "tx_count": latest_tx_count,
+            "created_at": created_at.isoformat() if created_at else None,
             "links": links,
             "history": history,
         }
+
+        include = include if include is not None else "coin0,coin1"
+        return build_pool_documents(
+            [pool_row], include_spec=include, fields_spec=fields,
+            links={"self": str(request.url)},
+            meta={
+                "query": {
+                    "identifier": identifier,
+                    "chain": network,
+                    "protocol": protocol,
+                },
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pool/{identifier}/daily-stats", tags=["Liquidity Pools"],
+         responses={
+             200: {
+                 "description": "Daily stats + bucket distribution for one pool",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": {
+                                 "type": "pool",
+                                 "id": 1,
+                                 "relationships": {
+                                     "daily_stats": {"data": [
+                                         {"type": "pool_daily_stat", "id": "1:2026-08-13"}
+                                     ]},
+                                 },
+                             },
+                             "included": [
+                                 {"type": "pool_daily_stat",
+                                  "id": "1:2026-08-13",
+                                  "attributes": {"day": "2026-08-13", "tx_count": 19,
+                                                 "volume_usd": 1000.44, "tvl_usd": 5800000.0}},
+                             ],
+                         }
+                     }
+                 }
+             }
+         })
+async def get_pool_daily_stats(
+    identifier: str = Path(..., description="Numeric liquidity_pool.id, a 42-char 0x V3 contract address, or a 66-char 0x V4 pool_id. Example: `1` or `0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths to embed. Default: `daily_stats,daily_stats_bucket`. Example: `daily_stats`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `pool_daily_stat[day,volume_usd]`"),
+    days: Optional[float] = Query(None, description="Window lookback in days for `window_stats`/`apr` (defaults to the pool's full available range)"),
+    start_date: Optional[str] = Query(None, description="ISO start date (YYYY-MM-DD) for `window_stats`/`apr`"),
+    end_date: Optional[str] = Query(None, description="ISO end date (YYYY-MM-DD) for `window_stats`/`apr`"),
+):
+    """Return one pool's pre-aggregated daily stats as a JSON:API compound document.
+
+    Served from `liquidity_pool_daily_stats` (per pool+day: volume, TVL, tx
+    count) and `liquidity_pool_daily_stats_bucket` (per pool+day+bucket
+    log-volume distribution), the same pre-aggregated read models used by the
+    pool page's history chart.
+
+    When a window is given (`days`, or `start_date`/`end_date`), the pool
+    resource also carries `window_stats` (window sums: tx_count, volume_usd,
+    tvl_usd, fees_usd) and an `apr` attribute computed with the same fee-rate /
+    TVL-reliability math as `/api/routes/analyze`.
+
+    Accepts a liquidity_pool.id (integer), a V3 contract address (0x + 40 hex,
+    42 chars), or a V4 pool_id (0x + 64 hex, 66 chars).
+
+    Examples:
+
+        GET /api/pool/1/daily-stats
+        GET /api/pool/1/daily-stats?include=daily_stats
+        GET /api/pool/1/daily-stats?days=7
+        GET /api/pool/1/daily-stats?fields=pool_daily_stat[day,volume_usd]
+    """
+    try:
+        pool_row = await load_pool_row(identifier)
+        include = include if include is not None else "daily_stats,daily_stats_bucket"
+        from resources.graph import _fetch_pool_stats_range
+        default_range = _fetch_pool_stats_range([pool_row['pool_id']])
+        window = resolve_stats_window(days, start_date, end_date, default_range)
+        return build_pool_documents(
+            [pool_row], include_spec=include, fields_spec=fields,
+            links={"self": f"/api/pool/{identifier}/daily-stats"},
+            window=window,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[pool-daily-stats] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error looking up pool daily stats: {e}")
 
 
 @app.get("/api/coin/price-history", tags=["Coins"])
@@ -3653,7 +4558,7 @@ async def get_dag_run_status(dag_id: str, dag_run_id: str):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Error communicating with Airflow: {exc}")
 
-@app.get("/api/coin/list", tags=["Coins"])
+@app.get("/api/coins/list", tags=["Coins"])
 async def get_coins():
     """Get list of active indexed coins for the backtester."""
     try:
@@ -3673,28 +4578,214 @@ async def get_coins():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/coin-families", tags=["Coins"])
-async def get_coin_families():
-    """Get mapping of coin families and their member symbols."""
+@app.get("/api/coin-families", tags=["Coins"],
+         responses={
+             200: {
+                 "description": "List of coin families with their member coins",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": [
+                                 {
+                                     "type": "coin_family",
+                                     "id": "BTC",
+                                     "attributes": {"name": "BTC"},
+                                     "relationships": {"members": {"data": [{"type": "coin", "id": 290}]}},
+                                 }
+                             ],
+                             "included": [{"type": "coin", "id": 290, "attributes": {"symbol": "BTC", "name": "Bitcoin"}}],
+                         }
+                     }
+                 }
+             }
+         })
+async def get_coin_families(
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths to embed. Default: `members`. Example: `members`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `coin[symbol,name]`"),
+):
+    """List coin families as a JSON:API compound document.
+
+    ``data`` is an array of ``coin_family`` resources and ``included`` holds
+    the member ``coin`` resources (default). The response is intentionally
+    slim so page loads stay fast.
+
+    Example:
+
+        GET /api/coin-families?include=members
+
+        {
+          "data": [
+            { "type": "coin_family", "id": "BTC", "attributes": {"name": "BTC"},
+              "relationships": { "members": { "data": [ {"type": "coin", "id": 290}, ... ] } } }
+          ],
+          "included": [
+            { "type": "coin", "id": 290, "attributes": {"symbol": "BTC", "name": "Bitcoin"} },
+            ...
+          ]
+        }
+
+    Use ``data`` + ``included`` to rebuild the old ``families`` (family -> member
+    symbols) and ``symbol_family_map`` (symbol -> family) maps client-side.
+    """
+    try:
+        def _query():
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT DISTINCT UPPER(f.name) AS family
+                    FROM coin_family f
+                    ORDER BY family
+                """)
+                rows = cur.fetchall()
+                cur.close()
+                return [r[0] for r in rows]
+
+        family_names = await asyncio.to_thread(_query)
+        family_rows = [{"family": name} for name in family_names]
+
+        include = include if include is not None else "members"
+        return build_coin_family_documents(
+            family_rows, include_spec=include, fields_spec=fields,
+            links={"self": "/api/coin-families"},
+            member_attrs=("symbol", "name"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/coins/search-by-symbol", tags=["Coins"],
+         responses={
+             200: {
+                 "description": "Coins matching a symbol with their contracts and families",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": [
+                                 {
+                                     "type": "coin",
+                                     "id": 290,
+                                     "attributes": {"symbol": "BTC", "name": "Bitcoin", "price": 60000.0},
+                                     "relationships": {
+                                         "contracts": {"data": [{"type": "coin_contract", "id": "290:Ethereum"}]},
+                                         "families": {"data": [{"type": "coin_family", "id": "BTC"}]},
+                                     },
+                                 }
+                             ],
+                             "included": [
+                                 {"type": "coin_contract", "id": "290:Ethereum",
+                                  "attributes": {"chain": "Ethereum", "contract_address": "0x...", "decimals": 8}},
+                             ],
+                         }
+                     }
+                 }
+             }
+         })
+async def search_coins_by_symbol(
+    symbol: str = Query(..., description="Coin symbol to search (case-insensitive). Example: `WETH`"),
+    include_coin_families: bool = Query(True, description="Also return every coin in the same coin family. With this on, `BTC` matches all BTC-pegged coins (WBTC, KBTC, ...). Default: `true`"),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths to embed. Default: `contracts,families`. Example: `contracts`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `coin[symbol,name]`"),
+):
+    """List coins matching a symbol as a JSON:API compound document.
+
+    ``data`` is an array of ``coin`` resources and ``included`` holds the
+    requested ``coin_contract`` / ``coin_family`` resources.
+
+    Example — WETH with its on-chain contracts:
+
+        GET /api/coins/search-by-symbol?symbol=WETH&include=contracts
+
+    Example — BTC expanded to its whole family:
+
+        GET /api/coins/search-by-symbol?symbol=BTC&include_coin_families=true&include=contracts,families
+
+    When include_coin_families is true (default), the search expands to every
+    coin that shares the queried symbol's coin family (e.g. `BTC` also returns
+    WBTC, KBTC, TBTC, ...).
+    """
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
+                cur.execute("SELECT coin_id FROM coin WHERE UPPER(symbol) = UPPER(%s)", (symbol.strip(),))
+                matched_coin_ids = [row[0] for row in cur.fetchall()]
+                if not matched_coin_ids:
+                    raise HTTPException(status_code=404, detail=f"No coin found for symbol '{symbol}'")
+
+                if include_coin_families:
+                    # Only expand through the family whose name matches the
+                    # queried symbol (e.g. `BTC` -> the "BTC" family with WBTC,
+                    # KBTC, ...). A coin can also belong to broad meta-families
+                    # like Tier1/STOCK which we must not expand through.
+                    cur.execute("""
+                        SELECT DISTINCT f.name
+                        FROM coin_family f
+                        JOIN coin c ON f.coin_id = c.coin_id
+                        WHERE UPPER(f.name) = UPPER(%s)
+                    """, (symbol.strip(),))
+                    family_names = [row[0] for row in cur.fetchall()]
+                    if family_names:
+                        cur.execute("""
+                            SELECT DISTINCT f.coin_id
+                            FROM coin_family f
+                            WHERE f.name = ANY(%s)
+                        """, (family_names,))
+                        matched_coin_ids = [row[0] for row in cur.fetchall()]
+
                 cur.execute("""
-                    SELECT UPPER(f.name) as family, UPPER(c.symbol) as symbol
-                    FROM coin_family f
-                    JOIN coin c ON f.coin_id = c.coin_id
-                """)
-                families_map = {}
-                symbol_family_map = {}
-                for fam, sym in cur.fetchall():
-                    if fam not in families_map:
-                        families_map[fam] = []
-                    families_map[fam].append(sym)
-                    symbol_family_map[sym] = fam
-                return {
-                    "families": families_map,
-                    "symbol_family_map": symbol_family_map
-                }
+                    SELECT c.coin_id, c.symbol, c.name, c.slug, c.hardness,
+                           c.cmc_rank, c.cmc_id, c.first_historical_data,
+                           c.image_url, c.price, c.price_timestamp, c.decimals,
+                           c.percent_change_1h, c.percent_change_24h, c.percent_change_7d,
+                           c.percent_change_30d, c.percent_change_60d, c.percent_change_90d,
+                           c.market_cap, c.market_cap_dominance, c.fully_diluted_market_cap,
+                           c.tvl, c.total_supply, c.circulating_supply, c.max_supply,
+                           c.cmc_last_updated
+                    FROM coin c
+                    WHERE c.coin_id = ANY(%s)
+                    ORDER BY c.coin_id
+                """, (matched_coin_ids,))
+                coins = cur.fetchall()
+
+                coin_cols = [
+                    "coin_id", "symbol", "name", "slug", "hardness",
+                    "cmc_rank", "cmc_id", "first_historical_data",
+                    "image_url", "price", "price_timestamp", "decimals",
+                    "percent_change_1h", "percent_change_24h", "percent_change_7d",
+                    "percent_change_30d", "percent_change_60d", "percent_change_90d",
+                    "market_cap", "market_cap_dominance", "fully_diluted_market_cap",
+                    "tvl", "total_supply", "circulating_supply", "max_supply",
+                    "cmc_last_updated"
+                ]
+
+                result = []
+                for row in coins:
+                    coin = dict(zip(coin_cols, row))
+                    coin["price"] = float(coin["price"]) if coin["price"] is not None else None
+                    for col in ("percent_change_1h", "percent_change_24h", "percent_change_7d",
+                                "percent_change_30d", "percent_change_60d", "percent_change_90d",
+                                "market_cap", "market_cap_dominance", "fully_diluted_market_cap",
+                                "tvl", "total_supply", "circulating_supply", "max_supply"):
+                        if coin[col] is not None:
+                            coin[col] = float(coin[col])
+                    for col in ("first_historical_data", "price_timestamp", "cmc_last_updated"):
+                        if coin[col] is not None:
+                            coin[col] = coin[col].isoformat()
+                    result.append(coin)
+
+        include = include if include is not None else "contracts,families"
+        return build_coin_documents(
+            result, include_spec=include, fields_spec=fields,
+            links={"self": "/api/coins/search-by-symbol"},
+            meta={"query": symbol.strip(), "include_coin_families": include_coin_families, "n": len(result)},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -3721,8 +4812,8 @@ async def list_pools(
                 JOIN coin c1 ON p.coin1_id = c1.coin_id
                 LEFT JOIN (
                     SELECT DISTINCT ON (pool_id) pool_id, tvl_usd, volume_usd, tx_count
-                    FROM liquidity_pool_history
-                    ORDER BY pool_id, date DESC
+                    FROM liquidity_pool_daily_stats
+                    ORDER BY pool_id, day DESC
                 ) h ON p.id = h.pool_id
                 WHERE p.reverted = FALSE OR pr.name IN ('Uniswap V3', 'Uniswap V4', 'PancakeSwap V3', 'PancakeSwap V4')
                 ORDER BY h.tvl_usd DESC NULLS LAST
@@ -4411,7 +5502,7 @@ def build_all_tables_health(lookback_days: int = 7):
         cur = conn.cursor()
         cur.execute("SET LOCAL statement_timeout = '600s'")
 
-        # 1. swaps (from liquidity_pool_history — 28MB vs 19GB swaps partition)
+        # 1. swaps (from liquidity_pool_daily_stats — 28MB vs 19GB swaps partition)
         volume_thresholds = [0, 1000, 100000, 10000000]
 
         # Single scan of history: get per-chain/protocol cnt/min/max for each volume threshold
@@ -4420,26 +5511,26 @@ def build_all_tables_health(lookback_days: int = 7):
             vol_filter = "" if min_vol == 0 else f"AND v.vol_7d >= {min_vol}"
             filter_cols.append(f"""
                 COALESCE(SUM(lph.tx_count) FILTER (WHERE 1=1 {vol_filter}), 0) as cnt_{min_vol},
-                MIN(lph.date) FILTER (WHERE 1=1 {vol_filter}) as min_date_{min_vol},
-                MAX(lph.date) FILTER (WHERE 1=1 {vol_filter}) as max_date_{min_vol}
+                MIN(lph.day) FILTER (WHERE 1=1 {vol_filter}) as min_date_{min_vol},
+                MAX(lph.day) FILTER (WHERE 1=1 {vol_filter}) as max_date_{min_vol}
             """)
         filter_sql = ','.join(filter_cols)
 
         cur.execute(f"""
             SELECT ch.name, pr.name,
                    {filter_sql}
-            FROM liquidity_pool_history lph
+            FROM liquidity_pool_daily_stats lph
             JOIN liquidity_pool lp ON lph.pool_id = lp.id
             JOIN chain ch ON lp.chain_id = ch.id
             JOIN protocol pr ON lp.protocol_id = pr.id
             LEFT JOIN (
                 SELECT pool_id, COALESCE(SUM(volume_usd), 0) as vol_7d
-                FROM liquidity_pool_history
-                WHERE date >= CURRENT_DATE - INTERVAL '7 days' AND date < CURRENT_DATE
+                FROM liquidity_pool_daily_stats
+                WHERE day >= CURRENT_DATE - INTERVAL '7 days' AND day < CURRENT_DATE
                 GROUP BY pool_id
             ) v ON lp.id = v.pool_id
-            WHERE lph.date >= CURRENT_DATE - INTERVAL '7 days'
-              AND lph.date < CURRENT_DATE
+            WHERE lph.day >= CURRENT_DATE - INTERVAL '7 days'
+              AND lph.day < CURRENT_DATE
             GROUP BY ch.name, pr.name
             ORDER BY ch.name, pr.name
         """)
@@ -4447,7 +5538,7 @@ def build_all_tables_health(lookback_days: int = 7):
         lph_rows = cur.fetchall()
 
         # Also get overall earliest swap data and total estimate
-        cur.execute("SELECT MIN(date), MAX(date) FROM liquidity_pool_history")
+        cur.execute("SELECT MIN(day), MAX(day) FROM liquidity_pool_daily_stats")
         lph_earliest, lph_latest = cur.fetchone()
         # Route coverage is derived from the pre-aggregated route tables (the
         # raw swaps tables are no longer read by the API). Routed swap-log
@@ -4653,10 +5744,10 @@ def build_all_tables_health(lookback_days: int = 7):
                 JOIN protocol pr ON lp.protocol_id = pr.id
                 LEFT JOIN (
                     SELECT pool_id, 
-                           MAX(date) as last_history_date, 
+                           MAX(day) as last_history_date, 
                            bool_or(tvl_usd IS NOT NULL AND tvl_usd > 0) as has_tvl,
-                           SUM(CASE WHEN date >= CURRENT_DATE - INTERVAL '7 days' THEN volume_usd ELSE 0 END) as vol_7d
-                    FROM liquidity_pool_history
+                           SUM(CASE WHEN day >= CURRENT_DATE - INTERVAL '7 days' THEN volume_usd ELSE 0 END) as vol_7d
+                    FROM liquidity_pool_daily_stats
                     GROUP BY pool_id
                 ) lp_stats ON lp.id = lp_stats.pool_id
                 WHERE (%s = 0 OR COALESCE(lp_stats.vol_7d, 0) >= %s)
@@ -4762,7 +5853,7 @@ def build_all_tables_health(lookback_days: int = 7):
         stats_chains = dict(cur.fetchall())
         cur.execute("""
             SELECT ch.name, COUNT(DISTINCT r.route_id)
-            FROM route_distribution_bucket rdb
+            FROM route_daily_stats_bucket rdb
             JOIN route r ON r.route_id = rdb.route_id
             JOIN chain ch ON r.chain_id = ch.id
             GROUP BY ch.name
@@ -4781,7 +5872,7 @@ def build_all_tables_health(lookback_days: int = 7):
                 "pairs": pair_chains.get(chain, 0),
                 "routes": route_chains.get(chain, 0),
                 "daily_stats": stats_chains.get(chain, 0),
-                "route_distribution_bucket": bucket_chains.get(chain, 0),
+                "route_daily_stats_bucket": bucket_chains.get(chain, 0),
                 "route_hop": hop_chains.get(chain, 0)
             }
             for chain in sorted(set(pair_chains) | set(route_chains) | set(stats_chains) | set(bucket_chains) | set(hop_chains))
@@ -4792,7 +5883,7 @@ def build_all_tables_health(lookback_days: int = 7):
         route_count = cur.fetchone()[0]
         cur.execute("SELECT COUNT(DISTINCT route_id) FROM route_daily_stats")
         daily_stats_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(DISTINCT route_id) FROM route_distribution_bucket")
+        cur.execute("SELECT COUNT(DISTINCT route_id) FROM route_daily_stats_bucket")
         bucket_count = cur.fetchone()[0]
         cur.execute("SELECT COUNT(DISTINCT route_id) FROM route_hop")
         hop_count = cur.fetchone()[0]
@@ -4801,7 +5892,7 @@ def build_all_tables_health(lookback_days: int = 7):
             "pairs_count": pair_count,
             "routes_count": route_count,
             "daily_stats_count": daily_stats_count,
-            "route_distribution_bucket_count": bucket_count,
+            "route_daily_stats_bucket_count": bucket_count,
             "route_hop_count": hop_count,
             "chains": taxonomy_chains
         }
@@ -4829,7 +5920,7 @@ def build_all_tables_health(lookback_days: int = 7):
             "protocols": proto_names
         }
 
-        # 11. liquidity_pool_history
+        # 11. liquidity_pool_daily_stats
         cur.execute("SELECT COUNT(*) FROM liquidity_pool")
         total_pools = cur.fetchone()[0]
 
@@ -4838,14 +5929,14 @@ def build_all_tables_health(lookback_days: int = 7):
                 COUNT(DISTINCT pool_id),
                 COUNT(DISTINCT CASE WHEN latest_date >= (CURRENT_DATE - INTERVAL '1 day') THEN pool_id END)
             FROM (
-                SELECT pool_id, MAX(date) AS latest_date FROM liquidity_pool_history GROUP BY pool_id
+                SELECT pool_id, MAX(day) AS latest_date FROM liquidity_pool_daily_stats GROUP BY pool_id
             ) sub
         """)
         lph_covered_pools, lph_fresh_pools = cur.fetchone()
         lph_covered_pct = round(lph_covered_pools / total_pools * 100, 2) if total_pools > 0 else 0
         lph_fresh_pct = round(lph_fresh_pools / total_pools * 100, 2) if total_pools > 0 else 0
 
-        cur.execute("SELECT MIN(date), MAX(date), COUNT(*) FROM liquidity_pool_history")
+        cur.execute("SELECT MIN(day), MAX(day), COUNT(*) FROM liquidity_pool_daily_stats")
         lph_min, lph_max, lph_count = cur.fetchone()
         lph_stale = False
         if lph_max:
@@ -4857,7 +5948,7 @@ def build_all_tables_health(lookback_days: int = 7):
             if lph_stale: overall_degraded = True
         else:
             lph_stale = True
-        data_dict["liquidity_pool_history"] = {
+        data_dict["liquidity_pool_daily_stats"] = {
             "freshness_requirement": "Latest pool history timestamp must be within the last 2 days",
             "count": lph_count,
             "earliest": lph_min.isoformat() if lph_min else None,
@@ -4873,7 +5964,7 @@ def build_all_tables_health(lookback_days: int = 7):
             }
         }
 
-        # Per-chain/protocol pool-level passing metric for liquidity_pool_history matrix
+        # Per-chain/protocol pool-level passing metric for liquidity_pool_daily_stats matrix
         # A pool passes if it has TVL > 0 for every day in the lookback window.
         # Dormant pools (0 tx, 0 vol) with healthy TVL are considered passing.
         lookback_interval = f'{lookback_days} days'
@@ -4889,11 +5980,11 @@ def build_all_tables_health(lookback_days: int = 7):
             LEFT JOIN (
                 SELECT lph.pool_id,
                        COUNT(*) FILTER (WHERE lph.tvl_usd > 0) as valid_days,
-                       MIN(lph.date) FILTER (WHERE lph.tvl_usd > 0) as earliest_valid,
-                       MAX(lph.date) FILTER (WHERE lph.tvl_usd > 0) as latest_valid
-                FROM liquidity_pool_history lph
-                WHERE lph.date >= CURRENT_DATE - %s::interval
-                  AND lph.date < CURRENT_DATE
+                       MIN(lph.day) FILTER (WHERE lph.tvl_usd > 0) as earliest_valid,
+                       MAX(lph.day) FILTER (WHERE lph.tvl_usd > 0) as latest_valid
+                FROM liquidity_pool_daily_stats lph
+                WHERE lph.day >= CURRENT_DATE - %s::interval
+                  AND lph.day < CURRENT_DATE
                 GROUP BY lph.pool_id
             ) sub ON lp.id = sub.pool_id
             GROUP BY ch.name, pr.name
@@ -4927,10 +6018,10 @@ def build_all_tables_health(lookback_days: int = 7):
                 }
             }
 
-        data_dict["liquidity_pool_history"]["lookback_days"] = lookback_days
-        data_dict["liquidity_pool_history"]["chains"] = lph_chains
+        data_dict["liquidity_pool_daily_stats"]["lookback_days"] = lookback_days
+        data_dict["liquidity_pool_daily_stats"]["chains"] = lph_chains
 
-        # Per-volume-threshold passing metrics for liquidity_pool_history
+        # Per-volume-threshold passing metrics for liquidity_pool_daily_stats
         lph_volume_filters = {}
         for min_vol in volume_thresholds:
             cur.execute("""
@@ -4945,12 +6036,12 @@ def build_all_tables_health(lookback_days: int = 7):
                 LEFT JOIN (
                     SELECT lph.pool_id,
                            COUNT(*) FILTER (WHERE lph.tvl_usd > 0) as valid_days,
-                           MIN(lph.date) FILTER (WHERE lph.tvl_usd > 0) as earliest_valid,
-                           MAX(lph.date) FILTER (WHERE lph.tvl_usd > 0) as latest_valid,
-                            SUM(CASE WHEN date >= CURRENT_DATE - %s::interval THEN volume_usd ELSE 0 END) as vol_window
-                    FROM liquidity_pool_history lph
-                    WHERE lph.date >= CURRENT_DATE - %s::interval
-                      AND lph.date < CURRENT_DATE
+MIN(lph.day) FILTER (WHERE lph.tvl_usd > 0) as earliest_valid,
+                       MAX(lph.day) FILTER (WHERE lph.tvl_usd > 0) as latest_valid,
+                            SUM(CASE WHEN day >= CURRENT_DATE - %s::interval THEN volume_usd ELSE 0 END) as vol_window
+                    FROM liquidity_pool_daily_stats lph
+                    WHERE lph.day >= CURRENT_DATE - %s::interval
+                      AND lph.day < CURRENT_DATE
                     GROUP BY lph.pool_id
                 ) sub ON lp.id = sub.pool_id
                 WHERE (%s = 0 OR COALESCE(sub.vol_window, 0) >= %s)
@@ -4986,7 +6077,7 @@ def build_all_tables_health(lookback_days: int = 7):
                 }
             }
 
-        data_dict["liquidity_pool_history"]["volume_filters"] = lph_volume_filters
+        data_dict["liquidity_pool_daily_stats"]["volume_filters"] = lph_volume_filters
 
         # 12. liquidity_pool_position
         cur.execute("SELECT COUNT(*) FROM liquidity_pool_position")
@@ -5171,7 +6262,7 @@ async def custom_swagger_ui_html():
         openapi_url=app.openapi_url,
         title=app.title + " - API Specs",
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
-        swagger_css_url="/static/swagger-custom.css?v=3.0",
+        swagger_css_url="/static/swagger-custom.css?v=4.0",
         swagger_ui_parameters={"syntaxHighlight": {"theme": "monokai"}}
     )
 

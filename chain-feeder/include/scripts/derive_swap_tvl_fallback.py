@@ -18,7 +18,7 @@ import psycopg2
 
 def derive_and_backfill_tvl_fallback():
     """
-    Backfills missing or near-zero TVL in liquidity_pool_history by:
+    Backfills missing or near-zero TVL in liquidity_pool_daily_stats by:
     1. Forward-filling the latest known non-zero real TVL snapshot (> $1.0)
        for each pool to subsequent history dates where TVL is zero, <= 1.0, or null.
     2. Backward-filling the earliest known real TVL snapshot (> $1.0)
@@ -26,22 +26,22 @@ def derive_and_backfill_tvl_fallback():
     """
     conn = psycopg2.connect(DATA_WAREHOUSE_DB)
     cur = conn.cursor()
-    logging.info("Starting TVL fallback backfill for liquidity_pool_history...")
+    logging.info("Starting TVL fallback backfill for liquidity_pool_daily_stats...")
 
     # 1. Forward-fill latest known non-zero TVL (> $1.0) for each pool
     query_forward_fill = """
     WITH latest_known_tvl AS (
-        SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, date
-        FROM liquidity_pool_history
+        SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, day
+        FROM liquidity_pool_daily_stats
         WHERE tvl_usd IS NOT NULL AND ABS(tvl_usd) > 1.0
-        ORDER BY pool_id, date DESC
+        ORDER BY pool_id, day DESC
     )
-    UPDATE liquidity_pool_history h
+    UPDATE liquidity_pool_daily_stats h
     SET tvl_usd = l.tvl
     FROM latest_known_tvl l
     WHERE h.pool_id = l.pool_id
       AND (h.tvl_usd IS NULL OR ABS(h.tvl_usd) <= 1.0)
-      AND h.date >= l.date;
+      AND h.day >= l.day;
     """
     cur.execute(query_forward_fill)
     ff_rows = cur.rowcount
@@ -49,17 +49,17 @@ def derive_and_backfill_tvl_fallback():
     # 2. Backward-fill earliest known non-zero TVL (> $1.0) for remaining zero/null rows
     query_backward_fill = """
     WITH earliest_known_tvl AS (
-        SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, date
-        FROM liquidity_pool_history
+        SELECT DISTINCT ON (pool_id) pool_id, ABS(tvl_usd) AS tvl, day
+        FROM liquidity_pool_daily_stats
         WHERE tvl_usd IS NOT NULL AND ABS(tvl_usd) > 1.0
-        ORDER BY pool_id, date ASC
+        ORDER BY pool_id, day ASC
     )
-    UPDATE liquidity_pool_history h
+    UPDATE liquidity_pool_daily_stats h
     SET tvl_usd = e.tvl
     FROM earliest_known_tvl e
     WHERE h.pool_id = e.pool_id
       AND (h.tvl_usd IS NULL OR ABS(h.tvl_usd) <= 1.0)
-      AND h.date < e.date;
+      AND h.day < e.day;
     """
     cur.execute(query_backward_fill)
     bf_rows = cur.rowcount

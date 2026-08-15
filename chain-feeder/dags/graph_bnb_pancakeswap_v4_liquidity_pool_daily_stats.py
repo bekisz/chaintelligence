@@ -7,7 +7,7 @@ Reads PancakeSwap V4 swaps from the unified `swaps` table (protocol =
      pairing exists in `liquidity_pool` with protocol = 'PancakeSwap V4'.
   2. sync_v4_pool_ids — backfills `liquidity_pool.pool_id` (the V4 poolId) by
      querying the PancakeSwap V4 BNB subgraph.
-  3. build_daily_history — aggregates swaps into `liquidity_pool_history`.
+  3. build_daily_history — aggregates swaps into `liquidity_pool_daily_stats`.
   4. sync_tvl_from_graph — fetches daily TVL from the PancakeSwap V4 subgraph.
 
 This mirrors `uniswap_v4_history_sync.py` but sources from the unified `swaps`
@@ -249,10 +249,10 @@ def sync_tvl_from_graph():
         logging.info(f"Upserting {len(data)} records for pool {c0}-{c1} (TVL/Vol)")
         for d in data:
             cur.execute("""
-                INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd, tvl_usd)
+                INSERT INTO liquidity_pool_daily_stats (pool_id, day, tx_count, volume_usd, tvl_usd)
                 VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (pool_id, date) DO UPDATE
-                SET tvl_usd = COALESCE(NULLIF(liquidity_pool_history.tvl_usd, 0), CASE
+                ON CONFLICT (pool_id, day) DO UPDATE
+                SET tvl_usd = COALESCE(NULLIF(liquidity_pool_daily_stats.tvl_usd, 0), CASE
                     WHEN EXCLUDED.tvl_usd IS NOT NULL AND ABS(EXCLUDED.tvl_usd) > 1.0 THEN EXCLUDED.tvl_usd
                     ELSE 0
                 END),
@@ -266,7 +266,7 @@ def sync_tvl_from_graph():
 
 
 with DAG(
-    'graph_bnb_pancakeswap_v4_liquidity_pool_history',
+    'graph_bnb_pancakeswap_v4_liquidity_pool_daily_stats',
     max_active_runs=1,
     default_args=default_args,
     description='Derived daily history for PancakeSwap V4 (Infinity) pools',

@@ -11,17 +11,57 @@
     <link rel="icon" type="image/png" href="/static/favicon.png?v=side-brain-minimal">
     <link rel="stylesheet" href="/static/style.css?v=13.0">
     <style>
+        .api-docs {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 28px 24px 40px;
+            line-height: 1.6;
+            color: #e8eaed;
+        }
+        .api-docs h1 { font-size: 1.5rem; margin: 0 0 6px; }
+        .api-docs h2 { font-size: 1.1rem; margin: 28px 0 8px; color: #9aa7f4; }
+        .api-docs p, .api-docs ul, .api-docs ol { margin: 6px 0; }
+        .api-docs code {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-size: 0.85em;
+        }
+        .api-docs pre {
+            background: #101318;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 14px;
+            overflow-x: auto;
+            font-size: 0.8em;
+        }
+        .api-docs pre code { background: none; padding: 0; }
+        .api-docs table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        .api-docs th, .api-docs td {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 7px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .api-docs th { background: rgba(154, 167, 244, 0.12); font-weight: 600; }
+        .api-docs .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .api-graph { background: #101318; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 14px 16px; overflow-x: auto; }
+        .api-graph pre { border: none; padding: 0; margin: 0; }
+
         .api-container {
             height: calc(100vh - 81px);
-            /* Header height + border approximately */
             width: 100%;
             margin: 0;
             padding: 0;
             overflow: hidden;
             background: rgba(26, 29, 36, 0.4);
         }
-
-        iframe {
+        .api-container iframe {
             width: 100%;
             height: 100%;
             border: none;
@@ -54,6 +94,179 @@
         <div class="blob blob-1"></div>
         <div class="blob blob-2"></div>
         <div class="blob blob-3"></div>
+    </div>
+
+    <div class="api-docs">
+        <h1>Chaintelligence API — JSON:API Compound Documents</h1>
+        <p>
+            The analytic endpoints (<code>/api/od/*</code>, <code>/api/ods/*</code>, <code>/api/routes/*</code>,
+            <code>/api/coins/*</code>, <code>/api/coin-families</code>, <code>/api/pool/*</code>) return
+            <a href="https://jsonapi.org/format/#document-structure" target="_blank" rel="noopener">JSON:API compound documents</a>.
+            Related resources are not nested inline; the primary resource(s) live in <code>data</code> (a single object for
+            one result, an array for many), and every linked resource is deduplicated in the top-level <code>included</code>
+            array. Relationships point at included resources by <code>type:id</code>.
+        </p>
+
+        <h2>The object graph</h2>
+        <div class="api-graph"><pre><code>od ── routes (many) ── hops (many) ── pool ── coin0
+ │        │                              │        coin1
+ │        └─ chain                       └─ chain
+ ├─ origin_coin      (coin)
+ └─ destination_coin (coin)
+
+coin ── contracts (many, coin_contract: chain/address/decimals)
+       └─ families (many, coin_family ── members (many, coin))
+
+chain ── id + name</code></pre></div>
+        <p>
+            Every <code>id</code> is a string. Route ids are the 16-char lowercase hex form
+            (e.g. <code>837dc52fa8bde82c</code>) used by <code>/api/routes/{route_hash}</code>; hop ids are
+            <code>{route_hash}:{seq}</code>. O&amp;D ids (<code>od_hash</code>) are also 16-char hex, pool ids are the
+            numeric liquidity-pool id, and coin ids are the numeric coin id.
+        </p>
+
+        <h2>Control what you get with <code>?include=</code></h2>
+        <p>
+            The default is intentionally slim. Append a comma-separated list of dot-paths to embed more of the graph.
+            Paths are validated against the schema — an unknown segment returns <code>400</code> with a
+            <code>detail</code> explaining the valid relationships for that resource.
+        </p>
+        <pre><code># Just the pair row, no relatives
+curl -u admin -H 'Authorization: Basic ...' \
+  "http://localhost:8000/api/od/2ac53c78a580597e?include="
+
+# Pair + its routes + each hop
+curl "http://localhost:8000/api/od/2ac53c78a580597e?include=routes.hops"
+
+# Full drill-down: routes → hops → pool → the pool's two coins
+curl "http://localhost:8000/api/od/2ac53c78a580597e?include=routes.hops.pool,routes.hops.pool.coin0,routes.hops.pool.coin1"</code></pre>
+
+        <h2>Slim it down with <code>?fields[type]=</code></h2>
+        <p>
+            Sparse fieldsets limit the attributes returned for each type. Apply per resource type, comma-separated
+            attribute names.
+        </p>
+        <pre><code># Only hop seq/symbols and pool fee/TVL — no coin metadata
+curl "http://localhost:8000/api/routes/837dc52fa8bde82c?include=hops.pool&fields[hop]=seq,token_in_symbol,token_out_symbol&fields[pool]=fee_bps,tvl_usd"</code></pre>
+
+        <h2>Default include per endpoint</h2>
+        <table>
+            <tr><th>Endpoint</th><th>Default <code>?include=</code></th><th>Notes</th></tr>
+            <tr>
+                <td class="mono">GET /api/od/{od_hash}</td>
+                <td class="mono">routes.hops.pool,<br>routes.hops.pool.coin0,<br>routes.hops.pool.coin1</td>
+                <td>Full drill-down: the pair plus all routes, hops, pools and pool tokens.</td>
+            </tr>
+            <tr>
+                <td class="mono">GET /api/ods/search-by-contract</td>
+                <td class="mono">routes.hops</td>
+                <td><code>show_routes=false</code> disables the include entirely.</td>
+            </tr>
+            <tr><td class="mono">GET /api/ods</td><td class="mono">(none)</td><td>List rows only; add <code>include=routes.hops</code> for drill-down.</td></tr>
+            <tr>
+                <td class="mono">GET /api/routes/{route_hash}</td>
+                <td class="mono">hops.pool,<br>hops.pool.coin0,<br>hops.pool.coin1</td>
+                <td>Single route with its hops, pools and pool tokens.</td>
+            </tr>
+            <tr><td class="mono">GET /api/coins/{coin_id}</td><td class="mono">contracts,families</td><td>Coin + its contracts and family memberships.</td></tr>
+            <tr><td class="mono">GET /api/coins/search-by-symbol</td><td class="mono">contracts,families</td><td>Same as coin-by-id; family expansion controlled by <code>include_coin_families</code>.</td></tr>
+            <tr><td class="mono">GET /api/coin-families</td><td class="mono">members</td><td>Families plus their member coins.</td></tr>
+            <tr><td class="mono">GET /api/pool/{identifier}</td><td class="mono">coin0,coin1</td><td>Pool detail with the two tokens embedded.</td></tr>
+        </table>
+
+        <h2>Reading the response</h2>
+        <ul>
+            <li><code>data</code> — the primary resource (object if exactly one, array if many or none).</li>
+            <li><code>included</code> — every linked resource, deduplicated by <code>type:id</code>.</li>
+            <li><code>meta.n</code> — how many primary resources matched; list endpoints add <code>limit</code>/<code>offset</code>.</li>
+            <li><code>links.self</code> — the canonical URL of this request.</li>
+            <li>Errors use <code>{"detail": ...}</code> with status 400 (bad <code>include</code>/<code>fields</code>/identifier),
+                404 (not found) or 500.</li>
+        </ul>
+
+        <h2>Daily stats &amp; bucket distribution</h2>
+        <p>
+            Every route carries pre-aggregated daily stats (<code>route_daily_stats</code>: volume, fees, tx/swap counts per
+            day) and a log-volume bucket distribution (<code>route_daily_stats_bucket</code>: one row per
+            route+day+bucket). Both are read models backing <code>/api/routes/analyze</code> and
+            <code>/api/swap-distribution</code> — no raw-swaps reads.
+        </p>
+        <pre><code># One route's daily stats + bucket distribution in a single request
+curl "http://localhost:8000/api/routes/837dc52fa8bde82c/daily-stats"
+
+# Same data reachable through the route resource via include
+curl "http://localhost:8000/api/routes/837dc52fa8bde82c?include=daily_stats,daily_stats_bucket"
+
+# ... or nested under the od drill-down
+curl "http://localhost:8000/api/od/2ac53c78a580597e?include=routes.daily_stats"
+
+# Just the day-level rollups, slimmed to two fields
+curl "http://localhost:8000/api/routes/837dc52fa8bde82c/daily-stats?include=daily_stats&fields=route_daily_stat[day,volume_usd]"</code></pre>
+        <p>
+            <code>route_daily_stat</code> ids are <code>{route_hash}:{day}</code> (e.g.
+            <code>837dc52fa8bde82c:2026-08-13</code>); <code>route_daily_stat_bucket</code> ids are
+            <code>{route_hash}:{day}:{bucket_index}</code>. Each daily stat links to its same-day buckets via
+            <code>daily_stats_bucket</code>. Fields: day, tx_count, swap_count, volume_usd, fees_usd (stats);
+            + bucket_index, sample_count, log_sum, log_sum2 (buckets).
+        </p>
+        <p>
+            A <code>window_stats</code> attribute on the route resource gives the window-aggregated sums and
+            derived metrics over a date range — the same numbers <code>/api/routes/analyze</code> reports per
+            route (count, swaps, volume, market_size, avg_volume, pct_volume, last_activity). Pass
+            <code>days</code> or <code>start_date</code>/<code>end_date</code>; without them it covers the
+            route's full available range:
+        </p>
+        <pre><code># Last 7 days of aggregated route activity
+curl "http://localhost:8000/api/routes/837dc52fa8bde82c/daily-stats?days=7"
+
+# Explicit window; window_stats.tx_count/swaps/volume/fees are the day-range sums
+curl "http://localhost:8000/api/routes/837dc52fa8bde82c/daily-stats?start_date=2026-08-01&end_date=2026-08-15"
+
+# Just the window aggregate, nothing else
+curl "http://localhost:8000/api/routes/837dc52fa8bde82c/daily-stats?fields=route[window_stats]"</code></pre>
+
+        <h3>Pool daily stats</h3>
+        <p>
+            Pools have the same two read models — <code>liquidity_pool_daily_stats</code> (per pool+day:
+            volume, TVL, tx count) and <code>liquidity_pool_daily_stats_bucket</code> (per pool+day+bucket).
+            Use the pool identifier (numeric id, V3 contract address, or V4 pool_id) with the same path suffix:
+        </p>
+        <pre><code># One pool's daily stats + bucket distribution
+curl "http://localhost:8000/api/pool/165681/daily-stats"
+
+# By V3 contract address
+curl "http://localhost:8000/api/pool/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640/daily-stats"
+
+# Volume per day only
+curl "http://localhost:8000/api/pool/165681/daily-stats?include=daily_stats&fields=pool_daily_stat[day,volume_usd]"
+
+# Fees per bucket (one resource per pool+day+bucket)
+curl "http://localhost:8000/api/pool/165681/daily-stats?fields=pool_daily_stat_bucket[day,bucket_index,fees_usd]"</code></pre>
+        <p>
+            <code>pool_daily_stat</code> ids are <code>{pool_id}:{day}</code>, bucket ids are
+            <code>{pool_id}:{day}:{bucket_index}</code>. Pool stats fields: day, tx_count, volume_usd, tvl_usd;
+            pool buckets add bucket_index, sample_count, fees_usd, log_sum, log_sum2.
+        </p>
+        <p>
+            With a <code>days</code> or <code>start_date</code>/<code>end_date</code> window, the pool resource
+            also carries <code>window_stats</code> (window sums: tx_count, volume_usd, tvl_usd, fees_usd) and an
+            <code>apr</code> attribute computed with the same fee-rate / TVL-reliability math as
+            <code>/api/routes/analyze</code>:
+        </p>
+        <pre><code># Window + APR for a pool (fee tier applied to volume, annualized over the window)
+curl "http://localhost:8000/api/pool/165681/daily-stats?days=30"
+
+curl "http://localhost:8000/api/pool/165681/daily-stats?start_date=2026-08-01&end_date=2026-08-15"
+
+# Sparse: window aggregate + APR only
+curl "http://localhost:8000/api/pool/165681/daily-stats?fields=pool[window_stats,apr]"</code></pre>
+
+        <h2>Auth</h2>
+        <p>
+            Most analytic endpoints require HTTP Basic auth (<code>PORTAL_USERNAME</code>/<code>PORTAL_PASSWORD</code>).
+            Public endpoints: <code>/api/coins/list</code>, <code>/api/coins/search-by-symbol</code>,
+            <code>/api/coin-families</code>, <code>/api/coin/price-history</code>, the pages, and static assets.
+        </p>
     </div>
 
     <div class="api-container">

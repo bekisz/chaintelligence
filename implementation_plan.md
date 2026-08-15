@@ -9,11 +9,11 @@ A new Airflow DAG will be created to query TVL directly from EVM RPC nodes.
 - **Query Pools**: Fetch all active pools (`pool_address`), along with their `coin0` and `coin1` details (`ethereum_address`, `decimals`) and their current USD prices from the database.
 - **Multicall Balances**: Use `Multicall3` via the existing `RpcClient` to fetch `balanceOf(pool_address)` for both tokens in a batch to avoid rate limits.
 - **Calculate TVL**: Convert the raw token balances to standard units using decimals, multiply by their respective USD prices, and sum them to get the total TVL in USD.
-- **Upsert History**: Insert/Update `liquidity_pool_history` for the current date (`date = today()`) with the new `tvl_usd`.
+- **Upsert History**: Insert/Update `liquidity_pool_daily_stats` for the current date (`date = today()`) with the new `tvl_usd`.
 
 ### 2. Update Existing Graph DAGs
 Files: `chain-feeder/dags/uniswap_v3_history_sync.py`, `chain-feeder/dags/uniswap_v4_history_sync.py`, `manual_tvl_sync.py`
-- Modify the `ON CONFLICT DO UPDATE` clause when inserting into `liquidity_pool_history`.
+- Modify the `ON CONFLICT DO UPDATE` clause when inserting into `liquidity_pool_daily_stats`.
 - Instead of always overwriting `tvl_usd` with The Graph's data, we will use `COALESCE` or a conditional update so that if the existing `tvl_usd` was already updated by the RPC DAG for the current date, it will not be overwritten by The Graph.
 
 ## Open Questions

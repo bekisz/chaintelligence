@@ -27,18 +27,18 @@ def backfill_tvl_mid_gaps():
 
     cur.execute("""
     WITH prev_tvl AS (
-        SELECT h.ctid, h.pool_id, h.date,
+        SELECT h.ctid, h.pool_id, h.day,
             (SELECT h2.tvl_usd
-             FROM liquidity_pool_history h2
+             FROM liquidity_pool_daily_stats h2
              WHERE h2.pool_id = h.pool_id
-               AND h2.date < h.date
+               AND h2.day < h.day
                AND h2.tvl_usd IS NOT NULL AND ABS(h2.tvl_usd) > 1.0
-             ORDER BY h2.date DESC
+             ORDER BY h2.day DESC
              LIMIT 1) as prev_tvl
-        FROM liquidity_pool_history h
+        FROM liquidity_pool_daily_stats h
         WHERE h.tvl_usd IS NULL OR ABS(h.tvl_usd) <= 1.0
     )
-    UPDATE liquidity_pool_history h
+    UPDATE liquidity_pool_daily_stats h
     SET tvl_usd = p.prev_tvl
     FROM prev_tvl p
     WHERE h.ctid = p.ctid

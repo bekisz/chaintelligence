@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const coinListPromise = fetch('/api/coin/list')
+    const coinListPromise = fetch('/api/coins/list')
         .then(response => response.json())
         .then(coins => coins.forEach(coin => {
             if (!coin.symbol) return;

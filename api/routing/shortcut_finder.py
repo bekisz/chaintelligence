@@ -249,9 +249,9 @@ class ShortcutFinder:
                 JOIN coin c0 ON p.coin0_id = c0.coin_id
                 JOIN coin c1 ON p.coin1_id = c1.coin_id
                 LEFT JOIN LATERAL (
-                    SELECT tvl_usd FROM liquidity_pool_history
+                    SELECT tvl_usd FROM liquidity_pool_daily_stats
                     WHERE pool_id = p.id AND tvl_usd > 0
-                    ORDER BY date DESC LIMIT 1
+                    ORDER BY day DESC LIMIT 1
                 ) h ON true
                 WHERE (
                     (UPPER(c0.symbol) = %s AND UPPER(c1.symbol) = %s)

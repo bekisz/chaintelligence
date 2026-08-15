@@ -196,9 +196,9 @@ def ingest_pool_stats(conn, positions: list):
         pool_id = res[0]
         
         cur.execute("""
-            INSERT INTO liquidity_pool_history (pool_id, date, tvl_usd, volume_usd)
+            INSERT INTO liquidity_pool_daily_stats (pool_id, day, tvl_usd, volume_usd)
             VALUES (%s, CURRENT_DATE, %s, %s)
-            ON CONFLICT (pool_id, date) DO UPDATE 
+            ON CONFLICT (pool_id, day) DO UPDATE 
             SET tvl_usd = EXCLUDED.tvl_usd, 
                 volume_usd = EXCLUDED.volume_usd
         """, (pool_id, tvl, vol))

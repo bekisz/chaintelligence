@@ -149,3 +149,120 @@ body {
     font-size: 0.88rem !important;
     line-height: 1.5 !important;
 }
+
+/* --- Parameter / field names + types: bright and readable --- */
+
+/* Parameter names in the parameters table (e.g. origin_coin_contract_address) */
+.swagger-ui .parameters-col_name .parameter__name,
+.swagger-ui .parameters-col_name,
+.swagger-ui .parameter__name {
+    color: #e8ecf3 !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+}
+
+/* Parameter type labels (e.g. "string") */
+.swagger-ui .parameter__type,
+.swagger-ui .parameters-col_name .parameter__type {
+    color: #ff6aa2 !important;
+    font-weight: 600 !important;
+    font-size: 0.78rem !important;
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace !important;
+    background: rgba(255, 0, 122, 0.08) !important;
+    border-radius: 4px !important;
+    padding: 1px 6px !important;
+}
+
+/* Parameter descriptions */
+.swagger-ui .parameters-col_description,
+.swagger-ui .parameters-col_description p,
+.swagger-ui .parameters-col_description a {
+    color: #aab4c5 !important;
+    font-size: 0.82rem !important;
+}
+
+/* Inline example values in parameter descriptions (markdown `code`) */
+.swagger-ui .parameters-col_description code,
+.swagger-ui .parameters-col_description .markdown code,
+.swagger-ui .parameters-col_description span.markdown code {
+    color: #6db5dd !important;
+    font-weight: 700 !important;
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace !important;
+    background: rgba(56, 189, 248, 0.08) !important;
+    border-radius: 4px !important;
+    padding: 1px 6px !important;
+    font-size: 0.8rem !important;
+}
+
+/* Brighten description code in opblock summary/description text globally */
+.swagger-ui .opblock-description-wrapper code,
+.swagger-ui .opblock-description code,
+.swagger-ui .opblock-body .opblock-description code,
+.swagger-ui .markdown code {
+    color: #6db5dd !important;
+    font-weight: 700 !important;
+    background: rgba(56, 189, 248, 0.08) !important;
+    border-radius: 4px !important;
+    padding: 1px 6px !important;
+}
+
+/* Required marker */
+.swagger-ui .parameter__name.required::after,
+.swagger-ui .parameter__name.required > span {
+    color: #FF007A !important;
+}
+
+/* Schema model: property names + types (response body / request body) */
+.swagger-ui .model-box .model,
+.swagger-ui .model-box .model-title,
+.swagger-ui .model-box .model .property-row,
+.swagger-ui .model .property-name,
+.swagger-ui .model .property-row .property-name,
+.swagger-ui .model .property-row .property-name .property-enum {
+    color: #e8ecf3 !important;
+    font-weight: 600 !important;
+}
+
+.swagger-ui .model .property-row .property-name {
+    color: #e8ecf3 !important;
+}
+
+.swagger-ui .model .property-row .property-type,
+.swagger-ui .model .property-row .property .type,
+.swagger-ui .model .property-row > span {
+    color: #ff6aa2 !important;
+    font-weight: 600 !important;
+}
+
+/* Property examples inside models */
+.swagger-ui .model .property-row .property-example,
+.swagger-ui .model .property-row .property-example-val,
+.swagger-ui .model .property-row .property-example .markdown {
+    color: #6db5dd !important;
+}
+
+/* Model example value toggle */
+.swagger-ui .model-box .model-title .model-title__text {
+    color: #ffffff !important;
+}
+
+/* Examples dropdown / value snippets */
+.swagger-ui .example-value,
+.swagger-ui .examples-select-title,
+.swagger-ui .examples-select-section,
+.swagger-ui .examples-select {
+    color: #e2e8f0 !important;
+}
+
+/* Response body schema table header */
+.swagger-ui .opblock-section-header h4,
+.swagger-ui .opblock-section-header {
+    color: #ffffff !important;
+}
+
+/* Table rows inside model schemas */
+.swagger-ui .model-box table tr,
+.swagger-ui .model-box table td,
+.swagger-ui .model-box table th {
+    color: #e2e8f0 !important;
+}

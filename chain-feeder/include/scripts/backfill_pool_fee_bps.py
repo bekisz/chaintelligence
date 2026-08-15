@@ -79,8 +79,8 @@ GATEWAY = 'https://gateway-arbitrum.network.thegraph.com/api/{key}/subgraphs/id/
 
 def _epoch(d) -> int:
     """Python date -> unix epoch seconds at UTC midnight (subgraph 'timestamp' is unix seconds)."""
-    if isinstance(d, (datetime.date, datetime.datetime)):
-        return int(datetime.datetime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc).timestamp())
+    if isinstance(d, (datetime.day, datetime.daytime)):
+        return int(datetime.daytime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc).timestamp())
     return int(d)
 
 
@@ -403,10 +403,10 @@ def fetch_rows(net, proto):
     cur.execute("""
         SELECT lp.id, lp.fee_bps, LOWER(COALESCE(lp.pool_address,'')),
                cc0.contract_address, cc1.contract_address,
-               COALESCE((SELECT AVG(ABS(h.tvl_usd)) FROM liquidity_pool_history h
+               COALESCE((SELECT AVG(ABS(h.tvl_usd)) FROM liquidity_pool_daily_stats h
                          WHERE h.pool_id=lp.id), 0),
-               (SELECT MIN(h.date) FROM liquidity_pool_history h WHERE h.pool_id=lp.id),
-               (SELECT MAX(h.date) FROM liquidity_pool_history h WHERE h.pool_id=lp.id),
+               (SELECT MIN(h.day) FROM liquidity_pool_daily_stats h WHERE h.pool_id=lp.id),
+               (SELECT MAX(h.day) FROM liquidity_pool_daily_stats h WHERE h.pool_id=lp.id),
                lp.chain_id, lp.protocol_id, lp.pool_name
         FROM liquidity_pool lp
         JOIN chain ch ON lp.chain_id=ch.id

@@ -220,8 +220,47 @@ let routeDirection = 'forward';
     let allTokensList = [];
     let allFamiliesList = [];
 
+    // Normalize the JSON:API compound document from /api/coins/search-by-symbol
+    // back into the flat [{symbol, name, contracts:[{chain}]}] array.
+    const normalizeCoinSearch = (data) => {
+        if (!data || !data.data) return [];
+        const includedById = {};
+        (data.included || []).forEach(r => { includedById[r.type + ':' + r.id] = r; });
+        const coins = Array.isArray(data.data) ? data.data : [data.data];
+        return coins.map(c => {
+            const attrs = c.attributes || {};
+            const contractRefs = (c.relationships && c.relationships.contracts && c.relationships.contracts.data) || [];
+            const contracts = contractRefs.map(ref => {
+                const cc = includedById[ref.type + ':' + ref.id];
+                return cc && cc.attributes ? { chain: cc.attributes.chain } : null;
+            }).filter(Boolean);
+            return { symbol: attrs.symbol, name: attrs.name, contracts };
+        });
+    };
+
+    // Normalize the /api/coin-families compound document into the legacy
+    // {families: {FAMILY:[symbols]}, symbol_family_map: {SYMBOL:FAMILY}} shape.
+    const normalizeFamilyMap = (data) => {
+        const fams = data && data.data ? (Array.isArray(data.data) ? data.data : [data.data]) : [];
+        const includedById = {};
+        (data.included || []).forEach(r => { includedById[r.type + ':' + r.id] = r; });
+        const families = {};
+        const symbolFamilyMap = {};
+        fams.forEach(f => {
+            const famName = (f.attributes && f.attributes.name) || f.id;
+            const memberRefs = (f.relationships && f.relationships.members && f.relationships.members.data) || [];
+            const symbols = memberRefs.map(ref => {
+                const coin = includedById[ref.type + ':' + ref.id];
+                return coin && coin.attributes ? coin.attributes.symbol : null;
+            }).filter(Boolean);
+            families[famName] = symbols;
+            symbols.forEach(s => { if (!(s in symbolFamilyMap)) symbolFamilyMap[s] = famName; });
+        });
+        return { families, symbol_family_map: symbolFamilyMap };
+    };
+
     // Fetch official token logos & metadata from backend for lookahead autocomplete
-    fetch('/api/coin/list')
+    fetch('/api/coins/list')
         .then(response => response.json())
         .then(coins => {
             allTokensList = coins;
@@ -240,7 +279,7 @@ let routeDirection = 'forward';
     fetch('/api/coin-families')
         .then(res => res.json())
         .then(data => {
-            const fams = data.families || {};
+            const fams = normalizeFamilyMap(data).families || {};
             allFamiliesList = Object.keys(fams).map(f => ({
                 name: f,
                 membersCount: fams[f]?.length || 0
@@ -696,11 +735,12 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
     fetch('/api/coin-families')
         .then(response => response.json())
         .then(data => {
-            if (data && data.symbol_family_map) {
-                symbolFamilyMap = data.symbol_family_map;
+            const normalized = normalizeFamilyMap(data);
+            if (normalized.symbol_family_map) {
+                symbolFamilyMap = normalized.symbol_family_map;
             }
-            if (data && data.families) {
-                familySymbolsMap = data.families;
+            if (normalized.families) {
+                familySymbolsMap = normalized.families;
             }
             updateStableShortcutState();
         })
@@ -1262,12 +1302,19 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
         </span>`;
     };
 
-    const formatHashCell = (value, label) => {
+    const formatHashCell = (value, label, drillable = false) => {
         if (value == null || value === '') return '-';
         const parts = String(value).split('+').map(p => p.trim()).filter(Boolean);
         if (!parts.length) return '-';
         return parts.map(hash => {
             const shortened = hash.length > 13 ? `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}` : hash;
+            if (drillable) {
+                return `<a href="#" class="monospace od-hash-link" data-od-hash="${hash}"
+                    title="${label}: ${hash}\nClick to view pair details"
+                    onclick="event.preventDefault(); event.stopPropagation(); window.openODDetail && window.openODDetail('${hash}');">
+                    <span>${shortened}</span>
+                </a>`;
+            }
             return `<span class="monospace clickable-addr" title="${label}: ${hash}\nClick to copy" onclick="copyToClipboard('${hash}', this, event);">
                 <span>${shortened}</span>
                 <span class="copy-icon-wrapper">
@@ -1281,7 +1328,7 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
     };
 
     const formatRouteHash = (routeId) => formatHashCell(routeId, 'Route Hash');
-    const formatODHash = (pairId) => formatHashCell(pairId, 'O&D Hash');
+    const formatODHash = (pairId) => formatHashCell(pairId, 'O&D Hash', true);
 
     const selectedRouteIds = new Set();
 
@@ -2695,6 +2742,137 @@ if (stableShortcutCheckbox && stableShortcutWrapper) {
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !tableExpandModal.classList.contains('hidden')) closeTableExpand();
     });
+
+    // Drill-down modal showing the canonical O&D pair row + its route hops.
+    // Backed by a single GET /api/od/{od_hash}?include=routes.hops.pool,... compound document.
+    const odDetailModal = document.createElement('div');
+    odDetailModal.id = 'od-detail-modal';
+    odDetailModal.className = 'modal-overlay hidden';
+    odDetailModal.innerHTML = `
+        <div class="glass-modal od-detail-modal" role="dialog" aria-modal="true" aria-labelledby="od-detail-title">
+            <div class="modal-top">
+                <div class="modal-title-group"><h2 id="od-detail-title">Origin &amp; Destination Pair</h2></div>
+                <button type="button" class="secondary-btn flex-center" id="od-detail-close" title="Close" aria-label="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="od-detail-body">
+                <div class="od-detail-loading">Loading pair details…</div>
+            </div>
+        </div>`;
+    document.body.appendChild(odDetailModal);
+
+    const closeODDetail = () => odDetailModal.classList.add('hidden');
+    document.getElementById('od-detail-close')?.addEventListener('click', closeODDetail);
+    odDetailModal.addEventListener('click', event => {
+        if (event.target === odDetailModal) closeODDetail();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !odDetailModal.classList.contains('hidden')) closeODDetail();
+    });
+
+    const renderODDetailRoutes = (routes) => {
+        if (!routes || !routes.length) {
+            return `<div class="od-detail-sub">No canonical routes recorded for this pair.</div>`;
+        }
+        return routes.map(r => {
+            const hops = (r.route_hops || []).map(h => `
+                <div class="od-hop-row">
+                    <span class="od-hop-seq">${h.seq}</span>
+                    <span class="od-hop-token">${h.token_in_symbol || '?'}</span>
+                    <span class="od-hop-arrow">→</span>
+                    <span class="od-hop-token">${h.token_out_symbol || '?'}</span>
+                    <span class="od-hop-pool">pool ${h.pool_id != null ? h.pool_id : '?'}</span>
+                </div>`).join('');
+            return `
+                <div class="od-detail-route">
+                    <div class="od-route-head">
+                        <span class="monospace od-route-hash">${r.route_hash}</span>
+                        <span class="od-route-hops-badge">${r.hops ?? (r.route_hops || []).length} hop(s)</span>
+                        <button type="button" class="secondary-btn flex-center od-route-copy" title="Copy route hash" onclick="copyToClipboard('${r.route_hash}', this, event);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
+                    </div>
+                    <div class="od-hop-list">${hops}</div>
+                </div>`;
+        }).join('');
+    };
+
+    window.openODDetail = async (odHash) => {
+        const body = document.getElementById('od-detail-body');
+        const titleEl = document.getElementById('od-detail-title');
+        if (!body) return;
+        odDetailModal.classList.remove('hidden');
+        titleEl.textContent = 'Origin & Destination Pair';
+        body.innerHTML = `<div class="od-detail-loading">Loading pair details…</div>`;
+
+        try {
+            // Single compound-document request: the od root plus its routes,
+            // hops, pools and coins, all in one JSON:API payload.
+            const res = await fetch(`/api/od/${encodeURIComponent(odHash)}?include=routes.hops.pool,routes.hops.pool.coin0,routes.hops.pool.coin1`);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                body.innerHTML = `<div class="od-detail-error">Failed to load pair: ${err.detail || res.status}</div>`;
+                return;
+            }
+            const doc = await res.json();
+            const pair = doc.data || {};
+            const attrs = pair.attributes || {};
+            const includedById = {};
+            (doc.included || []).forEach(r => { includedById[r.type + ':' + r.id] = r; });
+
+            const routeRefs = (pair.relationships && pair.relationships.routes && pair.relationships.routes.data) || [];
+            const routes = routeRefs.map(ref => {
+                const route = includedById[ref.type + ':' + ref.id];
+                if (!route) return null;
+                const routeAttrs = route.attributes || {};
+                const hopRefs = (route.relationships && route.relationships.hops && route.relationships.hops.data) || [];
+                const routeHops = hopRefs.map(href => {
+                    const hop = includedById[href.type + ':' + href.id];
+                    if (!hop) return null;
+                    const hopAttrs = hop.attributes || {};
+                    const poolRef = hop.relationships && hop.relationships.pool && hop.relationships.pool.data;
+                    return {
+                        seq: hopAttrs.seq,
+                        token_in_symbol: hopAttrs.token_in_symbol,
+                        token_out_symbol: hopAttrs.token_out_symbol,
+                        pool_id: poolRef ? poolRef.id : null,
+                    };
+                }).filter(Boolean);
+                return {
+                    route_hash: ref.id,
+                    hops: routeAttrs.hops ?? routeHops.length,
+                    route_hops: routeHops,
+                };
+            }).filter(Boolean);
+
+            const metaRow = (label, valueHtml) => `
+                <div class="od-detail-row">
+                    <span class="od-detail-label">${label}</span>
+                    <span class="od-detail-value">${valueHtml}</span>
+                </div>`;
+
+            body.innerHTML = `
+                <div class="od-detail-meta">
+                    ${metaRow('O&D Hash', `<span class="monospace od-detail-hash">${pair.id || odHash}</span>`)}
+                    ${metaRow('Chain', attrs.chain || '—')}
+                    ${metaRow('Origin', `${attrs.origin_symbol || '?'} <span class="od-detail-sub">coin #${attrs.origin_coin_id ?? '?'}</span>`)}
+                    ${metaRow('Destination', `${attrs.dest_symbol || '?'} <span class="od-detail-sub">coin #${attrs.dest_coin_id ?? '?'}</span>`)}
+                    ${metaRow('Origin Contract', attrs.origin_coin_contract_address
+                        ? `<span class="monospace clickable-addr" title="${attrs.origin_coin_contract_address}\nClick to copy" onclick="copyToClipboard('${attrs.origin_coin_contract_address}', this, event);">${attrs.origin_coin_contract_address}</span>`
+                        : '—')}
+                    ${metaRow('Destination Contract', attrs.destination_coin_contract_address
+                        ? `<span class="monospace clickable-addr" title="${attrs.destination_coin_contract_address}\nClick to copy" onclick="copyToClipboard('${attrs.destination_coin_contract_address}', this, event);">${attrs.destination_coin_contract_address}</span>`
+                        : '—')}
+                    ${metaRow('First Seen', attrs.first_seen ? formatRelativeTime(attrs.first_seen) : '—')}
+                    ${metaRow('Last Seen', attrs.last_seen ? formatRelativeTime(attrs.last_seen) : '—')}
+                </div>
+                <div class="od-detail-section-title">Routes (${routes.length})</div>
+                <div class="od-detail-routes">${renderODDetailRoutes(routes)}</div>`;
+        } catch (e) {
+            body.innerHTML = `<div class="od-detail-error">Failed to load pair: ${e.message}</div>`;
+        }
+    };
 
     // Close dropdowns when clicking outside
     document.addEventListener('click', (e) => {

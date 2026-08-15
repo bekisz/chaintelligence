@@ -14,13 +14,13 @@ SELECT
         WHEN pool_id = 299 THEN 130865
         ELSE pool_id
     END AS pool_id,
-    date,
+    day,
     SUM(tx_count) AS tx_count,
     SUM(volume_usd) AS volume_usd,
     MAX(tvl_usd) AS tvl_usd
-FROM liquidity_pool_history
+FROM liquidity_pool_daily_stats
 WHERE pool_id IN (4701, 128988, 694, 128983, 11739, 129001, 299, 130865)
-GROUP BY date, CASE 
+GROUP BY day, CASE 
     WHEN pool_id = 4701 THEN 128988
     WHEN pool_id = 694 THEN 128983
     WHEN pool_id = 11739 THEN 129001
@@ -28,10 +28,10 @@ GROUP BY date, CASE
     ELSE pool_id
 END;
 
-DELETE FROM liquidity_pool_history WHERE pool_id IN (4701, 128988, 694, 128983, 11739, 129001, 299, 130865);
+DELETE FROM liquidity_pool_daily_stats WHERE pool_id IN (4701, 128988, 694, 128983, 11739, 129001, 299, 130865);
 
-INSERT INTO liquidity_pool_history (pool_id, date, tx_count, volume_usd, tvl_usd)
-SELECT pool_id, date, tx_count, volume_usd, tvl_usd FROM temp_history_merge;
+INSERT INTO liquidity_pool_daily_stats (pool_id, day, tx_count, volume_usd, tvl_usd)
+SELECT pool_id, day, tx_count, volume_usd, tvl_usd FROM temp_history_merge;
 
 DELETE FROM liquidity_pool WHERE id IN (4701, 694, 11739, 299);
 

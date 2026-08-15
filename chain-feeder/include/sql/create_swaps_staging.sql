@@ -3,8 +3,8 @@
 -- raw store plus an ingestion watermark table.
 --
 -- `swaps_staging` holds raw swap legs only long enough to be classified and
--- aggregated (route_daily_stats, route_distribution_bucket,
--- liquidity_pool_history). Old partitions are dropped after aggregation.
+-- aggregated (route_daily_stats, route_daily_stats_bucket,
+-- liquidity_pool_daily_stats). Old partitions are dropped after aggregation.
 -- `ingestion_state` replaces `MAX(swaps.ts)` ingestion cursors so the ETL no
 -- longer depends on the permanent table.
 --

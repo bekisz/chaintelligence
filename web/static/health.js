@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'coin_price_history',
         'route_taxonomy',
         'liquidity_pool',
-        'liquidity_pool_history',
+        'liquidity_pool_daily_stats',
         'liquidity_pool_position',
         'liquidity_pool_position_event',
         'liquidity_pool_position_snapshot'
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: 'pools-group',
             title: 'Liquidity Pool',
             icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
-            tables: ['liquidity_pool', 'liquidity_pool_history']
+            tables: ['liquidity_pool', 'liquidity_pool_daily_stats']
         },
         {
             id: 'positions-group',
@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
          'coin_price_history': { title: 'Coin Price History', category: 'Coins', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>', defaultPolicy: 'Daily candles within 2 days' },
          'route_taxonomy': { title: 'Route Taxonomy', category: 'Route Taxonomy', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="5" r="2"></circle><circle cx="19" cy="19" r="2"></circle><path d="M7 12h5a5 5 0 0 0 5-5"></path><path d="M7 12h5a5 5 0 0 1 5 5"></path><path d="M7 12h5a5 5 0 0 1 5 5"></path></svg>', defaultPolicy: 'Route endpoint pairs, paths, and daily statistics' },
          'liquidity_pool': { title: 'Liquidity Pools', category: 'Liquidity Pool', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>', defaultPolicy: 'Active DEX pool registry' },
-        'liquidity_pool_history': { title: 'Pool History Metrics', category: 'Liquidity Pool', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>', defaultPolicy: 'Daily TVL & Volume metrics within 2 days' },
+        'liquidity_pool_daily_stats': { title: 'Pool Daily Stats', category: 'Liquidity Pool', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>', defaultPolicy: 'Daily TVL & Volume metrics within 2 days' },
         'liquidity_pool_position': { title: 'LP Positions', category: 'Liquidity Pool Positions', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', defaultPolicy: 'Tracked user NFT & pool positions' },
         'liquidity_pool_position_event': { title: 'LP Position Events', category: 'Liquidity Pool Positions', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline></svg>', defaultPolicy: 'On-chain mint, burn, collect logs' },
         'liquidity_pool_position_snapshot': { title: 'LP Position Snapshots', category: 'Liquidity Pool Positions', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>', defaultPolicy: 'Hourly snapshots within 2 days' }
@@ -922,13 +922,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     // 4b. Liquidity pool history coverage matrix (pool-level passing metric)
-                    if (tablesObj.liquidity_pool_history && tablesObj.liquidity_pool_history.chains) {
+                    if (tablesObj.liquidity_pool_daily_stats && tablesObj.liquidity_pool_daily_stats.chains) {
                         const activeVolFilter = window.currentMatrixVolFilter || '0';
-                        const lphVolData = (tablesObj.liquidity_pool_history.volume_filters && tablesObj.liquidity_pool_history.volume_filters[activeVolFilter])
-                            ? tablesObj.liquidity_pool_history.volume_filters[activeVolFilter]
-                            : tablesObj.liquidity_pool_history;
-                        const lphChains = lphVolData.chains || tablesObj.liquidity_pool_history.chains;
-                        const lookbackDays = tablesObj.liquidity_pool_history.lookback_days || 7;
+                        const lphVolData = (tablesObj.liquidity_pool_daily_stats.volume_filters && tablesObj.liquidity_pool_daily_stats.volume_filters[activeVolFilter])
+                            ? tablesObj.liquidity_pool_daily_stats.volume_filters[activeVolFilter]
+                            : tablesObj.liquidity_pool_daily_stats;
+                        const lphChains = lphVolData.chains || tablesObj.liquidity_pool_daily_stats.chains;
+                        const lookbackDays = tablesObj.liquidity_pool_daily_stats.lookback_days || 7;
                         const lphChainNames = Object.keys(lphChains).sort((a, b) => {
                             if (a.toLowerCase() === 'ethereum') return -1;
                             if (b.toLowerCase() === 'ethereum') return 1;
@@ -936,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
 
                         // Build proto list from unfiltered data so protocols don't disappear at higher thresholds
-                        const lphAllChains = tablesObj.liquidity_pool_history.chains;
+                        const lphAllChains = tablesObj.liquidity_pool_daily_stats.chains;
                         const lphProtoSet = new Set();
                         Object.keys(lphAllChains).forEach(cName => {
                             const protos = lphAllChains[cName].protocols || {};
@@ -1203,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // 6. Liquidity pool history coverage breakdown
-                if (tName === 'liquidity_pool_history' && tablesObj.liquidity_pool) {
+                if (tName === 'liquidity_pool_daily_stats' && tablesObj.liquidity_pool) {
                     const activeVolFilter = window.currentMatrixVolFilter || '0';
                     const matrixData = (tablesObj.liquidity_pool.volume_filters && tablesObj.liquidity_pool.volume_filters[activeVolFilter]) ? tablesObj.liquidity_pool.volume_filters[activeVolFilter] : (tData.covered_pools ? tData : tablesObj.liquidity_pool);
                     const cp = matrixData.covered_pools || tData.covered_pools;
@@ -1373,7 +1373,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${renderCell(counts.pairs, routes, '#67e8f9')}
                         <td class="font-mono" style="text-align:right; color:#a78bfa; font-weight:700;">${formatNumber(counts.routes)}</td>
                         ${renderCell(counts.daily_stats, routes, '#fbbf24')}
-                        ${renderCell(counts.route_distribution_bucket, routes, '#34d399')}
+                        ${renderCell(counts.route_daily_stats_bucket, routes, '#34d399')}
                         ${renderCell(counts.route_hop, routes, '#f472b6')}
                     </tr>`;
                 }).join('');
@@ -1383,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${renderCell(_taxonomyData.pairs_count, allTotal, '#67e8f9')}
                     <td class="font-mono font-bold" style="text-align:right; border-top:2px solid rgba(99,102,241,0.75); color:#a78bfa;">${formatNumber(_taxonomyData.routes_count)}</td>
                     ${renderCell(_taxonomyData.daily_stats_count, allTotal, '#fbbf24')}
-                    ${renderCell(_taxonomyData.route_distribution_bucket_count, allTotal, '#34d399')}
+                    ${renderCell(_taxonomyData.route_daily_stats_bucket_count, allTotal, '#34d399')}
                     ${renderCell(_taxonomyData.route_hop_count, allTotal, '#f472b6')}
                 </tr>`;
             };

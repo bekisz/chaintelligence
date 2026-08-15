@@ -111,7 +111,7 @@ graph TD
 
     subgraph Layer2 [Layer 2: Data Warehouse - PostgreSQL]
         T_COIN[coin / coin_contract / coin_family / coin_price_history]
-        T_POOL[liquidity_pool / liquidity_pool_history]
+        T_POOL[liquidity_pool / liquidity_pool_daily_stats]
         T_POS[liquidity_pool_position + snapshot + event]
         T_SWAP[swaps - unified, monthly partitions]
     end
@@ -171,7 +171,7 @@ Key tables:
 | `coin_family` | Logical groupings of related assets (USD → USDC/USDT/DAI) for tiered updates. |
 | `coin_price_history` | Daily price snapshots for historical analysis and APR. |
 | `liquidity_pool` | Static pool registry (network, protocol, ordered coin pair, fee). |
-| `liquidity_pool_history` | Daily aggregated metrics per pool (tx count, USD volume, TVL). |
+| `liquidity_pool_daily_stats` | Daily aggregated metrics per pool (tx count, USD volume, TVL). |
 | `liquidity_pool_position` | A user's position within a pool (tick range, NFT token ID). |
 | `liquidity_pool_position_snapshot` | Time-series balance, claimable/claimed fees, in-range state (monthly partitions). |
 | `liquidity_pool_position_event` | On-chain lifecycle events (IncreaseLiquidity, DecreaseLiquidity, Collect). |
@@ -188,7 +188,7 @@ Located in `chain-feeder/dags/`. DAGs follow the naming convention `<source>_<ch
 
 - **Coin pipeline**: `cmc_global_coin_metadata` (multi-source token discovery with confidence-score conflict resolution), `cmc_global_coin_tiered_price` (orchestrates tiered price freshness), `cmc_global_coin_price`, `yaml_global_coin_family`, `defillama_global_coin_price_history` (daily snapshots for APR).
 - **Swap ingestion** (into unified `swaps`): per-network/protocol DAGs covering Ethereum, Arbitrum, Base, BNB; Uniswap V2/V3/V4, PancakeSwap V3/V4, and Aerodrome Slipstream (Base). Each checkpoints against `MAX(ts)` and supports backfill via run conf.
-- **History aggregation**: `global_liquidity_pool_history_rollup` (daily rollup of tx_count + volume from `swaps` into `liquidity_pool_history`, zero-fills dormant pools, triggers TVL fallback), plus per-network `liquidity_pool_history` DAGs and `rpc_tvl_sync` (RPC-based TVL via Multicall3, which The Graph reports as 0 for stablecoin pools).
+- **History aggregation**: `global_liquidity_pool_daily_stats_rollup` (daily rollup of tx_count + volume from `swaps` into `liquidity_pool_daily_stats`, zero-fills dormant pools, triggers TVL fallback), plus per-network `liquidity_pool_daily_stats` DAGs and `rpc_tvl_sync` (RPC-based TVL via Multicall3, which The Graph reports as 0 for stablecoin pools).
 - **LP position discovery**: `graph_all_uniswap_v3_liquidity_pool_position_snapshot` (primary, subgraph-based), `rpc_ethereum_uniswap_v3_liquidity_pool_position` (on-chain NFT Transfer fallback), `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` (fee-claim backfill), `rpc_all_uniswap_v3_liquidity_pool_position_event` (lifecycle events).
 - **Utilities**: `config_global_swap_retention` (deletes `swaps` older than the retention policy in `config/swap-retention.yaml`).
 

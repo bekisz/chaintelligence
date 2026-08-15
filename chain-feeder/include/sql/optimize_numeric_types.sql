@@ -4,9 +4,9 @@
 
 BEGIN;
 
--- 1. Optimize `liquidity_pool_history` Table
-ALTER TABLE liquidity_pool_history ALTER COLUMN volume_usd TYPE DOUBLE PRECISION;
-ALTER TABLE liquidity_pool_history ALTER COLUMN tvl_usd TYPE DOUBLE PRECISION;
+-- 1. Optimize `liquidity_pool_daily_stats` Table
+ALTER TABLE liquidity_pool_daily_stats ALTER COLUMN volume_usd TYPE DOUBLE PRECISION;
+ALTER TABLE liquidity_pool_daily_stats ALTER COLUMN tvl_usd TYPE DOUBLE PRECISION;
 
 -- 2. Optimize `liquidity_pool_position_snapshot` Table
 ALTER TABLE liquidity_pool_position_snapshot ALTER COLUMN balance_usd TYPE DOUBLE PRECISION;

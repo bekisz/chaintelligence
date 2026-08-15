@@ -217,10 +217,76 @@ async function init() {
     let allFamiliesList = [];
     let tokenImageMap = {};
 
+    // Server-side family expansion cache (keyed by normalized symbol) backed by
+    // GET /api/coins/search-by-symbol, matching how the backend resolves families
+    // in /api/routes/analyze.
+    const familySearchCache = {};
+    let familySearchSeq = 0;
+
+    // Normalize the JSON:API compound document from /api/coins/search-by-symbol
+    // back into the flat [{symbol, name, contracts:[{chain}]}] array.
+    const normalizeCoinSearch = (data) => {
+        if (!data || !data.data) return [];
+        const includedById = {};
+        (data.included || []).forEach(r => { includedById[r.type + ':' + r.id] = r; });
+        const coins = Array.isArray(data.data) ? data.data : [data.data];
+        return coins.map(c => {
+            const attrs = c.attributes || {};
+            const contractRefs = (c.relationships && c.relationships.contracts && c.relationships.contracts.data) || [];
+            const contracts = contractRefs.map(ref => {
+                const cc = includedById[ref.type + ':' + ref.id];
+                return cc && cc.attributes ? { chain: cc.attributes.chain } : null;
+            }).filter(Boolean);
+            return { symbol: attrs.symbol, name: attrs.name, contracts };
+        });
+    };
+
+    // Normalize the /api/coin-families compound document into the legacy
+    // {families: {FAMILY:[symbols]}, symbol_family_map: {SYMBOL:FAMILY}} shape.
+    const normalizeFamilyMap = (data) => {
+        const fams = data && data.data ? (Array.isArray(data.data) ? data.data : [data.data]) : [];
+        const includedById = {};
+        (data.included || []).forEach(r => { includedById[r.type + ':' + r.id] = r; });
+        const families = {};
+        const symbolFamilyMap = {};
+        fams.forEach(f => {
+            const famName = (f.attributes && f.attributes.name) || f.id;
+            const memberRefs = (f.relationships && f.relationships.members && f.relationships.members.data) || [];
+            const symbols = memberRefs.map(ref => {
+                const coin = includedById[ref.type + ':' + ref.id];
+                return coin && coin.attributes ? coin.attributes.symbol : null;
+            }).filter(Boolean);
+            families[famName] = symbols;
+            symbols.forEach(s => { if (!(s in symbolFamilyMap)) symbolFamilyMap[s] = famName; });
+        });
+        return { families, symbol_family_map: symbolFamilyMap };
+    };
+
+    const fetchFamilyExpansion = (symbol) => {
+        const key = (symbol || '').trim().toUpperCase();
+        if (!key || key === '*' || key in familySearchCache) return;
+        familySearchCache[key] = null;
+        const seq = ++familySearchSeq;
+        setTimeout(() => {
+            fetch(`/api/coins/search-by-symbol?symbol=${encodeURIComponent(key)}&include_coin_families=true`)
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    if (seq !== familySearchSeq) return;
+                    familySearchCache[key] = normalizeCoinSearch(data);
+                    [baseSearchInput, quoteSearchInput].forEach(el => {
+                        if (el && el.dataset.autocompleteInitialized && el.value.trim().toUpperCase() === key) {
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    });
+                })
+                .catch(() => { if (seq === familySearchSeq) familySearchCache[key] = []; });
+        }, 250);
+    };
+
     const loadTokensAndFamilies = async () => {
         try {
             const [cRes, fRes] = await Promise.all([
-                fetch('/api/coin/list'),
+                fetch('/api/coins/list'),
                 fetch('/api/coin-families')
             ]);
             if (cRes.ok) {
@@ -234,7 +300,11 @@ async function init() {
             }
             if (fRes.ok) {
                 const fData = await fRes.json();
-                allFamiliesList = fData.families || [];
+                const fams = normalizeFamilyMap(fData).families || {};
+                allFamiliesList = Object.keys(fams).map(f => ({
+                    name: f,
+                    membersCount: fams[f]?.length || 0
+                }));
             }
         } catch (e) {
             console.warn('Failed to fetch coin list or families:', e);
@@ -309,21 +379,59 @@ async function init() {
             dropdown.innerHTML = '';
             selectedIndex = -1;
 
+            // Kick off a server-side family expansion for the current query;
+            // when the response lands the dropdown re-renders with the expanded
+            // members (plus their contracts).
+            if (q !== '' && q !== '*' && !(q in familySearchCache)) {
+                fetchFamilyExpansion(q);
+            }
+
             let matches = [];
             if (q === '' || q === '*') {
                 matches.push({ type: 'wildcard', symbol: '*', name: 'Any Token (Wildcard)', icon: '/static/favicon.png' });
             }
 
-            allFamiliesList.forEach(fam => {
-                if (q === '' || fam.name.includes(q)) {
+            // Server-side family expansion: GET /api/coins/search-by-symbol returns
+            // every coin in the queried symbol's family plus its contracts. The
+            // request only succeeds for an exact symbol/family name, so partial
+            // queries keep the client-side family-name entry as a fallback.
+            const cachedFamily = familySearchCache[q];
+            const familyList = Array.isArray(allFamiliesList) ? allFamiliesList : [];
+            if (q !== '' && q !== '*') {
+                const expanded = cachedFamily || null;
+                if (expanded && expanded.length > 0) {
+                    expanded.forEach(coin => {
+                        const sym = (coin.symbol || '').toUpperCase();
+                        const chains = (coin.contracts || []).map(c => c.chain).filter(Boolean);
+                        matches.push({
+                            type: 'family',
+                            symbol: sym,
+                            name: chains.length ? `${coin.name || sym} · ${chains.join(', ')}` : (coin.name || sym),
+                            icon: getPrincipalSymbol(sym.replace('_YBA', ''))
+                        });
+                    });
+                } else {
+                    familyList.forEach(fam => {
+                        if (fam.name.includes(q)) {
+                            matches.push({
+                                type: 'family',
+                                symbol: fam.name,
+                                name: `Family (${fam.membersCount} coins)`,
+                                icon: getPrincipalSymbol(fam.name.replace('_YBA', ''))
+                            });
+                        }
+                    });
+                }
+            } else {
+                familyList.forEach(fam => {
                     matches.push({
                         type: 'family',
                         symbol: fam.name,
                         name: `Family (${fam.membersCount} coins)`,
                         icon: getPrincipalSymbol(fam.name.replace('_YBA', ''))
                     });
-                }
-            });
+                });
+            }
 
             let coinMatches = [];
             allTokensList.forEach(coin => {
@@ -837,8 +945,8 @@ function removeStrategy(id) {
 
 async function fetchCoinList() {
     try {
-        console.log("Fetching coin list from /api/coin/list...");
-        const response = await fetch('/api/coin/list');
+        console.log("Fetching coin list from /api/coins/list...");
+        const response = await fetch('/api/coins/list');
         if (!response.ok) throw new Error(`Failed to fetch internal coin list: ${response.status}`);
         allCoins = await response.json();
         console.log(`Successfully loaded ${allCoins.length} coins.`);
