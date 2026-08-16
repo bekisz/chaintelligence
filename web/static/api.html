@@ -164,6 +164,16 @@ curl "http://localhost:8000/api/routes/837dc52fa8bde82c?include=hops.pool&fields
             </tr>
             <tr><td class="mono">GET /api/ods</td><td class="mono">(none)</td><td>List rows only; add <code>include=routes.hops</code> for drill-down.</td></tr>
             <tr>
+                <td class="mono">GET /api/ods/set</td>
+                <td class="mono">(none)</td>
+                <td>O&amp;D Set: every pair matching the two side selectors; add <code>include=routes</code> for drill-down.</td>
+            </tr>
+            <tr>
+                <td class="mono">GET /api/ods/goal-state</td>
+                <td class="mono">(none)</td>
+                <td>Coverage report per requirement in <code>ods-goal-state.yaml</code>; <code>estimate=true</code> adds dry-run prune counts.</td>
+            </tr>
+            <tr>
                 <td class="mono">GET /api/routes/{route_hash}</td>
                 <td class="mono">hops.pool,<br>hops.pool.coin0,<br>hops.pool.coin1</td>
                 <td>Single route with its hops, pools and pool tokens.</td>
@@ -183,6 +193,44 @@ curl "http://localhost:8000/api/routes/837dc52fa8bde82c?include=hops.pool&fields
             <li>Errors use <code>{"detail": ...}</code> with status 400 (bad <code>include</code>/<code>fields</code>/identifier),
                 404 (not found) or 500.</li>
         </ul>
+
+        <h2>O&amp;D Sets — match pairs declaratively</h2>
+        <p>
+            <code>GET /api/ods/set</code> returns every origin/destination pair matching an
+            <em>O&amp;D Set</em> definition. Each side selector is resolved like the routing search bar:
+            a coin symbol (<code>WBTC</code>), a coin family (<code>BTC</code>, <code>USD</code> — expands to all
+            member coins), <code>*</code> (every coin), or a coin contract address (<code>0x…</code>).
+            <code>direction=both</code> (default) also returns each pair reversed; <code>direction=forward</code>
+            keeps only <code>origin → dest</code>. <code>chains</code> is a comma-separated chain list.
+        </p>
+        <pre><code># Every BTC-family <-> USD-family pair on Ethereum, both orientations
+curl "http://localhost:8000/api/ods/set?origin=BTC&dest=USD&direction=both&chains=Ethereum&include=routes"
+
+# All USDC pairs across Ethereum and Base, forward orientation only
+curl "http://localhost:8000/api/ods/set?origin=*&dest=USDC&direction=forward&chains=Ethereum,Base"
+
+# One side given by contract address
+curl "http://localhost:8000/api/ods/set?origin=0x2260fac5e5542a773aa44fbcfedf7c193bc2c599&dest=USD"</code></pre>
+
+        <h2>O&amp;D goal-state — data-coverage governance</h2>
+        <p>
+            <code>GET /api/ods/goal-state</code> is the read-only report side of the goal-state retention
+            engine. It evaluates every requirement in <code>config/ods-goal-state.yaml</code> across the
+            governed layers (<code>swaps</code>, <code>route_daily_stats</code>, <code>route_daily_stats_bucket</code>,
+            <code>liquidity_pool</code>) against the warehouse and reports each as
+            <code>ok</code>/<code>partial</code>/<code>missing</code>/<code>stale</code> plus the specific days missing.
+            The requirement side-selectors share the same semantics as <code>/api/ods/set</code>; a more
+            specific requirement (contract &gt; symbol &gt; family &gt; <code>*</code>, specific chain &gt; <code>*</code>)
+            overrides less specific ones, so coverage follows the effective windows. Pruning itself runs
+            in the <code>ods_goal_state_retention</code> Airflow DAG or the CLI
+            (<code>chain-feeder/include/scripts/ods_goal_state.py</code>); add <code>estimate=true</code> to dry-run
+            the delete counts.
+        </p>
+        <pre><code># Coverage + gaps for every requirement
+curl "http://localhost:8000/api/ods/goal-state"
+
+# Same report + how many rows a prune would delete per layer
+curl "http://localhost:8000/api/ods/goal-state?estimate=true"</code></pre>
 
         <h2>Daily stats &amp; bucket distribution</h2>
         <p>

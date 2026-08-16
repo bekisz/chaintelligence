@@ -755,7 +755,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coins/list", "/api/coins/search-by-symbol", "/api/coin-families", "/api/coin/price-history", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status", "/pool-arena", "/api/pool-arena", "/api/swap-distribution"]
+    exempt_paths = ["/api/coins/list", "/api/coins/search-by-symbol", "/api/coin-families", "/api/coin/price-history", "/api/ods/goal-state", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status", "/pool-arena", "/api/pool-arena", "/api/swap-distribution"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -863,6 +863,115 @@ def resolve_token_input(input_str: str) -> list[str]:
     except Exception as e:
         print(f"Error resolving token family: {e}")
         return [input_str]
+
+def resolve_od_set_side(term: str) -> dict:
+    """Resolve one O&D-set side (symbol | coin family | '*' | contract address) into constraints.
+
+    Returned constraints match the corresponding column pair of
+    `origin_destination_pair` (origin_coin_id/origin_symbol/origin_contract or
+    the dest_* sibling), so the same dict drives both the forward and the
+    reversed direction of a `direction=both` query.
+
+    Returns:
+        {"wild": bool, "coin_ids": list[int], "symbols": list[str],
+         "addresses": list[str]}
+
+    Resolution order:
+      - '*' (or empty): wildcard — the side matches every coin.
+      - Contract address (0x… / 40 hex chars): matched verbatim against the
+        contract column; if the address is tracked in coin_contract its
+        coin_id(s) are added so already-normalized pairs match too.
+      - Coin family name: expanded to member coin_ids + symbols.
+      - Anything else: treated as a coin symbol, resolved to coin_id(s) via
+        the coin table (additive so an exact symbol in the pair table matches
+        even if the coin lookup misses).
+    """
+    term = term or ''
+    result: dict = {'wild': False, 'coin_ids': [], 'symbols': [], 'addresses': []}
+
+    if not term.strip() or term == '*':
+        result['wild'] = True
+        return result
+
+    looks_like_addr = term.lower().startswith('0x') or (
+        len(term) == 40 and all(c in '0123456789abcdefABCDEF' for c in term)
+    )
+
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if looks_like_addr:
+                addr = term.strip().lower()
+                result['addresses'].append(addr)
+                cur.execute("""
+                    SELECT DISTINCT cc.coin_id
+                    FROM coin_contract cc
+                    WHERE LOWER(cc.contract_address) = %s
+                """, (addr,))
+                result['coin_ids'] = [r[0] for r in cur.fetchall()]
+                cur.close()
+                return result
+
+            # Coin family?
+            cur.execute("""
+                SELECT c.coin_id, c.symbol
+                FROM coin_family f
+                JOIN coin c ON f.coin_id = c.coin_id
+                WHERE UPPER(f.name) = %s
+            """, (term.upper(),))
+            rows = cur.fetchall()
+            if rows:
+                result['coin_ids'] = [r[0] for r in rows]
+                result['symbols'] = [r[1] for r in rows]
+                cur.close()
+                return result
+
+            # Coin symbol (may map to several coin_ids across chains).
+            cur.execute("""
+                SELECT DISTINCT coin_id, symbol
+                FROM coin
+                WHERE UPPER(symbol) = UPPER(%s)
+            """, (term,))
+            rows = cur.fetchall()
+            cur.close()
+            if rows:
+                result['coin_ids'] = [r[0] for r in rows]
+                result['symbols'] = [r[1] for r in rows]
+            else:
+                result['symbols'] = [term]
+            return result
+    except Exception as e:
+        print(f"Error resolving O&D set side '{term}': {e}")
+        result['symbols'] = [term.upper() if not looks_like_addr else term]
+        return result
+
+
+def _od_set_side_sql(side: str, res: dict) -> tuple[str, list]:
+    """Build the WHERE fragment for one side of an O&D-set match.
+
+    ``side`` is 'origin' or 'dest' and selects the origin_*/dest_* columns.
+    A wildcard resolution becomes `1=1`; otherwise the coin_id / symbol /
+    contract constraints are OR-ed together (any of them may identify the
+    token, so all three are additive).
+    """
+    if res.get('wild'):
+        return "1=1", []
+
+    clauses: List[str] = []
+    params: List = []
+    if res.get('coin_ids'):
+        clauses.append(f"pair.{side}_coin_id = ANY(%s)")
+        params.append(res['coin_ids'])
+    if res.get('symbols'):
+        clauses.append(f"UPPER(pair.{side}_symbol) = ANY(%s)")
+        params.append([s.upper() for s in res['symbols']])
+    if res.get('addresses'):
+        clauses.append(f"LOWER(pair.{side}_contract) = ANY(%s)")
+        params.append(res['addresses'])
+    if not clauses:
+        return "1=0", []
+    return "(" + " OR ".join(clauses) + ")", params
+
 
 # Global memory cache for resolved token symbols to contract addresses per network to prevent repetitive slow DB queries
 TOKEN_ADDRESS_CACHE = {}
@@ -2414,8 +2523,20 @@ async def swap_time_series(
             end_dt = now
             start_dt = end_dt - timedelta(days=7)
 
-        start_list = [s.strip().upper() for s in start_token.split(",") if s.strip()]
-        end_list = [e.strip().upper() for e in end_token.split(",") if e.strip()]
+        # Resolve tokens/families (e.g. 'BTC' -> WBTC, CBBTC, TBTC...; 'USD' -> USDC, USDT, DAI...)
+        # the same way /api/routes/analyze does, so 'USD' matches stablecoins rather than nothing.
+        start_list = []
+        for s in start_token.split(","):
+            s = s.strip()
+            if s:
+                start_list.extend(resolve_token_input(s))
+        end_list = []
+        for e in end_token.split(","):
+            e = e.strip()
+            if e:
+                end_list.extend(resolve_token_input(e))
+        start_list = [s.upper() for s in start_list]
+        end_list = [e.upper() for e in end_list]
         if not start_list or not end_list:
             raise HTTPException(status_code=400, detail="start_token and end_token are required")
 
@@ -3074,6 +3195,229 @@ async def list_ods(
     except Exception as e:
         print(f"[list-ods] error: {e}")
         raise HTTPException(status_code=500, detail=f"Error listing origin/destination pairs: {e}")
+
+
+@app.get("/api/ods/set", tags=["Origin & Destination"],
+         responses={
+             200: {
+                 "description": "List of origin/destination pairs matching an O&D Set definition",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "data": [
+                                 {
+                                     "type": "od",
+                                     "id": "2ac53c78a580597e",
+                                     "attributes": {"chain": "Ethereum", "origin_symbol": "WBTC", "dest_symbol": "USDC"},
+                                 }
+                             ],
+                             "meta": {
+                                 "set": {"origin": "BTC", "dest": "USD", "direction": "both",
+                                         "chains": ["Ethereum"]},
+                             },
+                         }
+                     }
+                 }
+             }
+         })
+async def list_od_set(
+    origin: str = Query(..., description="Origin side of the set. Accepts a coin symbol (e.g. `WBTC`), a coin family (e.g. `BTC`, `USD`), `*` (all coins), or a coin contract address (e.g. `0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599`)."),
+    dest: str = Query(..., description="Destination side of the set. Same accepted forms as `origin`."),
+    direction: str = Query("both", pattern="^(forward|both)$",
+                           description="Set direction: `forward` (origin->dest only) or `both` (also includes dest->origin pairs). Default: `both`"),
+    chains: Optional[str] = Query(None, description="Comma-separated chain names (e.g. `Ethereum,Base`). `*` or `all` (default) matches every chain."),
+    include: Optional[str] = Query(None, description="Comma-separated dot-paths of related resources to embed. Example: `routes.hops.pool`"),
+    fields: Optional[str] = Query(None, description="Sparse fieldsets, e.g. `od[chain,origin_symbol,dest_symbol]`"),
+    limit: int = Query(50, ge=1, le=500, description="Max O&D rows to return. Default: `50`"),
+    offset: int = Query(0, ge=0, description="Number of rows to skip (pagination). Default: `0`"),
+    request: Request = None,
+):
+    """List origin/destination pairs matching an O&D Set definition.
+
+    An **O&D Set** is a declarative definition that denotes *every* O&D pair
+    matching its criteria. Each side (`origin`, `dest`) is an expressive token
+    selector:
+
+      - a coin symbol (`WBTC`, `USDC`) — resolved via the coin table,
+      - a coin family (`BTC`, `USD`) — resolved to all family members,
+      - `*` — matches every coin on that side,
+      - a coin contract address (`0x…`) — matched against the stored contract.
+
+    `direction` controls whether only the `origin -> dest` orientation is kept
+    (`forward`) or both orientations are returned (`both`). `chains` restricts
+    the set to one or more networks.
+
+    Example — all BTC-family <-> USD-family pairs on Ethereum:
+
+        GET /api/ods/set?origin=BTC&dest=USD&direction=both&chains=Ethereum&include=routes
+
+    The response is the same JSON:API compound document produced by
+    `/api/ods`: `data` is an array of `od` resources and `included` holds any
+    relatives requested via `include`.
+    """
+    try:
+        origin_res = await asyncio.to_thread(resolve_od_set_side, origin)
+        dest_res = await asyncio.to_thread(resolve_od_set_side, dest)
+
+        # Chain selector: '*'/None/'all' -> no chain filter; otherwise match
+        # any of the comma-separated names (case-insensitive).
+        chain_list: Optional[List[str]] = None
+        if chains and chains.strip() and chains.strip().lower() not in ("all", "*"):
+            chain_list = [c.strip() for c in chains.split(",") if c.strip()]
+            if not chain_list:
+                raise HTTPException(status_code=400, detail="chains: no valid chain names provided")
+
+        fwd_o, fp1 = _od_set_side_sql('origin', origin_res)
+        fwd_d, fp2 = _od_set_side_sql('dest', dest_res)
+        if direction == "forward":
+            where_sql = f"({fwd_o} AND {fwd_d})"
+            where_params = fp1 + fp2
+        else:
+            rev_o, rp1 = _od_set_side_sql('dest', origin_res)
+            rev_d, rp2 = _od_set_side_sql('origin', dest_res)
+            where_sql = f"(({fwd_o} AND {fwd_d}) OR ({rev_o} AND {rev_d}))"
+            where_params = fp1 + fp2 + rp1 + rp2
+
+        net_sql = ""
+        net_params: List = []
+        if chain_list:
+            net_sql = " AND LOWER(ch.name) = ANY(%s)"
+            net_params = [[c.lower() for c in chain_list]]
+
+        def _query():
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute(f"""
+                    SELECT pair.id, pair.chain_id, ch.name AS chain_name,
+                           pair.origin_contract, pair.dest_contract,
+                           pair.origin_coin_id, pair.dest_coin_id,
+                           pair.origin_symbol, pair.dest_symbol,
+                           pair.first_seen, pair.last_seen
+                    FROM origin_destination_pair pair
+                    JOIN chain ch ON pair.chain_id = ch.id
+                    WHERE {where_sql}
+                      {net_sql}
+                    ORDER BY ch.name, pair.last_seen DESC NULLS LAST, pair.id
+                    LIMIT %s OFFSET %s
+                """, where_params + net_params + [limit, offset])
+                rows = cur.fetchall()
+                cur.close()
+                return rows
+
+        ods_rows = await asyncio.to_thread(_query)
+
+        ods = []
+        for (pair_id, chain_id, chain_name, origin_contract, dest_contract,
+             origin_coin_id, dest_coin_id, origin_symbol_s, dest_symbol_s,
+             first_seen, last_seen) in ods_rows:
+            ods.append({
+                "od_hash": route_hash_hex(pair_id),
+                "chain_id": chain_id,
+                "chain": chain_name,
+                "origin_coin_contract_address": origin_contract,
+                "destination_coin_contract_address": dest_contract,
+                "origin_coin_id": origin_coin_id,
+                "dest_coin_id": dest_coin_id,
+                "origin_symbol": origin_symbol_s,
+                "dest_symbol": dest_symbol_s,
+                "first_seen": first_seen.isoformat() if first_seen else None,
+                "last_seen": last_seen.isoformat() if last_seen else None,
+            })
+
+        return build_od_documents(
+            ods, include_spec=include, fields_spec=fields,
+            links={"self": str(request.url)} if request else None,
+            meta={
+                "set": {
+                    "origin": origin,
+                    "dest": dest,
+                    "direction": direction,
+                    "chains": chain_list or "*",
+                },
+                "n": len(ods),
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid include/fields parameter: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[list-od-set] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error listing O&D set: {e}")
+
+
+@app.get("/api/ods/goal-state", tags=["Origin & Destination"],
+         responses={
+             200: {
+                 "description": "Coverage report for every requirement in config/ods-goal-state.yaml",
+                 "content": {
+                     "application/json": {
+                         "example": {
+                             "config_path": "config/ods-goal-state.yaml",
+                             "checked_at": "2026-08-16T00:00:00+00:00",
+                             "checks": [
+                                 {
+                                     "name": "BTC-USD daily stats since Apr",
+                                     "origin": "BTC", "dest": "USD", "direction": "both",
+                                     "chains": "*", "layer": "route_daily_stats",
+                                     "window": {"start": "2026-04-01", "end": "2026-08-16"},
+                                     "pairs": 163, "expected_days": 138, "present_days": 114,
+                                     "missing_days": ["2026-04-22"], "status": "partial",
+                                 }
+                             ],
+                             "gaps": [{"name": "BTC-USD daily stats since Apr", "layer": "route_daily_stats",
+                                       "chain": "*", "from": "2026-04-22", "to": "2026-05-31", "days": 40}],
+                             "n_checks": 1, "not_ok": 1,
+                         }
+                     }
+                 },
+             }
+         })
+async def get_goal_state(estimate: bool = Query(False, description="If true, also estimate how many rows would be pruned outside the keep-windows.")):
+    """Report O&D goal-state coverage against the warehouse.
+
+    Reads ``config/ods-goal-state.yaml`` and evaluates every declared
+    requirement + layer combination against the actual warehouse data,
+    reporting each as ``ok``, ``partial``, ``missing`` or ``stale`` along with
+    the specific days (`window`) currently missing. ``gaps`` collapses those
+    missing days into contiguous ranges ready for backfill.
+
+    This is the read-only side of the goal-state retention engine (the pruning
+    side runs in the ``ods_goal_state_retention`` Airflow DAG and via the CLI
+    in ``chain-feeder/include/scripts/ods_goal_state.py``). The requirement
+    side-selectors (`origin`, `dest`) and override semantics match ``/api/ods/set``.
+    """
+    def _run():
+        from include.od_retention import load_goal_state, run_checks, export_gaps, prune
+        goal = load_goal_state()
+        with get_conn() as conn:
+            report = run_checks(conn, goal)
+            gaps = export_gaps(report)
+            estimates = None
+            if estimate:
+                result = prune(conn, goal, dry_run=True)
+                estimates = result['rows']
+        return goal, report, gaps, estimates
+
+    try:
+        goal, report, gaps, estimates = await asyncio.to_thread(_run)
+        not_ok = sum(1 for r in report if r['status'] != 'ok')
+        body = {
+            "config_path": goal.get('config_path'),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checks": report,
+            "gaps": gaps,
+            "n_checks": len(report),
+            "not_ok": not_ok,
+        }
+        if estimates is not None:
+            body["dry_run_estimate"] = estimates
+        return body
+    except Exception as e:
+        print(f"[ods-goal-state] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error evaluating goal state: {e}")
 
 
 @app.get("/api/routes/date-range", tags=["Route"])

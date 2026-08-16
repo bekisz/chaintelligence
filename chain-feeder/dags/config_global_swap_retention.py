@@ -1,5 +1,10 @@
 """Daily swap retention DAG.
 
+SUPERSEDED by ``ods_goal_state_retention`` (goal-state retention engine) — this
+DAG is now paused upon creation and kept only for manual/emergency use. The
+per-network floors it used to enforce are ported into ``defaults.per_chain`` in
+``config/ods-goal-state.yaml``.
+
 Reads swap_retention.yaml and deletes swap rows older than the configured
 retention period per (network, protocol). Deletes in batches to avoid
 long-running transactions and MVCC bloat.
@@ -202,6 +207,7 @@ with DAG(
     schedule='0 3 * * *',  # daily at 3 AM
     start_date=pendulum.now().subtract(days=1),
     catchup=False,
+    is_paused_upon_creation=True,  # superseded by ods_goal_state_retention
     tags=['retention', 'config', 'swaps'],
     params={
         'dry_run': Param(

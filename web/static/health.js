@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const summaryBadgeCountEl = document.getElementById('summary-badge-count');
     const tablesDetailContainerEl = document.getElementById('tables-detail-container');
     const tableSearchInput = document.getElementById('table-search-input');
+    const odsGoalStateContainerEl = document.getElementById('ods-goal-state-container');
 
     const apiModal = document.getElementById('api-modal');
     const closeModalBtn = document.getElementById('close-modal-btn');
@@ -156,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             currentHealthData = data;
             renderHealthUI(data);
+            fetchOdsGoalState();
         } catch (err) {
             console.error('Failed to fetch health status:', err);
             if (statusTitleEl) {
@@ -251,6 +253,136 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render Grids
         renderChainsGrid(tables.swaps);
         renderTableDetailCards(tables);
+    };
+
+    // ===== O&D Set Requirements (goal-state coverage) =====
+
+    const odsStatusMeta = {
+        ok:      { dot: 'dot-green', fill: 'fill-green', pill: 'OK',         label: 'MET',     color: '#34d399' },
+        partial: { dot: 'dot-amber', fill: 'fill-yellow', pill: 'PARTIAL',   label: 'PARTIAL', color: '#fbbf24' },
+        missing: { dot: 'dot-red',   fill: 'fill-red',    pill: 'MISSING',   label: 'GAP',     color: '#f87171' },
+        stale:   { dot: 'dot-amber', fill: 'fill-yellow', pill: 'STALE',     label: 'STALE',   color: '#fbbf24' }
+    };
+
+    const fetchOdsGoalState = async () => {
+        if (!odsGoalStateContainerEl) return;
+        try {
+            const res = await fetch('/api/ods/goal-state');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            renderOdsGoalState(data);
+        } catch (err) {
+            odsGoalStateContainerEl.innerHTML = `
+                <div class="empty-state glass-card">
+                    <div class="empty-state-title">Goal-state report unavailable</div>
+                    <div class="empty-state-desc font-mono">${err.message}</div>
+                </div>`;
+        }
+    };
+
+    const renderOdsGoalState = (data) => {
+        if (!odsGoalStateContainerEl) return;
+        const checks = Array.isArray(data.checks) ? data.checks : [];
+        const gaps = Array.isArray(data.gaps) ? data.gaps : [];
+        const notOk = data.not_ok || 0;
+        const total = data.n_checks || checks.length;
+        const configPath = data.config_path || '';
+
+        let html = '';
+
+        // Header strip
+        html += `
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                <span class="summary-badge-pill badge-${notOk > 0 ? 'stale' : 'pass'}" style="font-size:0.78rem; padding:5px 12px;">
+                    ${total - notOk}/${total} requirements met
+                </span>
+                <span class="summary-badge-pill badge-${notOk > 0 ? 'stale' : 'pass'}" style="font-size:0.78rem; padding:5px 12px;">
+                    ${notOk > 0 ? `${notOk} not met` : 'fully satisfied'}
+                </span>
+                ${configPath ? `<span class="dim-text font-mono" style="font-size:0.72rem;">source: ${configPath}</span>` : ''}
+            </div>
+        `;
+
+        if (checks.length === 0) {
+            html += `<div class="empty-state glass-card"><div class="empty-state-title">No requirements declared</div><div class="empty-state-desc">Add requirements to config/ods-goal-state.yaml to see coverage here.</div></div>`;
+            odsGoalStateContainerEl.innerHTML = html;
+            return;
+        }
+
+        // Requirement check cards
+        let cardsHtml = '';
+        checks.forEach(chk => {
+            const meta = odsStatusMeta[chk.status] || odsStatusMeta.stale;
+            const present = chk.present_days || 0;
+            const expected = chk.expected_days || 0;
+            const pct = expected > 0 ? Math.min(100, Math.round((present / expected) * 100)) : 0;
+            const missing = Array.isArray(chk.missing_days) ? chk.missing_days.length : 0;
+            const chains = Array.isArray(chk.chains) ? chk.chains.join(', ') : (chk.chains || '*');
+            const windowStr = `${chk.window ? chk.window.start : '--'} → ${chk.window ? chk.window.end : '--'}`;
+
+            const metaRow = [
+                `<span class="summary-badge-pill badge-pass" style="font-size:0.68rem;">${chk.origin || '--'} → ${chk.dest || '--'}</span>`,
+                `<span class="summary-badge-pill badge-pass" style="font-size:0.68rem; background:rgba(99,102,241,0.15); color:#a5b4fc; border-color:rgba(99,102,241,0.3);">layer: ${chk.layer || '--'}</span>`,
+                `<span class="dim-text font-mono" style="font-size:0.7rem;">chains: ${chains}</span>`,
+                `<span class="dim-text font-mono" style="font-size:0.7rem;">pairs: ${chk.pairs !== undefined ? formatNumber(chk.pairs) : '--'}</span>`
+            ].join('&nbsp;&nbsp;');
+
+            cardsHtml += `
+                <div class="ods-check-card">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                            <span class="status-indicator-dot ${meta.dot}"></span>
+                            <span style="font-weight:700; color:#f3f4f6; font-size:0.9rem;">${chk.name || '(unnamed requirement)'}</span>
+                        </div>
+                        <span class="summary-badge-pill badge-${chk.status === 'ok' ? 'pass' : 'stale'}" style="color:${meta.color}; border-color:${meta.color}33; background:${meta.color}1a;">
+                            ${meta.pill}
+                        </span>
+                    </div>
+
+                    <div style="font-size:0.78rem; color:#9ca3af;">${metaRow}</div>
+
+                    <div style="display:flex; justify-content:space-between; font-size:0.72rem; margin-top:2px;">
+                        <span class="dim-text font-mono">window: ${windowStr}</span>
+                        <span class="font-mono" style="color:${meta.color}; font-weight:700;">
+                            ${present}/${expected} days ${missing > 0 ? `· ${missing} missing` : ''}
+                        </span>
+                    </div>
+                    <div class="health-meter-track" style="height:6px;">
+                        <div class="health-meter-fill ${meta.fill}" style="width:${pct}%;"></div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `<div class="ods-check-grid">${cardsHtml}</div>`;
+
+        // Gaps panel
+        if (gaps.length > 0) {
+            let gapsHtml = '';
+            gaps.forEach(g => {
+                gapsHtml += `
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.78rem;">
+                        <span class="summary-badge-pill badge-stale" style="color:#f87171; border-color:#f8717133; background:#f871711a;">${g.days}d</span>
+                        <span class="font-mono" style="color:#f3f4f6;">${g.from} → ${g.to}</span>
+                        <span class="dim-text font-mono">layer: ${g.layer}</span>
+                        <span class="dim-text">${g.name}</span>
+                        <span class="dim-text font-mono">chains: ${Array.isArray(g.chain) ? g.chain.join(', ') : g.chain}</span>
+                    </div>
+                `;
+            });
+            html += `
+                <div class="ods-gaps-panel">
+                    <div class="subpanel-title" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                        <span class="status-indicator-dot dot-amber"></span>
+                        <span style="font-weight:700; color:#f9a8d4;">Missing Coverage Gaps</span>
+                        <span class="dim-text" style="font-size:0.75rem;">(${gaps.length} contiguous ranges)</span>
+                    </div>
+                    ${gapsHtml}
+                </div>
+            `;
+        }
+
+        odsGoalStateContainerEl.innerHTML = html;
     };
 
     // TOP Summary Matrix rendering (Amber / Green code for ordered active tables)

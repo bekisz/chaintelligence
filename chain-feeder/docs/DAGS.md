@@ -227,7 +227,7 @@ All swap DAGs follow the same pattern:
 3. Insert to the unified `swaps` table (PK: `tx_hash, log_index`). Rows are distinguished by `protocol` and `network` columns.
 4. Used by the History Pipeline for volume/TVL aggregation and by the API for route/trade analysis.
 
-The `swaps` table uses monthly range partitioning on the `ts` column (e.g. `swaps_2026_07`). Schema defined in [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql). Retention is enforced by `config_global_swap_retention` (see Utility DAGs).
+The `swaps` table uses monthly range partitioning on the `ts` column (e.g. `swaps_2026_07`). Schema defined in [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql). Retention is enforced by `ods_goal_state_retention` (see Utility DAGs; the older `config_global_swap_retention` is superseded).
 
 Shared utilities live in [common/utils/uniswap_utils.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/common/utils/uniswap_utils.py) (`UniswapV3Fetcher`, `UniswapV4Fetcher`, `PostgresStorage`, etc.).
 
@@ -364,7 +364,8 @@ graph TD
 
 | DAG | File | Schedule | Purpose | Tables Written |
 |---|---|---|---|---|
-| `config_global_swap_retention` | [config_global_swap_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/config_global_swap_retention.py) | `0 3 * * *` | Reads `config/swap-retention.yaml` and deletes `swaps` rows older than the configured retention period per (network, protocol) in batches. | `swaps` (deletions) |
+| `ods_goal_state_retention` | [ods_goal_state_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_retention.py) | `0 3 * * *` | Evaluates `config/ods-goal-state.yaml` requirements against the warehouse, reports coverage + gaps, backfills missing route daily stats, and (when `dry_run=false`) prunes rows outside the effective keep-windows across `swaps`, `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool_daily_stats`, `liquidity_pool_position_snapshot`. Replaces `config_global_swap_retention`. | `swaps` (deletions), `route_daily_stats` (delete+recompute), `route_daily_stats_bucket` (delete+recompute), `liquidity_pool_daily_stats` (deletions), `liquidity_pool_position_snapshot` (deletions) |
+| `config_global_swap_retention` | [config_global_swap_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/config_global_swap_retention.py) | `0 3 * * *` | **Superseded** by `ods_goal_state_retention` (paused on creation; kept for manual/emergency use). Reads `config/swap-retention.yaml` and deletes `swaps` rows older than the configured retention period per (network, protocol) in batches. | `swaps` (deletions) |
 
 ---
 
@@ -412,7 +413,8 @@ Shows which tables are **written** by which pipeline groups and **read** by whic
 | `rpc_ethereum_uniswap_v3_liquidity_pool_position` | `timedelta(hours=1)` | hourly | LP |
 | `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` | `@daily` | daily | LP |
 | `rpc_all_uniswap_v3_liquidity_pool_position_event` | `@daily` | daily | LP |
-| `config_global_swap_retention` | `0 3 * * *` | daily 3 AM | Utility |
+| `config_global_swap_retention` | `0 3 * * *` | daily 3 AM | Utility (superseded — paused) |
+| `ods_goal_state_retention` | `0 3 * * *` | daily 3 AM | Utility |
 
 ---
 

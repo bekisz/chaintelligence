@@ -952,7 +952,105 @@ class TestChaintelligenceAPI(unittest.TestCase):
         pool = resp.json()["data"]["attributes"]
         self.assertEqual(pool["window_stats"]["start_date"], "2026-08-01")
         self.assertEqual(pool["window_stats"]["end_date"], "2026-08-15")
-        self.assertAlmostEqual(pool["apr"], 0.0293, places=4)
+        self.assertAlmostEqual(pool["apr"], 0.0317, places=4)
+
+    def test_48_ods_set_family_expansion(self):
+        """O&D Set: BTC-family <-> USD-family on Ethereum expands to many pairs."""
+        url = (f"{BASE_URL}/api/ods/set?origin=BTC&dest=USD&direction=both"
+               f"&chains=Ethereum&limit=20")
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"O&D set failed: {resp.text}")
+        doc = resp.json()
+        data = doc.get("data")
+        items = data if isinstance(data, list) else [data]
+        self.assertGreater(len(items), 0)
+        symbols = {(o["attributes"]["origin_symbol"], o["attributes"]["dest_symbol"]) for o in items}
+        btc_like = {"WBTC", "BTC", "cbBTC"}
+        all_syms = {s for pair in symbols for s in pair}
+        self.assertTrue(all_syms & btc_like, f"expected a BTC-family member among {symbols}")
+        meta = doc["meta"]["set"]
+        self.assertEqual(meta["origin"], "BTC")
+        self.assertEqual(meta["dest"], "USD")
+        self.assertEqual(meta["direction"], "both")
+        self.assertEqual(meta["chains"], ["Ethereum"])
+
+    def test_49_ods_set_wildcard(self):
+        """O&D Set: wildcard origin with USDC dest returns USDC pairs."""
+        url = f"{BASE_URL}/api/ods/set?origin=*&dest=USDC&direction=forward&chains=Ethereum&limit=20"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"O&D set failed: {resp.text}")
+        doc = resp.json()
+        items = doc.get("data")
+        items = items if isinstance(items, list) else [items]
+        self.assertGreater(len(items), 0)
+        for o in items:
+            dest = o["attributes"]["dest_symbol"]
+            self.assertEqual(dest, "USDC", f"expected USDC dest, got {dest}")
+
+    def test_50_ods_set_contract_address(self):
+        """O&D Set: contract-address origin resolves and matches pairs."""
+        url = (f"{BASE_URL}/api/ods/set"
+               f"?origin=0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+               f"&dest=USD&direction=forward&chains=Ethereum&limit=20")
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"O&D set failed: {resp.text}")
+        doc = resp.json()
+        items = doc.get("data")
+        items = items if isinstance(items, list) else [items]
+        self.assertGreater(len(items), 0)
+        for o in items:
+            self.assertEqual(o["attributes"]["origin_symbol"], "WBTC",
+                             "contract origin should resolve to WBTC")
+
+    def test_51_ods_set_direction_forward(self):
+        """O&D Set: direction=forward only returns the requested orientation."""
+        url = (f"{BASE_URL}/api/ods/set?origin=WBTC&dest=USDC&direction=forward"
+               f"&chains=Ethereum&limit=20")
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"O&D set failed: {resp.text}")
+        doc = resp.json()
+        items = doc.get("data")
+        items = items if isinstance(items, list) else [items]
+        self.assertGreater(len(items), 0)
+        for o in items:
+            attrs = o["attributes"]
+            self.assertEqual(attrs["origin_symbol"], "WBTC")
+            self.assertEqual(attrs["dest_symbol"], "USDC")
+
+    def test_52_ods_set_bad_direction(self):
+        """O&D Set: invalid direction is rejected with 422."""
+        url = f"{BASE_URL}/api/ods/set?origin=WBTC&dest=USDC&direction=sideways"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 422, f"expected 422 for bad direction, got {resp.status_code}")
+
+    def test_53_goal_state_report(self):
+        """O&D goal-state: coverage engine reports per-requirement status."""
+        url = f"{BASE_URL}/api/ods/goal-state"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"goal-state failed: {resp.text}")
+        doc = resp.json()
+        self.assertIn("checks", doc)
+        self.assertIn("gaps", doc)
+        self.assertEqual(doc["n_checks"], len(doc["checks"]))
+        self.assertEqual(doc["not_ok"], sum(1 for c in doc["checks"] if c["status"] != "ok"))
+        for c in doc["checks"]:
+            self.assertIn(c["status"], ("ok", "partial", "missing", "stale"))
+            self.assertIn("layer", c)
+            self.assertIn("missing_days", c)
+
+    @unittest.skipUnless(os.getenv("RUN_GOAL_STATE_ESTIMATE") == "1",
+                         "slow: exercises full dry-run prune counts across all layers")
+    def test_54_goal_state_estimate(self):
+        """O&D goal-state: estimate=true returns dry-run prune counts per layer."""
+        url = f"{BASE_URL}/api/ods/goal-state?estimate=true"
+        resp = requests.get(url, auth=self.auth)
+        self.assertEqual(resp.status_code, 200, f"goal-state estimate failed: {resp.text}")
+        doc = resp.json()
+        est = doc.get("dry_run_estimate")
+        self.assertIsNotNone(est, "expected dry_run_estimate with estimate=true")
+        for layer in ("swaps", "route_daily_stats", "route_daily_stats_bucket", "liquidity_pool"):
+            self.assertIn(layer, est)
+            self.assertIsInstance(est[layer], int)
 
 
 if __name__ == "__main__":

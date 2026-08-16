@@ -176,6 +176,30 @@
                 <!-- Injected dynamically by health.js -->
             </div>
         </section>
+
+        <!-- Section: O&D Set Requirements (goal-state coverage) -->
+        <section class="dashboard-section" id="ods-goal-state-section">
+            <div class="section-top-bar space-between">
+                <div class="section-title-wrapper">
+                    <h2>
+                        <span class="glow-accent-dot purple"></span>
+                        O&D Set Requirements
+                    </h2>
+                    <p class="section-desc">Coverage of <span class="font-mono">config/ods-goal-state.yaml</span> requirements per layer — swaps, route_daily_stats, route_daily_stats_bucket, liquidity_pool</p>
+                </div>
+
+                <div class="matrix-controls">
+                    <button class="btn-inspect-sm" onclick="openApiModal('/api/ods/goal-state')">
+                        Inspect JSON
+                    </button>
+                </div>
+            </div>
+
+            <div id="ods-goal-state-container" class="ods-goal-state-container">
+                <!-- Injected dynamically by health.js -->
+                <div class="empty-state glass-card">Loading O&D goal-state coverage...</div>
+            </div>
+        </section>
     </main>
 
     <!-- Subpath Inspector Drawer / Modal -->
