@@ -38,6 +38,8 @@ from include.od_retention import (
     backfill_missing_daily_stats,
     effective_window,
     window_resolve,
+    is_floor_requirement,
+    LAYERS,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -129,30 +131,31 @@ def cmd_backfill(args, goal):
 
 
 def cmd_show_rules(args, goal):
-    conn = connect()
-    try:
-        today = args.today or date.today()
-        print("defaults:")
-        for layer, win in goal['defaults'].items():
-            s, e = window_resolve(win, today) or (None, None)
-            print(f"  {layer:26} {_win_label(s, e)}")
-        print("defaults.per_chain:")
-        for row in goal.get('per_chain', []):
-            for layer, win in row['layers'].items():
-                s, e = window_resolve(win, today) or (None, None)
-                print(f"  {row['chain']:20} {layer:26} {_win_label(s, e)}")
-        for req in goal['requirements']:
-            print(f"requirement: {req['name']}")
-            print(f"  origin={req['origin']!r} dest={req['dest']!r} "
-                  f"direction={req['direction']} chains={'*' if req['chains_all'] else sorted(req['chains'])}")
-            for layer in ('swaps', 'route_daily_stats', 'route_daily_stats_bucket', 'liquidity_pool'):
-                win = req['layers'].get(layer)
-                if win is None:
-                    continue
-                s, e = window_resolve(win, today) or (None, None)
-                print(f"  {layer:26} {_win_label(s, e)}")
-    finally:
-        conn.close()
+    today = args.today or date.today()
+    bases = [r for r in goal['requirements'] if is_floor_requirement(r)]
+    specs = [r for r in goal['requirements'] if not is_floor_requirement(r)]
+    print("base requirements (floors):")
+    if not bases:
+        print("  (none — every uncovered layer is a delete candidate)")
+    for req in bases:
+        _print_requirement(req, today, prefix="  ")
+    print("requirements:")
+    if not specs:
+        print("  (none)")
+    for req in specs:
+        _print_requirement(req, today)
+
+
+def _print_requirement(req, today, prefix=""):
+    print(f"{prefix}requirement: {req['name']}")
+    print(f"{prefix}  origin={req['origin']!r} dest={req['dest']!r} "
+          f"bidirectional={bool(req.get('bidirectional', True))} chains={'*' if req['chains_all'] else sorted(req['chains'])}")
+    for layer in LAYERS:
+        win = req['layers'].get(layer)
+        if win is None:
+            continue
+        s, e = window_resolve(win, today) or (None, None)
+        print(f"{prefix}  {layer:26} {_win_label(s, e)}")
 
 
 def _win_label(start, end):
@@ -201,7 +204,7 @@ def main():
     if args.config is None and goal.get('config_path'):
         log.info("using config: %s", goal['config_path'])
     elif args.config is None and not goal.get('config_path'):
-        log.warning("no config file found; built-in defaults only (no requirements)")
+        log.warning("no config file found; built-in base floor only (no O&D requirements)")
     args.fn(args, goal)
 
 

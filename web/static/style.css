@@ -4845,6 +4845,19 @@ tr:hover .row-action-btn {
     gap: 1rem;
 }
 
+.ods-goal-state-table th {
+    padding: 10px 12px;
+}
+
+.ods-goal-state-table td {
+    white-space: nowrap;
+}
+
+.ods-goal-state-table td:first-child {
+    white-space: normal;
+    min-width: 200px;
+}
+
 .ods-check-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -4877,6 +4890,98 @@ tr:hover .row-action-btn {
     display: flex;
     flex-direction: column;
     gap: 2px;
+}
+
+.ods-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.ods-pop-tooltip {
+    position: fixed;
+    z-index: 120;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(9, 12, 28, 0.98) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 10px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    font-family: 'JetBrains Mono', monospace;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s ease, visibility 0.12s ease;
+    max-width: 340px;
+}
+
+.ods-pop-tooltip.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ods-pop-tooltip .ods-tt-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(99, 102, 241, 0.10);
+    border-radius: 10px 10px 0 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #a5b4fc;
+}
+
+.ods-pop-tooltip .ods-tt-header .ods-tt-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #a855f7;
+    box-shadow: 0 0 8px #a855f7;
+    flex-shrink: 0;
+}
+
+.ods-pop-tooltip .ods-tt-body {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ods-pop-tooltip .ods-tt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: #d1d5db;
+    line-height: 1.4;
+}
+
+.ods-pop-tooltip .ods-tt-days {
+    flex-shrink: 0;
+    min-width: 36px;
+    text-align: center;
+    background: rgba(239, 68, 68, 0.16);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-weight: 700;
+    font-size: 0.66rem;
+}
+
+.ods-pop-tooltip .ods-tt-days.ok {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.ods-pop-tooltip .ods-tt-simple {
+    padding: 8px 12px;
+    font-size: 0.72rem;
+    color: #d1d5db;
+    line-height: 1.5;
+    white-space: pre-line;
 }
 
 .table-detail-card {

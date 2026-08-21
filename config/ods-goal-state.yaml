@@ -3,8 +3,12 @@
 # Read by the `ods_goal_state_retention` DAG, the API `/api/ods/goal-state`
 # report and the CLI in chain-feeder/include/scripts/ods_goal_state.py. The
 # engine keeps data for a (pair, layer) inside the window of the MOST-SPECIFIC
-# matching requirement (override cascade); `defaults` is the global floor
-# applied everywhere else.
+# matching requirement (override cascade). There is no separate `defaults`
+# category: the floor for any (pair, layer) is expressed as ordinary
+# requirements with `origin: "*"` and `dest: "*"` (wild on both sides). They use
+# the exact same config semantics as any other requirement — the cascade treats
+# them as floors automatically because more-specific requirements override
+# wild/wild rules.
 #
 # Specificity ranking (high > low):
 #   1. token set: contract address > symbol > coin family > '*'
@@ -18,76 +22,93 @@
 #   - '*' — every coin on that side
 #   - a coin contract address (0x…)
 #
+# `bidirectional` (default true): when true the requirement governs the pair
+# in both orientations (origin<->dest); set `bidirectional: false` to match
+# only the declared orientation (origin -> dest).
+#
 # Layers (each has its own independent window):
-#   swaps                     raw swap rows (route-attributable via route_id)
-#   route_daily_stats         per-(route, day) aggregates
-#   route_daily_stats_bucket  per-(route, day, bucket) swap-size distribution
-#   liquidity_pool            pool daily stats + position snapshots for the
-#                             pools used as hops by the set's routes
+#   swaps                              raw swap rows (route-attributable via route_id)
+#   route_daily_stats                  per-(route, day) aggregates
+#   route_daily_stats_bucket           per-(route, day, bucket) swap-size distribution
+#   liquidity_pool                     position snapshots for the pools used as hops
+#   liquidity_pool_daily_stats         per-(pool, day) liquidity stats
+#   liquidity_pool_daily_stats_bucket  per-(pool, day, bucket) liquidity distribution
 #
 # Window grammar per layer:
 #   last_days: N          keep the last N days (rolling, ending today)
 #   since: YYYY-MM-DD     keep from this day through today
 #   from:/to: YYYY-MM-DD  keep an exact bounded window
-#   absent / null         no requirement for that layer (default floor applies)
+#   absent / null         no requirement for that layer
 #
-# NOTE: a layer whose default is null is "unclaimed" — every row of it that is
-# not inside some requirement's window is a deletion candidate.
-
-defaults:
-  # Global floors — applied to every (pair, layer) not covered by a requirement.
-  swaps: { last_days: 3 }
-  route_daily_stats: ~
-  route_daily_stats_bucket: ~
-  liquidity_pool: { last_days: 32 }
-
-  # Per-chain floors — these reproduce the old config/swap-retention.yaml
-  # rules so config_global_swap_retention can be retired. A chain with no
-  # per_chain entry falls back to the global floors above.
-  per_chain:
-    - chain: "Ethereum"
-      swaps: { last_days: 180 }
-    - chain: "BNB"
-      swaps: { last_days: 8 }
-    - chain: "Arbitrum"
-      swaps: { last_days: 180 }
+# NOTE: a layer that no requirement (base or otherwise) covers is "unclaimed" —
+# every row of it is a deletion candidate.
+#
+# A floor requirement's `swaps` window is also the per-chain floor applied to
+# unclassified raw swaps (route_id IS NULL), which cannot be attributed to any
+# O&D set. A chain-specific floor overrides the global floor for those rows too.
 
 requirements:
-  # BTC-family <-> USD-family on every chain: the flagship dashboard dataset.
-  # Keep ALL raw swaps AND route_daily_stats from 2026-04-01 through today.
+  # === Floor requirements (wild on both sides) ===
+  # A floor matches every pair and is overridden by any more-specific
+  # requirement via the cascade. Chain-specific floors override the global
+  # floor. route_daily_stats / route_daily_stats_bucket are intentionally
+  # absent from the floors -> unclaimed -> deletable.
+
+  - name: "Global"
+    origin: "*"
+    dest: "*"
+    chains: "*"
+    swaps:
+      last_days: 2
+    route_daily_stats:
+      last_days: 8
+
+  # Per-chain floors — reproduce the old config/swap-retention.yaml rules so
+  # config_global_swap_retention can be retired. A chain with no specific
+  # floor falls back to "Global" above.
+  - name: "Ethereum Chain"
+    origin: "*"
+    dest: "*"
+    chains: "Ethereum"
+    swaps:
+      last_days: 8
+    route_daily_stats:
+      last_days: 32
+    route_daily_stats_bucket:
+      last_days: 8
+    liquidity_pool_daily_stats:
+      last_days: 8
+    liquidity_pool_daily_stats_bucket:
+      last_days: 8
+
+  # === O&D Set requirements (goal state) ===
+
+  # BTC <-> USD on Ethereum: keep raw swaps for 14 days and route_daily_stats
+  # from 2026-07-01 through today.
   # NOTE: the swaps layer is essential — route_daily_stats is a materialized
   # view rebuilt from swaps, so without a swaps retention clause a recompute
   # would silently erase daily stats once the raw rows age past their floor.
-  - name: "BTC-USD daily stats since Apr"
+  - name: "BTC-USD"
     origin: "BTC"
     dest: "USD"
-    direction: "both"
-    chains: "*"
+    chains: "Ethereum"
     swaps:
-      since: "2026-04-01"
+      last_days: 14
     route_daily_stats:
-      since: "2026-04-01"
+      since: "2026-07-01"
 
-  # ETH <-> BTC on Ethereum: keep this exact 3-day raw-swap window.
-  - name: "ETH-BTC swaps window"
-    origin: "ETH"
-    dest: "BTC"
-    direction: "both"
-    chains: "ethereum"
-    swaps:
-      from: "2026-08-13"
-      to: "2026-08-15"
-
-  # WBTC -> USDC (forward only): 40 days of raw swaps, 90 days of bucket
-  # distribution, 120 days of pool history for the pools it routes over.
-  - name: "WBTC-USDC swaps 40d"
+  - name: "WBTC-USDC"
     origin: "WBTC"
     dest: "USDC"
-    direction: "forward"
-    chains: "*"
+    chains: "ethereum"
+    bidirectional: true # default is true
     swaps:
-      last_days: 40
+      last_days: 8
+    route_daily_stats:
+      since: "2025-08-01"
     route_daily_stats_bucket:
-      last_days: 90
-    liquidity_pool:
-      last_days: 120
+      last_days: 60
+    liquidity_pool_daily_stats:
+      last_days: 60
+    liquidity_pool_daily_stats_bucket:
+      last_days: 8

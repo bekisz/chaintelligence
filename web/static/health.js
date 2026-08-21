@@ -264,12 +264,180 @@ document.addEventListener('DOMContentLoaded', () => {
         stale:   { dot: 'dot-amber', fill: 'fill-yellow', pill: 'STALE',     label: 'STALE',   color: '#fbbf24' }
     };
 
+    // Token icons for the O&D Set Part column — same sources as the Swap page.
+    let odsTokenImages = {};
+    let odsFamilies = {};
+    let lastOdsGoalData = null;
+
+    const initOdsTokenIcons = () => {
+        const loadImages = fetch('/api/coins/list')
+            .then(r => r.json())
+            .then(coins => {
+                (Array.isArray(coins) ? coins : []).forEach(c => {
+                    if (c.symbol) odsTokenImages[c.symbol.toUpperCase()] = c.image;
+                });
+            })
+            .catch(() => {});
+        const loadFamilies = fetch('/api/coin-families')
+            .then(r => r.json())
+            .then(data => {
+                const fams = data && data.data ? (Array.isArray(data.data) ? data.data : [data.data]) : [];
+                const includedById = {};
+                (data.included || []).forEach(inc => { includedById[inc.type + ':' + inc.id] = inc; });
+                fams.forEach(f => {
+                    const famName = (f.attributes && f.attributes.name) || f.id;
+                    const memberRefs = (f.relationships && f.relationships.members && f.relationships.members.data) || [];
+                    const symbols = memberRefs.map(ref => {
+                        const coin = includedById[ref.type + ':' + ref.id];
+                        return coin && coin.attributes ? coin.attributes.symbol : null;
+                    }).filter(Boolean);
+                    odsFamilies[famName] = symbols;
+                });
+            })
+            .catch(() => {});
+        // Re-render once icons are available so the table isn't stuck showing
+        // only tickers (it renders before these async fetches resolve).
+        Promise.all([loadImages, loadFamilies]).then(() => {
+            if (lastOdsGoalData) renderOdsGoalState(lastOdsGoalData);
+        });
+    };
+
+    // Custom styled popover tooltip for .ods-tooltip elements.
+    let odsTipEl = null;
+    const escHtmlText = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const initOdsTooltips = () => {
+        if (!odsTipEl) {
+            odsTipEl = document.createElement('div');
+            odsTipEl.className = 'ods-pop-tooltip';
+            document.body.appendChild(odsTipEl);
+        }
+        const box = odsGoalStateContainerEl;
+        if (!box || box.dataset.tooltipsInit) return;
+        box.dataset.tooltipsInit = '1';
+
+        box.addEventListener('mouseover', (e) => {
+            const t = e.target.closest && e.target.closest('.ods-tooltip');
+            if (t) {
+                let html = t.getAttribute('data-tip-html');
+                const text = t.getAttribute('data-tip');
+                if (!html && text) html = `<div class="ods-tt-simple">${escHtmlText(text)}</div>`;
+                if (html) {
+                    odsTipEl.innerHTML = html;
+                    odsTipEl.classList.add('visible');
+                }
+            }
+        });
+        box.addEventListener('mousemove', (e) => {
+            if (odsTipEl && odsTipEl.classList.contains('visible')) positionOdsTooltip(e);
+        });
+        box.addEventListener('mouseout', (e) => {
+            if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('.ods-tooltip')) {
+                if (odsTipEl) odsTipEl.classList.remove('visible');
+            }
+        });
+    };
+
+    const positionOdsTooltip = (e) => {
+        const pad = 12;
+        odsTipEl.style.left = '0px';
+        odsTipEl.style.top = '0px';
+        const r = odsTipEl.getBoundingClientRect();
+        let x = e.clientX + 14;
+        let y = e.clientY - r.height - 12;
+        if (x + r.width > window.innerWidth - pad) x = e.clientX - r.width - 14;
+        if (y < pad) y = e.clientY + 16;
+        odsTipEl.style.left = `${x}px`;
+        odsTipEl.style.top = `${y}px`;
+    };
+
+    const ODS_ARROW_SVGS = {
+        forward: '<svg width="20" height="10" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="28 5 38 12 28 19"></polyline></svg>',
+        both: '<svg width="20" height="10" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="38" y2="12"></line><polyline points="8 5 2 12 8 19"></polyline><polyline points="32 5 38 12 32 19"></polyline></svg>'
+    };
+
+    const ODS_WILDCARD_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23facc15'%3E%3Cpolygon points='22,12 13.3,11.25 17,3.34 12,10.5 7,3.34 10.7,11.25 2,12 10.7,12.75 7,20.66 12,13.5 17,20.66 13.3,12.75'/%3E%3C/svg%3E";
+
+    const odsTokenIcon = (spec, size = 14) => {
+        if (!spec) return '';
+        if (String(spec).toUpperCase() === '*') {
+            return `<img src="${ODS_WILDCARD_ICON}" width="${size}" height="${size}" style="border-radius:2px; flex-shrink:0;">`;
+        }
+        const upper = String(spec).toUpperCase();
+        if (/^0x/i.test(upper)) return '';
+        let url = odsTokenImages[upper];
+        if (!url && odsFamilies[upper] && odsFamilies[upper].length) {
+            const member = odsFamilies[upper].find(m => odsTokenImages[(m || '').toUpperCase()]) || odsFamilies[upper][0];
+            url = odsTokenImages[(member || '').toUpperCase()];
+        }
+        if (!url) {
+            url = `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/${upper.toLowerCase()}.png`;
+        }
+        return `<img src="${url}" width="${size}" height="${size}" onerror="this.style.visibility='hidden'" style="border-radius:50%; vertical-align:middle; flex-shrink:0;">`;
+    };
+
+    const odsSideKind = (spec) => {
+        if (!spec) return 'token';
+        const upper = String(spec).toUpperCase();
+        if (upper === '*') return 'wild';
+        if (/^0x/i.test(upper)) return 'contract';
+        return (odsFamilies[upper] && odsFamilies[upper].length) ? 'family' : 'token';
+    };
+
+    const ODS_CHAIN_ICONS = {
+        all: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff007a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 2 7 12 12 22 7 12 2'%3E%3C/polygon%3E%3Cpolyline points='2 17 12 22 22 17'%3E%3C/polyline%3E%3Cpolyline points='2 12 12 17 22 12'%3E%3C/polyline%3E%3C/svg%3E",
+        Ethereum: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+        Arbitrum: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+        Base: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+        BNB: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png'
+    };
+
+    const odsSetPartHtml = (g) => {
+        const arrow = ODS_ARROW_SVGS[g.bidirectional ? 'both' : 'forward'] || ODS_ARROW_SVGS.forward;
+        const kindLabel = { family: 'coin family', token: 'token', contract: 'contract address', wild: 'wildcard' };
+        const side = (spec, kind) => {
+            const label = `${kindLabel[kind]}: ${spec || '--'}`;
+            if (kind === 'wild') {
+                // Wildcard side: icon only, no text.
+                return `<span class="ods-tooltip" data-tip="${label}" style="display:inline-flex; align-items:center;">${odsTokenIcon(spec)}</span>`;
+            }
+            return `<span class="ods-tooltip" data-tip="${label}" style="display:inline-flex; align-items:center; gap:5px; white-space:nowrap;">
+                ${odsTokenIcon(spec)}<span class="font-mono" style="color:#f3f4f6;">${spec || '--'}</span>
+            </span>`;
+        };
+        return `<span style="display:inline-flex; align-items:center; gap:7px; white-space:nowrap;">
+            ${side(g.origin, odsSideKind(g.origin))}
+            <span style="color:#9ca3af; display:inline-flex;">${arrow}</span>
+            ${side(g.dest, odsSideKind(g.dest))}
+        </span>`;
+    };
+
+    const odsChainsHtml = (chains) => {
+        const arr = Array.isArray(chains) && chains.length ? chains : [chains || '*'];
+        const isAll = arr.length === 1 && arr[0] === '*';
+        if (isAll) {
+            return `<span class="ods-tooltip" data-tip="all chains" style="display:inline-flex; align-items:center;">
+                <img src="${ODS_CHAIN_ICONS.all}" width="14" height="14" style="border-radius:2px; flex-shrink:0;">
+            </span>`;
+        }
+        return `<span style="display:inline-flex; align-items:center; gap:8px; white-space:nowrap;">
+            ${arr.map(c => {
+                const key = Object.keys(ODS_CHAIN_ICONS).find(k => k.toLowerCase() === String(c).toLowerCase());
+                const icon = key ? ODS_CHAIN_ICONS[key] : ODS_CHAIN_ICONS.all;
+                return `<span class="ods-tooltip" data-tip="${c}" style="display:inline-flex; align-items:center;">
+                    <img src="${icon}" width="14" height="14" onerror="this.src='/static/favicon.png'" style="border-radius:2px; flex-shrink:0;">
+                </span>`;
+            }).join('')}
+        </span>`;
+    };
+
     const fetchOdsGoalState = async () => {
         if (!odsGoalStateContainerEl) return;
         try {
             const res = await fetch('/api/ods/goal-state');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
+            lastOdsGoalData = data;
             renderOdsGoalState(data);
         } catch (err) {
             odsGoalStateContainerEl.innerHTML = `
@@ -309,52 +477,85 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Requirement check cards
-        let cardsHtml = '';
+        // Requirement status table (rows = requirement, columns = O&D set part + layers)
+        const LAYERS = ['swaps', 'route_daily_stats', 'route_daily_stats_bucket', 'liquidity_pool_daily_stats', 'liquidity_pool_daily_stats_bucket'];
+
+        const byName = new Map();
         checks.forEach(chk => {
+            if (!byName.has(chk.name)) {
+                byName.set(chk.name, { name: chk.name, origin: chk.origin, dest: chk.dest, bidirectional: chk.bidirectional, chains: chk.chains, layers: {} });
+            }
+            byName.get(chk.name).layers[chk.layer] = chk;
+        });
+
+        const odsStatusPill = (chk) => {
+            if (!chk) return '<span class="dim-text" style="font-size:0.75rem;">—</span>';
             const meta = odsStatusMeta[chk.status] || odsStatusMeta.stale;
             const present = chk.present_days || 0;
             const expected = chk.expected_days || 0;
-            const pct = expected > 0 ? Math.min(100, Math.round((present / expected) * 100)) : 0;
-            const missing = Array.isArray(chk.missing_days) ? chk.missing_days.length : 0;
-            const chains = Array.isArray(chk.chains) ? chk.chains.join(', ') : (chk.chains || '*');
-            const windowStr = `${chk.window ? chk.window.start : '--'} → ${chk.window ? chk.window.end : '--'}`;
+            const pct = expected > 0 ? Math.max(0, Math.min(100, Math.round((present / expected) * 100))) : 0;
+            const MS = 86400000;
+            const dates = (chk.missing_days || []).slice().sort();
+            const ranges = [];
+            if (dates.length) {
+                let start = dates[0], prev = dates[0];
+                for (let i = 1; i < dates.length; i++) {
+                    if (new Date(dates[i]) - new Date(prev) === MS) { prev = dates[i]; }
+                    else { ranges.push([start, prev]); start = prev = dates[i]; }
+                }
+                ranges.push([start, prev]);
+            }
+            let ttHtml;
+            if (ranges.length) {
+                const rows = ranges.map(([a, b]) => {
+                    const n = Math.round((new Date(b) - new Date(a)) / MS) + 1;
+                    return `<div class="ods-tt-row"><span class="ods-tt-days">${n}d</span><span>${a} → ${b}</span></div>`;
+                }).join('');
+                ttHtml = `<div class="ods-tt-header"><span class="ods-tt-dot"></span>Coverage Gaps</div><div class="ods-tt-body">${rows}</div>`;
+            } else {
+                ttHtml = `<div class="ods-tt-header"><span class="ods-tt-dot"></span>Coverage Gaps</div><div class="ods-tt-body"><div class="ods-tt-row"><span class="ods-tt-days ok">${present}/${expected}</span><span>days · fully covered</span></div></div>`;
+            }
+            const escAttr = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            return `<span class="summary-badge-pill ods-tooltip" data-tip-html="${escAttr(ttHtml)}"
+                style="color:${meta.color}; border-color:${meta.color}33; background:${meta.color}1a; font-size:0.75rem;">
+                ${pct}%</span>`;
+        };
 
-            const metaRow = [
-                `<span class="summary-badge-pill badge-pass" style="font-size:0.68rem;">${chk.origin || '--'} → ${chk.dest || '--'}</span>`,
-                `<span class="summary-badge-pill badge-pass" style="font-size:0.68rem; background:rgba(99,102,241,0.15); color:#a5b4fc; border-color:rgba(99,102,241,0.3);">layer: ${chk.layer || '--'}</span>`,
-                `<span class="dim-text font-mono" style="font-size:0.7rem;">chains: ${chains}</span>`,
-                `<span class="dim-text font-mono" style="font-size:0.7rem;">pairs: ${chk.pairs !== undefined ? formatNumber(chk.pairs) : '--'}</span>`
-            ].join('&nbsp;&nbsp;');
+        const odsWindowReq = (chk) => {
+            if (!chk) return '<span class="dim-text" style="font-size:0.75rem;">—</span>';
+            const label = chk.window_label || '—';
+            const tip = `${label}\nwindow: ${chk.window ? chk.window.start : '--'} → ${chk.window ? chk.window.end : '--'}`;
+            return `<span class="ods-tooltip font-mono dim-text" data-tip="${tip.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" style="font-size:0.72rem; white-space:nowrap;">${label}</span>`;
+        };
 
-            cardsHtml += `
-                <div class="ods-check-card">
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                            <span class="status-indicator-dot ${meta.dot}"></span>
-                            <span style="font-weight:700; color:#f3f4f6; font-size:0.9rem;">${chk.name || '(unnamed requirement)'}</span>
-                        </div>
-                        <span class="summary-badge-pill badge-${chk.status === 'ok' ? 'pass' : 'stale'}" style="color:${meta.color}; border-color:${meta.color}33; background:${meta.color}1a;">
-                            ${meta.pill}
-                        </span>
-                    </div>
-
-                    <div style="font-size:0.78rem; color:#9ca3af;">${metaRow}</div>
-
-                    <div style="display:flex; justify-content:space-between; font-size:0.72rem; margin-top:2px;">
-                        <span class="dim-text font-mono">window: ${windowStr}</span>
-                        <span class="font-mono" style="color:${meta.color}; font-weight:700;">
-                            ${present}/${expected} days ${missing > 0 ? `· ${missing} missing` : ''}
-                        </span>
-                    </div>
-                    <div class="health-meter-track" style="height:6px;">
-                        <div class="health-meter-fill ${meta.fill}" style="width:${pct}%;"></div>
-                    </div>
-                </div>
+        let tableHtml = `
+            <table class="indexer-matrix-table ods-goal-state-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="text-align:left;">Requirement</th>
+                        <th rowspan="2" style="text-align:left;">O&amp;D Set Part</th>
+                        <th rowspan="2" style="text-align:left;">Chain</th>
+                        ${LAYERS.map(l => `<th colspan="2" style="text-align:center;">${l}</th>`).join('')}
+                    </tr>
+                    <tr>
+                        ${LAYERS.map(() => `<th style="text-align:center;">req</th><th style="text-align:center;">%</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        byName.forEach(g => {
+            tableHtml += `
+                <tr>
+                    <td style="text-align:left; font-weight:700; color:#f3f4f6;">${g.name || '(unnamed requirement)'}</td>
+                    <td style="text-align:left;">${odsSetPartHtml(g)}</td>
+                    <td style="text-align:left;">${odsChainsHtml(g.chains)}</td>
+                    ${LAYERS.map(l => `<td style="text-align:center;">${odsWindowReq(g.layers[l])}</td><td style="text-align:center;">${odsStatusPill(g.layers[l])}</td>`).join('')}
+                </tr>
             `;
         });
+        tableHtml += '</tbody></table>';
 
-        html += `<div class="ods-check-grid">${cardsHtml}</div>`;
+        html += tableHtml;
 
         // Gaps panel
         if (gaps.length > 0) {
@@ -1601,6 +1802,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initial Fetch & Auto Refresh every 15 minutes (15 * 60 * 1000 = 900000 ms)
+    initOdsTokenIcons();
+    initOdsTooltips();
     fetchHealthData();
     setInterval(fetchHealthData, 15 * 60 * 1000);
 });

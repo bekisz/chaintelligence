@@ -27,10 +27,10 @@ def resolved_side(coin_ids=None, symbols=None, addresses=None, wild=False, spec=
             'addresses': addresses or [], 'kind': 'test', 'spec': spec}
 
 
-def req(name, origin, dest, direction='both', chains_all=True, chains=None,
+def req(name, origin, dest, bidirectional=True, chains_all=True, chains=None,
         layers=None, idx=0):
     return {
-        'name': name, 'origin': origin, 'dest': dest, 'direction': direction,
+        'name': name, 'origin': origin, 'dest': dest, 'bidirectional': bidirectional,
         'chains_all': chains_all, 'chains': set(chains) if chains else set(),
         'layers': layers or {}, 'idx': idx,
         '_origin': origin, '_dest': dest,
@@ -100,13 +100,13 @@ class TestMatching(unittest.TestCase):
 
     def test_forward_only_orientation(self):
         r = req('fwd', resolved_side(symbols=['WBTC'], spec=2),
-                resolved_side(symbols=['USDC'], spec=2), direction='forward')
+                resolved_side(symbols=['USDC'], spec=2), bidirectional=False)
         self.assertTrue(rule_matches_pair(r, pair()))                 # WBTC->USDC
         self.assertFalse(rule_matches_pair(r, pair(o_sym='USDC', d_sym='WETH')))
 
     def test_both_direction_matches_reversed(self):
         r = req('both', resolved_side(symbols=['WBTC'], spec=2),
-                resolved_side(symbols=['USDC'], spec=2), direction='both')
+                resolved_side(symbols=['USDC'], spec=2))
         self.assertTrue(rule_matches_pair(r, pair()))                       # WBTC->USDC
         self.assertTrue(rule_matches_pair(r, pair(o_sym='USDC', d_sym='WBTC')))
         self.assertFalse(rule_matches_pair(r, pair(o_sym='WETH', d_sym='DAI')))
@@ -120,7 +120,7 @@ class TestMatching(unittest.TestCase):
 
 class TestSpecificity(unittest.TestCase):
     def goal(self, *rules):
-        return {'defaults': {}, 'per_chain': [], 'requirements': list(rules)}
+        return {'requirements': list(rules)}
 
     def test_family_pair_overrides_wild_all(self):
         wild = req('*-*', resolved_side(wild=True, spec=0), resolved_side(wild=True, spec=0),
@@ -171,15 +171,51 @@ class TestSpecificity(unittest.TestCase):
         self.assertEqual(effective_window(pair(), 'route_daily_stats_bucket', g, date(2026, 8, 16)),
                          (None, None))
 
+    def test_base_chain_floor_overrides_global_base(self):
+        global_base = req('Base: global', resolved_side(wild=True, spec=0), resolved_side(wild=True, spec=0),
+                          layers={'swaps': parse_window({'last_days': 3}, 's')}, idx=0)
+        eth_base = req('Base: Ethereum', resolved_side(wild=True, spec=0), resolved_side(wild=True, spec=0),
+                       chains_all=False, chains={'ethereum'},
+                       layers={'swaps': parse_window({'last_days': 180}, 's')}, idx=1)
+        g = self.goal(global_base, eth_base)
+        start, _ = effective_window(pair(chain='Ethereum'), 'swaps', g, date(2026, 8, 16))
+        self.assertEqual(start, date(2026, 8, 16) - timedelta(days=180))
+        start2, _ = effective_window(pair(chain='Base'), 'swaps', g, date(2026, 8, 16))
+        self.assertEqual(start2, date(2026, 8, 16) - timedelta(days=3))
+
+    def test_specific_requirement_beats_base_floor(self):
+        base = req('Base: global', resolved_side(wild=True, spec=0), resolved_side(wild=True, spec=0),
+                   layers={'swaps': parse_window({'last_days': 3}, 's')}, idx=0)
+        wbtc = req('WBTC-USDC', resolved_side(symbols=['WBTC'], spec=2), resolved_side(symbols=['USDC'], spec=2),
+                   layers={'swaps': parse_window({'last_days': 40}, 's')}, idx=1)
+        g = self.goal(base, wbtc)
+        start, _ = effective_window(pair(), 'swaps', g, date(2026, 8, 16))
+        self.assertEqual(start, date(2026, 8, 16) - timedelta(days=40))
+        # unrelated pair falls back to the base floor
+        start2, _ = effective_window(pair(oid=2, o_sym='WETH', d_sym='DAI'), 'swaps', g, date(2026, 8, 16))
+        self.assertEqual(start2, date(2026, 8, 16) - timedelta(days=3))
+        # a layer with no base clause at all is unclaimed -> deletable
+        self.assertEqual(effective_window(pair(), 'route_daily_stats', g, date(2026, 8, 16)),
+                         (None, None))
+
+    def test_floor_is_inferred_from_wild_sides(self):
+        from od_retention import _normalize_requirement, is_floor_requirement
+        named = _normalize_requirement(
+            {'name': 'named', 'origin': 'WBTC', 'dest': '*', 'swaps': {'last_days': 3}}, 0)
+        floor = _normalize_requirement(
+            {'name': 'floor', 'origin': '*', 'dest': '*', 'swaps': {'last_days': 3}}, 1)
+        self.assertTrue(is_floor_requirement(floor))
+        self.assertFalse(is_floor_requirement(named))
+        self.assertNotIn('base', floor, "no base flag should be attached")
+
     def test_default_floor_applies_when_no_requirement(self):
         wild = req('*-*', resolved_side(wild=True, spec=0), resolved_side(wild=True, spec=0),
                    layers={'swaps': parse_window({'last_days': 3}, 's')})
         r = req('btc-usd', resolved_side(symbols=['WBTC'], spec=2), resolved_side(symbols=['USDC'], spec=2),
                 layers={'route_daily_stats': parse_window({'since': '2026-04-01'}, 'r')}, idx=1)
-        g = {'defaults': {}, 'per_chain': [],
-             'requirements': [wild, r]}
+        g = {'requirements': [wild, r]}
         p = pair()
-        # BTC-USD has no swaps requirement -> falls to the wildcard rule for swaps
+        # BTC-USD has no swaps requirement -> falls to the wildcard (base) rule for swaps
         start, _ = effective_window(p, 'swaps', g, date(2026, 8, 16))
         self.assertEqual(start, date(2026, 8, 16) - timedelta(days=3))
         # and its daily_stats is governed by the specific requirement

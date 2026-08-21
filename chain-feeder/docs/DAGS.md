@@ -364,7 +364,8 @@ graph TD
 
 | DAG | File | Schedule | Purpose | Tables Written |
 |---|---|---|---|---|
-| `ods_goal_state_retention` | [ods_goal_state_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_retention.py) | `0 3 * * *` | Evaluates `config/ods-goal-state.yaml` requirements against the warehouse, reports coverage + gaps, backfills missing route daily stats, and (when `dry_run=false`) prunes rows outside the effective keep-windows across `swaps`, `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool_daily_stats`, `liquidity_pool_position_snapshot`. Replaces `config_global_swap_retention`. | `swaps` (deletions), `route_daily_stats` (delete+recompute), `route_daily_stats_bucket` (delete+recompute), `liquidity_pool_daily_stats` (deletions), `liquidity_pool_position_snapshot` (deletions) |
+| `ods_goal_state_retention` | [ods_goal_state_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_retention.py) | `0 3 * * *` | Evaluates `config/ods-goal-state.yaml` requirements against the warehouse, reports coverage + gaps, backfills missing route daily stats, and (when `dry_run=false`) prunes rows outside the effective keep-windows across `swaps`, `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool`, `liquidity_pool_daily_stats`, `liquidity_pool_daily_stats_bucket`. Replaces `config_global_swap_retention`. | `swaps` (deletions), `route_daily_stats` (delete+recompute), `route_daily_stats_bucket` (delete+recompute), `liquidity_pool_*` (deletions) |
+| `ods_goal_state_backfill` | [ods_goal_state_backfill.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_backfill.py) | `*/30 * * * *` | **Converge the warehouse toward the O&D goal state** (also triggerable manually). Runs on a 30-min schedule so it keeps working until every requirement in `config/ods-goal-state.yaml` is met: (1) evaluate coverage/gaps, (2) recompute `route_daily_stats`/`route_daily_stats_bucket` from present swaps, (3) if gaps remain, trigger the per-chain swap ETL DAGs (`graph_*_swaps`) with a `backfill_days` conf for the networks with raw-`swaps` gaps plus the rollup DAGs. Only networks with actual gaps are re-fetched, so it stops querying The Graph once requirements are met. Param `backfill_days_cap` (default 90) caps how far back each network backfills. | none directly |
 | `config_global_swap_retention` | [config_global_swap_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/config_global_swap_retention.py) | `0 3 * * *` | **Superseded** by `ods_goal_state_retention` (paused on creation; kept for manual/emergency use). Reads `config/swap-retention.yaml` and deletes `swaps` rows older than the configured retention period per (network, protocol) in batches. | `swaps` (deletions) |
 
 ---
@@ -415,6 +416,7 @@ Shows which tables are **written** by which pipeline groups and **read** by whic
 | `rpc_all_uniswap_v3_liquidity_pool_position_event` | `@daily` | daily | LP |
 | `config_global_swap_retention` | `0 3 * * *` | daily 3 AM | Utility (superseded — paused) |
 | `ods_goal_state_retention` | `0 3 * * *` | daily 3 AM | Utility |
+| `ods_goal_state_backfill` | (manual) | on demand | Utility |
 
 ---
 

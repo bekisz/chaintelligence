@@ -22,7 +22,7 @@ from include.route_classifier import (
 )
 
 BATCH_SIZE = 5000
-MAX_BATCHES_PER_RUN = 100
+MAX_BATCHES_PER_RUN = 300
 STALE_AFTER_MINUTES = 30
 
 

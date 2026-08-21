@@ -3389,31 +3389,25 @@ async def get_goal_state(estimate: bool = Query(False, description="If true, als
     in ``chain-feeder/include/scripts/ods_goal_state.py``). The requirement
     side-selectors (`origin`, `dest`) and override semantics match ``/api/ods/set``.
     """
-    def _run():
-        from include.od_retention import load_goal_state, run_checks, export_gaps, prune
-        goal = load_goal_state()
-        with get_conn() as conn:
-            report = run_checks(conn, goal)
-            gaps = export_gaps(report)
-            estimates = None
-            if estimate:
-                result = prune(conn, goal, dry_run=True)
-                estimates = result['rows']
-        return goal, report, gaps, estimates
+    cache_key = (bool(estimate),)
+    now = time.time()
+    current_mtime = _goal_state_config_mtime()
+    cached = _GOAL_STATE_CACHE.get(cache_key)
+    if (cached and (now - cached[1]) < _GOAL_STATE_CACHE_TTL
+            and cached[2] == current_mtime):
+        return cached[0]
+    if cached is not None:
+        if cached[2] != current_mtime:
+            # Config changed -> don't serve stale; recompute fresh now.
+            body = await asyncio.to_thread(_get_or_compute_goal_state, cache_key)
+            return body
+        # TTL-only staleness: serve the last report immediately and refresh
+        # in the background so a page load never blocks on the slow recompute.
+        _background_refresh_goal_state(cache_key)
+        return cached[0]
 
     try:
-        goal, report, gaps, estimates = await asyncio.to_thread(_run)
-        not_ok = sum(1 for r in report if r['status'] != 'ok')
-        body = {
-            "config_path": goal.get('config_path'),
-            "checked_at": datetime.now(timezone.utc).isoformat(),
-            "checks": report,
-            "gaps": gaps,
-            "n_checks": len(report),
-            "not_ok": not_ok,
-        }
-        if estimates is not None:
-            body["dry_run_estimate"] = estimates
+        body = await asyncio.to_thread(_get_or_compute_goal_state, cache_key)
         return body
     except Exception as e:
         print(f"[ods-goal-state] error: {e}")
@@ -3916,6 +3910,92 @@ async def analyze_pools(
 # every page load / network switch. Key: lowercased network name or "all".
 _DATE_RANGE_CACHE: Dict[str, tuple] = {}
 _DATE_RANGE_CACHE_TTL = 600  # seconds
+
+_GOAL_STATE_CACHE: Dict[tuple, tuple] = {}  # (estimate,) -> (body, timestamp)
+_GOAL_STATE_CACHE_TTL = 300  # seconds; report recompute is expensive (~30s+)
+_GOAL_STATE_REFRESH_LOCK: Dict[tuple, threading.Lock] = {}
+
+
+def _goal_state_config_mtime() -> Optional[float]:
+    """mtime of the goal-state config file (None if the file is missing)."""
+    from include.od_retention import _config_candidates
+    for path in _config_candidates():
+        if os.path.exists(path):
+            return os.path.getmtime(path)
+    return None
+
+
+def _compute_goal_state_body(estimate: bool) -> tuple:
+    """Build the full goal-state report (expensive DB work).
+
+    Returns ``(body, config_mtime)`` so callers can invalidate the cache when
+    the config file changes.
+    """
+    from include.od_retention import load_goal_state, run_checks, export_gaps, prune
+    goal = load_goal_state()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SET LOCAL statement_timeout = '90s'")
+        report = run_checks(conn, goal)
+        gaps = export_gaps(report)
+        estimates = None
+        if estimate:
+            estimates = prune(conn, goal, dry_run=True)['rows']
+    not_ok = sum(1 for r in report if r['status'] != 'ok')
+    body = {
+        "config_path": goal.get('config_path'),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checks": report,
+        "gaps": gaps,
+        "n_checks": len(report),
+        "not_ok": not_ok,
+    }
+    if estimates is not None:
+        body["dry_run_estimate"] = estimates
+    return body, _goal_state_config_mtime()
+
+
+def _get_or_compute_goal_state(cache_key: tuple) -> dict:
+    """Return a cached report, else compute it under the refresh lock.
+
+    If a background refresh is already running, this waits on the lock and then
+    serves whatever that refresh produced, so two threads never run the
+    expensive recompute concurrently.
+    """
+    lock = _GOAL_STATE_REFRESH_LOCK.setdefault(cache_key, threading.Lock())
+    with lock:
+        current_mtime = _goal_state_config_mtime()
+        cached = _GOAL_STATE_CACHE.get(cache_key)
+        if cached and cached[2] == current_mtime:
+            return cached[0]
+        body, mtime = _compute_goal_state_body(cache_key[0])
+        _GOAL_STATE_CACHE[cache_key] = (body, time.time(), mtime)
+        return body
+
+
+def _refresh_goal_state_cache(cache_key: tuple) -> None:
+    lock = _GOAL_STATE_REFRESH_LOCK.setdefault(cache_key, threading.Lock())
+    if not lock.acquire(blocking=False):
+        return  # a refresh is already running
+    try:
+        body, mtime = _compute_goal_state_body(cache_key[0])
+        _GOAL_STATE_CACHE[cache_key] = (body, time.time(), mtime)
+    except Exception as e:
+        print(f"[ods-goal-state] background refresh error: {e}")
+    finally:
+        lock.release()
+
+
+def _background_refresh_goal_state(cache_key: tuple) -> None:
+    threading.Thread(target=_refresh_goal_state_cache, args=(cache_key,),
+                     daemon=True, name="goal-state-refresh").start()
+
+
+@app.on_event("startup")
+def _warm_goal_state_cache() -> None:
+    # Warm the goal-state report at boot so the first page load is instant
+    # instead of blocking on the slow recompute.
+    _background_refresh_goal_state((False,))
 
 
 @app.get("/api/lp/position-summary", tags=["Liquidity Pool Positions"])

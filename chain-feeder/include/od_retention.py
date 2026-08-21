@@ -5,18 +5,29 @@ Defines and enforces a *goal state* for ingested data keyed to O&D sets.
 The goal state is declared in ``config/ods-goal-state.yaml`` (see that file for
 the full schema). Conceptually:
 
-* **defaults** — global floors applied to every (pair, layer) not covered by a
-  requirement (plus optional per-chain floors that reproduce the old
-  ``config/swap-retention.yaml`` rules).
+* **floor requirements** — ordinary requirements with both sides wild
+  (``origin: "*"`` / ``dest: "*"``) that define the retention *floor* for any
+  (pair, layer) not covered by a more-specific requirement. They fall out of
+  the override cascade automatically: a chain-specific floor overrides the
+  global floor, and floor requirements also provide the per-chain floors for
+  unclassified raw swaps (``route_id IS NULL``) that cannot be attributed to
+  any O&D set.
 * **requirements** — per-O&D-set goals. Each names an origin/destination
-  selector (symbol / coin family / ``*`` / contract address), a direction, an
+  selector (symbol / coin family / ``*`` / contract address), a
+  ``bidirectional`` flag (default true), an
   optional chain list, and per-layer windows. For every (pair, layer) the
   MOST-SPECIFIC matching requirement wins (override cascade): contract >
   symbol > family > ``*``, specific chain > ``*``, explicit window > rolling.
 
+There is no separate ``defaults`` category any more — a layer that no
+requirement (base or otherwise) covers is "unclaimed", meaning every row of it
+is a deletion candidate.
+
 Layers: ``swaps`` (raw rows, route-attributable), ``route_daily_stats``,
-``route_daily_stats_bucket`` (swap-size distribution) and ``liquidity_pool``
-(pool daily stats + position snapshots for pools used as route hops).
+``route_daily_stats_bucket`` (swap-size distribution), and three LP layers for
+pools used as route hops: ``liquidity_pool`` (position snapshots),
+``liquidity_pool_daily_stats`` and ``liquidity_pool_daily_stats_bucket``. Each
+LP layer has its own independent window.
 
 The engine is intentionally DB-light for resolution: pair rows are fetched
 once and rules are matched in pure Python, so the matching/specificity logic
@@ -32,15 +43,19 @@ from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
-LAYERS = ('swaps', 'route_daily_stats', 'route_daily_stats_bucket', 'liquidity_pool')
+LAYERS = ('swaps', 'route_daily_stats', 'route_daily_stats_bucket',
+          'liquidity_pool', 'liquidity_pool_daily_stats', 'liquidity_pool_daily_stats_bucket')
+LP_LAYERS = ('liquidity_pool', 'liquidity_pool_daily_stats', 'liquidity_pool_daily_stats_bucket')
 CONFIG_BASENAME = 'ods-goal-state.yaml'
 
-GLOBAL_DEFAULTS = {
-    'swaps': {'last_days': 3},
-    'route_daily_stats': None,
-    'route_daily_stats_bucket': None,
-    'liquidity_pool': {'last_days': 32},
-}
+
+def _lp_table(layer: str) -> str:
+    """Physical table for an LP layer."""
+    return {
+        'liquidity_pool': 'liquidity_pool_position_snapshot',
+        'liquidity_pool_daily_stats': 'liquidity_pool_daily_stats',
+        'liquidity_pool_daily_stats_bucket': 'liquidity_pool_daily_stats_bucket',
+    }[layer]
 
 
 # --------------------------------------------------------------------------
@@ -54,6 +69,23 @@ def _config_candidates() -> List[str]:
         os.path.join(os.environ.get('AIRFLOW_HOME', '/opt/airflow'), 'config', CONFIG_BASENAME),
         os.path.join('/app', 'config', CONFIG_BASENAME),
     ]
+
+
+# Fallback used only when the config file cannot be found: a single global
+# base requirement so a missing file never turns into "delete everything".
+FALLBACK_BASE_REQUIREMENT: Dict[str, Any] = {
+    'name': 'Base: built-in floor',
+    'origin': '*',
+    'dest': '*',
+    'bidirectional': True,
+    'chains_all': True,
+    'chains': set(),
+    'layers': {
+        'swaps': {'kind': 'rolling', 'days': 3},
+        'liquidity_pool': {'kind': 'rolling', 'days': 32},
+    },
+    'idx': 0,
+}
 
 
 def _parse_date(value: Any, path: str) -> date:
@@ -125,10 +157,10 @@ def _parse_chains(value: Any) -> Tuple[bool, set]:
 def load_goal_state(config_path: Optional[str] = None) -> Dict[str, Any]:
     """Load and normalize ``config/ods-goal-state.yaml``.
 
-    Returns ``{'defaults': {...}, 'requirements': [...]}`` with every window
-    parsed and every side resolved against the coin tables. Raises ValueError
-    on malformed content; falls back to empty requirements + built-in global
-    defaults when the file cannot be found.
+    Returns ``{'requirements': [...], 'config_path': path}`` with every window
+    parsed. Raises ValueError on malformed content; falls back to a single
+    built-in base requirement (swaps 3d, liquidity_pool 32d) when the file
+    cannot be found.
     """
     import yaml
 
@@ -139,36 +171,18 @@ def load_goal_state(config_path: Optional[str] = None) -> Dict[str, Any]:
                 path = candidate
                 break
     if path is None or not os.path.exists(path):
-        log.warning(f"Goal-state config not found; using built-in defaults (no requirements)")
-        return {'defaults': dict(GLOBAL_DEFAULTS), 'requirements': [], 'config_path': path}
+        log.warning("Goal-state config not found; using built-in base floor (no O&D requirements)")
+        return {'requirements': [dict(FALLBACK_BASE_REQUIREMENT)], 'config_path': path}
 
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
     log.debug(f"Loaded goal-state config from {path}")
 
-    defaults_raw = raw.get('defaults', {}) or {}
-    defaults = {layer: parse_window(GLOBAL_DEFAULTS[layer], f"defaults.{layer}") for layer in LAYERS}
-    for layer in LAYERS:
-        if layer in defaults_raw:
-            defaults[layer] = parse_window(defaults_raw.get(layer), f"defaults.{layer}")
-    per_chain: List[Dict[str, Any]] = []
-    for row in defaults_raw.get('per_chain', []) or []:
-        chain = row.get('chain')
-        if not chain:
-            raise ValueError("defaults.per_chain: each entry needs a 'chain'")
-        entry: Dict[str, Any] = {'chain': str(chain).lower(), 'layers': {}}
-        for layer in LAYERS:
-            if layer in row:
-                entry['layers'][layer] = parse_window(row.get(layer), f"defaults.per_chain.{chain}.{layer}")
-        per_chain.append(entry)
-
     requirements: List[Dict[str, Any]] = []
     for idx, row in enumerate(raw.get('requirements', []) or []):
-        req = _normalize_requirement(row, idx)
-        requirements.append(req)
+        requirements.append(_normalize_requirement(row, idx))
 
-    return {'defaults': defaults, 'per_chain': per_chain,
-            'requirements': requirements, 'config_path': path}
+    return {'requirements': requirements, 'config_path': path}
 
 
 def _normalize_requirement(row: Dict[str, Any], idx: int) -> Dict[str, Any]:
@@ -179,9 +193,7 @@ def _normalize_requirement(row: Dict[str, Any], idx: int) -> Dict[str, Any]:
         if not row.get(key):
             raise ValueError(f"requirements[{idx}]: missing '{key}'")
     wild_all, chains = _parse_chains(row.get('chains'))
-    direction = str(row.get('direction', 'both')).strip().lower()
-    if direction not in ('both', 'forward'):
-        raise ValueError(f"requirements[{idx}].direction: expected 'both' or 'forward', got {direction!r}")
+    bidirectional = bool(row.get('bidirectional', True))
 
     layers: Dict[str, Dict[str, Any]] = {}
     for layer in LAYERS:
@@ -194,12 +206,24 @@ def _normalize_requirement(row: Dict[str, Any], idx: int) -> Dict[str, Any]:
         'name': str(name),
         'origin': str(row['origin']).strip(),
         'dest': str(row['dest']).strip(),
-        'direction': direction,
+        'bidirectional': bidirectional,
         'chains_all': wild_all,
         'chains': chains,
         'layers': layers,
         'idx': idx,
     }
+
+
+def is_floor_requirement(req: Dict[str, Any]) -> bool:
+    """True when a requirement is a *floor* (both sides wild).
+
+    Floors fall out of the cascade naturally: ``origin:"*"`` / ``dest:"*"``
+    match every pair, so any more-specific requirement overrides them. They
+    additionally define the per-chain floors for unclassified raw swaps.
+    """
+    origin = str(req.get('origin', '')).strip()
+    dest = str(req.get('dest', '')).strip()
+    return origin in ('*', '') and dest in ('*', '')
 
 
 # --------------------------------------------------------------------------
@@ -296,7 +320,7 @@ def rule_matches_pair(req: Dict[str, Any], pair: Dict[str, Any]) -> bool:
                             pair.get('origin_coin_id'))
                and side_matches(req['_dest'], pair.get('dest_contract'), pair.get('dest_symbol'),
                                 pair.get('dest_coin_id')))
-    if req['direction'] == 'forward':
+    if not req.get('bidirectional', True):
         return forward
     reversed_ = (side_matches(req['_origin'], pair.get('dest_contract'), pair.get('dest_symbol'),
                               pair.get('dest_coin_id'))
@@ -318,9 +342,9 @@ def effective_window(pair: Dict[str, Any], layer: str, goal: Dict[str, Any],
                      today: date) -> Tuple[Optional[date], Optional[date]]:
     """Return the inclusive (start, end) keep-window for the pair + layer.
 
-    The most-specific requirement wins; otherwise the applicable default floor
-    (per-chain override first, then global). A ``(None, None)`` result means
-    the layer has no floor for this pair — every row is a delete candidate.
+    The most-specific requirement wins; a layer no requirement (base or
+    otherwise) covers is "unclaimed" and returns ``(None, None)`` — every row
+    is a delete candidate.
     """
     best: Optional[Dict[str, Any]] = None
     best_key: Optional[Tuple] = None
@@ -335,19 +359,12 @@ def effective_window(pair: Dict[str, Any], layer: str, goal: Dict[str, Any],
             best = req
     if best is not None:
         return window_resolve(best['layers'][layer], today)
+    return (None, None)
 
-    chain = (pair.get('chain') or '').lower()
-    floor: Optional[Dict[str, Any]] = None
-    for entry in goal.get('per_chain', []):
-        if entry['chain'] == chain and layer in entry['layers']:
-            floor = entry['layers'][layer]
-            break
-    if floor is None:
-        floor = goal['defaults'].get(layer)
-    resolved = window_resolve(floor, today)
-    if resolved is None:
-        return (None, None)
-    return resolved
+
+def base_requirements(goal: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The goal's floor rules: requirements whose sides are both wild."""
+    return [r for r in goal.get('requirements', []) if is_floor_requirement(r)]
 
 
 # --------------------------------------------------------------------------
@@ -396,49 +413,79 @@ def _pool_ids_for_pairs(conn, pair_ids: List[int]) -> List[int]:
 # Coverage checks
 # --------------------------------------------------------------------------
 
-def _coverage_days(conn, layer: str, pair_ids: List[int], pool_ids: List[int],
+def _coverage_days(conn, layer: str, pair_ids, pool_ids,
                    start: date, end: date) -> set:
-    if not pair_ids:
+    """Distinct days with data for the given pairs/pools.
+
+    ``pair_ids``/``pool_ids`` of ``None`` means "any pair/pool" (used for base
+    requirements, which cover every pair — avoids a giant ``ANY(...)`` list).
+    Empty list means no matches -> empty coverage.
+    """
+    pair_pred = ''
+    pair_args: tuple = ()
+    if pair_ids is None:
+        pass
+    elif pair_ids:
+        pair_pred = ' AND r.pair_id = ANY(%s)'
+        pair_args = (pair_ids,)
+    else:
         return set()
     with conn.cursor() as cur:
         if layer == 'route_daily_stats':
-            cur.execute("""
+            cur.execute(f"""
                 SELECT DISTINCT rs.day
                 FROM route_daily_stats rs
                 JOIN route r ON rs.route_id = r.route_id
-                WHERE r.pair_id = ANY(%s) AND rs.day BETWEEN %s AND %s
-            """, (pair_ids, start, end))
+                WHERE rs.day BETWEEN %s AND %s{pair_pred}
+            """, (start, end) + pair_args)
         elif layer == 'route_daily_stats_bucket':
-            cur.execute("""
+            cur.execute(f"""
                 SELECT DISTINCT rb.day
                 FROM route_daily_stats_bucket rb
                 JOIN route r ON rb.route_id = r.route_id
-                WHERE r.pair_id = ANY(%s) AND rb.day BETWEEN %s AND %s
-            """, (pair_ids, start, end))
+                WHERE rb.day BETWEEN %s AND %s{pair_pred}
+            """, (start, end) + pair_args)
         elif layer == 'swaps':
-            cur.execute("""
-                SELECT DISTINCT s.ts::date AS day
-                FROM swaps s
-                JOIN route r ON s.route_id = r.route_id
-                WHERE r.pair_id = ANY(%s) AND s.ts::date BETWEEN %s AND %s
-            """, (pair_ids, start, end))
-        elif layer == 'liquidity_pool':
-            days: set = set()
-            if pool_ids:
+            end_ex = end + timedelta(days=1)
+            if pair_ids is None:
+                # Base coverage: all classified swaps, no route/pair join needed.
+                # Raw ts range lets the ts/partial index prune instead of
+                # casting ts::date (which defeats partition pruning).
                 cur.execute("""
-                    SELECT DISTINCT ld.day
-                    FROM liquidity_pool_daily_stats ld
-                    WHERE ld.pool_id = ANY(%s) AND ld.day BETWEEN %s AND %s
-                """, (pool_ids, start, end))
-                days.update(r[0] for r in cur.fetchall())
-                cur.execute("""
+                    SELECT DISTINCT s.ts::date AS day
+                    FROM swaps s
+                    WHERE s.route_id IS NOT NULL AND s.ts >= %s AND s.ts < %s
+                """, (start, end_ex))
+            else:
+                cur.execute(f"""
+                    SELECT DISTINCT s.ts::date AS day
+                    FROM swaps s
+                    JOIN route r ON s.route_id = r.route_id
+                    WHERE s.ts >= %s AND s.ts < %s{pair_pred}
+                """, (start, end_ex) + pair_args)
+        elif layer in LP_LAYERS:
+            if pool_ids is not None and not pool_ids:
+                return set()
+            pool_pred = ''
+            pool_args: tuple = ()
+            if pool_ids is not None:
+                pool_pred = ' AND p.pool_id = ANY(%s)' if layer == 'liquidity_pool' else ' AND t.pool_id = ANY(%s)'
+                pool_args = (pool_ids,)
+            if layer == 'liquidity_pool':
+                # Position snapshots for the pools.
+                cur.execute(f"""
                     SELECT DISTINCT ps.timestamp::date AS day
                     FROM liquidity_pool_position_snapshot ps
                     JOIN liquidity_pool_position p ON ps.position_id = p.id
-                    WHERE p.pool_id = ANY(%s) AND ps.timestamp::date BETWEEN %s AND %s
-                """, (pool_ids, start, end))
-                days.update(r[0] for r in cur.fetchall())
-            return days
+                    WHERE ps.timestamp::date BETWEEN %s AND %s{pool_pred}
+                """, (start, end) + pool_args)
+            else:
+                cur.execute(f"""
+                    SELECT DISTINCT t.day
+                    FROM {_lp_table(layer)} t
+                    WHERE t.day BETWEEN %s AND %s{pool_pred}
+                """, (start, end) + pool_args)
+            return {r[0] for r in cur.fetchall()}
         else:
             return set()
         return {r[0] for r in cur.fetchall()}
@@ -453,6 +500,19 @@ def _expected_days(start: date, end: date) -> set:
         out.add(d)
         d += timedelta(days=1)
     return out
+
+
+def _window_label(win: Optional[Dict[str, Any]]) -> str:
+    """Human-readable requirement label for a layer's parsed window spec."""
+    if not win:
+        return '—'
+    if win['kind'] == 'rolling':
+        return f"last {win['days']}d"
+    start = win['start']
+    end = win.get('end')
+    if end is None:
+        return f"since {start.isoformat()}"
+    return f"{start.isoformat()}..{end.isoformat()}"
 
 
 def _check_status(present: set, expected: set, start: date, end: date, today: date) -> str:
@@ -476,9 +536,16 @@ def run_checks(conn, goal: Dict[str, Any], today: Optional[date] = None) -> List
     report: List[Dict[str, Any]] = []
 
     for req in reqs:
-        matched = [p for p in pairs if rule_matches_pair(req, p)]
-        pair_ids = [p['pair_id'] for p in matched]
-        pool_ids = _pool_ids_for_pairs(conn, pair_ids)
+        is_base = is_floor_requirement(req)
+        if is_base:
+            # Base requirements cover every pair; skip the giant ANY(...) list.
+            matched = pairs
+            pair_ids = None
+            pool_ids = None
+        else:
+            matched = [p for p in pairs if rule_matches_pair(req, p)]
+            pair_ids = [p['pair_id'] for p in matched]
+            pool_ids = _pool_ids_for_pairs(conn, pair_ids)
         for layer in LAYERS:
             win = req['layers'].get(layer)
             if win is None:
@@ -494,10 +561,12 @@ def run_checks(conn, goal: Dict[str, Any], today: Optional[date] = None) -> List
                 'name': req['name'],
                 'origin': req['origin'],
                 'dest': req['dest'],
-                'direction': req['direction'],
+                'bidirectional': bool(req.get('bidirectional', True)),
                 'chains': '*' if req['chains_all'] else sorted(req['chains']),
+                'base': is_floor_requirement(req),
                 'layer': layer,
                 'window': {'start': start.isoformat(), 'end': end.isoformat()},
+                'window_label': _window_label(win),
                 'pairs': len(matched),
                 'expected_days': len(expected),
                 'present_days': len(present),
@@ -620,9 +689,10 @@ def _prune_swaps(conn, pairs, goal, today, batch) -> Dict[str, int]:
         """
         total += _delete_batched(conn, sql, args, batch)
 
-    # Unclassified rows (route_id IS NULL): apply the per-chain default floor.
-    # They cannot be attributed to an O&D set, so only the chain floor governs
-    # them (this replaces the old network/protocol retention mechanism).
+    # Unclassified rows (route_id IS NULL): apply the per-chain base floor.
+    # They cannot be attributed to an O&D set, so only the base requirement's
+    # swaps window governs them (this replaces the old network/protocol
+    # retention mechanism).
     floors = _window_row_for_unclassified(conn, goal, today)
     for chain, (start, end) in floors.items():
         args = (chain,)
@@ -650,88 +720,116 @@ def _prune_swaps(conn, pairs, goal, today, batch) -> Dict[str, int]:
 
 
 def _window_row_for_unclassified(conn, goal, today) -> Dict[str, Tuple[Optional[date], Optional[date]]]:
-    """Per-chain floor windows for unclassified raw-swap rows (all chains)."""
-    default_win = window_resolve(goal['defaults'].get('swaps'), today)
-    per_chain = {e['chain']: e['layers'].get('swaps') for e in goal.get('per_chain', [])}
+    """Per-chain floor windows for unclassified raw-swap rows (all chains).
+
+    Unclassified swaps (``route_id IS NULL``) cannot be attributed to any O&D
+    set, so they are governed only by the ``swaps`` window of the *base*
+    requirements: a chain-specific base overrides the global base (same
+    override cascade; tie -> later rule wins).
+    """
+    bases = base_requirements(goal)
     with conn.cursor() as cur:
         cur.execute("SELECT DISTINCT LOWER(ch.name) FROM chain ch")
         chains = [r[0] for r in cur.fetchall()]
     out: Dict[str, Tuple[Optional[date], Optional[date]]] = {}
     for chain in chains:
-        floor = per_chain.get(chain)
-        win = window_resolve(floor, today) if floor else default_win
-        out[chain] = win if win else (None, None)
+        floor: Optional[Dict[str, Any]] = None
+        floor_key: Optional[Tuple] = None
+        for req in bases:
+            win = req['layers'].get('swaps')
+            if win is None:
+                continue
+            if not req['chains_all'] and chain not in req['chains']:
+                continue
+            key = (0 if req['chains_all'] else 1, req['idx'])
+            if floor is None or key > floor_key:
+                floor = win
+                floor_key = key
+        resolved = window_resolve(floor, today) if floor else None
+        out[chain] = resolved if resolved else (None, None)
     return out
 
 
-def _prune_liquidity_pool(conn, pairs, goal, today, batch) -> Dict[str, int]:
-    # Effective window per pool: most-specific requirement that uses the pool,
-    # else the global liquidity_pool default.
-    from collections import defaultdict as dd
+def _layer_pool_windows(conn, pairs, goal, today, layer: str) -> Dict[int, Tuple[Optional[date], Optional[date]]]:
+    """Most-specific requirement's window per used pool for an LP layer.
+
+    Base requirements (wild on both sides) act as the floor for pools no
+    specific requirement covers; a pool with no governing requirement at all
+    maps to ``(None, None)`` (everything deletable).
+    """
     pool_win: Dict[int, Tuple[Optional[date], Optional[date]]] = {}
     pool_spec: Dict[int, Tuple] = {}
-    pool_default = window_resolve(goal['defaults'].get('liquidity_pool'), today) or (None, None)
 
     for req in goal['requirements']:
-        win = req['layers'].get('liquidity_pool')
+        win = req['layers'].get(layer)
         if win is None:
             continue
         matched = [p for p in pairs if rule_matches_pair(req, p)]
         pair_ids = [p['pair_id'] for p in matched]
         pool_ids = _pool_ids_for_pairs(conn, pair_ids)
         resolved = window_resolve(win, today)
-        key = rule_specificity(req, 'liquidity_pool')
+        key = rule_specificity(req, layer)
         for pid in pool_ids:
             if pool_spec.get(pid, None) is None or key > pool_spec[pid]:
                 pool_spec[pid] = key
                 pool_win[pid] = resolved
+    return pool_win
+
+
+def _prune_lp_layer(conn, pairs, goal, today, batch, layer: str) -> int:
+    """Prune one LP layer's table outside each used pool's keep-window."""
+    from collections import defaultdict as dd
+    pool_win = _layer_pool_windows(conn, pairs, goal, today, layer)
 
     groups: Dict[Tuple, List[int]] = dd(list)
     key_to_win: Dict[Tuple, Tuple[Optional[date], Optional[date]]] = {}
-    # Leftover pools (used by some route but in no liquidity_pool requirement)
-    # get the default floor.
+    # Leftover pools (used by some route but covered by no requirement) are
+    # unclaimed -> everything is a deletion candidate.
     with conn.cursor() as cur:
-        cur.execute("""
-            SELECT DISTINCT h.pool_id
-            FROM route_hop h
-        """)
+        cur.execute("SELECT DISTINCT h.pool_id FROM route_hop h")
         used = [r[0] for r in cur.fetchall()]
     for pid in used:
-        win = pool_win.get(pid, pool_default)
+        win = pool_win.get(pid, (None, None))
         key = (win[0].isoformat() if win[0] else None, win[1].isoformat() if win[1] else None)
         groups[key].append(pid)
         key_to_win[key] = (win[0], win[1])
 
     total = 0
-    for key, pool_ids in groups.items():
-        if not pool_ids:
-            continue
-        start, end = key_to_win[key]
-        pred, args = _window_pred('t2.day', 't2', start, end)
-        pred_sql = " OR ".join(pred)
-        sql = f"""
-            DELETE FROM liquidity_pool_daily_stats t
-            WHERE t.ctid IN (
-                SELECT t2.ctid FROM liquidity_pool_daily_stats t2
-                WHERE t2.pool_id = ANY(%s) AND ({pred_sql})
-                LIMIT %s
-            )
-        """
-        total += _delete_batched(conn, sql, (pool_ids,) + args, batch)
-        # Position snapshots for the same pools.
-        pred2, args2 = _window_pred('ps2.timestamp::date', 'ps2', start, end)
-        pred2_sql = " OR ".join(pred2)
-        sql2 = f"""
-            DELETE FROM liquidity_pool_position_snapshot ps
-            WHERE ps.ctid IN (
-                SELECT ps2.ctid FROM liquidity_pool_position_snapshot ps2
-                JOIN liquidity_pool_position p ON ps2.position_id = p.id
-                WHERE p.pool_id = ANY(%s) AND ({pred2_sql})
-                LIMIT %s
-            )
-        """
-        total += _delete_batched(conn, sql2, (pool_ids,) + args2, batch)
-    return {'liquidity_pool': total}
+    if layer == 'liquidity_pool':
+        for key, pool_ids in groups.items():
+            if not pool_ids:
+                continue
+            start, end = key_to_win[key]
+            pred, args = _window_pred('ps2.timestamp::date', 'ps2', start, end)
+            pred_sql = " OR ".join(pred)
+            sql = f"""
+                DELETE FROM liquidity_pool_position_snapshot ps
+                WHERE ps.ctid IN (
+                    SELECT ps2.ctid FROM liquidity_pool_position_snapshot ps2
+                    JOIN liquidity_pool_position p ON ps2.position_id = p.id
+                    WHERE p.pool_id = ANY(%s) AND ({pred_sql})
+                    LIMIT %s
+                )
+            """
+            total += _delete_batched(conn, sql, (pool_ids,) + args, batch)
+    else:
+        table = _lp_table(layer)
+        for key, pool_ids in groups.items():
+            if not pool_ids:
+                continue
+            start, end = key_to_win[key]
+            pred, args = _window_pred('t2.day', 't2', start, end)
+            pred_sql = " OR ".join(pred)
+            sql = f"""
+                DELETE FROM {table} t
+                WHERE t.ctid IN (
+                    SELECT t2.ctid FROM {table} t2
+                    WHERE t2.pool_id = ANY(%s) AND ({pred_sql})
+                    LIMIT %s
+                )
+            """
+            total += _delete_batched(conn, sql, (pool_ids,) + args, batch)
+    return total
 
 
 def _verify_no_inwindow_casualties(pairs, goal, today) -> None:
@@ -745,6 +843,12 @@ def _verify_no_inwindow_casualties(pairs, goal, today) -> None:
     """
     from copy import deepcopy as _dc
     for req in goal.get('requirements', []):
+        # Floor requirements (wild on both sides) are *meant* to be overridden
+        # by more specific requirements (which may intentionally narrow the
+        # window, e.g. an exact bounded window inside a 180-day floor), so skip
+        # them here.
+        if is_floor_requirement(req):
+            continue
         if not req.get('layers'):
             continue
         for layer, win in req['layers'].items():
@@ -781,8 +885,7 @@ def prune(conn, goal: Dict[str, Any], today: Optional[date] = None,
     pairs = fetch_pairs(conn)
     goal = dict(goal)
     goal['requirements'] = _resolve_sides(conn, goal.get('requirements') or [])
-    layer_counts: Dict[str, int] = {'swaps': 0, 'route_daily_stats': 0,
-                                    'route_daily_stats_bucket': 0, 'liquidity_pool': 0}
+    layer_counts: Dict[str, int] = {layer: 0 for layer in LAYERS}
 
     if not dry_run:
         _verify_no_inwindow_casualties(pairs, goal, today)
@@ -794,15 +897,17 @@ def prune(conn, goal: Dict[str, Any], today: Optional[date] = None,
         layer_counts.update(_prune_swaps(conn, pairs, goal, today, batch))
         log_fn(f"pruned swaps: {layer_counts['swaps']} rows")
 
-        layer_counts.update(_prune_liquidity_pool(conn, pairs, goal, today, batch))
-        log_fn(f"pruned liquidity_pool: {layer_counts['liquidity_pool']} rows")
+        for layer in LP_LAYERS:
+            layer_counts[layer] = _prune_lp_layer(conn, pairs, goal, today, batch, layer)
+            log_fn(f"pruned {layer}: {layer_counts[layer]} rows")
 
     # Estimate (dry-run) counts too, cheaply.
     if dry_run:
         counts = {'swaps': _count_deletable(conn, pairs, goal, today, 'swaps'),
                   'route_daily_stats': _count_deletable(conn, pairs, goal, today, 'route_daily_stats'),
-                  'route_daily_stats_bucket': _count_deletable(conn, pairs, goal, today, 'route_daily_stats_bucket'),
-                  'liquidity_pool': _count_lp_deletable(conn, pairs, goal, today)}
+                  'route_daily_stats_bucket': _count_deletable(conn, pairs, goal, today, 'route_daily_stats_bucket')}
+        for layer in LP_LAYERS:
+            counts[layer] = _count_lp_deletable(conn, pairs, goal, today, layer)
         layer_counts.update(counts)
 
     return {'dry_run': dry_run, 'rows': layer_counts, 'vacuum': not dry_run}
@@ -854,27 +959,34 @@ def _count_deletable(conn, pairs, goal, today, layer) -> int:
     return 0
 
 
-def _count_lp_deletable(conn, pairs, goal, today) -> int:
+def _count_lp_deletable(conn, pairs, goal, today, layer: str) -> int:
+    pool_win = _layer_pool_windows(conn, pairs, goal, today, layer)
     total = 0
     with conn.cursor() as cur:
         cur.execute("SELECT DISTINCT h.pool_id FROM route_hop h")
         pool_ids = [r[0] for r in cur.fetchall()]
-    default = window_resolve(goal['defaults'].get('liquidity_pool'), today) or (None, None)
-    pool_win = {pid: default for pid in pool_ids}
-    for req in goal['requirements']:
-        win = req['layers'].get('liquidity_pool')
-        if win is None:
-            continue
-        matched = [p for p in pairs if rule_matches_pair(req, p)]
-        for pid in _pool_ids_for_pairs(conn, [p['pair_id'] for p in matched]):
-            pool_win[pid] = window_resolve(win, today)
-    with conn.cursor() as cur:
-        for pid, (start, end) in pool_win.items():
-            pred, args = _window_pred('t.day', 't', start, end)
-            if not pred:
-                continue
-            cur.execute(f"SELECT COUNT(*) FROM liquidity_pool_daily_stats t WHERE t.pool_id = %s AND ({' OR '.join(pred)})", (pid,) + args)
-            total += cur.fetchone()[0]
+        if layer == 'liquidity_pool':
+            col = 'ps.timestamp::date'
+            for pid in pool_ids:
+                start, end = pool_win.get(pid, (None, None))
+                pred, args = _window_pred(col, 'ps', start, end)
+                if not pred:
+                    continue
+                cur.execute(
+                    f"SELECT COUNT(*) FROM liquidity_pool_position_snapshot ps "
+                    f"JOIN liquidity_pool_position p ON ps.position_id = p.id "
+                    f"WHERE p.pool_id = %s AND ({' OR '.join(pred)})", (pid,) + args)
+                total += cur.fetchone()[0]
+        else:
+            col = 't.day'
+            table = _lp_table(layer)
+            for pid in pool_ids:
+                start, end = pool_win.get(pid, (None, None))
+                pred, args = _window_pred(col, 't', start, end)
+                if not pred:
+                    continue
+                cur.execute(f"SELECT COUNT(*) FROM {table} t WHERE t.pool_id = %s AND ({' OR '.join(pred)})", (pid,) + args)
+                total += cur.fetchone()[0]
     return total
 
 

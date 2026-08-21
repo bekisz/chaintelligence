@@ -24,6 +24,7 @@ from include.od_retention import (
     export_gaps,
     prune,
     backfill_missing_daily_stats,
+    is_floor_requirement,
 )
 
 BATCH_SIZE = 10000
@@ -44,8 +45,10 @@ def run_goal_state_checks(**context):
         dry_run = dry_run.lower() in ('true', '1', 'yes')
 
     goal = load_goal_state()
-    logging.info("Loaded goal-state: %s requirements, %s default layers",
-                 len(goal['requirements']), list(goal['defaults'].keys()))
+    logging.info("Loaded goal-state: %s requirements (%s base floors, %s O&D sets)",
+                 len(goal['requirements']),
+                 sum(1 for r in goal['requirements'] if is_floor_requirement(r)),
+                 sum(1 for r in goal['requirements'] if not is_floor_requirement(r)))
 
     conn = connect()
     try:
