@@ -39,7 +39,7 @@ def _claim_batch(conn):
             SELECT tx_hash
             FROM route_classification_queue
             WHERE status = 'pending' AND available_at <= NOW()
-            ORDER BY available_at, tx_hash
+            ORDER BY available_at DESC, tx_hash DESC
             FOR UPDATE SKIP LOCKED
             LIMIT %s
         """, (BATCH_SIZE,))
@@ -80,6 +80,12 @@ with DAG(
         affected_days = set()
         completed = 0
         failed = 0
+        # Share pair/route resolution caches across the whole run: the same
+        # (chain, origin, dest) pairs and (pair, pools) routes repeat constantly,
+        # and without these caches every tx re-resolves them from the DB (the
+        # dominant cost of classification). Populated per-batch, reused all run.
+        pair_cache = {}
+        route_cache = {}
         try:
             for _ in range(MAX_BATCHES_PER_RUN):
                 tx_hashes = _claim_batch(conn)
@@ -88,7 +94,10 @@ with DAG(
 
                 try:
                     with conn.cursor() as cur:
-                        _, days = classify_tx_hashes(cur, tx_hashes, table_name=RAW_SWAP_TABLE)
+                        _, days = classify_tx_hashes(cur, tx_hashes,
+                                                     pair_cache=pair_cache,
+                                                     route_cache=route_cache,
+                                                     table_name=RAW_SWAP_TABLE)
                     conn.commit()
                     affected_days.update(days)
 

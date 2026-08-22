@@ -81,6 +81,29 @@ def _networks_for_chain(chain) -> list:
     return out
 
 
+def _network_has_raw_swaps(conn, network: str, since_date, today) -> bool:
+    """True if any raw swap (classified or not) exists for a network from a date.
+
+    Used to distinguish a genuine data-missing gap from classification lag: if
+    raw swaps are already present, re-fetching from The Graph would be wasted
+    work — the gap just needs classification to catch up.
+    """
+    from datetime import datetime, timedelta
+    end = today + timedelta(days=1)
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT EXISTS(
+                SELECT 1 FROM swaps s
+                JOIN liquidity_pool lp ON s.pool_id = lp.id
+                JOIN chain ch ON lp.chain_id = ch.id
+                WHERE LOWER(ch.name) = LOWER(%s)
+                  AND s.ts >= %s AND s.ts < %s
+                LIMIT 1
+            )
+        """, (network, since_date.isoformat(), end.isoformat()))
+        return bool(cur.fetchone()[0])
+
+
 @task
 def compute_backfill_plan(**context):
     params = context.get('params', {})
@@ -108,11 +131,30 @@ def compute_backfill_plan(**context):
             if net not in oldest_per_net or f < oldest_per_net[net]:
                 oldest_per_net[net] = f
 
-    specs = []
+    # A swaps coverage gap can be classification lag rather than missing raw
+    # data. Only re-ingest a network when raw swaps (classified OR unclassified)
+    # are actually absent from its gap window, otherwise re-fetching would never
+    # converge (it would just keep re-adding already-present swaps while the
+    # classifier catches up). 
+    missing_nets = {}
     if oldest_per_net:
+        conn2 = connect()
+        try:
+            for net, min_from in oldest_per_net.items():
+                if not _network_has_raw_swaps(conn2, net, min_from, today):
+                    missing_nets[net] = min_from
+                    logging.info("  %s: raw swaps MISSING since %s -> will backfill",
+                                 net, min_from)
+                else:
+                    logging.info("  %s: raw swaps PRESENT (classification lag) -> skip re-fetch", net)
+        finally:
+            conn2.close()
+
+    specs = []
+    if missing_nets:
         for net, conf_key, dag_id in SWAP_DAGS:
-            if net in oldest_per_net:
-                days = min((today - oldest_per_net[net]).days + 1, cap)
+            if net in missing_nets:
+                days = min((today - missing_nets[net]).days + 1, cap)
                 specs.append({'trigger_dag_id': dag_id,
                               'conf': {'backfill_days': {conf_key: days}}})
     if swaps_gaps or other_gaps:
