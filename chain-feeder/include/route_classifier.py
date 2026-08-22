@@ -17,6 +17,7 @@ import logging
 import csv
 import io
 import hashlib
+import os
 from collections import defaultdict
 from typing import Dict, List, Optional
 import psycopg2.extras
@@ -30,6 +31,23 @@ log = logging.getLogger(__name__)
 
 LEG_AMOUNT_GATE = "(amount_usd >= 10.0 OR amount_usd = 0.0 OR amount_usd IS NULL)"
 ROUTE_WRITE_LOCK = "chaintelligence.route-dimension-write"
+
+
+def _get_dsn() -> str:
+    """Warehouse DSN for worker-process connections (parallel reconstruction)."""
+    dsn = os.environ.get('DATA_WAREHOUSE_DB', '')
+    if dsn:
+        return dsn
+    try:
+        from common.utils.config import DATA_WAREHOUSE_DB
+        return DATA_WAREHOUSE_DB
+    except Exception:
+        pass
+    try:
+        from include.settings import data_warehouse_dsn
+        return data_warehouse_dsn
+    except Exception:
+        raise RuntimeError("no DATA_WAREHOUSE_DB to build worker connections")
 
 # Canonical short-lived raw store for the switchover. Rollups and the
 # classification queue read from this instead of the legacy `swaps` table.
@@ -353,13 +371,23 @@ def collect_route_staging(cur, tx_hashes: List[str], table_name: str = 'swaps') 
     return list(candidates.values()), assignments, affected_days
 
 
-def merge_route_staging(cur, candidates: list[dict], assignments: list[dict], table_name: str = 'swaps') -> int:
-    """Merge staged route topology and assignments using set-based SQL."""
+def merge_route_staging(cur, candidates: list[dict], assignments: list[dict],
+                        table_name: str = 'swaps', chain_scope: Optional[int] = None) -> int:
+    """Merge staged route topology and assignments using set-based SQL.
+
+    ``chain_scope`` (a chain id) shards the route-write advisory lock per chain.
+    Routes never cross chains, so distinct chains can merge concurrently while
+    same-chain merges still serialize. Default (None) uses the global lock.
+    """
     if not candidates or not assignments:
         return 0
     # Coordinate with the live ingestion classifier. A transaction-level
     # advisory lock makes route dimension writes wait instead of deadlocking.
-    cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (ROUTE_WRITE_LOCK,))
+    if chain_scope is not None:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    (f"{ROUTE_WRITE_LOCK}:chain:{chain_scope}",))
+    else:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (ROUTE_WRITE_LOCK,))
     target_table = table_name.strip() if table_name and table_name.strip() else 'swaps'
     candidate_rows = []
     for c in candidates:
@@ -552,14 +580,103 @@ def classify_legs(cur, legs: List[Dict], pair_cache: Optional[Dict] = None,
 
 
 def classify_tx_hashes(cur, tx_hashes: List[str], pair_cache: Optional[Dict] = None,
-                       route_cache: Optional[Dict] = None, table_name: str = 'swaps') -> tuple[int, set[str]]:
-    """Pull legs for a set of tx hashes and classify them. Returns (count, affected_days). Idempotent."""
+                       route_cache: Optional[Dict] = None, table_name: str = 'swaps') -> tuple:
+    """Pull legs for a set of tx hashes and classify them.
+
+    Returns ``(legs_attributed, affected_days, dirty)`` where ``dirty`` carries
+    ``{'route_days': {(route_id, day)}, 'pool_days': {(pool_id, day)}}``.
+    Idempotent.
+    """
     if not tx_hashes:
-        return 0, set()
+        return 0, set(), {'route_days': set(), 'pool_days': set()}
     legs = _legs_for_txs(cur, tx_hashes, table_name=table_name)
     if not legs:
         return 0, set(), {'route_days': set(), 'pool_days': set()}
     return classify_legs(cur, legs, pair_cache=pair_cache, route_cache=route_cache, table_name=table_name)
+
+
+def classify_tx_hashes_batch(cur, tx_hashes: List[str], table_name: str = 'swaps'
+                             ) -> tuple[int, set, dict]:
+    """Set-based batch classification using collect_route_staging + merge.
+
+    Reconstruction (collect_route_staging) is read-only Python; the merge is a
+    short set-based SQL phase. Holds the route-write lock only during the SQL
+    merge, so a large batch keeps the Python work off the lock. Returns
+    ``(legs_updated, affected_days, dirty)`` like :func:`classify_tx_hashes`.
+    """
+    if not tx_hashes:
+        return 0, set(), {'route_days': set(), 'pool_days': set()}
+    candidates, assignments, days = collect_route_staging(cur, tx_hashes, table_name=table_name)
+    if not assignments:
+        return 0, days, {'route_days': set(), 'pool_days': set()}
+    updated = merge_route_staging(cur, candidates, assignments, table_name=table_name)
+    dirty = _dirty_from_staging(assignments, candidates)
+    return updated, days, dirty
+
+
+def classify_tx_hashes_sharded(cur, tx_hashes: List[str], table_name: str = 'swaps',
+                               workers: int = 1,
+                               pool=None) -> tuple[int, set, dict]:
+    """Chain/worker-sharded classifier.
+
+    Reconstructs route candidates in ``workers`` processes (each calling
+    ``collect_route_staging`` over a disjoint shard of tx hashes), then merges
+    all shards through set-based SQL. Reconstruction never holds the route-write
+    lock; merges run serially in the parent under the (global) lock.
+
+    ``pool`` may be a shared ``ProcessPoolExecutor``; if None one is created.
+    Returns ``(legs_updated, affected_days, dirty)``.
+    """
+    import concurrent.futures as _cf
+    from concurrent.futures import ProcessPoolExecutor
+
+    if not tx_hashes or workers <= 1:
+        return classify_tx_hashes_batch(cur, tx_hashes, table_name=table_name)
+
+    shards = [tx_hashes[i::workers] for i in range(workers)]
+    shards = [s for s in shards if s]
+
+    def _reconstruct_one(shard):
+        # Each handle opens its own read-only connection (mirrors backfill).
+        conn_own = psycopg2.connect(_get_dsn())
+        try:
+            with conn_own.cursor() as c:
+                cand, assign, days = collect_route_staging(c, shard, table_name=table_name)
+            conn_own.commit()
+            return cand, assign, days
+        finally:
+            conn_own.close()
+
+    owns_pool = pool is None
+    exec_ = pool or ProcessPoolExecutor(max_workers=workers)
+    try:
+        results = list(exec_.map(_reconstruct_one, shards))
+    finally:
+        if owns_pool:
+            exec_.shutdown(wait=True)
+
+    all_candidates = []
+    all_assignments = []
+    all_days = set()
+    for candidates, assignments, days in results:
+        all_candidates.extend(candidates)
+        all_assignments.extend(assignments)
+        all_days.update(days)
+
+    if not all_assignments:
+        return 0, all_days, {'route_days': set(), 'pool_days': set()}
+    updated = merge_route_staging(cur, all_candidates, all_assignments, table_name=table_name)
+    dirty = _dirty_from_staging(all_assignments)
+    return updated, all_days, dirty
+
+
+def _dirty_from_staging(assignments: list[dict]) -> dict:
+    """Derive dirty (route_id, day) / (pool, day) would need route_id; staging
+    assignments carry candidate_key (route identity) not ids. Return empty for
+    now — the legacy per-tx path records dirty directly; the batch path is
+    cleanly matched by the dirty_day_materializer scanning classified swaps.
+    """
+    return {'route_days': set(), 'pool_days': set()}
 
 
 def recompute_daily_stats(cur, days: List[str], chunk_days: int = 7, table_name: str = None) -> int:

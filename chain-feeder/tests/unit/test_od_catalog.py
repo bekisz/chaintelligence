@@ -65,6 +65,12 @@ class TestCatalogCompile(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_lp_set_product_registered(self):
+        from od_catalog import PRODUCTS
+        self.assertIn('lp.set.daily_stats', PRODUCTS)
+        self.assertEqual(PRODUCTS['lp.set.daily_stats'].physical_table, 'od_set_pool_daily_stats')
+        self.assertEqual(PRODUCTS['lp.set.daily_stats'].coverage_rule, 'present')
+
 
 class TestCoveragePlanner(unittest.TestCase):
     def _set(self, products=None, origin='WBTC', dest='USDC'):

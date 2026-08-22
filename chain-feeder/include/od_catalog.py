@@ -82,6 +82,12 @@ PRODUCTS: Dict[str, ProductDef] = {
     'pool.position_snapshots': ProductDef(
         'pool.position_snapshots', 'pool_day', requires_classification=True, durable=True,
         physical_table='liquidity_pool_position_snapshot', coverage_rule='present'),
+    # Set-level LP aggregate: per-O&D-set daily pool facts, counting a shared
+    # pool once per set/day. Derived from the universal pool daily stats through
+    # od_set_pool_member.
+    'lp.set.daily_stats': ProductDef(
+        'lp.set.daily_stats', 'set_pool_day', requires_classification=True, durable=True,
+        physical_table='od_set_pool_daily_stats', coverage_rule='present'),
 }
 
 
