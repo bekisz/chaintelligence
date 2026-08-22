@@ -136,30 +136,58 @@ def load_coverage_state(conn) -> CoverageState:
 
 
 def _load_from_swaps(conn, state: CoverageState) -> None:
-    """Best-effort: derive coverage from the live swaps/route tables.
+    """Best-effort coverage from durable, indexed tables (not a swaps scan).
 
     Used when the control-plane coverage ledger is empty (pre-population).
+    Raw presence is approximated from the ``ingestion_state`` watermark (a last
+    ingested timestamp per network) rather than scanning the huge swap tables.
+    Classified/product presence comes from ``route_daily_stats`` /
+    ``liquidity_pool_daily_stats``, which are exactly the durable read models and
+    are indexed by day.
     """
+    from datetime import datetime, timedelta, timezone
+    recent = (datetime.now(timezone.utc) - timedelta(days=14)).date()
     try:
         with conn.cursor() as cur:
+            # Raw presence: a network whose watermark is recent indicates swap
+            # logs are present for the last few days (no partitions scan).
+            cur.execute("SELECT network, last_ts FROM ingestion_state WHERE last_ts IS NOT NULL")
+            for network, last_ts in cur.fetchall():
+                chain = str(network).lower()
+                d = last_ts.date()
+                while d >= recent:
+                    state.raw_present.add((chain, d))
+                    d -= timedelta(days=1)
+
+            # Classified presence (route products): distinct (chain, day) with
+            # route_daily_stats rows.
             cur.execute("""
-                SELECT LOWER(ch.name), s.ts::date
-                FROM swaps s
-                JOIN liquidity_pool lp ON s.pool_id = lp.id
-                JOIN chain ch ON lp.chain_id = ch.id
-                WHERE s.ts >= NOW() - INTERVAL '30 days'
-                GROUP BY 1,2
-            """)
-            state.raw_present = {(r[0], r[1]) for r in cur.fetchall()}
+                SELECT LOWER(ch.name), rds.day
+                FROM route_daily_stats rds
+                JOIN route r ON r.route_id = rds.route_id
+                JOIN chain ch ON ch.id = r.chain_id
+                WHERE rds.day >= %s
+            """, (recent,))
+            for ch, day in cur.fetchall():
+                key = (ch.lower(), day)
+                state.classified.add(key)
+                state.product_present.setdefault('route.daily_stats', set()).add(key)
+                state.product_present.setdefault('route.daily_stats_buckets', set()).add(key)
+                state.product_present.setdefault('route.swap_logs', set()).add(key)
+
+            # LP product presence.
             cur.execute("""
-                SELECT LOWER(ch.name), s.ts::date
-                FROM swaps s
-                JOIN liquidity_pool lp ON s.pool_id = lp.id
-                JOIN chain ch ON lp.chain_id = ch.id
-                WHERE s.route_id IS NOT NULL AND s.ts >= NOW() - INTERVAL '90 days'
-                GROUP BY 1,2
-            """)
-            state.classified = {(r[0], r[1]) for r in cur.fetchall()}
+                SELECT LOWER(ch.name), lds.day
+                FROM liquidity_pool_daily_stats lds
+                JOIN liquidity_pool lp ON lp.id = lds.pool_id
+                JOIN chain ch ON ch.id = lp.chain_id
+                WHERE lds.day >= %s
+            """, (recent,))
+            for ch, day in cur.fetchall():
+                key = (ch.lower(), day)
+                state.product_present.setdefault('pool.daily_stats', set()).add(key)
+                state.product_present.setdefault('pool.daily_stats_buckets', set()).add(key)
+                state.product_present.setdefault('pool.position_snapshots', set()).add(key)
     except Exception:
         pass
 
