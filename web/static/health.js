@@ -646,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Per-set table: rows = requirement, columns = product ---
         const PRODUCT_ORDER = [
-            'route.swap_logs', 'route.daily_stats', 'route.daily_stats_buckets',
+            'route.daily_stats', 'route.daily_stats_buckets',
             'pool.daily_stats', 'pool.daily_stats_buckets', 'pool.position_snapshots',
         ];
 
@@ -659,15 +659,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sets.some(s => s._prodMap && s._prodMap[pid])) usedProducts.push(pid);
         });
 
+        // Group products into Route / Pool families for a two-tier header.
+        const GROUP_LABEL = { 'Route': 'route', 'Pool': 'pool' };
+        const groupOf = (pid) => pid.startsWith('route') ? 'Route' : 'Pool';
+        const routeProducts = usedProducts.filter(p => groupOf(p) === 'Route' && p !== 'route.swap_logs');
+        const poolProducts = usedProducts.filter(p => groupOf(p) === 'Pool');
+
         html += `
             <table class="indexer-matrix-table ods-goal-state-table ods-recon-table">
                 <thead>
                     <tr>
-                        <th style="text-align:left;">Requirement</th>
-                        <th style="text-align:left;">O&amp;D Set Part</th>
-                        <th style="text-align:left;">Chain</th>
-                        ${usedProducts.map(p => `<th style="text-align:center;">${p}</th>`).join('')}
-                        <th style="text-align:center;">Progress</th>
+                        <th rowspan="2" style="text-align:left;">Requirement</th>
+                        <th rowspan="2" style="text-align:left;">O&amp;D Set Part</th>
+                        <th rowspan="2" style="text-align:left;">Chain</th>
+                        <th rowspan="2" style="text-align:center;">Swap Fetch</th>
+                        ${routeProducts.length ? `<th colspan="${routeProducts.length}" style="text-align:center;">Route</th>` : ''}
+                        ${poolProducts.length ? `<th colspan="${poolProducts.length}" style="text-align:center;">Pool</th>` : ''}
+                        <th rowspan="2" style="text-align:center;">Progress</th>
+                    </tr>
+                    <tr>
+                        ${routeProducts.map(p => `<th style="text-align:center; font-size:0.66rem; white-space:nowrap;">${p.replace('route.', '')}</th>`).join('')}
+                        ${poolProducts.map(p => `<th style="text-align:center; font-size:0.66rem; white-space:nowrap;">${p.replace('pool.', '')}</th>`).join('')}
                     </tr>
                 </thead>
                 <tbody>
@@ -676,6 +688,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const st = STAGE_META[s.stage] || STAGE_META.FETCH;
             const progress = s.progress || 0;
             const g = { origin: s.origin, dest: s.dest, bidirectional: true, chains: s.chains };
+            const swapLogs = (s._prodMap || {})['route.swap_logs'];
+            const swapFetch = swapLogs ? (swapLogs.fetch || 0) : null;
+            const swapFetchChip = swapFetch === null ? '<span class="dim-text">—</span>'
+                : swapFetch === 0
+                    ? `<span class="ods-stage-chip stage-met" title="raw present">met</span>`
+                    : `<span class="ods-stage-chip stage-fetch" title="raw missing: ${swapFetch} day(s)">fetch ${swapFetch}</span>`;
             html += `
                 <tr>
                     <td style="text-align:left; font-weight:700; color:#f3f4f6;">
@@ -684,6 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td style="text-align:left;">${odsSetPartHtml(g)}</td>
                     <td style="text-align:left;">${odsChainsHtml(g.chains)}</td>
+                    <td style="text-align:center;">${swapFetchChip}</td>
                     ${usedProducts.map(pid => {
                         const p = (s._prodMap || {})[pid];
                         if (!p) return `<td style="text-align:center;" class="dim-text">—</td>`;
