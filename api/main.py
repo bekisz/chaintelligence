@@ -4031,10 +4031,21 @@ def _compute_recon_body() -> dict:
         for cs in cat['sets']:
             rows = plan_requirement(cs, state, today)
             per_product: Dict[str, dict] = {}
+            # Union of all required (chain,day) and those with raw present (action != FETCH)
+            required_days = set()
+            present_days = set()
             for r in rows:
+                key = (r['chain'], r['day'])
+                required_days.add(key)
+                if r['action'] != 'FETCH':
+                    present_days.add(key)
                 bucket = per_product.setdefault(r['product'], {'RESOLVE': 0, 'CLASSIFY': 0, 'FETCH': 0, 'MATERIALIZE': 0, 'total': 0})
                 bucket[r['action']] = bucket.get(r['action'], 0) + 1
                 bucket['total'] += 1
+            swap_total = len(required_days)
+            swap_present = len(present_days)
+            swap_fetch_pct = round(100 * (swap_total - swap_present) / max(swap_total, 1)) if swap_total else 0
+            swap_coverage_pct = 100 - swap_fetch_pct
             products = []
             stage_counts = {'FETCH': 0, 'CLASSIFY': 0, 'MATERIALIZE': 0}
             for pid, b in per_product.items():
@@ -4063,6 +4074,9 @@ def _compute_recon_body() -> dict:
                 'chains': sorted(cs.chains) if not cs.chains_all else ['*'],
                 'stage': stage,
                 'progress': round(100 * (agg_total - agg_unresolved) / max(agg_total, 1)) if agg_total else 0,
+                'swap_coverage_pct': swap_coverage_pct,
+                'swap_fetch_pct': swap_fetch_pct,
+                'swap_total_days': swap_total,
                 'products': products,
             })
 
