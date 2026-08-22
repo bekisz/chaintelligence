@@ -15,9 +15,6 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 from include.route_classifier import (
     classify_tx_hashes,
-    recompute_daily_stats,
-    recompute_distribution_buckets,
-    recompute_pool_distribution_buckets,
     RAW_SWAP_TABLE,
 )
 
@@ -85,7 +82,6 @@ with DAG(
     def classify_queue():
         hook = PostgresHook(postgres_conn_id='postgres_default')
         conn = hook.get_conn()
-        affected_days = set()
         completed = 0
         failed = 0
         # Share pair/route resolution caches across the whole run: the same
@@ -104,12 +100,27 @@ with DAG(
 
                 try:
                     with conn.cursor() as cur:
-                        _, days = classify_tx_hashes(cur, tx_hashes,
-                                                     pair_cache=pair_cache,
-                                                     route_cache=route_cache,
-                                                     table_name=RAW_SWAP_TABLE)
+                        _, _, dirty = classify_tx_hashes(cur, tx_hashes,
+                                                         pair_cache=pair_cache,
+                                                         route_cache=route_cache,
+                                                         table_name=RAW_SWAP_TABLE)
                     conn.commit()
-                    affected_days.update(days)
+
+                    # Record exact dirty (route/pool, day) work for the
+                    # incremental materializer instead of a broad recompute here.
+                    rd = dirty.get('route_days', set())
+                    pd = dirty.get('pool_days', set())
+                    if rd or pd:
+                        with conn.cursor() as cur:
+                            if rd:
+                                cur.executemany(
+                                    "INSERT INTO dirty_route_day(route_id, day) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                                    list(rd))
+                            if pd:
+                                cur.executemany(
+                                    "INSERT INTO dirty_pool_day(pool_id, day) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                                    list(pd))
+                        conn.commit()
 
                     # Conditional completion: only mark complete if the row's
                     # generation still equals the claimed token. A producer
@@ -140,14 +151,12 @@ with DAG(
                     failed += len(tx_hashes)
                     logging.exception('Route classification batch failed')
 
-            if affected_days:
-                with conn.cursor() as cur:
-                    recompute_daily_stats(cur, sorted(affected_days), table_name=RAW_SWAP_TABLE)
-                    recompute_distribution_buckets(cur, sorted(affected_days), table_name=RAW_SWAP_TABLE)
-                    recompute_pool_distribution_buckets(cur, sorted(affected_days), table_name=RAW_SWAP_TABLE)
-                conn.commit()
-            logging.info('Route queue run complete: %d completed, %d failed, %d days rolled up',
-                         completed, failed, len(affected_days))
+            # Aggregate materialization of the recorded dirty (route|pool, day)
+            # work is owned by the dirty_day_materializer DAG. This run only
+            # records fine-grained dirty rows (done per batch above); it no
+            # longer recommutes broad contiguous date ranges.
+            logging.info('Route queue run complete: %d completed, %d failed, dirty recorded; materializer consumes dirty_route_day/pool_day',
+                         completed, failed)
         finally:
             conn.close()
 

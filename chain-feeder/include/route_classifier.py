@@ -482,23 +482,30 @@ def merge_route_staging(cur, candidates: list[dict], assignments: list[dict], ta
 
 
 def classify_legs(cur, legs: List[Dict], pair_cache: Optional[Dict] = None,
-                  route_cache: Optional[Dict] = None, table_name: str = 'swaps') -> tuple[int, set[str]]:
+                  route_cache: Optional[Dict] = None, table_name: str = 'swaps') -> tuple:
     """Given fetched legs, register chains/pairs/routes and set swaps.route_id
-    on every leg using bulk SQL updates. Returns (number_of_legs_attributed, set_of_affected_days)."""
+    on every leg using bulk SQL updates.
+
+    Returns ``(number_of_legs_attributed, set_of_affected_days, dirty)`` where
+    ``dirty`` is ``{'route_day': {(route_id, day)}, 'pool_day': {(pool_id, day)}}``
+    for incremental materializers (dirty_route_day / dirty_pool_day).
+    """
     # Use the same transaction-level lock as the bulk backfill merge so live
     # ingestion and historical backfill serialize route dimension writes.
     cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (ROUTE_WRITE_LOCK,))
     by_tx: Dict[str, List[Dict]] = defaultdict(list)
     affected_days: set[str] = set()
+    dirty_route_days: set = set()
+    dirty_pool_days: set = set()
+
+    def _day_str(ts):
+        return ts[:10] if isinstance(ts, str) else ts.strftime('%Y-%m-%d')
 
     for leg in legs:
         by_tx[leg['tx_hash']].append(leg)
         ts = leg.get('ts')
         if ts:
-            if isinstance(ts, str):
-                affected_days.add(ts[:10])
-            else:
-                affected_days.add(ts.strftime('%Y-%m-%d'))
+            affected_days.add(_day_str(ts))
 
     update_rows = []
     for tx_hash, tx_legs in by_tx.items():
@@ -515,11 +522,17 @@ def classify_legs(cur, legs: List[Dict], pair_cache: Optional[Dict] = None,
                                      chain['pools'], chain['tokens'], ts,
                                      route_cache=route_cache)
             if route_id is not None:
+                day = _day_str(ts)
+                assert day is not None
+                import datetime as _dt
+                d = _dt.date.fromisoformat(day)
                 for leg in chain['legs']:
                     update_rows.append((route_id, leg['tx_hash'], leg['log_index'], leg['ts']))
+                    dirty_route_days.add((route_id, d))
+                    dirty_pool_days.add((leg['pool_id'], d))
 
     if not update_rows:
-        return 0, set()
+        return 0, set(), {'route_days': set(), 'pool_days': set()}
 
     target_table = table_name.strip() if table_name and table_name.strip() else 'swaps'
     update_sql = f"""
@@ -534,8 +547,8 @@ def classify_legs(cur, legs: List[Dict], pair_cache: Optional[Dict] = None,
         psycopg2.extras.execute_values(cur, update_sql, update_rows, page_size=1000)
     except psycopg2.errors.ForeignKeyViolation as fk_err:
         log.warning("ForeignKeyViolation in classify_legs: %s. Skipping this batch update.", fk_err)
-        return 0, affected_days
-    return len(update_rows), affected_days
+        return 0, affected_days, {'route_days': set(), 'pool_days': set()}
+    return len(update_rows), affected_days, {'route_days': set(dirty_route_days), 'pool_days': set(dirty_pool_days)}
 
 
 def classify_tx_hashes(cur, tx_hashes: List[str], pair_cache: Optional[Dict] = None,
@@ -545,7 +558,7 @@ def classify_tx_hashes(cur, tx_hashes: List[str], pair_cache: Optional[Dict] = N
         return 0, set()
     legs = _legs_for_txs(cur, tx_hashes, table_name=table_name)
     if not legs:
-        return 0, set()
+        return 0, set(), {'route_days': set(), 'pool_days': set()}
     return classify_legs(cur, legs, pair_cache=pair_cache, route_cache=route_cache, table_name=table_name)
 
 
