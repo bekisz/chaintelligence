@@ -157,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             currentHealthData = data;
             renderHealthUI(data);
+            fetchOdsReconciliation();
             fetchOdsGoalState();
         } catch (err) {
             console.error('Failed to fetch health status:', err);
@@ -298,7 +299,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Re-render once icons are available so the table isn't stuck showing
         // only tickers (it renders before these async fetches resolve).
         Promise.all([loadImages, loadFamilies]).then(() => {
-            if (lastOdsGoalData) renderOdsGoalState(lastOdsGoalData);
+            if (lastReconData) renderOdsReconciliation(lastReconData);
+            else if (lastOdsGoalData) renderOdsGoalState(lastOdsGoalData);
         });
     };
 
@@ -586,7 +588,116 @@ document.addEventListener('DOMContentLoaded', () => {
         odsGoalStateContainerEl.innerHTML = html;
     };
 
-    // TOP Summary Matrix rendering (Amber / Green code for ordered active tables)
+    // ===== O&D Reconciliation (stages + live activity) =====
+
+    const STAGE_META = {
+        'FETCH':        { color: '#fbbf24', label: 'Needs fetch', short: 'FETCH' },
+        'CLASSIFY':     { color: '#f87171', label: 'Classifying', short: 'CLASSIFY' },
+        'MATERIALIZE':  { color: '#f59e0b', label: 'Materializing', short: 'MAT' },
+        'SATISFIED':    { color: '#34d399', label: 'Satisfied', short: 'MET' },
+    };
+
+    let lastReconData = null;
+
+    const fetchOdsReconciliation = async () => {
+        if (!odsGoalStateContainerEl) return;
+        try {
+            const res = await fetch('/api/ods/reconciliation');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            lastReconData = data;
+            renderOdsReconciliation(data);
+        } catch (err) {
+            // non-fatal: the classic goal-state view still renders
+            console.error('reconciliation fetch failed:', err);
+        }
+    };
+
+    const renderOdsReconciliation = (data) => {
+        if (!odsGoalStateContainerEl) return;
+        const sets = Array.isArray(data.sets) ? data.sets : [];
+        const act = data.activity || {};
+        const pending = act.classification_pending || 0;
+        const ingesting = act.ingesting || {};
+        const lastCls = act.last_classifier ? new Date(act.last_classifier) : null;
+
+        let html = '';
+
+        // --- Live activity strip ---
+        const activeChains = Object.entries(ingesting)
+            .filter(([,v]) => v && v.active)
+            .map(([k]) => k).sort().join(', ');
+        html += `
+            <div class="ods-activity-strip">
+                <span class="summary-badge-pill" style="color:#fbbf24; background:#fbbf241a; border-color:#fbbf2433; font-size:0.72rem;">
+                    ⏳ ${pending.toLocaleString()} awaiting classification
+                </span>
+                <span class="summary-badge-pill" style="color:${activeChains ? '#34d399' : '#f87171'}; background:${activeChains ? '#34d3991a' : '#f871711a'}; border-color:${activeChains ? '#34d39933' : '#f8717133'}; font-size:0.72rem;">
+                    ${activeChains ? '● ingesting: ' + activeNetworks : '○ no active ingestion'}
+                </span>
+                ${lastCls ? `<span class="dim-text" style="font-size:0.7rem;">classifier run ${timeAgo(lastCls)}</span>` : ''}
+            </div>
+        `;
+
+        if (sets.length === 0) {
+            html += `<div class="empty-state glass-card"><div class="empty-state-title">No O&amp;D sets declared</div><div class="empty-state-desc">Declare sets+products in config/ods-goal-state.yaml to see reconciliation stages.</div></div>`;
+            odsGoalStateContainerEl.innerHTML = html;
+            return;
+        }
+
+        // --- Per-set cards ---
+        html += `<div class="ods-recon-grid">`;
+        sets.forEach(s => {
+            const st = STAGE_META[s.stage] || STAGE_META.FETCH;
+            const progress = s.progress || 0;
+            const chains = Array.isArray(s.chains) ? s.chains.join(', ') : '*';
+
+            let prodsHtml = (s.products || []).slice(0, 6).map(p => {
+                const f = p.fetch || 0, c = p.classify || 0, m = p.materialize || 0;
+                const parts = [];
+                if (f) parts.push(`<span class="ods-stage-chip stage-fetch" title="raw missing">fetch ${f}</span>`);
+                if (c) parts.push(`<span class="ods-stage-chip stage-classify" title="raw present, unclassified">classify ${c}</span>`);
+                if (m) parts.push(`<span class="ods-stage-chip stage-mat" title="facts missing">mat ${m}</span>`);
+                if (!f && !c && !m) parts.push(`<span class="ods-stage-chip stage-met" title="all days satisfied">met ${p.resolved||0}</span>`);
+                return `<div class="ods-prod">
+                    <span class="font-mono" style="color:#f3f4f6; font-size:0.72rem;">${p.product_id}</span>
+                    <span style="color:#9ca3af; font-size:0.7rem; margin-left:6px;">${p.pct}%</span>
+                    <div style="margin-top:4px;">${parts.join(' ')}</div>
+                </div>`;
+            }).join('');
+
+            html += `
+                <div class="ods-recon-card">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                        <span style="font-weight:700; color:#f3f4f6; font-size:0.85rem;">${s.name}</span>
+                        <span class="summary-badge-pill" style="color:${st.color}; background:${st.color}1a; border-color:${st.color}33; font-size:0.7rem;">
+                            ${st.short}
+                        </span>
+                    </div>
+                    <div style="font-size:0.72rem; color:#9ca3af; margin-top:3px;">
+                        <span class="font-mono">${s.origin} → ${s.dest}</span>&nbsp;·&nbsp;chains: ${chains}
+                    </div>
+                    <div class="health-meter-track" style="height:6px; margin-top:8px;">
+                        <div class="health-meter-fill ${progress >= 100 ? 'fill-green' : 'fill-yellow'}" style="width:${progress}%;"></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#9ca3af;">
+                        <span>resolved ${progress}%</span><span class="font-mono">${s.id}</span>
+                    </div>
+                    <div class="ods-prod-list">${prodsHtml}</div>
+                </div>
+            `;
+        });
+        html += `</div>`;
+
+        odsGoalStateContainerEl.innerHTML = html;
+    };
+
+    const timeAgo = (d) => {
+        const s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+        if (s < 60) return `${s}s ago`;
+        if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+        return `${Math.floor(s / 3600)}h ago`;
+    };
     const renderSummaryMatrix = (tables) => {
         if (!summaryGridEl) return;
         const activeTables = ORDERED_TABLE_NAMES.filter(k => tables[k]);

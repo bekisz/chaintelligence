@@ -755,7 +755,7 @@ PORTAL_PASS = os.getenv("PORTAL_PASSWORD", "chaintelligence")
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt metadata and backtester routes from authentication
-    exempt_paths = ["/api/coins/list", "/api/coins/search-by-symbol", "/api/coin-families", "/api/coin/price-history", "/api/ods/goal-state", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status", "/pool-arena", "/api/pool-arena", "/api/swap-distribution"]
+    exempt_paths = ["/api/coins/list", "/api/coins/search-by-symbol", "/api/coin-families", "/api/coin/price-history", "/api/ods/goal-state", "/api/ods/reconciliation", "/backtester", "/pool", "/favicon.ico", "/static", "/routing", "/lp", "/health", "/docs", "/swagger", "/openapi.json", "/status", "/health-status", "/pool-arena", "/api/pool-arena", "/api/swap-distribution"]
     if any(request.url.path.startswith(path) for path in exempt_paths) or request.method == "OPTIONS":
         return await call_next(request)
 
@@ -3996,6 +3996,132 @@ def _warm_goal_state_cache() -> None:
     # Warm the goal-state report at boot so the first page load is instant
     # instead of blocking on the slow recompute.
     _background_refresh_goal_state((False,))
+
+
+_RECON_CACHE: Dict[tuple, tuple] = {}
+_RECON_CACHE_TTL = 90  # seconds
+
+
+def _compute_recon_body() -> dict:
+    """O&D reconciliation report: per-set stages + live-update telemetry.
+
+    Uses the control-plane planner (reconcile.plan_requirement) with a coverage
+    ledger. The set's stage is the earliest unmet action across its products;
+    activity reflects ongoing ingestion/classification so the Health page can
+    show whether an update is currently affecting each set.
+    """
+    from datetime import datetime, timezone
+    from include.od_catalog import compile_catalog
+    from include.reconcile import load_coverage_state, plan_requirement
+
+    today = datetime.now(timezone.utc).date()
+
+    with get_conn() as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET LOCAL statement_timeout = '60s'")
+        except Exception:
+            pass
+        state = load_coverage_state(conn)
+        cat = compile_catalog()
+        sets = []
+        for cs in cat['sets']:
+            rows = plan_requirement(cs, state, today)
+            per_product: Dict[str, dict] = {}
+            for r in rows:
+                bucket = per_product.setdefault(r['product'], {'RESOLVE': 0, 'CLASSIFY': 0, 'FETCH': 0, 'MATERIALIZE': 0, 'total': 0})
+                bucket[r['action']] = bucket.get(r['action'], 0) + 1
+                bucket['total'] += 1
+            products = []
+            stage_counts = {'FETCH': 0, 'CLASSIFY': 0, 'MATERIALIZE': 0}
+            for pid, b in per_product.items():
+                resolved = b.get('RESOLVE', 0)
+                pct = round(100 * resolved / max(b['total'], 1))
+                products.append({
+                    'product_id': pid,
+                    'pct': pct,
+                    'resolved': resolved,
+                    'total': b['total'],
+                    'fetch': b.get('FETCH', 0),
+                    'classify': b.get('CLASSIFY', 0),
+                    'materialize': b.get('MATERIALIZE', 0),
+                })
+                for k in stage_counts:
+                    stage_counts[k] += b.get(k, 0)
+            unresolved = stage_counts['FETCH'] + stage_counts['CLASSIFY'] + stage_counts['MATERIALIZE']
+            agg_total = sum(b['total'] for b in per_product.values())
+            agg_unresolved = unresolved
+            stage = 'SATISFIED' if unresolved == 0 else max(stage_counts, key=lambda k: stage_counts[k])
+            sets.append({
+                'id': cs.id,
+                'name': cs.name,
+                'origin': cs.origin,
+                'dest': cs.dest,
+                'chains': sorted(cs.chains) if not cs.chains_all else ['*'],
+                'stage': stage,
+                'progress': round(100 * (agg_total - agg_unresolved) / max(agg_total, 1)) if agg_total else 0,
+                'products': products,
+            })
+
+    # Live telemetry — is there update activity right now
+    activity = {
+        'classification_pending': 0,
+        'ingesting': {},
+        'last_classifier': None,
+    }
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM route_classification_queue WHERE status IN ('pending','processing')")
+                activity['classification_pending'] = cur.fetchone()[0]
+                cur.execute("""
+                    SELECT MAX(updated_at) FROM route_classification_queue
+                    WHERE status IN ('pending','processing','complete')
+                """)
+                lc = cur.fetchone()[0]
+                if lc is not None:
+                    activity['last_classifier'] = lc.isoformat()
+                cur.execute("""
+                    SELECT network, MAX(updated_at) FROM ingestion_state GROUP BY network
+                """)
+                for network, updated_at in cur.fetchall():
+                    active = False
+                    if updated_at is not None:
+                        u = updated_at
+                        if u.tzinfo is None:
+                            u = u.replace(tzinfo=timezone.utc)
+                        active = (datetime.now(timezone.utc) - u).total_seconds() < 7200
+                    activity['ingesting'][network] = {
+                        'active': active,
+                        'updated_at': updated_at.isoformat() if updated_at else None,
+                    }
+    except Exception as e:
+        print(f"[ods-reconciliation] activity error: {e}")
+
+    return {
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'activity': activity,
+        'sets': sets,
+    }
+
+
+@app.get("/api/ods/reconciliation", tags=["Origin & Destination"])
+async def ods_reconciliation():
+    """O&D reconciliation stages per set (FETCH/CLASSIFY/MATERIALIZE/RESOLVE)
+    plus live-update telemetry (classification backlog, per-chain ingestion
+    activity)."""
+    cache_key = ()
+    now = time.time()
+    cached = _RECON_CACHE.get(cache_key)
+    if cached and (now - cached[1]) < _RECON_CACHE_TTL:
+        return cached[0]
+    try:
+        body = await asyncio.to_thread(_compute_recon_body)
+    except Exception as e:
+        print(f"[ods-reconciliation] error: {e}")
+        raise HTTPException(status_code=500, detail=f"reconciliation error: {e}")
+    _RECON_CACHE[cache_key] = (body, time.time())
+    return body
 
 
 @app.get("/api/lp/position-summary", tags=["Liquidity Pool Positions"])
