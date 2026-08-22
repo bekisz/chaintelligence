@@ -209,15 +209,16 @@ sequenceDiagram
     Note over D,DB: same rows mirrored into `swaps` if SWAP_LEGACY_MIRROR=true
     D->>DB: UPDATE ingestion_state (watermark GREATEST last_ts)
     D->>DB: COMMIT (whole batch)
-    D->>Q: INSERT ... ON CONFLICT (tx_hash) DO UPDATE SET status='pending'<br/>one row per distinct tx_hash
-    loop drain (up to 100 × 5000 txs per run)
-        W->>Q: claim batch FOR UPDATE SKIP LOCKED → status='processing'
+    D->>Q: INSERT ... ON CONFLICT (tx_hash) DO UPDATE SET status='pending',<br/>generation = generation + 1 (one row per distinct tx_hash)
+    loop drain (up to 300 × 5000 txs per run)
+        W->>Q: claim batch FOR UPDATE SKIP LOCKED → status='processing',<br/>claim_token = generation
         W->>C: classify_tx_hashes(tx_hashes, table_name='swaps_staging')
         C->>DB: upsert origin_destination_pair / route / route_hop
         C->>DB: UPDATE swaps_staging SET route_id ... for each leg
-        W->>Q: status='complete' (or retry w/ 5min backoff on failure)
+        W->>DB: INSERT dirty_route_day / dirty_pool_day (exact changed day tuples)
+        W->>Q: status='complete' ONLY WHERE claim_token = generation<br/>(or retry w/ 5min backoff on failure)
     end
-    W->>DB: recompute_daily_stats + recompute_distribution_buckets + recompute_pool_distribution_buckets (affected days)
+    Note over W,C: No broad recompute here; dirty_day_materializer consumes<br/>the dirty tables and recomputes exactly those days.
 ```
 
 ---
@@ -235,22 +236,26 @@ ingestion callbacks.
 ```mermaid
 flowchart LR
     subgraph Producer["Producer — uniswap_utils.py post-commit"]
-        ENQ["INSERT ... ON CONFLICT (tx_hash)<br/>DO UPDATE SET status='pending', available_at=NOW()"]
+        ENQ["INSERT ... ON CONFLICT (tx_hash)<br/>DO UPDATE SET status='pending', generation+1, available_at=NOW()"]
     end
     subgraph Consumer["Consumer — route_classification_queue DAG (hourly)"]
-        CL["claim batch: FOR UPDATE SKIP LOCKED<br/>LIMIT 5000, up to 100 batches/run"]
-        OK["UPDATE status='complete', last_error=NULL"]
+        CL["claim batch: FOR UPDATE SKIP LOCKED<br/>LIMIT 5000, up to 300 batches/run, claim_token=generation"]
+        OK["UPDATE status='complete' only if<br/>claim_token = generation"]
         RET["UPDATE status='pending',<br/>available_at=NOW()+5min, last_error=…"]
     end
     subgraph Work["Route reconstruction"]
         CG["classify_tx_hashes(cur, txs,<br/>table_name=SWAP_RAW_TABLE)"]
         UP["UPDATE swaps_staging.route_id"]
-        RU["recompute_daily_stats +<br/>recompute_distribution_buckets +<br/>recompute_pool_distribution_buckets<br/>for affected days"]
+        DIRT["INSERT dirty_route_day / dirty_pool_day<br/>(exact changed (route|pool, day) tuples)"]
+    end
+    subgraph Mat["Materialization"]
+        MAT["dirty_day_materializer DAG (*/20)<br/>recompute exactly those days:<br/>route_daily_stats + route + pool buckets"]
     end
 
-    ENQ --> CL --> CG --> UP --> RU --> OK
+    ENQ --> CL --> CG --> UP --> DIRT
+    DIRT --> MAT
     CG -->|"exception"| RET
-    RU -->|"commit"| OK
+    UP -->|"commit"| OK
 ```
 
 ### Queue status machine
@@ -258,34 +263,37 @@ flowchart LR
 ```mermaid
 stateDiagram-v2
     [*] --> pending
-    pending --> processing: claim batch (attempts+1, claimed_at=NOW)
-    processing --> complete: classify + rollup OK
+    pending --> processing: claim batch (attempts+1, claimed_at=NOW, claim_token=generation)
+    processing --> complete: classify recorded (only if claim_token=generation)
     processing --> pending: failure (available_at=NOW+5min, last_error set)
     pending --> pending: stale claim recovered after 30 min
-    complete --> pending: same tx re-ingested with late legs (producer re-queues)
+    complete --> pending: same tx re-ingested with late legs (producer re-queues, generation+1)
 ```
 
 > A tx whose legs span multiple protocols lands in different ingestion batches; the
-> producer re-queues it (`ON CONFLICT` → `status='pending'`) whenever late legs arrive,
-> so the route is reclassified until it is complete.
+> producer re-queues it (`ON CONFLICT` → `status='pending'`, `generation+1`) whenever
+> late legs arrive, so the route is reclassified until complete. Because completion is
+> conditional on `claim_token = generation`, a worker that classified an older value can
+> never overwrite a newer requeue.
 
 ### Classification steps (`include/route_classifier.py`)
 
-1. **Group legs by tx hash**, order by `log_index` (matching how `acct_route`/`RouteAnalyzer` reconstructs routes).
+1. **Group legs by tx hash**, order by `log_index`.
 2. **Derive per-leg flow** from the sign of `amount0`/`amount1`: the positive amount is spent, the negative is received (input token = token on the positive side).
 3. **Chain contiguous legs** so hop `N`'s output == hop `N+1`'s input; disjoint swaps in one tx produce separate chains (each becomes its own route). Round-trips (origin == dest) are valid.
-4. **Upsert** `origin_destination_pair` on `(chain_id, origin_contract, dest_contract)`, then `route` on `canonical_key`; insert `route_hop` rows (deleted+reinserted per route for idempotency).
+4. **Upsert** `origin_destination_pair` on `(chain_id, origin_contract, dest_contract)`, then `route` on `canonical_key`; insert `route_hop` rows. This may use the set-based batch path (`collect_route_staging` + `merge_route_staging`, optionally parallel) instead of per-tx upserts.
 5. **Attribute swaps**: set `swaps_staging.route_id` for each leg.
-6. `recompute_daily_stats(day)` deletes + reinserts the `route_daily_stats` rows for that day (DELETE + INSERT is idempotent).
+6. **Record dirty work**: the classifier writes the exact changed `(route_id, day)` / `(pool_id, day)` tuples into `dirty_route_day` / `dirty_pool_day`. `dirty_day_materializer` recomputes exactly those days (`DELETE + INSERT` is idempotent) — no broad contiguous recompute.
 
 ### DAGs in the pipeline
 
 | DAG | Schedule | Role |
 |---|---|---|
-| `route_classification_queue` | hourly | Drains the queue in batches, classifies, rolls up affected days. `max_active_runs=1`, stale-claim recovery after 30 min, retries with 5 min backoff |
+| `route_classification_queue` | hourly | Drains the queue in batches (up to 300 × 5000/run), classifies, records `dirty_route_day`/`dirty_pool_day`. `max_active_runs=1`, stale-claim recovery after 30 min, retries with 5 min backoff |
+| `dirty_day_materializer` | every 20 min | Consumes the dirty tables and recomputes **exactly** those days (`route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool_daily_stats_bucket`) |
 | `route_daily_stats_rollup` | hourly | Safety-net recompute of the recent window (default 3 days) for `route_daily_stats`, `route_daily_stats_bucket`, and `liquidity_pool_daily_stats_bucket` |
-| `global_liquidity_pool_daily_stats_rollup` | — | Reads `swaps_staging` to materialize `liquidity_pool_daily_stats` + `liquidity_pool_daily_stats_bucket` |
-| `purge_aggregated_swaps` | — | **Opt-in** (`RAW_SWAP_PURGE_ENABLED=true`) purge of `swaps_staging` rows older than retention once covered by aggregates; drops empty monthly partitions |
+| `global_liquidity_pool_daily_stats_rollup` | daily 2 AM | Reads `swaps_staging` to materialize `liquidity_pool_daily_stats` + `liquidity_pool_daily_stats_bucket` |
+| `purge_aggregated_swaps` | opt-in | **Opt-in** (`RAW_SWAP_PURGE_ENABLED=true`) purge of `swaps_staging` rows once covered by aggregates; drops empty monthly partitions |
 
 ---
 

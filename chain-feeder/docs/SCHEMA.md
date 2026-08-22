@@ -30,7 +30,13 @@ erDiagram
 | 7 | `liquidity_pool_position_snapshot` | Time-series balance and fee data per position |
 | 8 | `liquidity_pool_position_event` | On-chain lifecycle events (mints, burns, collects) |
 | 9 | `liquidity_pool_daily_stats` | Aggregated daily pool metrics (volume, TVL) |
-| 10 | `swaps` | Unified, monthly-partitioned swap event log |
+| 10 | `swaps_staging` | **Canonical** short-lived, monthly-partitioned swap event log |
+| 11 | `swaps` | Legacy compatibility mirror of `swaps_staging` (write while `SWAP_LEGACY_MIRROR=true`) |
+| 12 | `ingestion_state` | Per (network, protocol) ingestion watermark cursor |
+| 13 | `route_classification_queue` | Async queue of tx hashes awaiting route classification |
+| — | Route taxonomy | `origin_destination_pair`, `route`, `route_hop` (see below) |
+| — | Route/pool facts | `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool_daily_stats_bucket` |
+| — | Control plane | `od_set*`, `source_day_coverage`, `classification_day_coverage`, `product_day_coverage`, `dirty_route_day`, `dirty_pool_day`, `od_set_pool_daily_stats` |
 
 Schema source: [init_db.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/init_db.sql), [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql)
 
@@ -264,31 +270,35 @@ Written by the per-network `graph_*_liquidity_pool_daily_stats` DAGs, `global_li
 
 ---
 
-### 10. `swaps`
+### 10. `swaps_staging` (canonical raw store)
 
-Unified swap event log across all protocols and chains. Monthly range-partitioned on `ts`. Replaces the legacy per-protocol tables (`uniswap_v2_swaps`, `uniswap_v3_swaps`, `uniswap_v4_swaps`).
+Short-lived unified swap event log across all protocols and chains. Monthly range-partitioned on `ts`. This is the **authoritative** raw store the ETL writes to; rows are pruned once their route/pool aggregates exist. The legacy `swaps` table (section 11) is only a compatibility mirror during switchover.
 
 **Primary Key**: (`ts`, `tx_hash`, `log_index`) — includes partition key
-**Partitioning**: `RANGE(ts)` by month (e.g. `swaps_2026_07`)
+**Partitioning**: `RANGE(ts)` by month (e.g. `swaps_staging_2026_08`)
 
 | Column | Type | Description |
 |:---|:---|:---|
 | `tx_hash` | VARCHAR(80) | Transaction hash (part of PK). |
 | `log_index` | INT | Log index within the tx (part of PK). |
 | `ts` | TIMESTAMPTZ | Block timestamp (partition key, part of PK). |
-| `network` | VARCHAR(20) | Chain name (e.g. `Ethereum`, `Arbitrum`, `Base`, `BNB`). Default `Ethereum`. |
-| `protocol` | VARCHAR(50) | DEX protocol (e.g. `Uniswap V3`, `Uniswap V4`, `PancakeSwap V3`, `Aerodrome`). Default `Uniswap V3`. |
-| `t0_coin_id` | SMALLINT (FK → coin) | Token0 coin reference. |
-| `t1_coin_id` | SMALLINT (FK → coin) | Token1 coin reference. |
-| `amount0` | DOUBLE PRECISION | Signed amount of token0. |
-| `amount1` | DOUBLE PRECISION | Signed amount of token1. |
-| `amount_usd` | DOUBLE PRECISION | Normalized USD value of the swap. |
-| `pool_id` | INT (FK → liquidity_pool) | The pool this swap belongs to. Added via [normalize_swaps_pool_id.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/normalize_swaps_pool_id.sql). |
-| `fee_bps` | DOUBLE PRECISION | Fee in basis points (5 = 0.05%, 30 = 0.3%); NULL = dynamic fee. |
-| `fee_display` | VARCHAR(20) | Original display format, e.g. `0.05%`. |
-| `route_id` | INT (FK → route) | Route this swap leg belongs to, back-filled by the route classifier (`could be NULL between the INSERT and the post-commit classification sweep). Added via [create_route_tables.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_route_tables.sql). |
+| `network` / `protocol` | VARCHAR | Chain / DEX protocol. |
+| `pool_id` | INT (FK → liquidity_pool) | The pool this swap belongs to. |
+| `amount0` / `amount1` | DOUBLE PRECISION | Signed token amounts. |
+| `amount_usd` | DOUBLE PRECISION | Normalized USD value. |
+| `route_id` | BIGINT (FK → route) | Route assigned by the classifier (may be NULL until classified). |
 
-Schema source: [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql)
+Indexes: `(tx_hash)`, `(pool_id, ts) INCLUDE (amount_usd, amount0, amount1)`, partial `(route_id) WHERE route_id IS NOT NULL`.
+
+Schema source: [create_swaps_staging.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_staging.sql)
+
+---
+
+### 11. `swaps` (legacy mirror)
+
+The original unified swap log. Now written only as a compatibility **mirror** of `swaps_staging` while `SWAP_LEGACY_MIRROR=true` (default), so legacy API raw-swap fallbacks keep working. Once those consumers are migrated, flip the flag to `false` and retire the table. Underlying schema matches `swaps_staging` (minus `network`/`protocol`).
+
+Schema source: [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql), [normalize_swaps_pool_id.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/normalize_swaps_pool_id.sql)
 
 ---
 
@@ -356,7 +366,7 @@ The API's `/api/routes/analyze` first tries to read these stats per requested di
 
 ### `route_daily_stats_bucket`
 
-Compact log-volume distribution for **every** route. One row per `(route, day, bucket_index)`; each routed transaction contributes its first route leg once. Bucket parameters (`bucket_count`, `min_amount_usd`, `max_amount_usd`) are global, from `config/swap-distribution.yaml`. Written by `route_classifier.recompute_distribution_buckets` (hourly rollup + classification queue), which buckets all routes with swap legs in the window.
+Compact log-volume distribution for **every** route. One row per `(route, day, bucket_index)`; each routed transaction contributes its first route leg once. Bucket parameters (`bucket_count`, `min_amount_usd`, `max_amount_usd`) are global, from `config/swap-distribution.yaml`. Written by `route_classifier.recompute_distribution_buckets` via the `dirty_day_materializer` and `route_daily_stats_rollup` DAGs, which bucket all routes with swap legs in the window.
 
 | Column | Type | Description |
 |:---|:---|:---|
@@ -373,7 +383,7 @@ Primary key: `(route_id, day, bucket_index)`; index on `(day, route_id)`.
 
 ### `liquidity_pool_daily_stats_bucket`
 
-Pool-grain mirror of the route bucket table for **every** pool. One row per `(pool_id, day, bucket_index)`; each transaction contributes its first swap leg on the pool once. Bucket parameters are global, from `config/swap-distribution.yaml`. Written by `route_classifier.recompute_pool_distribution_buckets` (global pool rollup + hourly route rollup + classification queue), which buckets all pools with swap legs in the window.
+Pool-grain mirror of the route bucket table for **every** pool. One row per `(pool_id, day, bucket_index)`; each transaction contributes its first swap leg on the pool once. Bucket parameters are global, from `config/swap-distribution.yaml`. Written by `route_classifier.recompute_pool_distribution_buckets` via the `dirty_day_materializer`, `route_daily_stats_rollup`, and `global_liquidity_pool_daily_stats_rollup` DAGs, which bucket all pools with swap legs in the window.
 
 | Column | Type | Description |
 |:---|:---|:---|
@@ -387,6 +397,46 @@ Pool-grain mirror of the route bucket table for **every** pool. One row per `(po
 | `log_sum`, `log_sum2` | DOUBLE PRECISION | Log-volume moments for lognormal fitting. |
 
 Primary key: `(pool_id, day, bucket_index)`; index on `(day, pool_id)`.
+
+---
+
+## Route classification queue & control plane
+
+### `route_classification_queue`
+
+Async work queue of transaction hashes awaiting route classification. One row per `tx_hash`; the producer resets it to `pending` whenever late legs arrive (bumping `generation`), and the worker only completes a row if its `claim_token` still matches `generation` (prevents a late-leg requeue from being overwritten).
+
+| Column | Description |
+|:---|:---|
+| `tx_hash` (PK) | Transaction hash. |
+| `status` | `pending` \| `processing` \| `complete`. |
+| `generation` | Bumped by the producer on each requeue (part of the race fix). |
+| `claim_token` | Generation captured at claim time; completion is conditional on it. |
+| `available_at`, `claimed_at`, `attempts`, `last_error`, timestamps | Scheduling / error state. |
+
+Schema source: [create_route_classification_queue.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_route_classification_queue.sql), [add_route_queue_generation.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/add_route_queue_generation.sql)
+
+### `dirty_route_day` / `dirty_pool_day`
+
+Fine-grained, idempotent work queue for the incremental materializer. The classifier writes the exact `(route_id|pool_id, day)` tuples it changed; `dirty_day_materializer` recomputes exactly those days.
+
+| Column | Description |
+|:---|:---|
+| `route_id` / `pool_id` | Owning route or pool. |
+| `day` | UTC day needing recompute. |
+
+### `od_set*` (control plane)
+
+Declarative O&D registry and coverage ledger (written by the control plane, read by the reconciliation planner):
+
+| Table | Purpose |
+|:---|:---|
+| `od_set` / `od_product` / `od_set_product` | Compiled sets, product registry, per-product windows. |
+| `od_set_pair_member` / `od_set_route_member` / `od_set_pool_member` | Resolved set membership bridges (pairs / routes / pools). |
+| `source_day_coverage` / `classification_day_coverage` / `product_day_coverage` | Coverage ledger per (chain, day) and (product, chain, day). |
+| `od_set_pool_daily_stats` | Optional `lp.set.daily_stats` product: per-set pool/day aggregates (a shared pool counted once), derived from `liquidity_pool_daily_stats` via `od_set_pool_member`. |
+
+Schema sources: [add_od_control_plane.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/add_od_control_plane.sql), [add_od_set_pool_daily_stats.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/add_od_set_pool_daily_stats.sql)
 
 ## Views
 

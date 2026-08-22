@@ -167,7 +167,9 @@ WHERE EXCLUDED.confidence_score >= coin_contract.confidence_score;
 
 ### 2. Swap Pipeline — Trade Event Ingestion
 
-These DAGs fetch swap (trade) events from The Graph subgraphs and write to a single **unified `swaps` table** (monthly range-partitioned on `ts`). The legacy per-protocol tables (`uniswap_v2_swaps`, `uniswap_v3_swaps`, `uniswap_v4_swaps`) still exist in the schema but only as compatibility views over `swaps` (see `create_compatibility_views.sql`); they are no longer written to directly.
+These DAGs fetch swap (trade) events from The Graph subgraphs. The **canonical** short-lived raw store is `swaps_staging` (monthly range-partitioned on `ts`). The legacy `swaps` table is written only as a **compatibility mirror** while `SWAP_LEGACY_MIRROR=true` (default), so legacy API raw-swap fallbacks keep working during the switchover; once they are migrated, flip it to `false` and retire `swaps`.
+
+Every committed batch is followed by **asynchronous route classification**: the distinct transaction hashes are enqueued into `route_classification_queue`, drained by the `route_classification_queue` DAG (see §3).
 
 ```mermaid
 graph TD
@@ -194,14 +196,22 @@ graph TD
     PCS_SUB --> PCS
 
     subgraph Tables["Database"]
-        SWAPS["swaps<br/>(partitioned by month)"]
+        STAGING["swaps_staging<br/>(canonical, partitioned by month)"]
+        SWAPS["swaps<br/>(legacy mirror, SWAP_LEGACY_MIRROR)"]
+        IQ["ingestion_state<br/>watermark (network, protocol)"]
     end
 
-    V2 --> SWAPS
-    V3 --> SWAPS
-    V4 --> SWAPS
-    AERO --> SWAPS
-    PCS --> SWAPS
+    V2 --> STAGING
+    V3 --> STAGING
+    V4 --> STAGING
+    AERO --> STAGING
+    PCS --> STAGING
+    STAGING -.->|"mirror"| SWAPS
+    V2 --> IQ
+    V3 --> IQ
+    V4 --> IQ
+    AERO --> IQ
+    PCS --> IQ
 ```
 
 | DAG | File | Schedule | Source | Networks |
@@ -222,18 +232,61 @@ graph TD
 **Flow detail:**
 
 All swap DAGs follow the same pattern:
-1. Fetch swap events from The Graph subgraphs for tracked token pairs, checkpointing against `MAX(ts)` per (network, protocol).
-2. Resolve token symbols to `coin_id` foreign keys via `PostgresStorage.save_swaps`.
-3. Insert to the unified `swaps` table (PK: `tx_hash, log_index`). Rows are distinguished by `protocol` and `network` columns.
-4. Used by the History Pipeline for volume/TVL aggregation and by the API for route/trade analysis.
+1. Fetch swap events from The Graph subgraphs for tracked token pairs, checkpointing against `ingestion_state.last_ts` per (network, protocol).
+2. Validate per-swap tokens/pool and resolve `pool_id` via `PostgresStorage.save_swaps`.
+3. Insert to the canonical `swaps_staging` table (PK: `ts, tx_hash, log_index`); mirror rows to `swaps` while `SWAP_LEGACY_MIRROR=true`. Rows are distinguished by `network` and `protocol` columns.
+4. Advance the `ingestion_state` watermark.
+5. Enqueue the committed batch's distinct tx hashes into `route_classification_queue` for async route classification (§3).
 
-The `swaps` table uses monthly range partitioning on the `ts` column (e.g. `swaps_2026_07`). Schema defined in [create_swaps_table.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_table.sql). Retention is enforced by `ods_goal_state_retention` (see Utility DAGs; the older `config_global_swap_retention` is superseded).
+The `swaps_staging` table uses monthly range partitioning on `ts` (e.g. `swaps_staging_2026_08`). Schema defined in [create_swaps_staging.sql](file:///Users/szabi/git/chaintelligence/chain-feeder/include/sql/create_swaps_staging.sql). Raw rows are short-lived: they are pruned after their route/pool aggregates exist (see `purge_aggregated_swaps` and the O&D goal-state retention in §6).
 
 Shared utilities live in [common/utils/uniswap_utils.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/common/utils/uniswap_utils.py) (`UniswapV3Fetcher`, `UniswapV4Fetcher`, `PostgresStorage`, etc.).
 
 ---
 
-### 3. History Pipeline — Daily Pool Metrics Aggregation
+### 3. Route Classification & Materialization
+
+This pipeline turns short-lived raw swap legs into the durable route taxonomy and daily aggregates, and materializes LP daily/bucket facts. It is **decoupled** from ingestion (route reconstruction never blocks Graph callbacks).
+
+```mermaid
+graph LR
+    subgraph Stages["Route pipeline"]
+        Q["route_classification_queue DAG<br/>(@hourly)"]
+        CL["route_classifier.py<br/>classify: legs → chains →<br/>pair/route/route_hop"]
+        DIRTY["dirty_route_day/<br/>dirty_pool_day"]
+        MAT["dirty_day_materializer DAG<br/>(*/20)"]
+        ROLL["route_daily_stats_rollup DAG<br/>(@hourly, safety net)"]
+        PL["od_catalog + reconcile<br/>planner (FETCH/CLASSIFY/<br/>MATERIALIZE/RESOLVE)"]
+    end
+    subgraph Tables2["Durable outputs"]
+        RD["route_daily_stats"]
+        RB["route_daily_stats_bucket"]
+        PB["liquidity_pool_daily_stats +<br/>liquidity_pool_daily_stats_bucket"]
+    end
+
+    Q --> CL
+    CL -->|"writes route_id on swaps_staging"| DIRTY
+    DIRTY --> MAT --> RD
+    MAT --> RB
+    MAT --> PB
+    ROLL --> RD
+    ROLL --> RB
+    ROLL --> PB
+    PL -.->|"dispatch"| Q
+```
+
+| DAG | Schedule | Role | Tables Written |
+|---|---|---|---|
+| `route_classification_queue` | `@hourly` | Drains `route_classification_queue`, classifies tx hashes (set-based / parallel-capable), records fine-grained `dirty_route_day` / `dirty_pool_day`. Holds the route-write advisory lock only during the short SQL merge. | `swaps_staging.route_id` (update), `origin_destination_pair`, `route`, `route_hop`, `dirty_route_day`, `dirty_pool_day` |
+| `dirty_day_materializer` | `*/20 * * * *` | Consumes `dirty_route_day` / `dirty_pool_day`, recomputes **exactly** those days (route daily stats + route + pool buckets) incrementally. Backlog-guarded by `max_days_per_run` (default 90). | `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool_daily_stats_bucket` |
+| `route_daily_stats_rollup` | `@hourly` | **Safety net**: recomputes a rolling recent window (default 3 days) of `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool_daily_stats_bucket`. | same as above |
+| `global_liquidity_pool_daily_stats_rollup` | `0 2 * * *` (daily) | Rolls up `liquidity_pool_daily_stats` volume/count from `swaps_staging` (+ zero-fills, TVL fallback). | `liquidity_pool_daily_stats` |
+
+The control plane (§6) drives the plumbing: `od_catalog.py` compiles `config/ods-goal-state.yaml` into O&D sets + requested products, and `reconcile.py` decides, per (set, product, chain, day), whether work is `FETCH` (raw missing), `CLASSIFY` (raw present, unclassified), `MATERIALIZE` (facts missing), or `RESOLVE` (satisfied).
+
+---
+
+### 4. History Pipeline — Daily Pool Metrics Aggregation
 
 These DAGs produce daily aggregated metrics (volume, TVL, tx count) per pool and write to `liquidity_pool_daily_stats` (auto-creating pool entries in `liquidity_pool` when needed).
 
@@ -293,7 +346,7 @@ graph TD
 
 ---
 
-### 4. LP Position Pipeline — Discovery, Snapshots, Events, Claims
+### 5. LP Position Pipeline — Discovery, Snapshots, Events, Claims
 
 These DAGs discover LP positions, create snapshots, scan for fee claims, and track position lifecycle events.
 
@@ -360,12 +413,15 @@ graph TD
 
 ---
 
-### 5. Utility DAGs
+### 6. Utility DAGs
 
 | DAG | File | Schedule | Purpose | Tables Written |
 |---|---|---|---|---|
-| `ods_goal_state_retention` | [ods_goal_state_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_retention.py) | `0 3 * * *` | Evaluates `config/ods-goal-state.yaml` requirements against the warehouse, reports coverage + gaps, backfills missing route daily stats, and (when `dry_run=false`) prunes rows outside the effective keep-windows across `swaps`, `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool`, `liquidity_pool_daily_stats`, `liquidity_pool_daily_stats_bucket`. Replaces `config_global_swap_retention`. | `swaps` (deletions), `route_daily_stats` (delete+recompute), `route_daily_stats_bucket` (delete+recompute), `liquidity_pool_*` (deletions) |
-| `ods_goal_state_backfill` | [ods_goal_state_backfill.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_backfill.py) | `*/30 * * * *` | **Converge the warehouse toward the O&D goal state** (also triggerable manually). Runs on a 30-min schedule so it keeps working until every requirement in `config/ods-goal-state.yaml` is met: (1) evaluate coverage/gaps, (2) recompute `route_daily_stats`/`route_daily_stats_bucket` from present swaps, (3) if gaps remain, trigger the per-chain swap ETL DAGs (`graph_*_swaps`) with a `backfill_days` conf for the networks with raw-`swaps` gaps plus the rollup DAGs. Only networks with actual gaps are re-fetched, so it stops querying The Graph once requirements are met. Param `backfill_days_cap` (default 90) caps how far back each network backfills. | none directly |
+| `ods_goal_state_retention` | [ods_goal_state_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_retention.py) | `0 3 * * *` | Evaluates `config/ods-goal-state.yaml` requirements against the warehouse, reports coverage + gaps, and (when `dry_run=false`) prunes rows outside the effective keep-windows. Replaces `config_global_swap_retention`. | `swaps`/`swaps_staging` (deletions), `route_daily_stats` (delete+recompute), `route_daily_stats_bucket`, `liquidity_pool_*` (deletions) |
+| `ods_goal_state_backfill` | [ods_goal_state_backfill.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/ods_goal_state_backfill.py) | `*/30 * * * *` | **Planner-driven reconciler**: compiles the catalog (`od_catalog.py`), reads the coverage ledger (`reconcile.py`), and dispatches `FETCH`→per-chain swap ETL DAGs (`graph_*_swaps` with a `backfill_days` conf) and `MATERIALIZE`→rollup DAGs. Raw-present/unclassified yields `CLASSIFY` (handled by the classifier), **never** a Graph re-fetch — so it stops querying The Graph once requirements are met. Params: `backfill_days_cap` (90). | none directly |
+| `route_classification_queue` | [route_classification_queue.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/route_classification_queue.py) | `@hourly` | Async route classification worker (see §3); records dirty days for the materializer. | `swaps_staging.route_id`, `origin_destination_pair`, `route`, `route_hop`, `dirty_route_day`, `dirty_pool_day` |
+| `dirty_day_materializer` | [dirty_day_materializer.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/dirty_day_materializer.py) | `*/20 * * * *` | Incremental fact materializer over dirty days (see §3). | `route_daily_stats`, `route_daily_stats_bucket`, `liquidity_pool_daily_stats_bucket` |
+| `purge_aggregated_swaps` | [purge_aggregated_swaps.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/purge_aggregated_swaps.py) | (opt-in) | Purges `swaps_staging` rows once their route/pool aggregates exist; drops empty historical partitions. Feature-flag `RAW_SWAP_PURGE_ENABLED`. | `swaps_staging` (deletions) |
 | `config_global_swap_retention` | [config_global_swap_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/dags/config_global_swap_retention.py) | `0 3 * * *` | **Superseded** by `ods_goal_state_retention` (paused on creation; kept for manual/emergency use). Reads `config/swap-retention.yaml` and deletes `swaps` rows older than the configured retention period per (network, protocol) in batches. | `swaps` (deletions) |
 
 ---
@@ -385,7 +441,17 @@ Shows which tables are **written** by which pipeline groups and **read** by whic
 | `liquidity_pool_position` | `graph_all_uniswap_v3_liquidity_pool_position_snapshot`, `rpc_ethereum_uniswap_v3_liquidity_pool_position`, `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` | API (`/api/lp/position-summary`) |
 | `liquidity_pool_position_snapshot` | `graph_all_uniswap_v3_liquidity_pool_position_snapshot`, `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` | `v_lp_snapshots_summary` view |
 | `liquidity_pool_position_event` | `rpc_all_uniswap_v3_liquidity_pool_position_event` | API (event timeline) |
-| `swaps` | all swap DAGs | `global_liquidity_pool_daily_stats_rollup`, history DAGs, API (route/trade analysis) |
+| `swaps` | swap DAGs (legacy mirror), `route_classification_queue` | API raw-swap fallbacks, `config_global_swap_retention` (legacy) |
+| `swaps_staging` | all swap DAGs (canonical raw store), `route_classification_queue` (sets `route_id`) | `route_daily_stats` rollup, `global_liquidity_pool_daily_stats_rollup`, `purge_aggregated_swaps`, API route analysis |
+| `ingestion_state` | all swap DAGs | swap DAGs (watermark cursor) |
+| `origin_destination_pair` | `route_classification_queue` | route classification, API O&D sets |
+| `route` | `route_classification_queue` | API route analysis, `route_daily_stats` FK |
+| `route_hop` | `route_classification_queue` | pool-resolution, API |
+| `route_daily_stats` | `dirty_day_materializer`, `route_daily_stats_rollup`, `ods_goal_state_retention` (recompute) | API (`/api/routes/analyze`, postgres_fetcher) |
+| `route_daily_stats_bucket` | `dirty_day_materializer`, `route_daily_stats_rollup` | API route distribution |
+| `liquidity_pool_daily_stats_bucket` | `dirty_day_materializer`, `route_daily_stats_rollup` | API pool distribution |
+| `dirty_route_day` / `dirty_pool_day` | `route_classification_queue` | `dirty_day_materializer` |
+| `od_set_*`, `source_day_coverage`, `classification_day_coverage`, `product_day_coverage`, `od_set_pool_daily_stats` | control plane (`ods_goal_state_backfill`, `ods_lp_set_materializer`) | `ods_reconcile`/`ods_goal_state_backfill` planner, API `/api/ods/goal-state` |
 | `v_lp_snapshots_summary` | — (view) | API (`/api/lp/position-summary`) |
 
 ---
@@ -416,7 +482,11 @@ Shows which tables are **written** by which pipeline groups and **read** by whic
 | `rpc_all_uniswap_v3_liquidity_pool_position_event` | `@daily` | daily | LP |
 | `config_global_swap_retention` | `0 3 * * *` | daily 3 AM | Utility (superseded — paused) |
 | `ods_goal_state_retention` | `0 3 * * *` | daily 3 AM | Utility |
-| `ods_goal_state_backfill` | (manual) | on demand | Utility |
+| `ods_goal_state_backfill` | `*/30 * * * *` | 30 min | Utility |
+| `route_classification_queue` | `@hourly` | hourly | Route |
+| `dirty_day_materializer` | `*/20 * * * *` | 20 min | Route |
+| `route_daily_stats_rollup` | `@hourly` | hourly | Route |
+| `purge_aggregated_swaps` | (opt-in) | on demand | Utility |
 
 ---
 
@@ -428,6 +498,10 @@ graph LR
     TIERED -- "TriggerDagRunOperator" --> CPRICE["cmc_global_coin_price"]
     FAMILY -- "TriggerDagRunOperator" --> CMETA["cmc_global_coin_metadata"]
     ROLLUP["global_liquidity_pool_daily_stats_rollup"] -- "triggers TVL backfill" --> TVL["rpc_tvl_sync"]
+    BACKFILL["ods_goal_state_backfill"] -- "plan: FETCH" --> SWAP["graph_*_swaps"]
+    BACKFILL -- "plan: MATERIALIZE" --> ROUTEROLL["route_daily_stats_rollup"]
+    SWAP -- "enqueue tx hashes" --> Q["route_classification_queue"]
+    Q -- "dirty days" --> MAT["dirty_day_materializer"]
 ```
 
 ---
@@ -442,6 +516,8 @@ graph LR
 | `DATA_WAREHOUSE_DB` | all DAGs (via `include/settings.py`) | Direct psycopg2 connection string (authoritative) |
 | `RPC_DISCOVERY_START_DATE` | `rpc_all_uniswap_v3_liquidity_pool_position_*` | Backfill start date |
 | `SKIP_CLAIM_NETWORKS` | `rpc_all_uniswap_v3_liquidity_pool_position_snapshot_claims` | Networks to skip in claim scan |
+| `SWAP_LEGACY_MIRROR` | swap DAGs | Mirror raw swaps into legacy `swaps` table while migrating; flip to `false` after API consumers migrate |
+| `RAW_SWAP_PURGE_ENABLED` | `purge_aggregated_swaps` | Opt-in purge of covered `swaps_staging` rows |
 
 ---
 
@@ -458,3 +534,9 @@ graph LR
 | `contract_ingestion.py` | [include/contract_ingestion.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/contract_ingestion.py) | `cmc_global_coin_metadata` (MultiSourceContractEngine) |
 | `v4_pool.py` | [include/v4_pool.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/v4_pool.py) | V4 swap/history DAGs, API (`api/main.py`) |
 | `settings.py` | [include/settings.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/settings.py) | `data_warehouse_dsn()` — shared DSN derivation for both ETL and API configs; `load_distribution_config()` — global swap-size bucket params from `config/swap-distribution.yaml` |
+| `route_classifier.py` | [include/route_classifier.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/route_classifier.py) | Route reconstruction, set-based/parallel classification, daily-stats & bucket recompute (`route_classification_queue`, `dirty_day_materializer`, `route_daily_stats_rollup`, `backfill_route_tables`) |
+| `od_retention.py` | [include/od_retention.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/od_retention.py) | O&D goal-state engine (coverage checks, pruning); used by retention DAG, CLI, API `/api/ods/goal-state` |
+| `od_catalog.py` | [include/od_catalog.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/od_catalog.py) | Declarative O&D catalog compiler (sets + products) — `ods_goal_state_backfill`, `ods_reconcile` |
+| `reconcile.py` | [include/reconcile.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/reconcile.py) | Reconciliation planner (FETCH/CLASSIFY/MATERIALIZE/RESOLVE) + coverage-ledger reader |
+| `backfill_route_tables.py` | [include/scripts/backfill_route_tables.py](file:///Users/szabi/git/chaintelligence/chain-feeder/include/scripts/backfill_route_tables.py) | Parallel historical route backfill (collect+merge) |
+| `ods_reconcile.py` / `ods_lp_set_materializer.py` | [include/scripts/](file:///Users/szabi/git/chaintelligence/chain-feeder/include/scripts/) | Control-plane CLI: print plan; materialize set-level LP daily aggregates |
