@@ -632,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ⏳ ${pending.toLocaleString()} awaiting classification
                 </span>
                 <span class="summary-badge-pill" style="color:${activeChains ? '#34d399' : '#f87171'}; background:${activeChains ? '#34d3991a' : '#f871711a'}; border-color:${activeChains ? '#34d39933' : '#f8717133'}; font-size:0.72rem;">
-                    ${activeChains ? '● ingesting: ' + activeNetworks : '○ no active ingestion'}
+                    ${activeChains ? `● ingesting: ${activeChains}` : '○ no active ingestion'}
                 </span>
                 ${lastCls ? `<span class="dim-text" style="font-size:0.7rem;">classifier run ${timeAgo(lastCls)}</span>` : ''}
             </div>
