@@ -596,6 +596,14 @@ document.addEventListener('DOMContentLoaded', () => {
         'SATISFIED':    { color: '#34d399', label: 'Satisfied', short: 'MET' },
     };
 
+    // Per-stage day chips for product cells (red -> amber -> green scale).
+    const STAGE_DAY = [
+        { k: 'fetch',    color: '#ef4444', title: 'raw missing days' },
+        { k: 'classify', color: '#f59e0b', title: 'raw present, unclassified days' },
+        { k: 'mat',      color: '#faca15', title: 'facts missing days' },
+        { k: 'met',      color: '#34d399', title: 'satisfied days' },
+    ];
+
     let lastReconData = null;
 
     const fetchOdsReconciliation = async () => {
@@ -708,13 +716,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${usedProducts.map(pid => {
                         const p = (s._prodMap || {})[pid];
                         if (!p) return `<td style="text-align:center;" class="dim-text">—</td>`;
-                        const f = p.fetch || 0, c = p.classify || 0, m = p.materialize || 0;
-                        const links = [];
-                        if (f) links.push(`<span class="ods-stage-chip stage-fetch" title="raw missing: ${f} day(s)">fetch ${f}</span>`);
-                        if (c) links.push(`<span class="ods-stage-chip stage-classify" title="raw present, unclassified: ${c} day(s)">classify ${c}</span>`);
-                        if (m) links.push(`<span class="ods-stage-chip stage-mat" title="facts missing: ${m} day(s)">mat ${m}</span>`);
-                        if (!f && !c && !m) links.push(`<span class="ods-stage-chip stage-met" title="all days satisfied">met ${p.resolved || 0}</span>`);
-                        return `<td style="text-align:center; white-space:nowrap;">${links.join(' ')}<div style="font-size:0.62rem; color:#9ca3af;">${p.pct}%</div></td>`;
+                        const vals = { fetch: p.fetch || 0, classify: p.classify || 0, mat: p.materialize || 0, met: p.resolved || 0 };
+                        const labels = STAGE_DAY.map(st => {
+                            const n = vals[st.k] || 0;
+                            return `<span class="ods-stage-chip" style="background:${st.color}1a; color:${st.color}; border-color:${st.color}33;" title="${st.title}: ${n}">${st.k} ${n}</span>`;
+                        }).join(' ');
+                        return `<td style="text-align:center; white-space:nowrap;">${labels}</td>`;
                     }).join('')}
                     <td style="text-align:center;">
                         <div class="health-meter-track" style="width:70px; height:5px;">
