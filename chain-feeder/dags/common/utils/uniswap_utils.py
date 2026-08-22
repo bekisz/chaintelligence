@@ -939,10 +939,11 @@ class PostgresStorage:
                     with conn.cursor() as cur2:
                         cur2.executemany("""
                             INSERT INTO route_classification_queue
-                                (tx_hash, status, available_at, updated_at)
-                            VALUES (%s, 'pending', NOW(), NOW())
+                                (tx_hash, status, generation, available_at, updated_at)
+                            VALUES (%s, 'pending', 0, NOW(), NOW())
                             ON CONFLICT (tx_hash) DO UPDATE SET
                                 status = 'pending',
+                                generation = route_classification_queue.generation + 1,
                                 available_at = NOW(),
                                 claimed_at = NULL,
                                 last_error = NULL,

@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS route_classification_queue (
     tx_hash       TEXT PRIMARY KEY,
     status        TEXT NOT NULL DEFAULT 'pending',
     attempts      INTEGER NOT NULL DEFAULT 0,
+    generation    BIGINT NOT NULL DEFAULT 0,
+    claim_token   BIGINT,
     available_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     claimed_at    TIMESTAMPTZ,
     last_error    TEXT,

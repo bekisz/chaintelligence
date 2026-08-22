@@ -36,23 +36,31 @@ def _claim_batch(conn):
               AND claimed_at < NOW() - (%s || ' minutes')::interval
         """, (STALE_AFTER_MINUTES,))
         cur.execute("""
-            SELECT tx_hash
+            SELECT tx_hash, generation
             FROM route_classification_queue
             WHERE status = 'pending' AND available_at <= NOW()
             ORDER BY available_at DESC, tx_hash DESC
             FOR UPDATE SKIP LOCKED
             LIMIT %s
         """, (BATCH_SIZE,))
-        tx_hashes = [row[0] for row in cur.fetchall()]
-        if tx_hashes:
+        rows = [(row[0], row[1]) for row in cur.fetchall()]
+        if rows:
+            tx_hashes = [r[0] for r in rows]
+            # claim_token records the generation at claim time so completion can
+            # be made conditional (no overwriting a newer requeue).
             cur.execute("""
                 UPDATE route_classification_queue
                 SET status = 'processing', claimed_at = NOW(), updated_at = NOW(),
                     attempts = attempts + 1
                 WHERE tx_hash = ANY(%s)
             """, (tx_hashes,))
+            cur.execute("""
+                UPDATE route_classification_queue
+                SET claim_token = generation
+                WHERE tx_hash = ANY(%s)
+            """, (tx_hashes,))
     conn.commit()
-    return tx_hashes
+    return rows
 
 
 with DAG(
@@ -88,9 +96,11 @@ with DAG(
         route_cache = {}
         try:
             for _ in range(MAX_BATCHES_PER_RUN):
-                tx_hashes = _claim_batch(conn)
-                if not tx_hashes:
+                claimed = _claim_batch(conn)
+                if not claimed:
                     break
+                tx_hashes = [c[0] for c in claimed]
+                gen_by_hash = {c[0]: c[1] for c in claimed}
 
                 try:
                     with conn.cursor() as cur:
@@ -101,13 +111,19 @@ with DAG(
                     conn.commit()
                     affected_days.update(days)
 
+                    # Conditional completion: only mark complete if the row's
+                    # generation still equals the claimed token. A producer
+                    # requeue (new leg) bumps generation, so a worker that
+                    # classified an older value must NOT overwrite the requeue.
                     with conn.cursor() as cur:
-                        cur.execute("""
-                            UPDATE route_classification_queue
-                            SET status = 'complete', claimed_at = NULL,
-                                updated_at = NOW(), last_error = NULL
-                            WHERE tx_hash = ANY(%s)
-                        """, (tx_hashes,))
+                        for th, gen in claimed:
+                            cur.execute("""
+                                UPDATE route_classification_queue
+                                SET status = 'complete', claimed_at = NULL,
+                                    updated_at = NOW(), last_error = NULL
+                                WHERE tx_hash = %s AND claim_token = %s
+                                      AND generation = %s
+                            """, (th, gen, gen))
                     conn.commit()
                     completed += len(tx_hashes)
                 except Exception as exc:
