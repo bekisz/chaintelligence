@@ -22,7 +22,12 @@ from typing import Any, Dict, List, Literal, Optional
 
 import yaml
 
-from od_retention import _normalize_requirement, load_goal_state, parse_window
+try:
+    # when imported as `include.od_catalog`
+    from .od_retention import _normalize_requirement, load_goal_state, parse_window
+except ImportError:
+    # when included directly with PATH=<repo>/chain-feeder/include
+    from od_retention import _normalize_requirement, load_goal_state, parse_window
 
 CONFIG_BASENAME = 'ods-goal-state.yaml'
 

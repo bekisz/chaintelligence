@@ -34,9 +34,10 @@ from common.utils.config import DATA_WAREHOUSE_DB
 from include.od_retention import (
     load_goal_state,
     run_checks,
-    export_gaps,
     backfill_missing_daily_stats,
 )
+from include.od_catalog import compile_catalog
+from include.reconcile import load_coverage_state, plan_requirement
 
 DEFAULT_CAP_DAYS = 90
 DEFAULT_SCHEDULE = '*/30 * * * *'  # keep converging until requirements are met
@@ -81,92 +82,63 @@ def _networks_for_chain(chain) -> list:
     return out
 
 
-def _network_has_raw_swaps(conn, network: str, since_date, today) -> bool:
-    """True if any raw swap (classified or not) exists for a network from a date.
-
-    Used to distinguish a genuine data-missing gap from classification lag: if
-    raw swaps are already present, re-fetching from The Graph would be wasted
-    work — the gap just needs classification to catch up.
-    """
-    from datetime import datetime, timedelta
-    end = today + timedelta(days=1)
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT EXISTS(
-                SELECT 1 FROM swaps s
-                JOIN liquidity_pool lp ON s.pool_id = lp.id
-                JOIN chain ch ON lp.chain_id = ch.id
-                WHERE LOWER(ch.name) = LOWER(%s)
-                  AND s.ts >= %s AND s.ts < %s
-                LIMIT 1
-            )
-        """, (network, since_date.isoformat(), end.isoformat()))
-        return bool(cur.fetchone()[0])
-
-
 @task
 def compute_backfill_plan(**context):
+    """Build the reconciliation plan and translate it into ETL dispatches.
+
+    Uses the control-plane coverage ledger (od_catalog + reconcile) rather than
+    the legacy gap-scan: raw-present-but-unclassified is CLASSIFY (never FETCH),
+    so a classification lag can no longer blind-trigger Graph re-ingestion.
+    """
     params = context.get('params', {})
     cap = int(params.get('backfill_days_cap', DEFAULT_CAP_DAYS))
-
-    goal = load_goal_state()
-    conn = connect()
-    try:
-        report = run_checks(conn, goal)
-    finally:
-        conn.close()
-    not_ok = [r for r in report if r['status'] != 'ok']
-    gaps = export_gaps(report)
 
     from datetime import datetime, timezone
     today = datetime.now(timezone.utc).date()
 
-    swaps_gaps = [g for g in gaps if g['layer'] == 'swaps']
-    other_gaps = [g for g in gaps if g['layer'] != 'swaps']
+    conn = connect()
+    try:
+        state = load_coverage_state(conn)
+        cat = compile_catalog()
+        plans = []
+        for cs in cat['sets']:
+            plans.extend(plan_requirement(cs, state, today))
+    finally:
+        conn.close()
 
-    oldest_per_net = {}
-    for g in swaps_gaps:
-        for net in _networks_for_chain(g['chain']):
-            f = datetime.strptime(g['from'], '%Y-%m-%d').date()
-            if net not in oldest_per_net or f < oldest_per_net[net]:
-                oldest_per_net[net] = f
-
-    # A swaps coverage gap can be classification lag rather than missing raw
-    # data. Only re-ingest a network when raw swaps (classified OR unclassified)
-    # are actually absent from its gap window, otherwise re-fetching would never
-    # converge (it would just keep re-adding already-present swaps while the
-    # classifier catches up). 
-    missing_nets = {}
-    if oldest_per_net:
-        conn2 = connect()
-        try:
-            for net, min_from in oldest_per_net.items():
-                if not _network_has_raw_swaps(conn2, net, min_from, today):
-                    missing_nets[net] = min_from
-                    logging.info("  %s: raw swaps MISSING since %s -> will backfill",
-                                 net, min_from)
-                else:
-                    logging.info("  %s: raw swaps PRESENT (classification lag) -> skip re-fetch", net)
-        finally:
-            conn2.close()
+    # Dispatch plan actions to the ETL DAGs.
+    #   FETCH       -> per-network swap ingestion DAGs (only where raw is missing)
+    #   CLASSIFY    -> (handled by the always-on classifier queue; surfaced below)
+    #   MATERIALIZE -> rollup DAGs
+    fetch_nets = {}
+    for r in plans:
+        if r['action'] == 'FETCH':
+            for net in _networks_for_chain(r['chain']):
+                day = datetime.strptime(r['day'], '%Y-%m-%d').date()
+                if net not in fetch_nets or day < fetch_nets[net]:
+                    fetch_nets[net] = day
 
     specs = []
-    if missing_nets:
+    if fetch_nets:
         for net, conf_key, dag_id in SWAP_DAGS:
-            if net in missing_nets:
-                days = min((today - missing_nets[net]).days + 1, cap)
+            if net in fetch_nets:
+                days = min((today - fetch_nets[net]).days + 1, cap)
                 specs.append({'trigger_dag_id': dag_id,
                               'conf': {'backfill_days': {conf_key: days}}})
-    if swaps_gaps or other_gaps:
+    need_materialize = any(r['action'] == 'MATERIALIZE' for r in plans)
+    need_classify = any(r['action'] == 'CLASSIFY' for r in plans)
+    if need_materialize:
         for dag_id in ROLLUP_DAGS:
             specs.append({'trigger_dag_id': dag_id, 'conf': {}})
 
-    logging.info("coverage: %d checks, %d not ok", len(report), len(not_ok))
-    logging.info("backfill plan: %d ETL triggers", len(specs))
+    from reconcile import summarize_rows
+    logging.info("control-plane plan: %s", summarize_rows(plans))
+    logging.info("dispatch: %d ETL triggers, classify=%s materialize=%s",
+                 len(specs), need_classify, need_materialize)
     for s in specs:
         logging.info("  -> %s conf=%s", s['trigger_dag_id'], s['conf'])
 
-    context['task_instance'].xcom_push(key='report', value=report)
+    context['task_instance'].xcom_push(key='plans', value=plans)
     return specs
 
 

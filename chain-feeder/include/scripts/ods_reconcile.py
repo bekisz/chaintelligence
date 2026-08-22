@@ -27,8 +27,12 @@ sys.path.insert(0, os.path.join(REPO_ROOT, 'chain-feeder', 'include'))
 import psycopg2
 
 from common.utils.config import DATA_WAREHOUSE_DB
-from od_catalog import compile_catalog
-from reconcile import load_coverage_state, plan_requirement, summarize_rows
+try:
+    from od_catalog import compile_catalog
+    from reconcile import load_coverage_state, plan_requirement, summarize_rows
+except ImportError:
+    from include.od_catalog import compile_catalog
+    from include.reconcile import load_coverage_state, plan_requirement, summarize_rows
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 

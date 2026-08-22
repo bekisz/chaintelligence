@@ -23,8 +23,14 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Set
 
-from od_retention import window_resolve
-from od_catalog import PRODUCTS, SetCatalog
+try:
+    # when imported as `include.reconcile`
+    from .od_retention import window_resolve
+    from .od_catalog import PRODUCTS, SetCatalog
+except ImportError:
+    # when included directly with PATH=<repo>/chain-feeder/include
+    from od_retention import window_resolve
+    from od_catalog import PRODUCTS, SetCatalog
 
 
 WORKERS = ('FETCH', 'CLASSIFY', 'MATERIALIZE', 'RESOLVE', 'UNAVAILABLE')
