@@ -644,49 +644,66 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // --- Per-set cards ---
-        html += `<div class="ods-recon-grid">`;
+        // --- Per-set table: rows = requirement, columns = product ---
+        const PRODUCT_ORDER = [
+            'route.swap_logs', 'route.daily_stats', 'route.daily_stats_buckets',
+            'pool.daily_stats', 'pool.daily_stats_buckets', 'pool.position_snapshots',
+        ];
+
+        sets.forEach(s => {
+            s._prodMap = {};
+            (s.products || []).forEach(p => { s._prodMap[p.product_id] = p; });
+        });
+        const usedProducts = [];
+        PRODUCT_ORDER.forEach(pid => {
+            if (sets.some(s => s._prodMap && s._prodMap[pid])) usedProducts.push(pid);
+        });
+
+        html += `
+            <table class="indexer-matrix-table ods-goal-state-table ods-recon-table">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;">Requirement</th>
+                        <th style="text-align:left;">O&amp;D Set Part</th>
+                        <th style="text-align:left;">Chain</th>
+                        ${usedProducts.map(p => `<th style="text-align:center;">${p}</th>`).join('')}
+                        <th style="text-align:center;">Progress</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
         sets.forEach(s => {
             const st = STAGE_META[s.stage] || STAGE_META.FETCH;
             const progress = s.progress || 0;
-            const chains = Array.isArray(s.chains) ? s.chains.join(', ') : '*';
-
-            let prodsHtml = (s.products || []).slice(0, 6).map(p => {
-                const f = p.fetch || 0, c = p.classify || 0, m = p.materialize || 0;
-                const parts = [];
-                if (f) parts.push(`<span class="ods-stage-chip stage-fetch" title="raw missing">fetch ${f}</span>`);
-                if (c) parts.push(`<span class="ods-stage-chip stage-classify" title="raw present, unclassified">classify ${c}</span>`);
-                if (m) parts.push(`<span class="ods-stage-chip stage-mat" title="facts missing">mat ${m}</span>`);
-                if (!f && !c && !m) parts.push(`<span class="ods-stage-chip stage-met" title="all days satisfied">met ${p.resolved||0}</span>`);
-                return `<div class="ods-prod">
-                    <span class="font-mono" style="color:#f3f4f6; font-size:0.72rem;">${p.product_id}</span>
-                    <span style="color:#9ca3af; font-size:0.7rem; margin-left:6px;">${p.pct}%</span>
-                    <div style="margin-top:4px;">${parts.join(' ')}</div>
-                </div>`;
-            }).join('');
-
+            const g = { origin: s.origin, dest: s.dest, bidirectional: true, chains: s.chains };
             html += `
-                <div class="ods-recon-card">
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                        <span style="font-weight:700; color:#f3f4f6; font-size:0.85rem;">${s.name}</span>
-                        <span class="summary-badge-pill" style="color:${st.color}; background:${st.color}1a; border-color:${st.color}33; font-size:0.7rem;">
-                            ${st.short}
-                        </span>
-                    </div>
-                    <div style="font-size:0.72rem; color:#9ca3af; margin-top:3px;">
-                        <span class="font-mono">${s.origin} → ${s.dest}</span>&nbsp;·&nbsp;chains: ${chains}
-                    </div>
-                    <div class="health-meter-track" style="height:6px; margin-top:8px;">
-                        <div class="health-meter-fill ${progress >= 100 ? 'fill-green' : 'fill-yellow'}" style="width:${progress}%;"></div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#9ca3af;">
-                        <span>resolved ${progress}%</span><span class="font-mono">${s.id}</span>
-                    </div>
-                    <div class="ods-prod-list">${prodsHtml}</div>
-                </div>
+                <tr>
+                    <td style="text-align:left; font-weight:700; color:#f3f4f6;">
+                        ${s.name}
+                        <span class="summary-badge-pill" style="margin-left:8px; color:${st.color}; background:${st.color}1a; border-color:${st.color}33; font-size:0.62rem;">${st.short}</span>
+                    </td>
+                    <td style="text-align:left;">${odsSetPartHtml(g)}</td>
+                    <td style="text-align:left;">${odsChainsHtml(g.chains)}</td>
+                    ${usedProducts.map(pid => {
+                        const p = (s._prodMap || {})[pid];
+                        if (!p) return `<td style="text-align:center;" class="dim-text">—</td>`;
+                        const f = p.fetch || 0, c = p.classify || 0, m = p.materialize || 0;
+                        const links = [];
+                        if (f) links.push(`<span class="ods-stage-chip stage-fetch" title="raw missing: ${f} day(s)">fetch ${f}</span>`);
+                        if (c) links.push(`<span class="ods-stage-chip stage-classify" title="raw present, unclassified: ${c} day(s)">classify ${c}</span>`);
+                        if (m) links.push(`<span class="ods-stage-chip stage-mat" title="facts missing: ${m} day(s)">mat ${m}</span>`);
+                        if (!f && !c && !m) links.push(`<span class="ods-stage-chip stage-met" title="all days satisfied">met ${p.resolved || 0}</span>`);
+                        return `<td style="text-align:center; white-space:nowrap;">${links.join(' ')}<div style="font-size:0.62rem; color:#9ca3af;">${p.pct}%</div></td>`;
+                    }).join('')}
+                    <td style="text-align:center;">
+                        <div class="health-meter-track" style="width:70px; height:5px;">
+                            <div class="health-meter-fill ${progress >= 100 ? 'fill-green' : 'fill-yellow'}" style="width:${progress}%;"></div>
+                        </div>
+                    </td>
+                </tr>
             `;
         });
-        html += `</div>`;
+        html += '</tbody></table>';
 
         odsGoalStateContainerEl.innerHTML = html;
     };

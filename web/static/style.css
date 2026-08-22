@@ -4977,6 +4977,21 @@ tr:hover .row-action-btn {
     border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
+.ods-recon-table th {
+    white-space: nowrap;
+    text-align: center;
+}
+
+.ods-recon-table td {
+    vertical-align: middle;
+}
+
+.ods-recon-table td:first-child,
+.ods-recon-table td:nth-child(2),
+.ods-recon-table td:nth-child(3) {
+    white-space: normal;
+}
+
 .ods-tooltip {
     position: relative;
     cursor: help;
