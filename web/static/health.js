@@ -158,7 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentHealthData = data;
             renderHealthUI(data);
             fetchOdsReconciliation();
-            fetchOdsGoalState();
         } catch (err) {
             console.error('Failed to fetch health status:', err);
             if (statusTitleEl) {

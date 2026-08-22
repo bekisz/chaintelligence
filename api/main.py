@@ -3993,13 +3993,16 @@ def _background_refresh_goal_state(cache_key: tuple) -> None:
 
 @app.on_event("startup")
 def _warm_goal_state_cache() -> None:
-    # Warm the goal-state report at boot so the first page load is instant
-    # instead of blocking on the slow recompute.
+    # Warm the goal-state report + reconciliation view at boot so the first
+    # page load is instant instead of blocking on the slow recompute.
     _background_refresh_goal_state((False,))
+    threading.Thread(target=_refresh_recon_cache, args=((),),
+                     daemon=True, name="recon-warm").start()
 
 
 _RECON_CACHE: Dict[tuple, tuple] = {}
 _RECON_CACHE_TTL = 90  # seconds
+_RECON_REFRESH_LOCK: Dict[tuple, threading.Lock] = {}
 
 
 def _compute_recon_body() -> dict:
@@ -4105,6 +4108,19 @@ def _compute_recon_body() -> dict:
     }
 
 
+def _refresh_recon_cache(cache_key: tuple) -> None:
+    lock = _RECON_REFRESH_LOCK.setdefault(cache_key, threading.Lock())
+    if not lock.acquire(blocking=False):
+        return  # a refresh is already running
+    try:
+        body = _compute_recon_body()
+        _RECON_CACHE[cache_key] = (body, time.time())
+    except Exception as e:
+        print(f"[ods-reconciliation] background refresh error: {e}")
+    finally:
+        lock.release()
+
+
 @app.get("/api/ods/reconciliation", tags=["Origin & Destination"])
 async def ods_reconciliation():
     """O&D reconciliation stages per set (FETCH/CLASSIFY/MATERIALIZE/RESOLVE)
@@ -4114,6 +4130,11 @@ async def ods_reconciliation():
     now = time.time()
     cached = _RECON_CACHE.get(cache_key)
     if cached and (now - cached[1]) < _RECON_CACHE_TTL:
+        return cached[0]
+    if cached is not None:
+        # stale-while-revalidate: serve last value instantly, refresh in bg
+        threading.Thread(target=_refresh_recon_cache, args=(cache_key,),
+                         daemon=True, name="recon-refresh").start()
         return cached[0]
     try:
         body = await asyncio.to_thread(_compute_recon_body)
