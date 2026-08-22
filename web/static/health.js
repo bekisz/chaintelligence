@@ -597,11 +597,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Per-stage day chips for product cells (red -> amber -> green scale).
+    // Tooltip names the stage and explains what it means; the cell shows just
+    // the day count (color carries the meaning).
     const STAGE_DAY = [
-        { k: 'fetch',    color: '#ef4444', title: 'raw missing days' },
-        { k: 'classify', color: '#f59e0b', title: 'raw present, unclassified days' },
-        { k: 'mat',      color: '#faca15', title: 'facts missing days' },
-        { k: 'met',      color: '#34d399', title: 'satisfied days' },
+        { k: 'fetch',    color: '#ef4444', name: 'Fetch',    mean: 'raw swap data is missing — needs to be fetched from the source' },
+        { k: 'classify', color: '#f59e0b', name: 'Classify', mean: 'raw swaps present but not yet route-classified' },
+        { k: 'mat',      color: '#faca15', name: 'Materialize', mean: 'classified but the product fact (daily stats / buckets) is not built yet' },
+        { k: 'met',      color: '#34d399', name: 'Satisfied', mean: 'all required days are present and processed' },
     ];
 
     let lastReconData = null;
@@ -719,7 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const vals = { fetch: p.fetch || 0, classify: p.classify || 0, mat: p.materialize || 0, met: p.resolved || 0 };
                         const labels = STAGE_DAY.map(st => {
                             const n = vals[st.k] || 0;
-                            return `<span class="ods-stage-chip" style="background:${st.color}1a; color:${st.color}; border-color:${st.color}33;" title="${st.title}: ${n}">${st.k} ${n}</span>`;
+                            return `<span class="ods-stage-chip" style="background:${st.color}1a; color:${st.color}; border-color:${st.color}33;" title="${st.name}: ${n} day(s) – ${st.mean}">${n}</span>`;
                         }).join(' ');
                         return `<td style="text-align:center; white-space:nowrap;">${labels}</td>`;
                     }).join('')}
